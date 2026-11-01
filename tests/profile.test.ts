@@ -76,3 +76,28 @@ describe('profile store', () => {
     expect(JSON.parse(saved!).lastFreeBoxAt).toBe(first.lastFreeBoxAt);
   });
 });
+
+describe('developer account', () => {
+  it('unlocks with the dev query, maxes every character, never spends, and can be turned off', async () => {
+    const { applyDevQuery, canLevelUp, levelUp, openBox, applyMatchResult, createDefaultProfile } = await import('../src/meta/profile');
+    const { DEV_CODE, DEV_CURRENCY } = await import('../src/meta/economy');
+    const base = createDefaultProfile();
+    expect(applyDevQuery(base, '?dev=wrong')).toBe(base);
+    const dev = applyDevQuery(base, `?dev=${DEV_CODE}`);
+    expect(dev.dev).toBe(true);
+    expect(dev.coins).toBe(DEV_CURRENCY);
+    expect(Object.values(dev.characters).every((c) => c.level === 3)).toBe(true);
+    expect(dev.formation.every((s) => s.level === 3)).toBe(true);
+    expect(canLevelUp(dev, 'sad')).toEqual({ ok: false, reason: 'max' });
+    expect(levelUp(dev, 'sad')).toBe(dev);
+    const box = openBox(dev, 'basic');
+    expect(box.ok && box.profile.coins).toBe(DEV_CURRENCY);
+    const free1 = openBox(dev, 'free');
+    expect(free1.ok && openBox(free1.profile, 'free').ok).toBe(true);
+    expect(applyMatchResult(dev, 'win', 'hard').profile.gems).toBe(DEV_CURRENCY);
+    const off = applyDevQuery(dev, '?dev=off');
+    expect(off.dev).toBe(false);
+    expect(off.coins).toBe(base.coins);
+    expect(off.characters.sad.level).toBe(1);
+  });
+});

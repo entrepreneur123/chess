@@ -12,7 +12,7 @@ import {
   type Formation,
   type Level,
 } from '../engine';
-import { BOX, LEVEL_UP_COST, MATCH_GEM_REWARD, MATCH_REWARD, MAX_LEVEL, MIN_MOVES_FOR_REWARD, START_COINS, START_GEMS } from './economy';
+import { BOX, DEV_CODE, DEV_CURRENCY, LEVEL_UP_COST, MATCH_GEM_REWARD, MATCH_REWARD, MAX_LEVEL, MIN_MOVES_FOR_REWARD, START_COINS, START_GEMS } from './economy';
 import { defaultRng, randInt, weightedPick, type Rng } from './rng';
 
 export const PROFILE_VERSION = 2;
@@ -37,6 +37,8 @@ export interface Profile {
   difficulty: Difficulty;
   settings: Settings;
   onboarding: Onboarding;
+  /** Developer account: unlimited currency, all characters at max level, free boxes. */
+  dev: boolean;
 }
 
 export interface Settings {
@@ -82,6 +84,7 @@ export function createDefaultProfile(): Profile {
     difficulty: 'normal',
     settings: { ...DEFAULT_SETTINGS },
     onboarding: { tutorialSeen: false, firstMoveDone: false },
+    dev: false,
   };
 }
 
@@ -187,7 +190,37 @@ export function sanitizeProfile(input: unknown, now = Date.now()): Profile {
       tutorialSeen: asBool(onboarding.tutorialSeen, veteran),
       firstMoveDone: asBool(onboarding.firstMoveDone, veteran),
     },
+    dev: raw.dev === true,
   };
+}
+
+/** Turns a profile into the developer account (idempotent) or back into a fresh normal account. */
+export function setDevMode(p: Profile, on: boolean): Profile {
+  if (!on) return { ...createDefaultProfile(), settings: p.settings, onboarding: { tutorialSeen: true, firstMoveDone: true } };
+  const characters = {} as Record<CharacterId, CharacterProgress>;
+  for (const id of CHARACTER_IDS) characters[id] = { level: MAX_LEVEL, cards: 99 };
+  return {
+    ...p,
+    dev: true,
+    coins: DEV_CURRENCY,
+    gems: DEV_CURRENCY,
+    characters,
+    formation: syncFormationLevels(p.formation, levelsOf({ characters })),
+    onboarding: { tutorialSeen: true, firstMoveDone: true },
+  };
+}
+
+/** `?dev=<code>` unlocks the developer account, `?dev=off` leaves it. Returns the (possibly updated) profile. */
+export function applyDevQuery(p: Profile, search: string): Profile {
+  let v: string | null = null;
+  try {
+    v = new URLSearchParams(search).get('dev');
+  } catch {
+    return p;
+  }
+  if (v === DEV_CODE) return p.dev ? p : setDevMode(p, true);
+  if (v === 'off' && p.dev) return setDevMode(p, false);
+  return p;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -204,6 +237,7 @@ export function canLevelUp(p: Profile, id: CharacterId): LevelUpCheck {
   const c = p.characters[id];
   const cost = levelUpCost(c.level);
   if (!cost) return { ok: false, reason: 'max' };
+  if (p.dev) return { ok: true };
   if (c.cards < cost.cards) return { ok: false, reason: 'cards' };
   if (p.gems < cost.gems) return { ok: false, reason: 'gems' };
   return { ok: true };
@@ -213,10 +247,10 @@ export function levelUp(p: Profile, id: CharacterId): Profile {
   if (!canLevelUp(p, id).ok) return p;
   const c = p.characters[id];
   const cost = levelUpCost(c.level)!;
-  const characters = { ...p.characters, [id]: { level: (c.level + 1) as Level, cards: c.cards - cost.cards } };
+  const characters = { ...p.characters, [id]: { level: (c.level + 1) as Level, cards: p.dev ? c.cards : c.cards - cost.cards } };
   return {
     ...p,
-    gems: p.gems - cost.gems,
+    gems: p.dev ? p.gems : p.gems - cost.gems,
     characters,
     formation: syncFormationLevels(p.formation, levelsOf({ characters })),
   };
@@ -240,12 +274,13 @@ export function applyMatchResult(
   if (outcome === 'win') stats.wins++;
   else if (outcome === 'loss') stats.losses++;
   else stats.draws++;
+  if (p.dev) return { profile: { ...p, stats }, reward, gemReward };
   return { profile: { ...p, coins: p.coins + reward, gems: p.gems + gemReward, stats }, reward, gemReward };
 }
 
 /** Test-only gem grant (no billing exists). Amount must be positive. */
 export function grantGems(p: Profile, amount: number): Profile {
-  if (!Number.isFinite(amount) || amount <= 0) return p;
+  if (!Number.isFinite(amount) || amount <= 0 || p.dev) return p;
   return { ...p, gems: p.gems + Math.floor(amount) };
 }
 
@@ -275,8 +310,8 @@ export type BoxKind = 'free' | 'basic';
 export type OpenBoxResult = { ok: true; profile: Profile; drop: BoxDrop } | { ok: false; reason: 'coins' | 'cooldown' };
 
 export function openBox(p: Profile, kind: BoxKind, rng: Rng = defaultRng, now = Date.now()): OpenBoxResult {
-  if (kind === 'free' && freeBoxRemainingMs(p, now) > 0) return { ok: false, reason: 'cooldown' };
-  if (kind === 'basic' && p.coins < BOX.basicPrice) return { ok: false, reason: 'coins' };
+  if (kind === 'free' && !p.dev && freeBoxRemainingMs(p, now) > 0) return { ok: false, reason: 'cooldown' };
+  if (kind === 'basic' && !p.dev && p.coins < BOX.basicPrice) return { ok: false, reason: 'coins' };
   const drop = rollBox(rng);
   const c = p.characters[drop.character];
   return {
@@ -284,8 +319,8 @@ export function openBox(p: Profile, kind: BoxKind, rng: Rng = defaultRng, now = 
     drop,
     profile: {
       ...p,
-      coins: kind === 'basic' ? p.coins - BOX.basicPrice : p.coins,
-      lastFreeBoxAt: kind === 'free' ? now : p.lastFreeBoxAt,
+      coins: kind === 'basic' && !p.dev ? p.coins - BOX.basicPrice : p.coins,
+      lastFreeBoxAt: kind === 'free' && !p.dev ? now : p.lastFreeBoxAt,
       characters: { ...p.characters, [drop.character]: { ...c, cards: c.cards + drop.amount } },
     },
   };
@@ -348,7 +383,13 @@ let current: Profile | null = null;
 const listeners = new Set<Listener>();
 
 export function getProfile(): Profile {
-  if (!current) current = loadProfile();
+  if (!current) {
+    current = loadProfile();
+    if (typeof location !== 'undefined') {
+      const next = applyDevQuery(current, location.search);
+      if (next !== current) setProfile(next);
+    }
+  }
   return current;
 }
 

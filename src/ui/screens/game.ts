@@ -16,6 +16,7 @@ import type { Router, Screen } from '../router';
 import { BOT, GameController, HUMAN, type ControllerSnapshot, type Phase } from '../game/GameController';
 import { endReasonText, pieceInfoCard, rosterChips, setText, TimerRing, turnPillContent } from '../game/hud';
 import type { GameParams } from './gameParams';
+import '../game/hud.css';
 
 export function gameScreen(router: Router, params: GameParams): Screen {
   const bag = new Disposables();
@@ -42,6 +43,29 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   const coach = h('div', { class: 'coach', role: 'status', 'aria-live': 'polite', hidden: true }, h('span', { class: 'coach__icon' }, icon('touch', 20)), coachText);
   const infoHost = h('div', { class: 'info-host' });
   const boardHost = h('div', { class: 'board-host', 'aria-label': '게임 보드' });
+  // Feedback layer: turn banners, hit flashes and floating combat text (pure CSS animations).
+  const fx = h('div', { class: 'fx-layer', 'aria-hidden': 'true' });
+  const spawnFx = (el: HTMLElement, ms: number) => {
+    fx.appendChild(el);
+    bag.timeout(() => el.remove(), ms);
+  };
+  const showTurnBanner = (mine: boolean) => {
+    spawnFx(
+      mine
+        ? h('div', { class: 'turn-banner' }, '내 차례', h('span', { class: 'turn-banner__sub' }, 'YOUR TURN'))
+        : h('div', { class: 'turn-banner turn-banner--bot' }, '상대 차례'),
+      950,
+    );
+  };
+  const showCaptureFx = (byMe: boolean) => {
+    spawnFx(h('div', { class: `hit-flash${byMe ? ' hit-flash--gain' : ''}` }), 560);
+    spawnFx(h('div', { class: `float-text${byMe ? '' : ' float-text--hurt'}` }, byMe ? '격파!' : '피격!'), 1150);
+    if (!byMe) {
+      boardWrap.classList.remove('is-shake');
+      void boardWrap.offsetWidth;
+      boardWrap.classList.add('is-shake');
+    }
+  };
 
   const topBar = h(
     'header',
@@ -70,13 +94,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     botRing.el,
     resignBtn,
   );
-  const el = h(
-    'main',
-    { class: 'game no-select' },
-    topBar,
-    h('div', { class: 'board-wrap' }, boardHost, h('div', { class: 'board-overlay' }, pill, counter, passChip, coach), infoHost),
-    bottomBar,
-  );
+  const boardWrap = h('div', { class: 'board-wrap' }, boardHost, fx, h('div', { class: 'board-overlay' }, pill, counter, passChip, coach), infoHost);
+  const el = h('main', { class: 'game no-select' }, topBar, boardWrap, bottomBar);
 
   // ---------- runtime objects (created on mount)
   let board: IBoardView | null = null;
@@ -134,8 +153,10 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     if (move.captureId) {
       sfx('capture');
       haptic('capture');
+      showCaptureFx(move.pieceId.startsWith(`p${HUMAN}-`));
     } else sfx('land');
   };
+  let lastTurnShown: number | null = null;
   const askResign = async () => {
     if (!ctrl || ctrl.phase === 'ended') return;
     const ok = await confirmDialog({
@@ -190,6 +211,13 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     if (snap.phase === 'humanTurn' && prevPhase !== 'humanTurn' && !snap.paused) {
       sfx('turn');
       if (prevPhase !== null) haptic('turn');
+    }
+    // Turn banner + board turn sweep whenever the side to move changes (not on the ended state).
+    if (snap.phase !== 'ended' && snap.phase !== 'animating' && s.turn !== lastTurnShown) {
+      if (lastTurnShown !== null || s.turn === HUMAN) showTurnBanner(s.turn === HUMAN);
+      lastTurnShown = s.turn;
+      const b = board as unknown as { setTurn?: (p: 0 | 1) => void } | null;
+      b?.setTurn?.(s.turn);
     }
     prevPhase = snap.phase;
     updateCoach(snap);
@@ -373,6 +401,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
         botRing.update(active && snap.turn === HUMAN, rem, c.turnTimeMs, c.paused);
         // Countdown ticks for the last seconds of the player's own turn.
         if (c.phase === 'humanTurn' && !c.paused) {
+          bottomBar.classList.toggle('is-urgent', rem <= PACING.timerWarnMs);
           const sec = Math.ceil(rem / 1000);
           if (sec !== lastTickSec) {
             lastTickSec = sec;
@@ -381,7 +410,10 @@ export function gameScreen(router: Router, params: GameParams): Screen {
               if (sec === PACING.timerWarnMs / 1000) haptic('warn');
             }
           }
-        } else lastTickSec = -1;
+        } else {
+          lastTickSec = -1;
+          bottomBar.classList.remove('is-urgent');
+        }
       });
 
       if (import.meta.env.DEV) {

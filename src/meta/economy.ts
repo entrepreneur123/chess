@@ -13,8 +13,8 @@ export const START_GEMS = 200;
 
 /** Cost to go from `level` to `level + 1` (cards from boxes + gems). Level 3 is max. */
 export const LEVEL_UP_COST: Record<1 | 2, { cards: number; gems: number }> = {
-  1: { cards: 2, gems: 120 },
-  2: { cards: 4, gems: 360 },
+  1: { cards: 5, gems: 300 },
+  2: { cards: 12, gems: 900 },
 };
 export const MAX_LEVEL: Level = 3;
 
@@ -36,8 +36,15 @@ export const BOX = {
   freeCooldownMs: 24 * 60 * 60 * 1000,
   rarityWeights: { common: 60, rare: 30, epic: 10, legendary: 0 } as Record<Rarity, number>,
   amountMin: 1,
-  amountMax: 3,
+  amountMax: 2,
 };
+
+/**
+ * Developer account unlock. Open the app once with `?dev=<DEV_CODE>` (or `?dev=off` to leave):
+ * unlimited currency, every character at max level, free boxes. Stored in the profile.
+ */
+export const DEV_CODE = 'gridclash-dev-2026';
+export const DEV_CURRENCY = 999_999;
 
 /**
  * Placeholder IAP catalog. There is NO billing: while testing, every pack is granted for free
