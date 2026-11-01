@@ -1535,3 +1535,35 @@ body {
     animation: none;
   }
 }
+
+/* ---- Matchmaking ------------------------------------------------------------------------ */
+.mm {
+  background: radial-gradient(90% 60% at 50% 40%, rgba(61, 139, 255, 0.22), transparent 70%);
+}
+.mm__title--found {
+  color: var(--c-gold);
+  font-weight: 900;
+  font-size: 28px;
+}
+.radar__ring {
+  border-color: rgba(61, 139, 255, 0.6);
+}
+.radar__core {
+  box-shadow: 0 0 30px rgba(61, 139, 255, 0.6);
+}
+.versus__side {
+  padding: var(--s-3) var(--s-2);
+  border-radius: var(--radius-m);
+}
+.versus__side:first-child {
+  border-color: rgba(61, 139, 255, 0.45);
+  box-shadow: 0 0 20px rgba(61, 139, 255, 0.2);
+}
+.versus__side:last-child {
+  border-color: rgba(255, 77, 79, 0.45);
+  box-shadow: 0 0 20px rgba(255, 77, 79, 0.2);
+}
+.versus__vs {
+  font-size: 30px;
+  text-shadow: 0 0 16px rgba(255, 194, 71, 0.6);
+}
