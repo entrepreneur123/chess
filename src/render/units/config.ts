@@ -64,7 +64,7 @@ export const LOOKS: Record<CharacterId, CharacterLook> = {
   // Paladin (KayKit Knight). Team: cape + plume + heraldry cells.
   sad: {
     file: 'models/sad.glb',
-    height: 1.42,
+    height: 1.7,
     rim: 0.5,
     teamCells: [cell(0, 1), cell(2, 2)],
     metalRegion: [0, 0, 1, 0.75],
@@ -91,8 +91,8 @@ export const LOOKS: Record<CharacterId, CharacterLook> = {
   // Charging war bull (Quaternius). Team: heraldry on the back saddle plate (all levels) + pauldrons (Lv2+).
   marki: {
     file: 'models/marki.glb',
-    height: 1.08,
-    maxLength: 1.6,
+    height: 1.3,
+    maxLength: 1.85,
     rim: 0.28,
     stretch: [1.28, 1, 1],
     boneScale: { Head: 1.3, Neck1: 1.1, Torso: 1.08, Torso2: 1.1, FrontShoulderL: 1.18, FrontShoulderR: 1.18, BackShoulderL: 1.1, BackShoulderR: 1.1 },
@@ -133,7 +133,7 @@ export const LOOKS: Record<CharacterId, CharacterLook> = {
   // Shield bearer (KayKit Barbarian + knight-atlas props in the right half of a 2:1 atlas).
   walk: {
     file: 'models/walk.glb',
-    height: 1.4,
+    height: 1.68,
     rim: 0.5,
     teamCells: [cell(0, 1, 0), cell(1, 1, 0), cell(2, 2, 0), cell(0, 1, 1), cell(2, 2, 1)],
     metalRegion: [0, 0, 1, 0.75],
