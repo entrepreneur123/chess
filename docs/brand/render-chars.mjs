@@ -82,9 +82,9 @@ scene.add(new THREE.HemisphereLight(0xd3dcff, 0x3b2f2a, 0.7));
 const sc = document.createElement('canvas'); sc.width = sc.height = 128;
 const sx = sc.getContext('2d');
 const grad = sx.createRadialGradient(64, 64, 4, 64, 64, 62);
-grad.addColorStop(0, 'rgba(0,0,0,0.55)'); grad.addColorStop(0.6, 'rgba(0,0,0,0.25)'); grad.addColorStop(1, 'rgba(0,0,0,0)');
+grad.addColorStop(0, 'rgba(0,0,0,0.5)'); grad.addColorStop(0.55, 'rgba(0,0,0,0.18)'); grad.addColorStop(1, 'rgba(0,0,0,0)');
 sx.fillStyle = grad; sx.fillRect(0, 0, 128, 128);
-const blob = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.5), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(sc), transparent: true, depthWrite: false }));
+const blob = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 1.15), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(sc), transparent: true, depthWrite: false }));
 blob.rotation.x = -Math.PI / 2; blob.position.y = 0.002;
 scene.add(blob);
 
@@ -136,9 +136,9 @@ function unionBox(character, owner, yaw) {
 
 // Portrait framing per character: [target (x,y,z) in model space, vertical half-extent]
 const PORTRAIT = {
-  sad: { t: [0, 0.7, 0.04], half: 0.4 },
-  marki: { t: [0, 0.5, 0.36], half: 0.48 },
-  walk: { t: [0, 0.68, 0.06], half: 0.42 },
+  sad: { t: [0, 0.69, 0.04], half: 0.27 },
+  marki: { t: [0.02, 0.42, 0.38], half: 0.34 },
+  walk: { t: [0, 0.69, 0.05], half: 0.27 },
 };
 
 window.draw = ({ character, level, owner, size, mode }) => {
