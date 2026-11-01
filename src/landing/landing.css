@@ -766,3 +766,55 @@ p {
     transition: none;
   }
 }
+
+/* Illustrations */
+.char-card__head {
+  align-items: flex-start;
+}
+.char-card__art {
+  width: 96px;
+  height: 128px;
+  flex: none;
+  object-fit: cover;
+  border-radius: 14px;
+  box-shadow: 0 0 0 2px var(--r-common), 0 0 18px rgba(154, 165, 189, 0.35), 0 8px 18px rgba(0, 0, 0, 0.5);
+  transition: opacity 200ms var(--ease);
+}
+.char-card[data-char='marki'] .char-card__art {
+  box-shadow: 0 0 0 2px var(--r-rare), 0 0 18px rgba(63, 160, 255, 0.5), 0 8px 18px rgba(0, 0, 0, 0.5);
+}
+.char-card[data-char='walk'] .char-card__art {
+  box-shadow: 0 0 0 2px var(--r-epic), 0 0 18px rgba(193, 93, 255, 0.55), 0 8px 18px rgba(0, 0, 0, 0.5);
+}
+.char-card__role b {
+  color: var(--gold);
+}
+.hero__cast {
+  display: flex;
+  gap: 18px;
+  margin: 22px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.hero__cast li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+.cast {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 0 0 2px var(--r-common), 0 0 14px rgba(154, 165, 189, 0.4), 0 6px 14px rgba(0, 0, 0, 0.5);
+}
+.cast--rare {
+  box-shadow: 0 0 0 2px var(--r-rare), 0 0 14px rgba(63, 160, 255, 0.55), 0 6px 14px rgba(0, 0, 0, 0.5);
+}
+.cast--epic {
+  box-shadow: 0 0 0 2px var(--r-epic), 0 0 14px rgba(193, 93, 255, 0.6), 0 6px 14px rgba(0, 0, 0, 0.5);
+}

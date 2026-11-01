@@ -74,6 +74,8 @@ function initCards(): void {
         b.setAttribute('aria-pressed', String(i === lv - 1));
       });
       drawGrid(grid, ch, lv);
+      const art = card.querySelector<HTMLImageElement>('.char-card__art');
+      if (art) art.src = `../chars/${ch}-lv${lv}.jpg`;
     };
     for (let lv = 1; lv <= 3; lv++) {
       const b = document.createElement('button');
