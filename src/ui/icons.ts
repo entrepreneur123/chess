@@ -1,4 +1,8 @@
-/** Inline Material-style icons (24x24 paths). No network/font downloads. */
+/**
+ * Inline icon set (24x24, filled, rounded joins). Material-derived glyphs plus a few game glyphs
+ * drawn on the same grid, so every icon shares one visual weight. No network/font downloads.
+ * Currency icons (`coin`, `gem`) are multi-tone game assets and ignore `currentColor`.
+ */
 
 const PATHS = {
   back: 'M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z',
@@ -17,7 +21,6 @@ const PATHS = {
     'M7.5 5.6 10 7 8.6 4.5 10 2 7.5 3.4 5 2l1.4 2.5L5 7zm12 9.8L17 14l1.4 2.5L17 19l2.5-1.4L22 19l-1.4-2.5L22 14zM22 2l-2.5 1.4L17 2l1.4 2.5L17 7l2.5-1.4L22 7l-1.4-2.5zm-7.63 5.29a.996.996 0 0 0-1.41 0L1.29 18.96a.996.996 0 0 0 0 1.41l2.34 2.34c.39.39 1.02.39 1.41 0L16.7 11.05a.996.996 0 0 0 0-1.41l-2.33-2.35zm-1.03 5.49-2.12-2.12 2.44-2.44 2.12 2.12-2.44 2.44z',
   check: 'M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z',
   up: 'M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z',
-  gem: 'M19 3H5L2 9l10 12L22 9l-3-6zM9.62 8l1.5-3h1.76l1.5 3H9.62zM11 10v6.68L5.44 10H11zm2 0h5.56L13 16.68V10zm6.26-2h-2.65l-1.5-3h2.65l1.5 3zM6.24 5h2.65l-1.5 3H4.74l1.5-3z',
   trophy:
     'M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.3 5 8zm14 0c0 1.3-.84 2.4-2 2.82V7h2v1z',
   person: 'M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z',
@@ -36,25 +39,55 @@ const PATHS = {
     'M0 15h2V9H0v6zm3 2h2V7H3v10zm19-8v6h2V9h-2zm-3 8h2V7h-2v10zM16.5 3h-9C6.67 3 6 3.67 6 4.5v15c0 .83.67 1.5 1.5 1.5h9c.83 0 1.5-.67 1.5-1.5v-15c0-.83-.67-1.5-1.5-1.5zM16 19H8V5h8v14z',
   touch:
     'M9 11.24V7.5C9 6.12 10.12 5 11.5 5S14 6.12 14 7.5v3.74c1.21-.81 2-2.18 2-3.74C16 5.01 13.99 3 11.5 3S7 5.01 7 7.5c0 1.56.79 2.93 2 3.74zm9.84 4.63-4.54-2.26c-.17-.07-.35-.11-.54-.11H13v-6c0-.83-.67-1.5-1.5-1.5S10 6.67 10 7.5v10.74l-3.43-.72c-.08-.01-.15-.03-.24-.03-.31 0-.59.13-.79.33l-.79.8 4.94 4.94c.27.27.65.44 1.06.44h6.79c.75 0 1.33-.55 1.44-1.28l.75-5.27c.01-.07.02-.14.02-.2 0-.62-.38-1.16-.91-1.38z',
+  // ---- v2 additions (same 24px filled grid as the Material set above)
+  swords:
+    'M3 3 5.79 3.88 14.7 12.79 12.79 14.7 3.88 5.79zM16.44 10.5l1.34 1.34-5.94 5.94-1.34-1.34zM15.41 13.92l3.39 3.4-1.48 1.48-3.4-3.39zM19.12 16.58l1.84 1.83-2.55 2.55-1.83-1.84zM20.12 5.79 11.21 14.7 9.3 12.79 18.21 3.88 21 3zM13.5 16.44l-1.34 1.34-5.94-5.94 1.34-1.34zM10.08 15.41l-3.4 3.39-1.48-1.48 3.39-3.4zM7.42 19.12 5.59 20.96 3.04 18.41 4.88 16.58z',
+  chest:
+    'M6 3h12a3 3 0 0 1 3 3v3.5H3V6a3 3 0 0 1 3-3zM3 11h7.5v2.5a1.5 1.5 0 0 0 1.5 1.5 1.5 1.5 0 0 0 1.5-1.5V11H21v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8zm8-2.5h2V13h-2z',
+  shield: 'M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z',
+  crown: 'M3 7.5l4.6 3.6L12 4.5l4.4 6.6L21 7.5 19.2 17H4.8L3 7.5zM5 18.5h14V21H5z',
+  star: 'M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z',
+  plus: 'M19 13.5h-5.5V19h-3v-5.5H5v-3h5.5V5h3v5.5H19z',
+  bolt: 'M7 2v11h3v9l7-12h-4l4-8z',
+  card: 'M7 2h10a3 3 0 0 1 3 3v14a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V5a3 3 0 0 1 3-3zm5 5-3 5 3 5 3-5-3-5z',
+  target:
+    'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 3a7 7 0 1 1 0 14 7 7 0 0 1 0-14zm0 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm0 2.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3z',
 } as const;
 
-export type IconName = keyof typeof PATHS | 'coin';
+export type IconName = keyof typeof PATHS | 'coin' | 'gem';
+
+const NS = 'http://www.w3.org/2000/svg';
+
+/** Multi-tone currency art (flat fills, no gradient ids: safe to repeat on one page). */
+const ART: Record<'coin' | 'gem', string> = {
+  coin:
+    '<circle cx="12" cy="12.6" r="10" fill="#9E5604"/>' +
+    '<circle cx="12" cy="11.6" r="10" fill="#F5A30A"/>' +
+    '<circle cx="12" cy="11.6" r="7.4" fill="#FFC328"/>' +
+    '<path d="M5.2 9.4A7.4 7.4 0 0 1 17.6 6.4 9 9 0 0 0 5.2 9.4z" fill="#FFE58C"/>' +
+    '<path d="M12 6.9l1.45 2.95 3.25.47-2.35 2.3.55 3.24L12 14.33l-2.9 1.53.55-3.24-2.35-2.3 3.25-.47z" fill="#9E5604" opacity=".35" transform="translate(0 .7)"/>' +
+    '<path d="M12 6.9l1.45 2.95 3.25.47-2.35 2.3.55 3.24L12 14.33l-2.9 1.53.55-3.24-2.35-2.3 3.25-.47z" fill="#FFF6D1"/>',
+  gem:
+    '<path d="M6.2 3.5h11.6L22 9.2 12 21.5 2 9.2z" fill="#0B6A8F"/>' +
+    '<path d="M6.2 3.5h11.6L22 9.2H2z" fill="#47DBFF"/>' +
+    '<path d="M8.6 9.2h6.8L12 21.5z" fill="#9CF3FF"/>' +
+    '<path d="M2 9.2h6.6L12 21.5z" fill="#18B5E6"/>' +
+    '<path d="M9.2 3.5h5.6l.6 5.7H8.6z" fill="#C9F8FF"/>' +
+    '<path d="M6.2 3.5h3L8.6 9.2H2z" fill="#86E9FF"/>',
+};
 
 export function icon(name: IconName, size = 24, cls = ''): SVGSVGElement {
-  const ns = 'http://www.w3.org/2000/svg';
-  const svg = document.createElementNS(ns, 'svg');
+  const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('viewBox', '0 0 24 24');
   svg.setAttribute('width', String(size));
   svg.setAttribute('height', String(size));
   svg.setAttribute('aria-hidden', 'true');
   svg.setAttribute('focusable', 'false');
-  svg.setAttribute('class', `icon ${cls}`.trim());
-  if (name === 'coin') {
-    svg.innerHTML =
-      '<circle cx="12" cy="12" r="10" fill="#F9AB00"/><circle cx="12" cy="12" r="7" fill="none" stroke="#FFE08A" stroke-width="1.6"/>' +
-      '<path d="M12 7.5l1.3 2.9 3.1.3-2.3 2.1.7 3.1-2.8-1.6-2.8 1.6.7-3.1-2.3-2.1 3.1-.3z" fill="#FFF4CC"/>';
+  svg.setAttribute('class', `icon icon--${name} ${cls}`.trim());
+  if (name === 'coin' || name === 'gem') {
+    svg.innerHTML = ART[name];
   } else {
-    const p = document.createElementNS(ns, 'path');
+    const p = document.createElementNS(NS, 'path');
     p.setAttribute('d', PATHS[name]);
     p.setAttribute('fill', 'currentColor');
     svg.appendChild(p);

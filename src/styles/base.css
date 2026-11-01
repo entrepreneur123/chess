@@ -1,0 +1,234 @@
+/* ==========================================================================
+   Base: reset, app shell, typography primitives, screen layout, app bar.
+   ========================================================================== */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--ink-900);
+  color: var(--text-1);
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-regular);
+  line-height: var(--lh-body);
+  letter-spacing: var(--ls-body);
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+body {
+  overflow: hidden;
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+button {
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+table {
+  border-collapse: collapse;
+}
+img {
+  -webkit-user-drag: none;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.icon {
+  flex: none;
+  display: block;
+}
+:focus-visible {
+  outline: 2px solid var(--gold-300);
+  outline-offset: 2px;
+}
+[hidden] {
+  display: none !important;
+}
+
+/* ---- Type primitives ---------------------------------------------------- */
+.t-display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: var(--ls-display);
+  line-height: var(--lh-tight);
+}
+.t-num {
+  font-family: var(--font-num);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: 0;
+}
+.t-eyebrow {
+  font-family: var(--font-num);
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+/* ---- App shell ---------------------------------------------------------- */
+#app {
+  position: fixed;
+  inset: 0;
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  isolation: isolate;
+  background:
+    radial-gradient(130% 55% at 50% -12%, rgba(47, 125, 246, 0.2), transparent 62%),
+    radial-gradient(90% 45% at 50% 112%, rgba(236, 58, 69, 0.1), transparent 60%),
+    linear-gradient(180deg, #08101f 0%, var(--ink-900) 48%, #060a14 100%);
+}
+/* Film grain over every screen (static, composited once). */
+#app::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+  background-image: var(--tex-grain);
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+}
+
+.screen {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-left: var(--sal);
+  padding-right: var(--sar);
+  animation: screen-in var(--dur-3) var(--ease-emph) both;
+}
+.screen--first {
+  animation-duration: var(--dur-4);
+}
+@keyframes screen-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.992);
+  }
+}
+
+.scroll-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: var(--s-2) var(--gutter) calc(var(--s-6) + var(--sab));
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.scroll-body::-webkit-scrollbar {
+  display: none;
+}
+.scroll-body > * {
+  flex-shrink: 0;
+}
+
+/* Boot splash hand-off (index.html ships .boot inside #app; the router fades it out). */
+.boot-splash-out {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-splash);
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 360ms var(--ease-out);
+}
+.boot-splash-out.is-out {
+  opacity: 0;
+}
+
+/* ---- App bar (sub-screens) ---------------------------------------------- */
+.appbar {
+  position: relative;
+  z-index: 2;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  min-height: calc(60px + var(--sat));
+  padding: var(--sat) var(--s-3) 0 var(--s-1);
+  background: linear-gradient(180deg, rgba(7, 12, 24, 0.96), rgba(7, 12, 24, 0.82));
+  box-shadow: 0 1px 0 var(--line-1), 0 10px 24px -14px rgba(0, 0, 0, 0.9);
+}
+.appbar::after {
+  /* gold hairline accent under the title */
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 195, 40, 0.45) 30%, rgba(255, 195, 40, 0.45) 70%, transparent);
+  opacity: 0.6;
+}
+.appbar__title {
+  flex: 1;
+  min-width: 0;
+  padding-left: var(--s-1);
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: var(--fs-h1);
+  line-height: 1.1;
+  letter-spacing: var(--ls-display);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
+}
+.appbar__trailing {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+/* ---- Tablet / desktop: a centred column ---------------------------------- */
+@media (min-width: 600px) {
+  .scroll-body {
+    padding-left: max(var(--gutter), calc((100% - var(--column)) / 2));
+    padding-right: max(var(--gutter), calc((100% - var(--column)) / 2));
+  }
+  .appbar {
+    padding-left: max(var(--s-1), calc((100% - var(--column)) / 2 - var(--s-2)));
+    padding-right: max(var(--s-3), calc((100% - var(--column)) / 2));
+  }
+}
