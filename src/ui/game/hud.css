@@ -203,3 +203,33 @@
     display: none;
   }
 }
+
+/* ---- v2 polish: avatars with unit art, display type on announcements -------- */
+.pbar__avatar {
+  display: inline-flex;
+  flex: none;
+  margin-right: 2px;
+}
+.pbar__avatar .unit-art__lv {
+  display: none;
+}
+.turn-pill {
+  font-family: var(--font-display, inherit);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  font-size: 17px;
+}
+.turn-banner {
+  font-family: var(--font-display, inherit);
+  font-weight: 400;
+  font-size: 34px;
+}
+.float-text {
+  font-family: var(--font-display, inherit);
+  font-weight: 400;
+}
+.ring__label,
+.ply-counter {
+  font-family: var(--font-num, inherit);
+  font-variant-numeric: tabular-nums;
+}

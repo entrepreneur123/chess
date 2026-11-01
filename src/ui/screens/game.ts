@@ -70,7 +70,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   const topBar = h(
     'header',
     { class: 'pbar pbar--top' },
-    h('span', { class: 'avatar avatar--red' }, icon('bot', 22)),
+    h('span', { class: 'pbar__avatar pbar__avatar--red' }, unitArt(params.botFormation[0]?.character ?? 'sad', params.botFormation[0]?.level ?? 1, { size: 44, owner: BOT })),
     h(
       'div',
       { class: 'pbar__info' },
@@ -88,7 +88,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   const bottomBar = h(
     'footer',
     { class: 'pbar pbar--bottom' },
-    h('span', { class: 'avatar avatar--blue' }, icon('person', 22)),
+    h('span', { class: 'pbar__avatar pbar__avatar--blue' }, unitArt(params.playerFormation[0]?.character ?? 'sad', params.playerFormation[0]?.level ?? 1, { size: 44, owner: HUMAN })),
     h('div', { class: 'pbar__info' }, h('div', { class: 'pbar__name' }, '나'), h('div', { class: 'pbar__meta' }, '블루 · 아래쪽')),
     bottomRoster,
     botRing.el,

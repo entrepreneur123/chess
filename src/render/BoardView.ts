@@ -4,10 +4,15 @@
  * World mapping: x = c - 5.5 (col 0 at screen left), z = 5.5 - r (row 0 nearest the camera,
  * i.e. player 0 at the bottom of the screen), y = up. Tile tops are at y = TILE_TOP.
  *
+ * Units are animated glTF characters (src/render/units, public/models/*.glb): one merged skinned
+ * draw call each, AnimationMixer per piece (idle loop / run / jump / attack / death), facing from
+ * Piece.dir with a smooth turn. Until the models load (or if they fail) pieces show silhouettes.
+ *
  * Performance notes: tiles are one InstancedMesh, overlays are InstancedMeshes, effects reuse
  * pre-allocated meshes (no per-frame / per-move allocations), one 1024 shadow map, pixel ratio
- * capped at 2. Frames are only requested while something is animating (the idle pulse of a
- * selection runs at ~30 fps and stops as soon as nothing is selected).
+ * capped at 2. Frames are only requested while something is animating: moves/effects at full
+ * rate, the selection pulse at ~30 fps, unit idle loops at ~24 fps (off with prefers-reduced-motion
+ * or setIdleAnimation(false), paused while the tab is hidden).
  */
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
