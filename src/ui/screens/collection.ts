@@ -8,7 +8,7 @@ import { MAX_LEVEL } from '../../meta/economy';
 import { canLevelUp, getProfile, levelUp, levelUpCost, subscribeProfile, updateProfile } from '../../meta/profile';
 import { appBar } from '../components/appbar';
 import { confirmDialog } from '../components/dialog';
-import { CONCEPT, coinChip, gemChip, movementDiagram, rarityChip, unitArt } from '../components/piece';
+import { CONCEPT, coinChip, gemChip, movementDiagram, rarityChip } from '../components/piece';
 import { toast } from '../components/toast';
 import { Disposables, h, prefersReducedMotion, replaceChildren } from '../dom';
 import { icon } from '../icons';
@@ -93,19 +93,20 @@ export function collectionScreen(router: Router): Screen {
     return h(
       'article',
       { class: `unit-card rarity-${def.rarity}${leveled ? ' is-leveled' : ''}`, 'data-character': id },
-      h('div', { class: 'unit-card__shine', 'aria-hidden': 'true' }),
-      leveled ? h('div', { class: 'unit-card__burst', 'aria-hidden': 'true' }, h('span', { class: 'unit-card__burst-text' }, 'LEVEL UP!')) : null,
       h(
         'header',
-        { class: 'unit-card__head' },
-        h('div', { class: 'unit-card__portrait' }, h('span', { class: 'unit-card__rays', 'aria-hidden': 'true' }), unitArt(id, prog.level, { kind: 'card', size: 112 })),
+        { class: 'unit-card__banner' },
+        h('img', { class: 'unit-card__art', src: `./chars/${id}-lv${prog.level}.jpg`, alt: '', loading: 'lazy', decoding: 'async', draggable: 'false' }),
+        h('div', { class: 'unit-card__shine', 'aria-hidden': 'true' }),
         h(
           'div',
           { class: 'unit-card__title' },
+          h('div', { class: 'unit-card__role' }, h('b', null, CONCEPT[id]), ' · ', ROLE[id].role),
           h('div', { class: 'unit-card__name' }, def.nameKo, h('span', { class: 'unit-card__en' }, def.nameEn)),
           h('div', { class: 'unit-card__chips' }, rarityChip(def.rarity), h('span', { class: 'lv-pill lv-pill--big', 'data-level': prog.level }, `Lv.${prog.level}`)),
-          h('div', { class: 'unit-card__role' }, h('b', null, CONCEPT[id]), ' · ', ROLE[id].role),
         ),
+        h('div', { class: 'unit-card__stars', 'aria-hidden': 'true' }, levels.map((lv) => icon('star', 16, lv <= prog.level ? 'is-on' : ''))),
+        leveled ? h('div', { class: 'unit-card__burst', 'aria-hidden': 'true' }, h('span', { class: 'unit-card__burst-text' }, 'LEVEL UP!')) : null,
       ),
       h('p', { class: 'unit-card__trait' }, icon('info', 14), ROLE[id].trait),
       h(
@@ -130,6 +131,7 @@ export function collectionScreen(router: Router): Screen {
         h(
           'div',
           { class: 'upgrade__cards' },
+          h('span', { class: 'upgrade__card-icon', 'aria-hidden': 'true' }, icon('card', 22)),
           h('div', { class: 'progress-block__label' }, h('span', null, cost ? '강화 카드' : '보유 카드'), h('span', { class: 'progress-block__value' }, cost ? `${prog.cards} / ${cost.cards}` : String(prog.cards))),
           h(
             'div',
@@ -180,7 +182,7 @@ export function collectionScreen(router: Router): Screen {
     replaceChildren(wallet, coinChip(p.coins), gemChip(p.gems));
     replaceChildren(
       list,
-      h('p', { class: 'hint hint--pad' }, '상자에서 카드를 모으고 보석으로 강화하세요. 다이어그램의 위쪽이 앞(적 방향)입니다.'),
+      h('p', { class: 'hint hint--pad' }, icon('info', 16), '상자에서 카드를 모으고 보석으로 강화하세요. 다이어그램의 위쪽이 앞(적 방향)입니다.'),
       CHARACTER_IDS.map(card),
     );
     if (justLeveled && !prefersReducedMotion()) {
@@ -188,6 +190,8 @@ export function collectionScreen(router: Router): Screen {
       target?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
     justLeveled = null;
+    // Entrance animation only on first paint (later re-renders must not replay it).
+    if (!list.classList.contains('is-settled')) bag.timeout(() => list.classList.add('is-settled'), 900);
   };
   render();
   bag.add(subscribeProfile(render));

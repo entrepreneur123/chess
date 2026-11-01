@@ -7,6 +7,7 @@ import { CHARACTERS, CHARACTER_IDS, TURN_TIME_MS, type CharacterId } from '../..
 import { getProfile, updateProfile } from '../../meta/profile';
 import { h, prefersReducedMotion, type Child } from '../dom';
 import { icon } from '../icons';
+import { chestArt } from './chest';
 import { formationGrid } from './formationGrid';
 import { overlayRoot, pushOverlay, registerForceClose } from './overlay';
 import { CONCEPT, movementDiagram, pieceToken, rarityChip, unitArt } from './piece';
@@ -20,8 +21,8 @@ interface Slide {
 
 const SHORT_MOVE: Record<CharacterId, string> = {
   sad: '상하좌우 이동',
-  marki: '앞으로 직진',
-  walk: '앞줄로 점프',
+  marki: '앞으로 직진 · 끝줄에서 뒤돌아요',
+  walk: '앞줄로 점프 · 끝줄에서 뒤돌아요',
 };
 
 function goalArt(): Child {
@@ -117,7 +118,7 @@ function growArt(): Child {
   return h(
     'div',
     { class: 'tut-art tut-art--grow' },
-    h('div', { class: 'tut-grow__box' }, h('div', { class: 'box-mini', 'aria-hidden': 'true' }), h('span', { class: 'tut-grow__cap' }, '상자')),
+    h('div', { class: 'tut-grow__box' }, chestArt('basic'), h('span', { class: 'tut-grow__cap' }, '상자')),
     h('span', { class: 'tut-grow__arrow' }, icon('chevron', 22)),
     h('div', { class: 'tut-grow__lv' }, movementDiagram('sad', 1, { cell: 7 }), h('span', { class: 'tut-grow__cap' }, 'Lv.1')),
     h('span', { class: 'tut-grow__arrow' }, icon('chevron', 22)),
@@ -127,7 +128,7 @@ function growArt(): Child {
 
 const SLIDES: Slide[] = [
   { key: 'goal', art: goalArt, title: '상대 말 3개를 모두 잡으면 승리!', body: '12×12 보드 위 1:1 대결. 이동 경로에서 처음 만나는 상대 말을 잡을 수 있어요.' },
-  { key: 'chars', art: charactersArt, title: '세 캐릭터, 세 가지 움직임', body: '파란 칸이 갈 수 있는 곳이에요. 월크는 다른 말을 뛰어넘어요.' },
+  { key: 'chars', art: charactersArt, title: '세 캐릭터, 세 가지 움직임', body: '파란 칸이 갈 수 있는 곳이에요. 마르키·월크는 앞으로만 가다가 끝줄에 닿으면 뒤돌아요. 월크는 말을 뛰어넘어요.' },
   { key: 'tap', art: tapArt, title: '탭하고, 한 번 더 탭!', body: '내 말을 탭하면 갈 수 있는 칸이 빛나요. 빛나는 칸을 탭하면 이동해요.' },
   { key: 'zone', art: zoneArt, title: '진형은 아래 3줄에서', body: '대전 전에 내 구역(3×12) 안에 말을 자유롭게 배치해 작전을 짜세요.' },
   { key: 'timer', art: timerArt, title: '한 턴은 60초', body: '시간이 지나면 턴이 넘어가요. 3번 연속 초과하면 기권패!' },
@@ -176,7 +177,7 @@ export function showTutorial(): Promise<void> {
       }),
     );
     const nextLabel = h('span', null, '다음');
-    const nextBtn = h('button', { class: 'btn btn--filled btn--block tut-next', type: 'button', 'data-action': 'tut-next', onclick: () => next() }, nextLabel, icon('chevron', 20));
+    const nextBtn = h('button', { class: 'btn btn--primary btn--block btn--lg tut-next', type: 'button', 'data-action': 'tut-next', onclick: () => next() }, nextLabel, icon('chevron', 20));
     const skipBtn = h('button', { class: 'btn btn--text tut-skip', type: 'button', 'data-action': 'tut-skip', onclick: () => close() }, '건너뛰기');
     const panel = h(
       'div',

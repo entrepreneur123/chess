@@ -4,6 +4,7 @@
  * "guard" entry that is present whenever a non-root screen is shown.
  */
 import { closeAllOverlays, closeTopOverlay } from './components/overlay';
+import { installPressFx } from './components/press';
 import { clearToasts } from './components/toast';
 import { clear } from './dom';
 
@@ -31,6 +32,22 @@ export type ScreenFactory<N extends ScreenName> = (router: Router, params: Scree
 
 const ROOT = 'lobby' as const;
 
+/** Resolve once the UI faces used on first paint are loaded, or after `maxMs`, whichever is first. */
+function waitForFonts(maxMs: number): Promise<void> {
+  const fonts = typeof document !== 'undefined' ? document.fonts : undefined;
+  if (!fonts?.load) return Promise.resolve();
+  const loads = Promise.all([
+    fonts.load('400 16px Pretendard', '가A'),
+    fonts.load('800 16px Pretendard', '가A'),
+    fonts.load('16px "Black Han Sans"', '대전'),
+    fonts.load('italic 900 16px "Exo 2"', 'GRID'),
+  ]).then(
+    () => undefined,
+    () => undefined,
+  );
+  return Promise.race([loads, new Promise<void>((r) => window.setTimeout(r, maxMs))]);
+}
+
 export class Router {
   private current: { name: ScreenName; screen: Screen } | null = null;
   private guard = false;
@@ -40,6 +57,7 @@ export class Router {
   constructor(private readonly outlet: HTMLElement) {
     history.replaceState({ t12: 'root' }, '');
     window.addEventListener('popstate', this.onPopState);
+    installPressFx();
   }
 
   register<N extends ScreenName>(name: N, factory: ScreenFactory<N>): this {
@@ -94,9 +112,14 @@ export class Router {
       removed = true;
       layer.remove();
     };
-    requestAnimationFrame(() => requestAnimationFrame(() => layer.classList.add('is-out')));
+    // Keep the splash up until the brand faces are ready (max ~900 ms) so the first screen never
+    // flashes fallback fonts, then cross-fade.
+    const fadeOut = () => requestAnimationFrame(() => requestAnimationFrame(() => layer.classList.add('is-out')));
     layer.addEventListener('transitionend', remove);
-    window.setTimeout(remove, 700); // reduced motion / no transition
+    void waitForFonts(900).then(() => {
+      fadeOut();
+      window.setTimeout(remove, 700); // reduced motion / no transition
+    });
   }
 
   /** Go back to the lobby (root). */

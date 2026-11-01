@@ -3,9 +3,10 @@ import { CHARACTERS } from '../../engine';
 import { BOX, GEM_PACKS } from '../../meta/economy';
 import { freeBoxRemainingMs, getProfile, grantGems, levelUpCost, openBox, subscribeProfile, updateProfile, type BoxDrop, type BoxKind } from '../../meta/profile';
 import { appBar } from '../components/appbar';
+import { chestArt } from '../components/chest';
 import { confirmDialog } from '../components/dialog';
 import { overlayRoot, pushOverlay, registerForceClose } from '../components/overlay';
-import { coinChip, gemChip, rarityChip, unitArt } from '../components/piece';
+import { coinChip, gemChip, rarityChip } from '../components/piece';
 import { toast } from '../components/toast';
 import { Disposables, h, prefersReducedMotion, replaceChildren } from '../dom';
 import { icon } from '../icons';
@@ -19,7 +20,10 @@ function fmtRemaining(ms: number): string {
   return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
 }
 
-/** Full-screen box opening: shake -> burst -> card reveal. Resolves when dismissed. */
+/**
+ * Full-screen box opening: drop + shake -> burst (flash, rarity-coloured light) -> card flip.
+ * Tapping during the opening skips straight to the reveal. Resolves when dismissed.
+ */
 function playBoxOpening(drop: BoxDrop, kind: BoxKind): Promise<void> {
   return new Promise((resolve) => {
     const def = CHARACTERS[drop.character];
@@ -37,43 +41,69 @@ function playBoxOpening(drop: BoxDrop, kind: BoxKind): Promise<void> {
       pop();
       unforce();
       root.classList.remove('is-in');
-      window.setTimeout(() => root.remove(), 220);
+      window.setTimeout(() => root.remove(), 260);
       resolve();
+    };
+
+    const burst = () => {
+      if (closed || root.classList.contains('is-burst')) return;
+      root.classList.add('is-burst');
     };
 
     const reveal = () => {
       if (stage === 'revealed' || closed) return;
       stage = 'revealed';
+      burst();
       root.classList.add('is-revealed');
       sfx('reveal');
       haptic(def.rarity === 'common' ? 'select' : 'win');
+      timers.push(window.setTimeout(() => okBtn.focus({ preventScroll: true }), reduced ? 0 : 700));
     };
 
-    const boxEl = h(
-      'div',
-      { class: `box-3d box-3d--${kind}`, 'aria-hidden': 'true' },
-      h('span', { class: 'box-3d__lid' }),
-      h('span', { class: 'box-3d__body' }),
-      h('span', { class: 'box-3d__ribbon' }),
-    );
+    const pct = cost ? Math.min(100, (prog.cards / cost.cards) * 100) : 100;
+    const ready = !!cost && prog.cards >= cost.cards;
+    const okBtn = h('button', { class: 'btn btn--primary btn--block btn--lg', type: 'button', 'data-action': 'reveal-ok', onclick: close }, '확인');
     const cardEl = h(
       'div',
       { class: `reveal-card rarity-${def.rarity}`, 'data-reveal': drop.character },
-      unitArt(drop.character, prog.level, { size: 128 }),
-      h('div', { class: 'reveal-card__name' }, def.nameKo),
-      rarityChip(def.rarity),
-      h('div', { class: 'reveal-card__amount' }, `카드 +${drop.amount}`),
       h(
         'div',
-        { class: 'reveal-card__progress' },
-        cost ? (prog.cards >= cost.cards ? `강화 가능! 카드 ${prog.cards} / ${cost.cards}` : `강화까지 카드 ${prog.cards} / ${cost.cards}`) : `최대 레벨 · 보유 ${prog.cards}`,
+        { class: 'reveal-card__inner' },
+        h('div', { class: 'reveal-card__back' }, h('span', { class: 'reveal-card__emblem' }, icon('swords', 44))),
+        h(
+          'div',
+          { class: 'reveal-card__front rarity-frame' },
+          h('img', { class: 'reveal-card__art', src: `./chars/${drop.character}-lv${prog.level}.jpg`, alt: '', decoding: 'async', draggable: 'false' }),
+          h('div', { class: 'reveal-card__amount' }, h('span', { class: 'reveal-card__x' }, '×'), String(drop.amount)),
+          h(
+            'div',
+            { class: 'reveal-card__info' },
+            rarityChip(def.rarity),
+            h('div', { class: 'reveal-card__name' }, def.nameKo),
+          ),
+        ),
       ),
-      h('button', { class: 'btn btn--filled btn--block', type: 'button', 'data-action': 'reveal-ok', onclick: close }, '확인'),
+    );
+    const details = h(
+      'div',
+      { class: 'reveal-details' },
+      h('p', { class: 'reveal-card__progress' }, cost ? (ready ? '강화 가능!' : '다음 강화까지') : '최대 레벨', h('b', null, cost ? `${prog.cards} / ${cost.cards}` : `보유 ${prog.cards}`)),
+      h('div', { class: 'progress' }, h('span', { class: `progress__bar${ready ? ' is-full' : ''}`, style: `width:${pct}%` })),
+      okBtn,
     );
     const root = h(
       'div',
-      { class: 'box-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': '상자 열기' },
-      h('div', { class: 'box-overlay__stage' }, h('div', { class: 'burst', 'aria-hidden': 'true' }), boxEl, cardEl),
+      { class: `box-overlay rarity-${def.rarity}`, role: 'dialog', 'aria-modal': 'true', 'aria-label': '상자 열기' },
+      h('div', { class: 'box-overlay__rays', 'aria-hidden': 'true' }),
+      h(
+        'div',
+        { class: 'box-overlay__stage' },
+        h('div', { class: 'burst', 'aria-hidden': 'true' }),
+        chestArt(kind, 'box-3d'),
+        h('div', { class: 'box-overlay__flash', 'aria-hidden': 'true' }),
+        cardEl,
+      ),
+      details,
       h('p', { class: 'box-overlay__hint' }, '탭하여 건너뛰기'),
     );
     root.addEventListener('click', (e) => {
@@ -85,7 +115,8 @@ function playBoxOpening(drop: BoxDrop, kind: BoxKind): Promise<void> {
     overlayRoot().appendChild(root);
     requestAnimationFrame(() => root.classList.add('is-in'));
     if (!reduced) sfx('boxShake');
-    timers.push(window.setTimeout(reveal, reduced ? 50 : 1300));
+    timers.push(window.setTimeout(burst, reduced ? 0 : 1150));
+    timers.push(window.setTimeout(reveal, reduced ? 50 : 1400));
   });
 }
 
@@ -95,8 +126,9 @@ export function shopScreen(router: Router): Screen {
   const body = h('div', { class: 'scroll-body shop__body' });
   const el = h('div', { class: 'shop' }, appBar('상점', { onBack: () => router.home(), trailing: coinHost }), body);
   let busy = false;
+  let settled = false;
   const freeLabel = h('span', { class: 'box-card__cta-label' });
-  const freeBtn = h('button', { class: 'btn btn--filled btn--block', type: 'button', 'data-action': 'open-free', onclick: () => void buy('free') }, icon('gift', 20), freeLabel);
+  const freeBtn = h('button', { class: 'btn btn--upgrade btn--block', type: 'button', 'data-action': 'open-free', onclick: () => void buy('free') }, icon('gift', 20), freeLabel);
 
   const buy = async (kind: BoxKind) => {
     if (busy) return;
@@ -162,48 +194,50 @@ export function shopScreen(router: Router): Screen {
     tickFree();
     replaceChildren(
       body,
-      h('h3', { class: 'section-title section-title--pad' }, '캐릭터 상자'),
+      h('h3', { class: 'section-title section-title--display section-title--pad' }, '캐릭터 상자'),
       h(
         'div',
         { class: 'box-grid' },
         h(
           'article',
-          { class: 'card box-card box-card--free' },
-          h('div', { class: 'box-card__art' }, h('div', { class: 'box-mini box-mini--free', 'aria-hidden': 'true' })),
+          { class: 'box-card box-card--free enter', style: '--i:0' },
+          h('span', { class: 'box-card__ribbon' }, 'FREE'),
+          h('div', { class: 'box-card__art' }, chestArt('free')),
           h('div', { class: 'box-card__name' }, '무료 일일 상자'),
           h('div', { class: 'box-card__desc' }, '24시간마다 1회'),
           freeBtn,
         ),
         h(
           'article',
-          { class: 'card box-card' },
-          h('div', { class: 'box-card__art' }, h('div', { class: 'box-mini', 'aria-hidden': 'true' })),
+          { class: 'box-card enter', style: '--i:1' },
+          h('div', { class: 'box-card__art' }, chestArt('basic')),
           h('div', { class: 'box-card__name' }, '일반 상자'),
-          h('div', { class: 'box-card__desc' }, '캐릭터 카드 1종'),
+          h('div', { class: 'box-card__desc' }, `캐릭터 카드 ${BOX.amountMin}–${BOX.amountMax}장`),
           h(
             'button',
             {
-              class: `btn ${p.coins >= BOX.basicPrice ? 'btn--filled' : 'btn--tonal'} btn--block`,
+              class: `btn ${p.coins >= BOX.basicPrice || p.dev ? 'btn--primary' : 'btn--tonal'} btn--block`,
               type: 'button',
               'data-action': 'open-basic',
-              'aria-disabled': p.coins >= BOX.basicPrice ? 'false' : 'true',
+              'aria-disabled': p.coins >= BOX.basicPrice || p.dev ? 'false' : 'true',
               onclick: () => void buy('basic'),
             },
-            icon('coin', 18),
-            String(BOX.basicPrice),
+            icon('coin', 22),
+            h('span', { class: 't-num' }, String(BOX.basicPrice)),
           ),
         ),
       ),
-      h('p', { class: 'hint hint--pad' }, icon('info', 16), odds()),
-      h('h3', { class: 'section-title section-title--pad' }, icon('gem', 18), '보석 충전'),
+      h('p', { class: 'hint hint--pad odds' }, icon('info', 16), odds()),
+      h('h3', { class: 'section-title section-title--display section-title--pad' }, '보석 충전'),
       h(
         'div',
         { class: 'gem-grid' },
         GEM_PACKS.map((g, i) =>
           h(
             'button',
-            { class: `gem-pack gem-pack--${i}`, type: 'button', 'data-action': 'gem-pack', 'data-pack': g.id, onclick: () => void claimGems(g.gems) },
-            h('span', { class: 'gem-pack__art', 'aria-hidden': 'true' }, icon('gem', 30 + i * 6)),
+            { class: `gem-pack gem-pack--${i} pressable enter`, style: `--i:${i + 2}`, type: 'button', 'data-action': 'gem-pack', 'data-pack': g.id, onclick: () => void claimGems(g.gems) },
+            i === GEM_PACKS.length - 1 ? h('span', { class: 'gem-pack__best' }, 'BEST') : null,
+            h('span', { class: 'gem-pack__art', 'aria-hidden': 'true' }, Array.from({ length: i + 1 }, (_, k) => icon('gem', 34 + i * 4 - k * 6, `gem-pack__gem gem-pack__gem--${k}`))),
             h('span', { class: 'gem-pack__amount' }, g.gems.toLocaleString('ko-KR')),
             h('span', { class: 'gem-pack__price' }, h('s', null, g.priceLabel)),
             h('span', { class: 'gem-pack__tag' }, g.testGrant ? '테스트 무료' : '준비 중'),
@@ -212,6 +246,8 @@ export function shopScreen(router: Router): Screen {
       ),
       h('p', { class: 'hint hint--pad' }, icon('info', 16), '테스트 버전: 보석은 결제 없이 지급됩니다. 캐릭터 강화에 사용하세요.'),
     );
+    body.classList.toggle('is-settled', settled);
+    settled = true;
   };
 
   render();

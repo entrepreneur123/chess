@@ -34,7 +34,7 @@ export function formationScreen(router: Router): Screen {
   const statusHost = h('div', { class: 'form-status', 'aria-live': 'polite' });
   const saveBtn = h(
     'button',
-    { class: 'btn btn--filled', type: 'button', 'data-action': 'save', onclick: () => save() },
+    { class: 'btn btn--primary', type: 'button', 'data-action': 'save', onclick: () => save() },
     icon('save', 20),
     '저장',
   );
@@ -101,7 +101,7 @@ export function formationScreen(router: Router): Screen {
         return h(
           'button',
           {
-            class: `tray-card${selected === id ? ' is-selected' : ''}`,
+            class: `tray-card pressable rarity-${def.rarity}${selected === id ? ' is-selected' : ''}`,
             type: 'button',
             role: 'option',
             'aria-selected': selected === id ? 'true' : 'false',
@@ -111,6 +111,7 @@ export function formationScreen(router: Router): Screen {
               render();
             },
           },
+          selected === id ? h('span', { class: 'tray-card__pick' }, '선택됨') : null,
           h('div', { class: 'tray-card__token' }, unitArt(id, lv, { size: 56 })),
           h(
             'div',
@@ -119,7 +120,7 @@ export function formationScreen(router: Router): Screen {
             h('div', { class: 'tray-card__desc' }, def.descKo[lv - 1]),
             h(
               'div',
-              { class: 'tray-card__where' },
+              { class: `tray-card__where${slot ? '' : ' is-off'}` },
               slot ? `${ROW_LABELS[slot.row]} · ${slot.col + 1}번 칸` : '미배치',
             ),
           ),
@@ -132,7 +133,8 @@ export function formationScreen(router: Router): Screen {
       v.ok
         ? h(
             'p',
-            { class: 'hint' },
+            { class: `hint${selected ? ' is-holding' : ''}` },
+            icon(selected ? 'touch' : 'info', 16),
             selected
               ? `${CHARACTERS[selected].nameKo}을(를) 놓을 칸을 탭하세요. 다른 말 위에 놓으면 자리를 바꿉니다.`
               : '캐릭터를 선택한 뒤 칸을 탭해 배치하세요. 배치된 말을 탭하면 집어 듭니다.',
@@ -150,13 +152,13 @@ export function formationScreen(router: Router): Screen {
       { class: 'scroll-body formation__body' },
       h(
         'section',
-        { class: 'card card--flush' },
-        h('div', { class: 'enemy-hint' }, icon('up', 16), '적 진영 방향'),
+        { class: 'zone-board enter', style: '--i:0' },
+        h('div', { class: 'enemy-hint' }, h('span', { class: 'enemy-hint__chev', 'aria-hidden': 'true' }, icon('up', 16), icon('up', 16)), '적 진영 방향'),
         gridHost,
-        h('div', { class: 'zone-caption' }, '내 배치 구역 (3 × 12)'),
+        h('div', { class: 'zone-caption' }, '내 배치 구역 · 3 × 12'),
       ),
       statusHost,
-      h('h3', { class: 'section-title section-title--pad' }, '내 캐릭터'),
+      h('h3', { class: 'section-title section-title--display section-title--pad' }, '내 캐릭터'),
       trayHost,
     ),
     h(

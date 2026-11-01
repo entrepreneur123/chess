@@ -101,7 +101,7 @@
   width: 100%;
 }
 .btn--sm {
-  min-height: 40px;
+  min-height: var(--touch);
   padding: 0 var(--s-4);
   font-size: var(--fs-body);
   --b-depth: 3px;
@@ -196,7 +196,7 @@
   text-shadow: 0 1px 0 rgba(200, 255, 225, 0.5);
 }
 .btn--secondary {
-  --b-top: var(--blue-400);
+  --b-top: #2a72e6;
   --b-bot: var(--blue-600);
   --b-edge: var(--blue-700);
   --b-text: #fff;
@@ -211,7 +211,7 @@
   --b-hi: rgba(255, 255, 255, 0.12);
 }
 .btn--danger {
-  --b-top: var(--red-400);
+  --b-top: #d9303b;
   --b-bot: var(--red-600);
   --b-edge: var(--red-700);
   --b-text: #fff;
@@ -460,10 +460,10 @@
   height: 20px;
   padding: 0 8px;
   border-radius: 5px;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--rar) 34%, transparent), color-mix(in srgb, var(--rar-deep) 50%, transparent));
+  background: linear-gradient(180deg, var(--rar-soft), rgba(0, 0, 0, 0.3));
   box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--rar) 70%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    inset 0 0 0 1px var(--rar),
+    inset 0 2px 0 rgba(255, 255, 255, 0.18);
   color: #fff;
   font-size: var(--fs-micro);
   font-weight: var(--fw-bold);
@@ -490,7 +490,7 @@
   display: grid;
   place-items: center;
   border-radius: var(--r-full);
-  background: linear-gradient(180deg, var(--red-400), var(--red-600));
+  background: linear-gradient(180deg, var(--red-500), var(--red-600));
   box-shadow:
     0 0 0 2px var(--ink-900),
     0 2px 6px rgba(236, 58, 69, 0.6);
@@ -610,12 +610,15 @@
 .wallet__btn:active {
   transform: scale(0.94);
 }
+.wallet__btn .coin-chip {
+  padding-right: 20px;
+}
 .wallet__plus {
   display: grid;
   place-items: center;
   width: 22px;
   height: 22px;
-  margin-left: -16px;
+  margin-left: -13px;
   border-radius: 6px;
   background: linear-gradient(180deg, #5cf0a8, var(--green-500));
   box-shadow:
@@ -757,6 +760,43 @@
   height: 22px;
   border-radius: 6px;
   font-size: 13px;
+}
+
+/* Card ornaments: corner gems for epic+, animated foil sheen for legendary. */
+.unit-art--card.rarity-epic::before,
+.unit-art--card.rarity-legendary::before,
+.unit-art--card.rarity-epic::after,
+.unit-art--card.rarity-legendary::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  z-index: 2;
+  width: 9px;
+  height: 9px;
+  margin-left: -4.5px;
+  transform: rotate(45deg);
+  border-radius: 1.5px;
+  background: linear-gradient(135deg, #fff, var(--rar) 55%, var(--rar-deep));
+  box-shadow:
+    0 0 8px var(--rar),
+    0 0 0 1.5px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+.unit-art--card.rarity-epic::before,
+.unit-art--card.rarity-legendary::before {
+  top: -6px;
+}
+.unit-art--card.rarity-epic::after,
+.unit-art--card.rarity-legendary::after {
+  bottom: -6px;
+}
+.unit-art--card.rarity-legendary {
+  animation: legend-glow 2.4s var(--ease-in-out) infinite;
+}
+@keyframes legend-glow {
+  50% {
+    filter: drop-shadow(0 0 10px var(--rar-glow));
+  }
 }
 
 /* ---- Piece token (board-style disc) -------------------------------------- */
@@ -1257,10 +1297,15 @@ body.in-game .toast-host {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .unit-art--card.rarity-legendary,
   .btn::before,
   .badge,
   .fx-ripple::after,
   .enter {
     animation: none !important;
   }
+}
+/* Containers that re-render mark themselves settled so .enter doesn't replay. */
+.is-settled .enter {
+  animation: none;
 }

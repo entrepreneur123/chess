@@ -1,14 +1,34 @@
+/**
+ * Matchmaking: a short "searching" beat (radar around the player's lead unit + rotating tips),
+ * then a split-screen VS card with both sides' key art before the match starts.
+ */
 import type { Difficulty } from '../../ai/bot';
-import { CHARACTER_IDS, validateFormation } from '../../engine';
+import { CHARACTERS, CHARACTER_IDS, validateFormation, type CharacterId, type Level, type Rarity } from '../../engine';
 import { PACING } from '../../meta/economy';
 import { createOpponent, DIFFICULTY_LABEL } from '../../meta/opponent';
 import { getProfile, levelsOf } from '../../meta/profile';
 import { randInt, defaultRng } from '../../meta/rng';
-import { pieceToken } from '../components/piece';
-import { toast } from '../components/toast';
+import { pieceToken, unitArt } from '../components/piece';
+import { clearToasts, toast } from '../components/toast';
 import { Disposables, h, replaceChildren } from '../dom';
 import { icon } from '../icons';
 import type { Router, Screen } from '../router';
+
+const RARITY_RANK: Record<Rarity, number> = { common: 0, rare: 1, epic: 2, legendary: 3 };
+const TIPS = [
+  '월크는 사이에 있는 말을 뛰어넘어요',
+  '마르키는 앞으로 길게 돌진해요. 끝줄에 닿으면 뒤돌아요',
+  '사드는 유일하게 뒤로 물러날 수 있어요',
+  '60수 동안 잡기가 없으면 남은 전력으로 판정해요',
+  '레벨이 오르면 이동 범위가 넓어져요',
+];
+
+/** The unit a side "leads" with on the VS card: highest level, then highest rarity. */
+function leadUnit(levels: Record<CharacterId, Level>, exclude?: CharacterId): CharacterId {
+  return CHARACTER_IDS.filter((id) => id !== exclude).sort(
+    (a, b) => levels[b] - levels[a] || RARITY_RANK[CHARACTERS[b].rarity] - RARITY_RANK[CHARACTERS[a].rarity],
+  )[0];
+}
 
 export function matchmakingScreen(router: Router, params: { difficulty: Difficulty }): Screen {
   const bag = new Disposables();
@@ -16,63 +36,77 @@ export function matchmakingScreen(router: Router, params: { difficulty: Difficul
   const difficulty = params.difficulty;
   const levels = levelsOf(profile);
   const playerFormation = validateFormation(profile.formation).ok ? profile.formation : null;
+  const myLead = leadUnit(levels);
 
   const stage = h('div', { class: 'mm__stage', 'aria-live': 'polite' });
   const el = h(
     'main',
     { class: 'mm' },
+    h('div', { class: 'mm__bg', 'aria-hidden': 'true' }, h('img', { src: `./chars/${myLead}-lv${levels[myLead]}.jpg`, alt: '', decoding: 'async' })),
     stage,
     h(
       'div',
       { class: 'mm__footer' },
-      h('button', { class: 'btn btn--text', type: 'button', 'data-action': 'cancel', onclick: () => router.home() }, '취소'),
+      h('button', { class: 'btn btn--tonal btn--sm mm__cancel', type: 'button', 'data-action': 'cancel', onclick: () => router.home() }, icon('close', 18), '취소'),
     ),
   );
 
-  const searching = () =>
+  const searching = () => {
+    const tip = h('p', { class: 'mm__tip' }, h('b', null, 'TIP'), h('span', null, TIPS[randInt(defaultRng, 0, TIPS.length - 1)]));
     replaceChildren(
       stage,
       h(
         'div',
         { class: 'radar', 'aria-hidden': 'true' },
+        h('span', { class: 'radar__sweep' }),
         h('span', { class: 'radar__ring' }),
         h('span', { class: 'radar__ring radar__ring--2' }),
         h('span', { class: 'radar__ring radar__ring--3' }),
-        h('span', { class: 'radar__core' }, icon('person', 32)),
+        h('span', { class: 'radar__core' }, unitArt(myLead, levels[myLead], { size: 104 })),
       ),
-      h('h2', { class: 'mm__title' }, '매칭 중…'),
-      h('p', { class: 'mm__sub' }, `난이도 ${DIFFICULTY_LABEL[difficulty]} · 비슷한 실력의 상대를 찾고 있어요`),
+      h('h2', { class: 'mm__title' }, '상대를 찾는 중', h('span', { class: 'mm__dots', 'aria-hidden': 'true' }, h('i'), h('i'), h('i'))),
+      h('p', { class: 'mm__sub' }, h('span', { class: 'chip chip--gold' }, `난이도 ${DIFFICULTY_LABEL[difficulty]}`), '비슷한 실력의 상대를 찾고 있어요'),
+      tip,
     );
+  };
 
-  const found = (name: string, oppLevels: Record<string, number>) =>
+  const side = (who: 'me' | 'opp', name: string, lv: Record<CharacterId, Level>, owner: 0 | 1) => {
+    // The opponent leads with a different unit than the player so the VS card is a real face-off.
+    const lead = who === 'me' ? myLead : leadUnit(lv, myLead);
+    return h(
+      'div',
+      { class: `versus__side versus__side--${who}` },
+      h('div', { class: 'versus__art' }, h('img', { src: `./chars/${lead}-lv${lv[lead]}.jpg`, alt: '', decoding: 'async', draggable: 'false' })),
+      h(
+        'div',
+        { class: 'versus__plate' },
+        h('span', { class: 'versus__eyebrow' }, who === 'me' ? 'BLUE TEAM' : `RED TEAM · AI ${DIFFICULTY_LABEL[difficulty]}`),
+        h('span', { class: 'versus__name', 'data-opponent': who === 'opp' ? name : undefined }, name),
+        h('div', { class: 'versus__pieces' }, CHARACTER_IDS.map((id) => pieceToken(id, lv[id], owner, 'sm'))),
+      ),
+    );
+  };
+
+  const found = (name: string, oppLevels: Record<CharacterId, Level>) => {
+    el.classList.add('is-found');
+    clearToasts(); // nothing may cover the VS card
     replaceChildren(
       stage,
       h(
         'div',
         { class: 'versus' },
-        h(
-          'div',
-          { class: 'versus__side' },
-          h('span', { class: 'avatar avatar--blue avatar--lg' }, icon('person', 32)),
-          h('span', { class: 'versus__name' }, '나'),
-          h('div', { class: 'versus__pieces' }, CHARACTER_IDS.map((id) => pieceToken(id, levels[id], 0, 'xs'))),
-        ),
-        h('span', { class: 'versus__vs' }, 'VS'),
-        h(
-          'div',
-          { class: 'versus__side' },
-          h('span', { class: 'avatar avatar--red avatar--lg' }, icon('bot', 32)),
-          h('span', { class: 'versus__name', 'data-opponent': name }, name),
-          h(
-            'div',
-            { class: 'versus__pieces' },
-            CHARACTER_IDS.map((id) => pieceToken(id, (oppLevels[id] ?? 1) as 1 | 2 | 3, 1, 'xs')),
-          ),
-        ),
+        side('me', '나', levels, 0),
+        h('div', { class: 'versus__vs', 'aria-hidden': 'true' }, h('span', null, 'VS')),
+        side('opp', name, oppLevels, 1),
       ),
-      h('h2', { class: 'mm__title mm__title--found' }, '상대 발견!'),
-      h('p', { class: 'mm__sub' }, h('span', { class: 'chip chip--outline' }, icon('lock', 14), '상대 진형 비공개'), ' 곧 대전이 시작됩니다'),
+      h(
+        'div',
+        { class: 'mm__found' },
+        h('h2', { class: 'mm__title mm__title--found' }, '상대 발견!'),
+        h('p', { class: 'mm__sub' }, h('span', { class: 'chip chip--outline' }, icon('lock', 14), '상대 진형 비공개'), ' 곧 대전이 시작됩니다'),
+      ),
     );
+  };
 
   return {
     el,

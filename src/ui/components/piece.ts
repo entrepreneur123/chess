@@ -8,6 +8,7 @@ import {
   type PlayerId,
   type Rarity,
 } from '../../engine';
+import { getProfile } from '../../meta/profile';
 import { h } from '../dom';
 import { icon } from '../icons';
 
@@ -74,22 +75,26 @@ export function unitArt(
   );
 }
 
-export function gemChip(amount: number): HTMLElement {
+/**
+ * Currency pill. The developer account has unlimited currency: the value renders as "∞" while the
+ * accessible label keeps the real number.
+ */
+function currencyChip(kind: 'coin' | 'gem', amount: number, label: string): HTMLElement {
+  const infinite = getProfile().dev;
   return h(
     'span',
-    { class: 'coin-chip coin-chip--gem', 'aria-label': `보석 ${amount}` },
-    icon('gem', 18),
-    h('span', { class: 'coin-chip__value' }, amount.toLocaleString('ko-KR')),
+    { class: `coin-chip${kind === 'gem' ? ' coin-chip--gem' : ''}${infinite ? ' is-infinite' : ''}`, 'aria-label': `${label} ${amount}` },
+    icon(kind, 18),
+    h('span', { class: 'coin-chip__value', 'aria-hidden': 'true' }, infinite ? '∞' : amount.toLocaleString('ko-KR')),
   );
 }
 
+export function gemChip(amount: number): HTMLElement {
+  return currencyChip('gem', amount, '보석');
+}
+
 export function coinChip(amount: number, opts: { label?: string } = {}): HTMLElement {
-  return h(
-    'span',
-    { class: 'coin-chip', 'aria-label': `${opts.label ?? '코인'} ${amount}` },
-    icon('coin', 18),
-    h('span', { class: 'coin-chip__value' }, amount.toLocaleString('ko-KR')),
-  );
+  return currencyChip('coin', amount, opts.label ?? '코인');
 }
 
 // -----------------------------------------------------------------------------------------------

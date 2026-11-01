@@ -233,21 +233,25 @@
   --rar: var(--rar-common);
   --rar-deep: var(--rar-common-deep);
   --rar-glow: var(--rar-common-glow);
+  --rar-soft: rgba(174, 187, 210, 0.32);
 }
 .rarity-rare {
   --rar: var(--rar-rare);
   --rar-deep: var(--rar-rare-deep);
   --rar-glow: var(--rar-rare-glow);
+  --rar-soft: rgba(72, 169, 255, 0.32);
 }
 .rarity-epic {
   --rar: var(--rar-epic);
   --rar-deep: var(--rar-epic-deep);
   --rar-glow: var(--rar-epic-glow);
+  --rar-soft: rgba(192, 112, 255, 0.32);
 }
 .rarity-legendary {
   --rar: var(--rar-legendary);
   --rar-deep: var(--rar-legendary-deep);
   --rar-glow: var(--rar-legendary-glow);
+  --rar-soft: rgba(255, 190, 59, 0.32);
 }
 
 @media (prefers-reduced-motion: reduce) {

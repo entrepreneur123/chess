@@ -12,15 +12,13 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { BOARD_SIZE, ZONE_DEPTH } from '../engine/types';
-import type { CharacterId, Move, Piece, PlayerId, Pos, Rarity } from '../engine/types';
+import type { Move, Piece, PlayerId, Pos, Rarity } from '../engine/types';
 import type { BoardHighlights, IBoardView } from './types';
-import {
-  buildBatchedCharacterModel,
-  createBatchMaterials,
-  disposeBatchMaterials,
-  disposeCharacterCache,
-  type BatchMaterials,
-} from './characters';
+import { UnitActor } from './units/actor';
+import { loadUnitAssets, unitAssetsIfLoaded } from './units/assets';
+import { LOOKS, MOVE_CLIP } from './units/config';
+import { unitPointScale } from './units/fx';
+import { UnitLibrary } from './units/library';
 import { ANIM, BOARD_COLORS, CHARACTER_RARITY, RARITY_COLORS, RARITY_GLOW, TEAM_COLORS } from './palette';
 import {
   clamp01,
@@ -60,8 +58,14 @@ const SELECT_LIFT = 0.12;
 const TAP_SLOP_PX = 14;
 const MAX_PIXEL_RATIO = 2;
 const IDLE_FRAME_MS = 32; // idle pulse (selection / targets) is capped at ~30 fps
-/** Uniform scale of each character model on the board (tile = 1 unit; the bull is long, so smaller). */
-const MODEL_SCALE: Record<CharacterId, number> = { sad: 1.32, marki: 1.14, walk: 1.3 }; // units overflow their tile slightly on purpose: readability on phones
+const IDLE_ANIM_FRAME_MS = 41; // unit idle loops alone run at ~24 fps
+/** Attack clip length on the board (ms) and the victim's death clip length (ms). */
+const ATTACK_MS = 440;
+const DEATH_MS = 280;
+/** Upper bound for a capture move (ms) so turns stay snappy. */
+const MOVE_BUDGET_MS = 560;
+/** Facing turn time (s) when a piece's forward direction changes / after a move. */
+const TURN_S = 0.25;
 /** Height of the puck top above the tile (models stand on it). */
 const PUCK_TOP = 0.14;
 /** Rows between the zone edge lines (world z of the line between home zone and no-man's land). */
@@ -80,7 +84,15 @@ interface PieceVisual {
   root: THREE.Group;
   /** Lifted / bobbed / squashed part (puck + body). Origin sits on the tile top. */
   inner: THREE.Group;
+  /** Animated glTF unit (null while the models load or if they failed: `body` is a silhouette). */
+  actor: UnitActor | null;
+  body: THREE.Object3D | null;
+  /** Invisible tap target sized to the unit (the only thing the picker raycasts). */
+  proxy: THREE.Mesh;
 }
+
+/** Yaw (radians, model faces +z at 0) for a piece's forward direction (+1 = toward row 11 = -z). */
+const forwardYaw = (p: Piece): number => ((p.dir ?? (p.owner === 0 ? 1 : -1)) === 1 ? Math.PI : 0);
 
 interface RunningAnim {
   start: number;
@@ -92,12 +104,14 @@ interface RunningAnim {
   jump: boolean;
   jumpHeight: number;
   landed: boolean;
-  captured: THREE.Group | null;
+  captured: PieceVisual | null;
   capturedOwner: PlayerId;
   capturedAt: THREE.Vector3;
   captureStart: number;
   capFired: boolean;
-  capturedMaterials: THREE.Material[];
+  deathMs: number;
+  attackStart: number;
+  attackFired: boolean;
   piecesAfter: Piece[];
   resolve: () => void;
 }
@@ -129,10 +143,12 @@ class PieceKit {
   readonly pip: THREE.BufferGeometry;
   readonly groundPlane: THREE.BufferGeometry;
   readonly burstBit: THREE.BufferGeometry;
-
-  /** Per-team shared materials for the merged character models (rim-lit in the team's light tone). */
-  readonly batch: Record<PlayerId, BatchMaterials>;
-  private readonly models = new Map<string, THREE.Group>();
+  /** Loading / failure silhouette (capsule body + head) and the invisible pick proxy. */
+  readonly capsule: THREE.BufferGeometry;
+  readonly capsuleHead: THREE.BufferGeometry;
+  readonly proxyGeo: THREE.BufferGeometry;
+  readonly proxyMat: THREE.MeshBasicMaterial;
+  readonly silhouette: Record<PlayerId, THREE.MeshStandardMaterial>;
   readonly rarity: Record<Rarity, THREE.MeshStandardMaterial>;
   readonly rarityHalo: Record<Rarity, THREE.MeshBasicMaterial>;
   readonly baseMat: THREE.MeshStandardMaterial;
@@ -165,13 +181,20 @@ class PieceKit {
     this.groundPlane = g(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2));
 
     this.burstBit = g(new THREE.IcosahedronGeometry(0.095, 0));
+    this.capsule = g(new THREE.CapsuleGeometry(0.2, 0.36, 6, 16).translate(0, 0.38, 0));
+    this.capsuleHead = g(new THREE.SphereGeometry(0.17, 16, 12).translate(0, 0.84, 0));
+    this.proxyGeo = g(new THREE.CylinderGeometry(1, 1, 1, 10).translate(0, 0.5, 0));
+    this.proxyMat = m(new THREE.MeshBasicMaterial({ visible: false }));
 
     const std = (color: string, roughness: number, emissive?: string, ei = 0): THREE.MeshStandardMaterial =>
       m(new THREE.MeshStandardMaterial({ color, roughness, metalness: 0.05, emissive: emissive ?? '#000000', emissiveIntensity: ei }));
 
-    const mk = (id: PlayerId): BatchMaterials =>
-      createBatchMaterials((mat) => addRim(mat, TEAM_COLORS[id].light, 0.55, 2.4));
-    this.batch = { 0: mk(0), 1: mk(1) };
+    const sil = (id: PlayerId): THREE.MeshStandardMaterial => {
+      const mat = std(TEAM_COLORS[id].main, 0.5, TEAM_COLORS[id].dark, 0.25);
+      addRim(mat, TEAM_COLORS[id].light, 0.8, 2.2);
+      return mat;
+    };
+    this.silhouette = { 0: sil(0), 1: sil(1) };
 
     const glowTex = makeGlowTexture();
     const blobTex = makeBlobTexture();
@@ -259,40 +282,24 @@ class PieceKit {
       pip.position.set(Math.sin(a) * 0.35, 0.145, Math.cos(a) * 0.35);
     }
 
-    // Character model (faces +z). Player 0 moves toward -z (away from the camera) and player 1
-    // toward +z (facing the camera), so player 0's body is turned around.
-    const body = this.model(p.character, p.level, p.owner).clone(true);
-    body.rotation.y = p.owner === 0 ? Math.PI : 0;
-    body.scale.setScalar(MODEL_SCALE[p.character]);
-    body.position.y = PUCK_TOP - 0.01;
-    inner.add(body);
     return { root, inner };
   }
 
-  /** Merged (<= 4 meshes) template per character/level/owner, built lazily and cached. */
-  private model(ch: CharacterId, level: Piece['level'], owner: PlayerId): THREE.Group {
-    const key = `${ch}:${level}:${owner}`;
-    let tpl = this.models.get(key);
-    if (!tpl) {
-      tpl = buildBatchedCharacterModel({ character: ch, level, owner }, this.batch[owner]);
-      this.models.set(key, tpl);
+  /** Simple team-coloured capsule unit (models loading / failed to load). */
+  silhouetteBody(owner: PlayerId): THREE.Group {
+    const g = new THREE.Group();
+    for (const geo of [this.capsule, this.capsuleHead]) {
+      const me = new THREE.Mesh(geo, this.silhouette[owner]);
+      me.castShadow = true;
+      g.add(me);
     }
-    return tpl;
+    return g;
   }
 
   dispose(): void {
     for (const geo of this.geometries) geo.dispose();
     for (const mat of this.materials) mat.dispose();
     for (const t of this.textures) t.dispose();
-    for (const m of this.models.values()) {
-      m.traverse((o) => {
-        if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).geometry.dispose();
-      });
-    }
-    this.models.clear();
-    disposeBatchMaterials(this.batch[0]);
-    disposeBatchMaterials(this.batch[1]);
-    disposeCharacterCache();
   }
 }
 
@@ -340,6 +347,13 @@ export class BoardView implements IBoardView {
   private turnFxPlayer: PlayerId = 0;
 
   private readonly visuals = new Map<string, PieceVisual>();
+  /** glTF unit factory (null until the models are loaded, or if loading failed). */
+  private units: UnitLibrary | null = null;
+  private readonly unitGlowTex: THREE.Texture;
+  /** Unit idle loops (breathing etc.) at ~24 fps; off for prefers-reduced-motion. */
+  private idleAnim = true;
+  private lastTick = 0;
+  private readonly pickList: THREE.Object3D[] = [];
   private highlights: BoardHighlights = {};
   private hi: HighlightIndex = indexHighlights({});
   private placedMoves: Pos[] = [];
@@ -396,6 +410,12 @@ export class BoardView implements IBoardView {
 
     const glowTex = makeGlowTexture();
     this.ownTextures.push(glowTex);
+    this.unitGlowTex = glowTex;
+    try {
+      this.idleAnim = !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    } catch {
+      this.idleAnim = true;
+    }
 
     const backdrop = makeBackdropTexture();
     this.ownTextures.push(backdrop);
@@ -440,7 +460,28 @@ export class BoardView implements IBoardView {
       this.resizeObserver = new ResizeObserver(() => this.resize());
       this.resizeObserver.observe(container);
     }
+    document.addEventListener('visibilitychange', this.onVisibility);
     this.resize();
+    this.initUnits();
+  }
+
+  /** Use the cached unit models, or load them; pieces show silhouettes until they arrive. */
+  private initUnits(): void {
+    const ready = unitAssetsIfLoaded();
+    if (ready) {
+      this.units = new UnitLibrary(ready, this.unitGlowTex);
+      return;
+    }
+    loadUnitAssets().then(
+      (assets) => {
+        if (this.disposed) return;
+        this.units = new UnitLibrary(assets, this.unitGlowTex);
+        this.rebuildBodies();
+      },
+      (err: unknown) => {
+        console.warn('[render] unit models failed to load, using silhouettes:', err);
+      },
+    );
   }
 
   // ---------------------------------------------------------------- scene setup
@@ -730,40 +771,57 @@ export class BoardView implements IBoardView {
     }
 
     // Detach the captured piece from tracking: it lives only for the effect.
-    let captured: THREE.Group | null = null;
+    let captured: PieceVisual | null = null;
     let capturedOwner: PlayerId = mover.piece.owner === 0 ? 1 : 0;
-    const capturedMaterials: THREE.Material[] = [];
     const capturedAt = new THREE.Vector3(cellX(move.to.c), 0, cellZ(move.to.r));
     if (move.captureId) {
       const cv = this.visuals.get(move.captureId);
       if (cv) {
         this.visuals.delete(move.captureId);
-        captured = cv.root;
+        captured = cv;
         capturedOwner = cv.piece.owner;
         capturedAt.copy(cv.root.position);
-        captured.traverse((o) => {
-          if (o instanceof THREE.Mesh) {
-            const mat = (o.material as THREE.Material).clone();
-            mat.transparent = true;
-            o.material = mat;
-            o.castShadow = false;
-            capturedMaterials.push(mat);
-          }
+        cv.root.traverse((o) => {
+          o.castShadow = false;
         });
       }
     }
 
     const jump = mover.piece.character === 'walk';
     const moveDur = jump ? ANIM.jump : slideDuration(move);
-    const captureStart = captured ? moveDur * (jump ? 0.92 : 0.82) : moveDur;
-    const duration = Math.max(
-      moveDur + (jump ? ANIM.land : 40),
-      captured ? captureStart + ANIM.capture + 40 : 0,
-    );
+    const captureStart = captured ? moveDur * (jump ? 0.85 : 0.8) : moveDur;
+    // Keep every move (capture included) inside ~560 ms: the death clip absorbs the difference.
+    const deathMs = Math.max(200, Math.min(DEATH_MS, MOVE_BUDGET_MS - captureStart));
+    const duration = Math.max(moveDur + (jump ? ANIM.land : 40), captured ? captureStart + deathMs : 0);
     const from = mover.root.position.clone();
     from.y = 0;
     const to = new THREE.Vector3(cellX(move.to.c), 0, cellZ(move.to.r));
     const dist = Math.hypot(move.to.r - move.from.r, move.to.c - move.from.c);
+
+    // Unit animation: face the travel direction, run / jump, strike so the impact frame lands on
+    // the capture, the victim turns to the attacker and plays its death.
+    const actor = mover.actor;
+    let attackStart = Infinity;
+    if (actor) {
+      const dx = to.x - from.x;
+      const dz = to.z - from.z;
+      if (dx * dx + dz * dz > 1e-6) actor.face(Math.atan2(dx, dz), 0.12);
+      const clip = MOVE_CLIP[mover.piece.character];
+      if (clip === 'jump' && actor.has('jump')) {
+        actor.play('jump', { once: true, fade: 0.06, timeScale: actor.clipDuration('jump') / ((moveDur + ANIM.land) / 1000) });
+      } else {
+        actor.play('run', { fade: 0.08, timeScale: 1.55 });
+      }
+      if (captured && actor.has('attack')) {
+        const lead = LOOKS[mover.piece.character].impact * ATTACK_MS;
+        attackStart = Math.max(0, captureStart - lead);
+      }
+    }
+    if (captured?.actor) {
+      const dx = from.x - capturedAt.x;
+      const dz = from.z - capturedAt.z;
+      if (dx * dx + dz * dz > 1e-6) captured.actor.face(Math.atan2(dx, dz), 0.15);
+    }
 
     return new Promise<void>((resolve) => {
       this.anim = {
@@ -774,14 +832,17 @@ export class BoardView implements IBoardView {
         from,
         to,
         jump,
-        jumpHeight: 0.7 + Math.min(dist, 6) * 0.12,
+        // The jump clip already lifts the body: a lower arc keeps the unit on screen.
+        jumpHeight: (0.7 + Math.min(dist, 6) * 0.12) * (actor?.has('jump') ? 0.6 : 1),
         landed: false,
         captured,
         capturedOwner,
         capturedAt,
         captureStart,
         capFired: false,
-        capturedMaterials,
+        deathMs,
+        attackStart,
+        attackFired: false,
         piecesAfter,
         resolve,
       };
@@ -820,12 +881,21 @@ export class BoardView implements IBoardView {
     this.requestRender();
   }
 
+  /** Optional extra: enable/disable the units' idle loops (battery saver). */
+  setIdleAnimation(enabled: boolean): void {
+    this.idleAnim = enabled;
+    this.requestRender();
+  }
+
   resize(): void {
     if (this.disposed) return;
     const { w, h } = containerSize(this.container);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO));
     this.renderer.setSize(w, h, false);
     this.fitCamera(w / h, h);
+    // Spark point sizes: drawing-buffer px per world unit at distance 1.
+    unitPointScale.value =
+      (h * this.renderer.getPixelRatio()) / (2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)));
     this.requestRender();
   }
 
@@ -855,8 +925,12 @@ export class BoardView implements IBoardView {
     canvas.removeEventListener('contextmenu', this.onContextMenu);
     canvas.removeEventListener('webglcontextlost', this.onContextLost);
     canvas.removeEventListener('webglcontextrestored', this.onContextRestored);
+    document.removeEventListener('visibilitychange', this.onVisibility);
+    for (const v of this.visuals.values()) v.actor?.dispose();
     this.visuals.clear();
     this.pieceLayer.clear();
+    this.units?.dispose();
+    this.units = null;
     this.kit.dispose();
     for (const g of this.ownGeometries) g.dispose();
     for (const m of this.ownMaterials) m.dispose();
@@ -882,14 +956,16 @@ export class BoardView implements IBoardView {
       seen.add(p.id);
       let v = this.visuals.get(p.id);
       if (v && !sameLook(v.piece, p)) {
-        this.pieceLayer.remove(v.root);
+        this.removeVisual(v);
         v = undefined;
       }
       if (!v) {
-        const b = this.kit.build(p);
-        v = { piece: p, root: b.root, inner: b.inner };
+        v = this.createVisual(p);
         this.visuals.set(p.id, v);
         this.pieceLayer.add(v.root);
+      } else if (v.actor) {
+        // Forward direction changed (turn-around at the far edge) or a move ended: turn smoothly.
+        v.actor.face(forwardYaw(p), TURN_S);
       }
       v.piece = { ...p, pos: { ...p.pos } };
       v.inner.scale.set(1, 1, 1);
@@ -897,11 +973,62 @@ export class BoardView implements IBoardView {
     }
     for (const [id, v] of this.visuals) {
       if (!seen.has(id)) {
-        this.pieceLayer.remove(v.root); // geometry/materials are shared -> nothing to dispose
+        this.removeVisual(v);
         this.visuals.delete(id);
       }
     }
     this.applyLift();
+  }
+
+  private createVisual(p: Piece): PieceVisual {
+    const b = this.kit.build(p);
+    const proxy = new THREE.Mesh(this.kit.proxyGeo, this.kit.proxyMat);
+    proxy.userData.pieceId = p.id;
+    b.inner.add(proxy);
+    const v: PieceVisual = { piece: p, root: b.root, inner: b.inner, actor: null, body: null, proxy };
+    this.attachBody(v, p);
+    return v;
+  }
+
+  /** (Re)create the unit body of a visual: animated glTF actor, or a silhouette fallback. */
+  private attachBody(v: PieceVisual, p: Piece): void {
+    if (v.body) v.inner.remove(v.body);
+    v.actor?.dispose();
+    v.actor = null;
+    let height = 0.95;
+    if (this.units) {
+      try {
+        v.actor = this.units.createActor(p);
+        v.actor.face(forwardYaw(p), 0);
+        v.body = v.actor.object;
+        height = v.actor.height;
+      } catch (err) {
+        console.warn('[render] unit build failed, using a silhouette:', err);
+        v.actor = null;
+      }
+    }
+    if (!v.actor) {
+      v.body = this.kit.silhouetteBody(p.owner);
+      v.body.scale.setScalar(LOOKS[p.character].levels[p.level].scale);
+    }
+    const body = v.body;
+    if (body) {
+      body.position.y = PUCK_TOP - 0.01;
+      v.inner.add(body);
+    }
+    v.proxy.scale.set(0.42, PUCK_TOP + height, 0.42);
+  }
+
+  /** Swap every silhouette for its glTF unit once the models are ready. */
+  private rebuildBodies(): void {
+    for (const v of this.visuals.values()) if (!v.actor) this.attachBody(v, v.piece);
+    this.requestRender();
+  }
+
+  private removeVisual(v: PieceVisual): void {
+    this.pieceLayer.remove(v.root);
+    v.actor?.dispose(); // geometry/materials are shared templates -> freed by the library
+    v.actor = null;
   }
 
   /** Raise the selected piece slightly so the selection reads at a glance. */
@@ -1021,7 +1148,7 @@ export class BoardView implements IBoardView {
       }
     }
     // Tallest piece on the far row.
-    pts.push(new THREE.Vector3(-HALF, 1.75, -HALF), new THREE.Vector3(HALF, 1.75, -HALF));
+    pts.push(new THREE.Vector3(-HALF, 1.95, -HALF), new THREE.Vector3(HALF, 1.95, -HALF));
     const marginX = portrait ? 0.985 : 0.92;
     const marginY = portrait ? 0.95 : 0.92;
     const target = new THREE.Vector3(0, 0, 0);
@@ -1094,15 +1221,47 @@ export class BoardView implements IBoardView {
     if (this.disposed) return;
     const animating = this.tickAnimation(now);
     const fxActive = this.updateFx(now);
-    const busy = animating || fxActive;
-    if (!busy && this.pulsing && now - this.lastFrame < IDLE_FRAME_MS) {
-      this.requestRender(); // idle pulse is throttled to ~30 fps; skip drawing this tick
-      return;
+    let unitsBusy = false;
+    let haveActors = false;
+    for (const v of this.visuals.values()) {
+      if (!v.actor) continue;
+      haveActors = true;
+      if (v.actor.busy) unitsBusy = true;
+    }
+    const capturedActor = this.anim?.captured?.actor ?? null;
+    const busy = animating || fxActive || unitsBusy;
+    const idleLoop = this.idleAnim && haveActors && !document.hidden;
+    if (!busy && (this.pulsing || idleLoop)) {
+      const cap = this.pulsing ? IDLE_FRAME_MS : IDLE_ANIM_FRAME_MS;
+      if (now - this.lastFrame < cap) {
+        this.requestRender(); // idle pulse / idle loops are throttled; skip drawing this tick
+        return;
+      }
+    }
+    // Unit animation clock (clamped so a long pause never makes the mixers jump).
+    const dt = this.lastTick > 0 ? Math.min(0.1, Math.max(0, (now - this.lastTick) / 1000)) : 0;
+    this.lastTick = now;
+    if (haveActors || capturedActor) {
+      const step = busy || this.idleAnim ? dt : 0;
+      for (const v of this.visuals.values()) v.actor?.update(step);
+      capturedActor?.update(dt);
+      this.units?.update(now / 1000);
     }
     this.lastFrame = now;
     this.updatePulse(now);
     this.renderer.render(this.scene, this.camera);
-    if (busy || this.pulsing) this.requestRender();
+    if (busy || this.pulsing || idleLoop) this.requestRender();
+    else this.lastTick = 0;
+  };
+
+  private readonly onVisibility = (): void => {
+    if (document.hidden) {
+      if (this.rafId) cancelAnimationFrame(this.rafId);
+      this.rafId = 0;
+      this.lastTick = 0;
+    } else {
+      this.requestRender();
+    }
   };
 
   /** Advance the running animation; returns true if more frames are needed. */
@@ -1145,17 +1304,27 @@ export class BoardView implements IBoardView {
     if (!a.landed && t >= a.moveDur) {
       a.landed = true;
       this.startLandFx(a.to, TEAM_COLORS[a.mover.piece.owner].glow, now);
+      if (a.mover.actor && !a.captured && !a.jump) a.mover.actor.idle(0.12);
+    }
+    if (!a.attackFired && t >= a.attackStart && a.mover.actor) {
+      a.attackFired = true;
+      const act = a.mover.actor;
+      act.play('attack', { once: true, fade: 0.06, timeScale: act.clipDuration('attack') / (ATTACK_MS / 1000) });
     }
     if (a.captured && t >= a.captureStart) {
+      const cv = a.captured;
       if (!a.capFired) {
         a.capFired = true;
         this.startCaptureFx(a.capturedAt, a.capturedOwner, now);
+        const act = cv.actor;
+        if (act) act.play('death', { once: true, hold: true, fade: 0.05, timeScale: act.clipDuration('death') / (a.deathMs / 1000) });
       }
-      const ck = clamp01((t - a.captureStart) / ANIM.capture);
-      const s = 1 - easeOutCubic(ck);
-      a.captured.scale.setScalar(Math.max(0.001, s));
-      a.captured.position.y = 0.15 * easeOutCubic(ck);
-      for (const m of a.capturedMaterials) m.opacity = 1 - ck;
+      // Knock-back first (death clip), then shrink away into the burst.
+      const ck = clamp01((t - a.captureStart) / a.deathMs);
+      const sk = clamp01((ck - 0.45) / 0.55);
+      const s = 1 - easeOutCubic(sk);
+      cv.root.scale.setScalar(Math.max(0.001, s));
+      cv.root.position.y = 0.12 * easeOutCubic(sk);
     }
     return true;
   }
@@ -1296,9 +1465,10 @@ export class BoardView implements IBoardView {
     if (!a) return;
     this.anim = null;
     a.mover.inner.scale.set(1, 1, 1);
-    if (a.captured) {
-      this.pieceLayer.remove(a.captured);
-      for (const m of a.capturedMaterials) m.dispose();
+    if (a.captured) this.removeVisual(a.captured);
+    if (a.mover.actor) {
+      if (!natural) a.mover.actor.face(a.mover.actor.facing, 0);
+      a.mover.actor.idle(natural ? 0.2 : 0);
     }
     this.syncPieces(a.piecesAfter);
     this.requestRender();
@@ -1392,16 +1562,22 @@ export class BoardView implements IBoardView {
 
     // Otherwise forgive taps on a tall piece body, but only close to its own square so a tall
     // piece never steals the tap meant for an empty square far behind it.
-    const hits = this.raycaster.intersectObject(this.pieceLayer, true);
+    this.pieceLayer.updateMatrixWorld(); // proxies may not have been rendered since the last sync
+    this.pickList.length = 0;
+    for (const v of this.visuals.values()) this.pickList.push(v.proxy);
+    const hits = this.raycaster.intersectObjects(this.pickList, false);
+    this.pickList.length = 0;
     for (const h of hits) {
-      let o: THREE.Object3D | null = h.object;
-      while (o && o.userData.pieceId === undefined) o = o.parent;
-      const id = o?.userData.pieceId as string | undefined;
+      const id = h.object.userData.pieceId as string | undefined;
       const v = id ? this.visuals.get(id) : undefined;
       if (!v) continue;
       if (hit) {
+        // A tap on the head reaches the ground `height * slope` behind the unit (camera tilt);
+        // anything further away is a tap meant for another square.
+        const dir = this.raycaster.ray.direction;
+        const slope = Math.hypot(dir.x, dir.z) / Math.max(0.05, Math.abs(dir.y));
         const d = Math.hypot(hit.x - v.root.position.x, hit.z - v.root.position.z);
-        if (d > 0.85) continue;
+        if (d > 0.6 + v.proxy.scale.y * slope * 1.05) continue;
       }
       return { ...v.piece.pos };
     }
