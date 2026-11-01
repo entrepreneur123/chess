@@ -136,7 +136,7 @@ function unionBox(character, owner, yaw) {
 
 // Portrait framing per character: [target (x,y,z) in model space, vertical half-extent]
 const PORTRAIT = {
-  sad: { t: [0, 0.69, 0.04], half: 0.27 },
+  sad: { t: [0, 0.72, 0.04], half: 0.31 },
   marki: { t: [0.02, 0.42, 0.38], half: 0.34 },
   walk: { t: [0, 0.69, 0.05], half: 0.27 },
 };

@@ -87,3 +87,6 @@ export function buildCharacterModel(opts: CharacterModelOptions): THREE.Group {
 export function disposeCharacterCache(): void {
   disposeKit();
 }
+
+export { buildBatchedCharacterModel, createBatchMaterials, disposeBatchMaterials } from './batch';
+export type { BatchMaterials } from './batch';

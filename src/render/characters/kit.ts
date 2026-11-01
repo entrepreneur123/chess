@@ -262,7 +262,7 @@ export function taperedTube(
         const b2 = i * radial + ((j + 1) % radial);
         const c2 = (i + 1) * radial + j;
         const d = (i + 1) * radial + ((j + 1) % radial);
-        idx.push(a, c2, b2, b2, c2, d);
+        idx.push(a, b2, c2, b2, d, c2);
       }
     }
     const g = new THREE.BufferGeometry();

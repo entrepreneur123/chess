@@ -122,7 +122,7 @@ export function buildMarki(g: THREE.Group, { level: L, team }: BuildCtx): void {
         const a0 = hp[i];
         const b0 = hp[i + 1];
         const [ax] = axis(hornParent, a0, [a0[0] + (b0[0] - a0[0]), a0[1] + (b0[1] - a0[1]), a0[2] + (b0[2] - a0[2])]);
-        torus(ax, hr[i] + 0.008, 0.015, teamCloth, { rot: [Math.PI / 2, 0, 0] }, [3, 8]);
+        torus(ax, hr[i] * 0.95 + 0.004, 0.017, teamCloth, { rot: [Math.PI / 2, 0, 0] }, [3, 8]);
       }
       if (L === 2) {
         const tip = hp[hp.length - 1];

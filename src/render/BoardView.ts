@@ -14,6 +14,13 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { BOARD_SIZE, ZONE_DEPTH } from '../engine/types';
 import type { CharacterId, Move, Piece, PlayerId, Pos, Rarity } from '../engine/types';
 import type { BoardHighlights, IBoardView } from './types';
+import {
+  buildBatchedCharacterModel,
+  createBatchMaterials,
+  disposeBatchMaterials,
+  disposeCharacterCache,
+  type BatchMaterials,
+} from './characters';
 import { ANIM, BOARD_COLORS, CHARACTER_RARITY, RARITY_COLORS, RARITY_GLOW, TEAM_COLORS } from './palette';
 import {
   clamp01,
@@ -53,7 +60,10 @@ const SELECT_LIFT = 0.12;
 const TAP_SLOP_PX = 14;
 const MAX_PIXEL_RATIO = 2;
 const IDLE_FRAME_MS = 32; // idle pulse (selection / targets) is capped at ~30 fps
-const PIECE_SCALE = 1.34;
+/** Uniform scale of each character model on the board (tile = 1 unit; the bull is long, so smaller). */
+const MODEL_SCALE: Record<CharacterId, number> = { sad: 0.96, marki: 0.86, walk: 0.96 };
+/** Height of the puck top above the tile (models stand on it). */
+const PUCK_TOP = 0.14;
 /** Rows between the zone edge lines (world z of the line between home zone and no-man's land). */
 const ZONE_LINE_Z: Record<PlayerId, number> = {
   0: HALF - (ZONE_DEPTH - 0.5),
@@ -118,26 +128,11 @@ class PieceKit {
   readonly rarityRing: THREE.BufferGeometry;
   readonly pip: THREE.BufferGeometry;
   readonly groundPlane: THREE.BufferGeometry;
-  // sad
-  readonly sadPillar: THREE.BufferGeometry;
-  readonly sadCap: THREE.BufferGeometry;
-  readonly sadArm: THREE.BufferGeometry;
-  readonly sadGem: THREE.BufferGeometry;
-  // marki
-  readonly markiShaft: THREE.BufferGeometry;
-  readonly markiCollar: THREE.BufferGeometry;
-  readonly markiTip: THREE.BufferGeometry;
-  readonly markiChevron: THREE.BufferGeometry;
-  // walk
-  readonly walkNeck: THREE.BufferGeometry;
-  readonly walkOrb: THREE.BufferGeometry;
-  readonly walkHalo: THREE.BufferGeometry;
   readonly burstBit: THREE.BufferGeometry;
 
-  readonly team: Record<PlayerId, THREE.MeshStandardMaterial>;
-  readonly teamDark: Record<PlayerId, THREE.MeshStandardMaterial>;
-  readonly teamLight: Record<PlayerId, THREE.MeshStandardMaterial>;
-  readonly teamGlow: Record<PlayerId, THREE.MeshStandardMaterial>;
+  /** Per-team shared materials for the merged character models (rim-lit in the team's light tone). */
+  readonly batch: Record<PlayerId, BatchMaterials>;
+  private readonly models = new Map<string, THREE.Group>();
   readonly rarity: Record<Rarity, THREE.MeshStandardMaterial>;
   readonly rarityHalo: Record<Rarity, THREE.MeshBasicMaterial>;
   readonly baseMat: THREE.MeshStandardMaterial;
@@ -169,56 +164,14 @@ class PieceKit {
     this.pip = g(new THREE.SphereGeometry(0.063, 12, 8));
     this.groundPlane = g(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2));
 
-    // sad: sturdy octagonal tower with a plus-shaped crown.
-    this.sadPillar = g(new THREE.CylinderGeometry(0.2, 0.25, 0.42, 8).translate(0, 0.14 + 0.21, 0));
-    this.sadCap = g(new THREE.CylinderGeometry(0.28, 0.22, 0.08, 8).translate(0, 0.6, 0));
-    this.sadArm = g(new RoundedBoxGeometry(0.6, 0.15, 0.19, 2, 0.04).translate(0, 0.715, 0));
-    this.sadGem = g(new THREE.OctahedronGeometry(0.075, 0).translate(0, 0.86, 0));
-
-    // marki: spear leaning toward its forward direction (built pointing toward -z, i.e. +r).
-    this.markiShaft = g(new THREE.CylinderGeometry(0.09, 0.115, 0.52, 8).translate(0, 0.26, 0));
-    this.markiCollar = g(new THREE.CylinderGeometry(0.19, 0.14, 0.08, 8).translate(0, 0.55, 0));
-    this.markiTip = g(new THREE.ConeGeometry(0.25, 0.5, 4).rotateY(Math.PI / 4).translate(0, 0.59 + 0.25, 0));
-    const chev = new THREE.Shape();
-    chev.moveTo(0, 0.13);
-    chev.lineTo(0.2, -0.04);
-    chev.lineTo(0.13, -0.1);
-    chev.lineTo(0, 0.0);
-    chev.lineTo(-0.13, -0.1);
-    chev.lineTo(-0.2, -0.04);
-    chev.closePath();
-    this.markiChevron = g(
-      new THREE.ExtrudeGeometry(chev, { depth: 0.025, bevelEnabled: false })
-        .rotateX(-Math.PI / 2) // shape +y -> world -z (forward)
-        .translate(0, 0.12, -0.2),
-    );
-
-    // walk: orb on a short neck with a floating halo ring.
-    this.walkNeck = g(new THREE.CylinderGeometry(0.12, 0.19, 0.1, 16).translate(0, 0.19, 0));
-    this.walkOrb = g(new THREE.SphereGeometry(0.26, 24, 16).translate(0, 0.45, 0));
-    this.walkHalo = g(new THREE.TorusGeometry(0.35, 0.032, 8, 40).rotateX(Math.PI / 2));
-
     this.burstBit = g(new THREE.IcosahedronGeometry(0.095, 0));
 
     const std = (color: string, roughness: number, emissive?: string, ei = 0): THREE.MeshStandardMaterial =>
       m(new THREE.MeshStandardMaterial({ color, roughness, metalness: 0.05, emissive: emissive ?? '#000000', emissiveIntensity: ei }));
 
-    const mk = (id: PlayerId): void => {
-      const t = TEAM_COLORS[id];
-      this.team[id] = std(t.main, 0.38, t.main, 0.22);
-      addRim(this.team[id], t.light, 1.1);
-      this.teamDark[id] = std(t.dark, 0.5, t.dark, 0.2);
-      addRim(this.teamDark[id], t.light, 0.6);
-      this.teamLight[id] = std(t.light, 0.35, t.light, 0.25);
-      addRim(this.teamLight[id], '#FFFFFF', 0.5);
-      this.teamGlow[id] = std(t.glow, 0.4, t.glow, 1.15);
-    };
-    this.team = {} as Record<PlayerId, THREE.MeshStandardMaterial>;
-    this.teamDark = {} as Record<PlayerId, THREE.MeshStandardMaterial>;
-    this.teamLight = {} as Record<PlayerId, THREE.MeshStandardMaterial>;
-    this.teamGlow = {} as Record<PlayerId, THREE.MeshStandardMaterial>;
-    mk(0);
-    mk(1);
+    const mk = (id: PlayerId): BatchMaterials =>
+      createBatchMaterials((mat) => addRim(mat, TEAM_COLORS[id].light, 0.55, 2.4));
+    this.batch = { 0: mk(0), 1: mk(1) };
 
     const glowTex = makeGlowTexture();
     const blobTex = makeBlobTexture();
@@ -306,61 +259,40 @@ class PieceKit {
       pip.position.set(Math.sin(a) * 0.35, 0.145, Math.cos(a) * 0.35);
     }
 
-    // Body is yawed so that its local -z faces the owner's forward direction.
-    const body = new THREE.Group();
-    body.rotation.y = p.owner === 0 ? 0 : Math.PI;
-    body.scale.set(PIECE_SCALE, PIECE_SCALE * 1.28, PIECE_SCALE);
-    body.position.y = 0.0;
+    // Character model (faces +z). Player 0 moves toward -z (away from the camera) and player 1
+    // toward +z (facing the camera), so player 0's body is turned around.
+    const body = this.model(p.character, p.level, p.owner).clone(true);
+    body.rotation.y = p.owner === 0 ? Math.PI : 0;
+    body.scale.setScalar(MODEL_SCALE[p.character]);
+    body.position.y = PUCK_TOP - 0.01;
     inner.add(body);
-    this.buildBody(p.character, body, p.owner);
     return { root, inner };
   }
 
-  private buildBody(ch: CharacterId, body: THREE.Group, owner: PlayerId): void {
-    const add = (geo: THREE.BufferGeometry, mat: THREE.Material, parent: THREE.Object3D = body): THREE.Mesh => {
-      const me = new THREE.Mesh(geo, mat);
-      me.castShadow = true;
-      parent.add(me);
-      return me;
-    };
-    const teamMat = this.team[owner];
-    switch (ch) {
-      case 'sad': {
-        add(this.sadPillar, teamMat);
-        add(this.sadCap, this.teamDark[owner]);
-        add(this.sadArm, teamMat);
-        add(this.sadArm, teamMat).rotation.y = Math.PI / 2;
-        add(this.sadGem, this.teamGlow[owner]).castShadow = false;
-        break;
-      }
-      case 'marki': {
-        add(this.markiChevron, this.teamGlow[owner]).castShadow = false;
-        const spear = new THREE.Group();
-        spear.position.set(0, 0.13, 0.06);
-        spear.rotation.x = -0.24; // lean toward -z (forward)
-        body.add(spear);
-        add(this.markiShaft, teamMat, spear);
-        add(this.markiCollar, this.teamLight[owner], spear);
-        add(this.markiTip, teamMat, spear);
-        break;
-      }
-      case 'walk': {
-        add(this.walkNeck, this.teamDark[owner]);
-        add(this.walkOrb, teamMat);
-        const halo = add(this.walkHalo, this.teamGlow[owner]);
-        halo.castShadow = false;
-        halo.position.y = 0.48;
-        halo.rotation.x = 0.32;
-        halo.rotation.z = 0.12;
-        break;
-      }
+  /** Merged (<= 4 meshes) template per character/level/owner, built lazily and cached. */
+  private model(ch: CharacterId, level: Piece['level'], owner: PlayerId): THREE.Group {
+    const key = `${ch}:${level}:${owner}`;
+    let tpl = this.models.get(key);
+    if (!tpl) {
+      tpl = buildBatchedCharacterModel({ character: ch, level, owner }, this.batch[owner]);
+      this.models.set(key, tpl);
     }
+    return tpl;
   }
 
   dispose(): void {
     for (const geo of this.geometries) geo.dispose();
     for (const mat of this.materials) mat.dispose();
     for (const t of this.textures) t.dispose();
+    for (const m of this.models.values()) {
+      m.traverse((o) => {
+        if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).geometry.dispose();
+      });
+    }
+    this.models.clear();
+    disposeBatchMaterials(this.batch[0]);
+    disposeBatchMaterials(this.batch[1]);
+    disposeCharacterCache();
   }
 }
 
