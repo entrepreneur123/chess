@@ -1,0 +1,6 @@
+{
+  "appId": "com.tactics12.app",
+  "appName": "Tactics 12",
+  "webDir": "dist",
+  "android": { "backgroundColor": "#F8F9FA" }
+}

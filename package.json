@@ -1,0 +1,26 @@
+{
+  "name": "tactics-12",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "cap:sync": "npm run build && npx cap sync android"
+  },
+  "dependencies": {
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^8.3.5",
+    "@capacitor/cli": "^8.3.5",
+    "@capacitor/core": "^8.3.5",
+    "@types/three": "^0.187.0",
+    "typescript": "~5.9.3",
+    "vite": "^8.0.0",
+    "vitest": "^4.0.0"
+  }
+}
