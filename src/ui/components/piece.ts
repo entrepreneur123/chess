@@ -11,7 +11,7 @@ import {
 import { h } from '../dom';
 import { icon } from '../icons';
 
-export const RARITY_LABEL: Record<Rarity, string> = { common: '일반', rare: '희귀', epic: '영웅', legendary: '전설' };
+export const RARITY_LABEL: Record<Rarity, string> = { common: '일반', rare: '희귀', epic: '에픽', legendary: '전설' };
 
 /** One-letter glyph used on tokens. */
 export function glyphOf(id: CharacterId): string {

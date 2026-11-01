@@ -55,7 +55,6 @@ function playBoxOpening(drop: BoxDrop, kind: BoxKind): Promise<void> {
     const cardEl = h(
       'div',
       { class: `reveal-card rarity-${def.rarity}`, 'data-reveal': drop.character },
-      h('div', { class: 'reveal-card__glow', 'aria-hidden': 'true' }),
       pieceToken(drop.character, prog.level, 0, 'lg'),
       h('div', { class: 'reveal-card__name' }, def.nameKo),
       rarityChip(def.rarity),
@@ -115,7 +114,7 @@ export function shopScreen(router: Router): Screen {
 
   const odds = () => {
     const w = BOX.rarityWeights;
-    return `일반 ${w.common}% · 희귀 ${w.rare}% · 영웅 ${w.epic}% · 카드 ${BOX.amountMin}–${BOX.amountMax}장`;
+    return `일반 ${w.common}% · 희귀 ${w.rare}% · 에픽 ${w.epic}% · 카드 ${BOX.amountMin}–${BOX.amountMax}장`;
   };
 
   const render = () => {

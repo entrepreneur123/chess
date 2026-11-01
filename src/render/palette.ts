@@ -38,7 +38,7 @@ export const RARITY_COLORS: Record<Rarity, string> = {
 export const RARITY_LABELS: Record<Rarity, { en: string; ko: string }> = {
   common: { en: 'Common', ko: '일반' },
   rare: { en: 'Rare', ko: '희귀' },
-  epic: { en: 'Epic', ko: '영웅' },
+  epic: { en: 'Epic', ko: '에픽' },
   legendary: { en: 'Legendary', ko: '전설' },
 };
 

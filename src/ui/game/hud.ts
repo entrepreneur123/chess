@@ -13,7 +13,7 @@ export class TimerRing {
   readonly el: HTMLElement;
   private arc: SVGCircleElement;
   private label: HTMLElement;
-  private lastText = '';
+  private lastText: string | null = null;
   private lastState = '';
 
   constructor(owner: PlayerId) {

@@ -6,7 +6,6 @@ import { DIFFICULTY_LABEL } from '../../meta/opponent';
 import { applyMatchResult, updateProfile, type MatchOutcome } from '../../meta/profile';
 import { randInt, defaultRng } from '../../meta/rng';
 import { confirmDialog, showDialog } from '../components/dialog';
-import { coinChip } from '../components/piece';
 import { toast } from '../components/toast';
 import { Disposables, h, replaceChildren } from '../dom';
 import { icon } from '../icons';
@@ -154,7 +153,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
         adjudicated
           ? h('p', { class: 'result__score' }, `전력  나 ${materialScore(s, HUMAN)} : ${materialScore(s, BOT)} 상대`)
           : null,
-        h('div', { class: 'result__reward' }, h('span', null, '보상'), coinChip(reward), h('span', { class: 'result__plus' }, `+${reward}`)),
+        h('div', { class: 'result__reward', 'data-reward': reward }, h('span', null, '보상'), icon('coin', 20), h('span', { class: 'result__plus' }, `+${reward}`)),
       ),
       dismissValue: 'lobby',
       actions: [

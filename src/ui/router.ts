@@ -28,7 +28,7 @@ export type ScreenName = keyof ScreenParams;
 
 export type ScreenFactory<N extends ScreenName> = (router: Router, params: ScreenParams[N]) => Screen;
 
-const ROOT: ScreenName = 'lobby';
+const ROOT = 'lobby' as const;
 
 export class Router {
   private current: { name: ScreenName; screen: Screen } | null = null;
