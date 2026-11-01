@@ -43,7 +43,7 @@ export interface ControllerSnapshot {
 
 export type ControllerEvent =
   | { type: 'change' }
-  | { type: 'toast'; message: string; tone?: 'neutral' | 'warn' }
+  | { type: 'toast'; message: string; tone?: 'neutral' | 'warn'; kind?: 'timeout' | 'pass'; player?: PlayerId }
   | { type: 'ended'; state: GameState };
 
 export interface ControllerPorts {
@@ -329,8 +329,8 @@ export class GameController {
     const who = prev.turn;
     this.selection = null;
     this._state = applyTimeout(prev);
-    if (who === HUMAN) this.emit({ type: 'toast', message: '시간 초과! 턴이 넘어갑니다', tone: 'warn' });
-    else this.emit({ type: 'toast', message: '상대가 시간을 초과해 턴이 넘어옵니다' });
+    if (who === HUMAN) this.emit({ type: 'toast', message: '시간 초과! 턴이 넘어갑니다', tone: 'warn', kind: 'timeout', player: who });
+    else this.emit({ type: 'toast', message: '상대가 시간을 초과해 턴이 넘어옵니다', kind: 'timeout', player: who });
     this.announcePasses(prev, this._state, 1);
     this.checkEndOrContinue(true);
   }
@@ -343,6 +343,8 @@ export class GameController {
         this.emit({
           type: 'toast',
           message: e.player === HUMAN ? '움직일 수 있는 말이 없어 턴을 넘깁니다' : '상대가 움직일 수 없어 턴이 넘어옵니다',
+          kind: 'pass',
+          player: e.player,
         });
       }
     }

@@ -4,6 +4,7 @@
  * "guard" entry that is present whenever a non-root screen is shown.
  */
 import { closeAllOverlays, closeTopOverlay } from './components/overlay';
+import { clearToasts } from './components/toast';
 import { clear } from './dom';
 
 export interface Screen {
@@ -54,6 +55,9 @@ export class Router {
     const factory = this.factories[name] as ScreenFactory<N> | undefined;
     if (!factory) throw new Error(`Unknown screen ${name}`);
     closeAllOverlays();
+    clearToasts();
+    const first = this.current === null;
+    if (first) this.fadeOutBootSplash();
     if (this.current) {
       try {
         this.current.screen.dispose?.();
@@ -66,10 +70,33 @@ export class Router {
     this.current = { name, screen };
     screen.el.classList.add('screen');
     screen.el.dataset.screen = name;
+    if (first) screen.el.classList.add('screen--first');
     this.outlet.appendChild(screen.el);
     this.outlet.scrollTop = 0;
     screen.mount?.();
     this.syncGuard();
+  }
+
+  /**
+   * index.html may ship a static splash inside the outlet so the first paint is never blank.
+   * Move it into a fixed layer above the first screen and cross-fade it out.
+   */
+  private fadeOutBootSplash(): void {
+    if (!this.outlet.firstChild) return;
+    const layer = document.createElement('div');
+    layer.className = 'boot-splash-out';
+    layer.setAttribute('aria-hidden', 'true');
+    while (this.outlet.firstChild) layer.appendChild(this.outlet.firstChild);
+    document.body.appendChild(layer);
+    let removed = false;
+    const remove = () => {
+      if (removed) return;
+      removed = true;
+      layer.remove();
+    };
+    requestAnimationFrame(() => requestAnimationFrame(() => layer.classList.add('is-out')));
+    layer.addEventListener('transitionend', remove);
+    window.setTimeout(remove, 700); // reduced motion / no transition
   }
 
   /** Go back to the lobby (root). */

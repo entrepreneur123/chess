@@ -1,16 +1,18 @@
 import { BotClient } from '../../ai/botClient';
-import { createGame, getPieceById, materialScore, type GameState, type Piece, type Pos } from '../../engine';
+import { haptic, sfx } from '../../audio/sfx';
+import { createGame, getPieceById, materialScore, type GameState, type Move, type Piece, type Pos } from '../../engine';
 import { createBoardView, type IBoardView } from '../../render';
-import { PACING } from '../../meta/economy';
+import { MIN_MOVES_FOR_REWARD, PACING } from '../../meta/economy';
 import { DIFFICULTY_LABEL } from '../../meta/opponent';
-import { applyMatchResult, updateProfile, type MatchOutcome } from '../../meta/profile';
+import { applyMatchResult, getProfile, updateProfile, type MatchOutcome } from '../../meta/profile';
 import { randInt, defaultRng } from '../../meta/rng';
+import { confetti, countUp } from '../components/celebrate';
 import { confirmDialog, showDialog } from '../components/dialog';
-import { toast } from '../components/toast';
+import { clearToasts, toast } from '../components/toast';
 import { Disposables, h, replaceChildren } from '../dom';
 import { icon } from '../icons';
 import type { Router, Screen } from '../router';
-import { BOT, GameController, HUMAN, type ControllerSnapshot } from '../game/GameController';
+import { BOT, GameController, HUMAN, type ControllerSnapshot, type Phase } from '../game/GameController';
 import { endReasonText, pieceInfoCard, rosterChips, setText, TimerRing, turnPillContent } from '../game/hud';
 import type { GameParams } from './gameParams';
 
@@ -23,8 +25,20 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   const botRing = new TimerRing(HUMAN);
   const topRoster = h('div', { class: 'pbar__roster-host' });
   const bottomRoster = h('div', { class: 'pbar__roster-host' });
-  const pill = h('div', { class: 'turn-pill', role: 'status', 'aria-live': 'polite' });
+  // The pill is built once; only its text/class change so screen readers announce real changes.
+  const pillText = h('span', { class: 'turn-pill__text' });
+  const pill = h(
+    'div',
+    { class: 'turn-pill', role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' },
+    h('span', { class: 'turn-pill__dot', 'aria-hidden': 'true' }),
+    pillText,
+  );
   const counter = h('div', { class: 'ply-counter', 'aria-label': '잡기 없는 수' });
+  // Persistent hint while one side keeps auto-passing (the toast is shown only the first time).
+  const passChip = h('div', { class: 'pass-chip', hidden: true });
+  // First-match coach mark.
+  const coachText = h('span', { class: 'coach__text' });
+  const coach = h('div', { class: 'coach', role: 'status', 'aria-live': 'polite', hidden: true }, h('span', { class: 'coach__icon' }, icon('touch', 20)), coachText);
   const infoHost = h('div', { class: 'info-host' });
   const boardHost = h('div', { class: 'board-host', 'aria-label': '게임 보드' });
 
@@ -59,7 +73,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     'main',
     { class: 'game no-select' },
     topBar,
-    h('div', { class: 'board-wrap' }, boardHost, h('div', { class: 'board-overlay' }, pill, counter), infoHost),
+    h('div', { class: 'board-wrap' }, boardHost, h('div', { class: 'board-overlay' }, pill, counter, passChip, coach), infoHost),
     bottomBar,
   );
 
@@ -69,7 +83,58 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   let ctrl: GameController | null = null;
   let syncedPieces: Piece[] | null = null;
   let resultShown = false;
+  let pillCls = '';
+  let rosterKey = -1;
+  let prevPhase: Phase | null = null;
+  let prevSel: string | null = null;
+  let lastTickSec = -1;
+  const passToastShown = [false, false];
+  let coachOn = !getProfile().onboarding.firstMoveDone;
+  let coachMsg = '';
 
+  const setCoach = (msg: string) => {
+    if (msg === coachMsg) return;
+    coachMsg = msg;
+    coach.hidden = !msg;
+    if (msg) {
+      coachText.textContent = msg;
+      coach.classList.remove('is-entering');
+      void coach.offsetWidth;
+      coach.classList.add('is-entering');
+    }
+  };
+
+  const updateCoach = (snap: ControllerSnapshot) => {
+    if (!coachOn || snap.phase !== 'humanTurn' || snap.paused) {
+      setCoach('');
+      return;
+    }
+    const sel = snap.selection;
+    if (sel?.actionable && sel.moves.length > 0) setCoach('빛나는 칸을 탭해 이동하세요');
+    else if (sel?.actionable) setCoach('이 말은 지금 못 움직여요. 다른 말을 탭해 보세요');
+    else if (sel) setCoach('상대 말이에요. 아래쪽 파란 말을 탭해 보세요');
+    else setCoach('내 말(파랑)을 탭해 이동 가능한 칸을 보세요');
+  };
+
+  const finishCoach = () => {
+    if (!coachOn) return;
+    coachOn = false;
+    setCoach('');
+    updateProfile((p) => ({ ...p, onboarding: { ...p.onboarding, firstMoveDone: true } }));
+    bag.timeout(() => toast('좋아요! 상대 말 3개를 모두 잡으면 승리해요', { tone: 'success', duration: 2600 }), 450);
+  };
+
+  /** Sound + haptics for one move, split into lift-off (now) and landing (when `animate` resolves). */
+  const moveFeedbackStart = (move: Move, before: GameState) => {
+    const piece = getPieceById(before, move.pieceId);
+    sfx(piece?.character === 'walk' ? 'jump' : 'move');
+  };
+  const moveFeedbackEnd = (move: Move) => {
+    if (move.captureId) {
+      sfx('capture');
+      haptic('capture');
+    } else sfx('land');
+  };
   const askResign = async () => {
     if (!ctrl || ctrl.phase === 'ended') return;
     const ok = await confirmDialog({
@@ -104,17 +169,46 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       board.setInteractive(snap.phase !== 'animating' && snap.phase !== 'ended' && !snap.paused);
     }
     // HUD
-    replaceChildren(topRoster, rosterChips(params.botFormation, BOT, s));
-    replaceChildren(bottomRoster, rosterChips(params.playerFormation, HUMAN, s));
+    // Pieces only disappear through captures, so the count is a sufficient change key.
+    if (s.pieces.length !== rosterKey) {
+      rosterKey = s.pieces.length;
+      replaceChildren(topRoster, rosterChips(params.botFormation, BOT, s));
+      replaceChildren(bottomRoster, rosterChips(params.playerFormation, HUMAN, s));
+    }
     const tp = turnPillContent(snap);
-    pill.className = `turn-pill ${tp.cls}`;
-    replaceChildren(pill, h('span', { class: 'turn-pill__dot', 'aria-hidden': 'true' }), tp.text);
+    if (tp.cls !== pillCls) {
+      pillCls = tp.cls;
+      pill.className = `turn-pill ${tp.cls}`;
+    }
+    setText(pillText, tp.text);
+    const lastEntry = s.history[s.history.length - 1];
+    const passing = snap.phase !== 'ended' && lastEntry?.kind === 'pass' && lastEntry.reason === 'noMoves' ? lastEntry.player : null;
+    passChip.hidden = passing === null;
+    if (passing !== null) setText(passChip, passing === BOT ? '상대 이동 불가 · 내가 연속으로 둬요' : '이동 가능한 말 없음 · 자동 패스');
+    // Your-turn cue (not while paused / on the very first frame before any gesture is irrelevant).
+    if (snap.phase === 'humanTurn' && prevPhase !== 'humanTurn' && !snap.paused) {
+      sfx('turn');
+      if (prevPhase !== null) haptic('turn');
+    }
+    prevPhase = snap.phase;
+    updateCoach(snap);
     setText(counter, `잡기 없이 ${s.pliesSinceCapture}/60`);
     counter.classList.toggle('is-warn', s.pliesSinceCapture >= 50);
     const activeTurn = snap.phase === 'ended' ? null : s.turn;
     topBar.classList.toggle('is-turn', activeTurn === BOT);
     bottomBar.classList.toggle('is-turn', activeTurn === HUMAN);
     resignBtn.toggleAttribute('disabled', snap.phase === 'ended');
+
+    const selKey = snap.selection ? `${snap.selection.pieceId}|${snap.selection.actionable}` : null;
+    if (selKey !== prevSel) {
+      if (snap.selection && snap.phase !== 'animating') {
+        if (snap.selection.actionable) {
+          sfx('select');
+          haptic('light');
+        } else sfx('tap');
+      }
+      prevSel = selKey;
+    }
 
     const selPiece = snap.selection ? getPieceById(s, snap.selection.pieceId) : undefined;
     const current = infoHost.firstElementChild as HTMLElement | null;
@@ -132,36 +226,67 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     if (resultShown) return;
     resultShown = true;
     const outcome = outcomeOf(s);
+    const humanMoves = s.history.filter((e) => e.kind === 'move' && e.player === HUMAN).length;
+    const coinsBefore = getProfile().coins;
     let reward = 0;
     updateProfile((p) => {
-      const humanMoves = s.history.filter((e) => e.kind === 'move' && e.player === HUMAN).length;
       const res = applyMatchResult(p, outcome, params.difficulty, humanMoves);
       reward = res.reward;
       return res.profile;
     });
+    setCoach('');
     await bag.sleep(s.endReason === 'resign' ? 150 : 650);
     if (bag.isDisposed) return;
+    clearToasts(); // nothing may sit on top of (or compete with) the result
     const title = outcome === 'win' ? '승리!' : outcome === 'loss' ? '패배' : '무승부';
     const adjudicated = s.endReason === 'moveLimit' || s.endReason === 'stalemate';
-    const choice = await showDialog<'again' | 'lobby'>({
+    const noReward = reward === 0 && outcome !== 'win' && humanMoves < MIN_MOVES_FOR_REWARD;
+    const plus = h('span', { class: 'result__plus' }, '+0');
+    const total = h('span', { class: 'result__total-value' }, coinsBefore.toLocaleString('ko-KR'));
+    const body = h(
+      'div',
+      { class: 'result__body' },
+      h('p', { class: 'result__reason', 'data-reason': s.endReason ?? '' }, endReasonText(s.endReason, outcome)),
+      outcome === 'loss' && !noReward ? h('p', { class: 'result__cheer' }, '아쉬워요! 진형을 바꿔 다시 도전해 보세요.') : null,
+      adjudicated ? h('p', { class: 'result__score' }, `전력  나 ${materialScore(s, HUMAN)} : ${materialScore(s, BOT)} 상대`) : null,
+      h(
+        'div',
+        { class: `result__reward${reward > 0 ? ' has-reward' : ''}`, 'data-reward': reward },
+        h('span', null, '보상'),
+        icon('coin', 22),
+        plus,
+      ),
+      noReward
+        ? h('p', { class: 'result__note', 'data-note': 'min-moves' }, icon('info', 16), `${MIN_MOVES_FOR_REWARD}수 이상 둬야 보상을 받아요`)
+        : h('p', { class: 'result__total' }, '보유 코인 ', total),
+    );
+    const dialog = showDialog<'again' | 'lobby'>({
       title,
       className: `result result--${outcome}`,
-      icon: h('span', { class: `result__icon result__icon--${outcome}` }, icon(outcome === 'win' ? 'trophy' : outcome === 'loss' ? 'flag' : 'info', 36)),
-      body: h(
-        'div',
-        { class: 'result__body' },
-        h('p', { class: 'result__reason', 'data-reason': s.endReason ?? '' }, endReasonText(s.endReason, outcome)),
-        adjudicated
-          ? h('p', { class: 'result__score' }, `전력  나 ${materialScore(s, HUMAN)} : ${materialScore(s, BOT)} 상대`)
-          : null,
-        h('div', { class: 'result__reward', 'data-reward': reward }, h('span', null, '보상'), icon('coin', 20), h('span', { class: 'result__plus' }, `+${reward}`)),
+      icon: h(
+        'span',
+        { class: `result__icon result__icon--${outcome}` },
+        icon(outcome === 'win' ? 'trophy' : outcome === 'loss' ? 'flag' : 'info', 40),
       ),
+      body,
       dismissValue: 'lobby',
       actions: [
         { label: '로비', value: 'lobby', variant: 'text' },
         { label: '다시 하기', value: 'again', variant: 'filled' },
       ],
     });
+    if (outcome === 'win') {
+      sfx('win');
+      haptic('win');
+      bag.add(confetti());
+    } else sfx(outcome === 'loss' ? 'lose' : 'draw');
+    if (reward > 0) {
+      bag.timeout(() => {
+        bag.add(countUp(plus, 0, reward, { prefix: '+', durationMs: 900, onStep: () => sfx('coin') }));
+        bag.add(countUp(total, coinsBefore, coinsBefore + reward, { durationMs: 900 }));
+      }, 380);
+    }
+    const choice = await dialog;
     if (bag.isDisposed) return;
     if (choice === 'again') router.navigate('matchmaking', { difficulty: params.difficulty });
     else router.home();
@@ -184,17 +309,20 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       const botRef = bot;
       bag.add(() => botRef.dispose());
 
-      ctrl = new GameController(initial, {
+      const c: GameController = (ctrl = new GameController(initial, {
         requestBotMove: (state) => botRef.requestMove(state, params.difficulty),
         botThinkDelayMs: () => randInt(defaultRng, PACING.botThinkMinMs, PACING.botThinkMaxMs),
         animate: async (move, after) => {
-          if (!b) return;
-          b.setInteractive(false);
-          await b.animateMove(move, after.pieces);
-          syncedPieces = after.pieces;
+          if (move.pieceId.startsWith(`p${HUMAN}-`)) finishCoach();
+          moveFeedbackStart(move, c.state);
+          if (b) {
+            b.setInteractive(false);
+            await b.animateMove(move, after.pieces);
+            syncedPieces = after.pieces;
+          }
+          if (!bag.isDisposed) moveFeedbackEnd(move);
         },
-      });
-      const c = ctrl;
+      }));
       bag.add(() => c.dispose());
 
       board?.setPieces(initial.pieces);
@@ -204,7 +332,15 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       bag.add(
         c.on((e) => {
           if (e.type === 'change') renderSnapshot(c.snapshot());
-          else if (e.type === 'toast') toast(e.message, { tone: e.tone === 'warn' ? 'warn' : 'neutral' });
+          else if (e.type === 'toast') {
+            // Repeated auto-passes would toast every single move: show it once, then the pass chip.
+            if (e.kind === 'pass' && e.player !== undefined) {
+              if (passToastShown[e.player]) return;
+              passToastShown[e.player] = true;
+            }
+            if (e.kind === 'timeout' && e.player === HUMAN) haptic('warn');
+            toast(e.message, { tone: e.tone === 'warn' ? 'warn' : 'neutral' });
+          }
           else if (e.type === 'ended') void showResult(e.state);
         }),
       );
@@ -222,6 +358,17 @@ export function gameScreen(router: Router, params: GameParams): Screen {
         const rem = c.turnRemainingMs();
         topRing.update(active && snap.turn === BOT, rem, c.turnTimeMs, c.paused);
         botRing.update(active && snap.turn === HUMAN, rem, c.turnTimeMs, c.paused);
+        // Countdown ticks for the last seconds of the player's own turn.
+        if (c.phase === 'humanTurn' && !c.paused) {
+          const sec = Math.ceil(rem / 1000);
+          if (sec !== lastTickSec) {
+            lastTickSec = sec;
+            if (sec > 0 && sec <= PACING.timerWarnMs / 1000) {
+              sfx(sec <= 3 ? 'tickUrgent' : 'tick');
+              if (sec === PACING.timerWarnMs / 1000) haptic('warn');
+            }
+          }
+        } else lastTickSec = -1;
       });
 
       if (import.meta.env.DEV) {

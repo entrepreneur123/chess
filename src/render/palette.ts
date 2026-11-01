@@ -92,3 +92,11 @@ export const ANIM = {
   jump: 420,
   capture: 240,
 } as const;
+
+/** Backdrop behind the 3D board: soft radial gradient with faint team glows at the top/bottom. */
+export const BACKDROP = {
+  center: '#FFFFFF',
+  edge: '#EEF1F5',
+  /** Strength of the team-colored glows (0 = none). */
+  teamGlow: 0.10,
+};

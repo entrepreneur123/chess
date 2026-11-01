@@ -4,6 +4,8 @@ import { APP_NAME } from '../../meta/economy';
 import { DIFFICULTY_LABEL } from '../../meta/opponent';
 import { freeBoxRemainingMs, getProfile, levelUpsAvailable, subscribeProfile, updateProfile } from '../../meta/profile';
 import { formationGrid } from '../components/formationGrid';
+import { showSettings } from '../components/settingsSheet';
+import { isTutorialOpen, showTutorial } from '../components/tutorial';
 import { coinChip, pieceToken } from '../components/piece';
 import { Disposables, h, replaceChildren } from '../dom';
 import { icon, type IconName } from '../icons';
@@ -56,7 +58,16 @@ export function lobbyScreen(router: Router): Screen {
         'header',
         { class: 'lobby__top' },
         h('div', { class: 'brand' }, h('span', { class: 'brand__mark', 'aria-hidden': 'true' }), h('span', { class: 'brand__name' }, APP_NAME)),
-        coinChip(p.coins),
+        h(
+          'div',
+          { class: 'lobby__actions' },
+          coinChip(p.coins),
+          h(
+            'button',
+            { class: 'icon-btn', type: 'button', 'aria-label': '설정', 'data-action': 'settings', onclick: () => showSettings() },
+            icon('settings'),
+          ),
+        ),
       ),
       h(
         'div',
@@ -64,7 +75,17 @@ export function lobbyScreen(router: Router): Screen {
         h(
           'section',
           { class: 'card hero' },
-          h('div', { class: 'hero__eyebrow' }, '1 : 1 전략 대전'),
+          h(
+            'div',
+            { class: 'hero__head' },
+            h('div', { class: 'hero__eyebrow' }, '1 : 1 전략 대전'),
+            h(
+              'button',
+              { class: 'help-chip', type: 'button', 'data-action': 'how-to-play', onclick: () => void showTutorial() },
+              icon('help', 16),
+              '게임 방법',
+            ),
+          ),
           h('h2', { class: 'hero__title' }, '12×12 능력 체스'),
           h(
             'p',
@@ -94,7 +115,19 @@ export function lobbyScreen(router: Router): Screen {
         ),
         h(
           'section',
-          { class: 'card card--tap formation-preview', role: 'button', tabindex: '0', onclick: () => router.navigate('formation') },
+          {
+            class: 'card card--tap formation-preview',
+            role: 'button',
+            tabindex: '0',
+            'aria-label': '현재 진형 편집',
+            onclick: () => router.navigate('formation'),
+            onkeydown: (e: KeyboardEvent) => {
+              if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+                e.preventDefault();
+                router.navigate('formation');
+              }
+            },
+          },
           h(
             'div',
             { class: 'section-head' },
@@ -137,5 +170,16 @@ export function lobbyScreen(router: Router): Screen {
 
   render();
   bag.add(subscribeProfile(render));
-  return { el, dispose: () => bag.dispose() };
+  return {
+    el,
+    mount() {
+      // First launch: open the how-to-play carousel once the lobby has faded in.
+      if (!getProfile().onboarding.tutorialSeen) {
+        bag.timeout(() => {
+          if (!isTutorialOpen() && !getProfile().onboarding.tutorialSeen) void showTutorial();
+        }, 450);
+      }
+    },
+    dispose: () => bag.dispose(),
+  };
 }

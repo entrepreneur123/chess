@@ -1,9 +1,9 @@
 // Renders all brand PNGs from the SVG/HTML sources in this folder.
 //   node docs/brand/render.mjs
-// Outputs: public/icons/*.png, public/apple-touch-icon.png, public/og.png,
+// Outputs: public/favicon.svg, public/icons/*.png, public/apple-touch-icon.png, public/og.png,
 //          docs/brand/out/{play-icon-512,feature-graphic-1024x500,icon-rounded-512}.png
 import { createRequire } from 'node:module';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -22,6 +22,14 @@ const master = readFileSync(resolve(here, 'icon.svg'), 'utf8');
 const maskable = master
   .replace('<!--content-->', '<g transform="translate(256 256) scale(0.8) translate(-256 -256)">')
   .replace('<!--/content-->', '</g>');
+
+// Favicon: master artwork clipped to a rounded square (browsers show SVG favicons as-is).
+const favicon = master
+  .replace('<defs>', '<defs>\n    <clipPath id="round"><rect width="512" height="512" rx="115"/></clipPath>')
+  .replace('<rect width="512" height="512" fill="url(#bg)"/>', '<g clip-path="url(#round)">\n  <rect width="512" height="512" fill="url(#bg)"/>')
+  .replace('</svg>', '</g>\n</svg>');
+writeFileSync(resolve(pub, 'favicon.svg'), favicon);
+console.log('wrote', resolve(pub, 'favicon.svg'));
 
 const browser = await chromium.launch();
 
