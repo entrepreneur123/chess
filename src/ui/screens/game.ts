@@ -7,7 +7,7 @@ import { DIFFICULTY_LABEL } from '../../meta/opponent';
 import { applyMatchResult, getProfile, updateProfile, type MatchOutcome } from '../../meta/profile';
 import { randInt, defaultRng } from '../../meta/rng';
 import { confetti, countUp } from '../components/celebrate';
-import { pieceToken } from '../components/piece';
+import { unitArt } from '../components/piece';
 import { confirmDialog, showDialog } from '../components/dialog';
 import { clearToasts, toast } from '../components/toast';
 import { Disposables, h, replaceChildren } from '../dom';
@@ -252,7 +252,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     const hero = h(
       'div',
       { class: `result__hero result__hero--${outcome}`, 'aria-hidden': 'true' },
-      heroPieces.map((pc, i) => h('span', { class: 'result__unit', style: `--i:${i}` }, pieceToken(pc.character, pc.level, pc.owner, 'md'))),
+      heroPieces.map((pc, i) => h('span', { class: 'result__unit', style: `--i:${i}` }, unitArt(pc.character, pc.level, { size: 64, owner: pc.owner }))),
     );
     const body = h(
       'div',

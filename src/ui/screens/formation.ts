@@ -11,7 +11,7 @@ import { getProfile, levelsOf, syncFormationLevels, updateProfile } from '../../
 import { appBar } from '../components/appbar';
 import { confirmDialog } from '../components/dialog';
 import { formationGrid, ROW_LABELS } from '../components/formationGrid';
-import { movementDiagram, pieceToken, rarityChip } from '../components/piece';
+import { movementDiagram, rarityChip, unitArt } from '../components/piece';
 import { toast } from '../components/toast';
 import { h, replaceChildren } from '../dom';
 import { icon } from '../icons';
@@ -111,7 +111,7 @@ export function formationScreen(router: Router): Screen {
               render();
             },
           },
-          h('div', { class: 'tray-card__token' }, pieceToken(id, lv, 0, 'md')),
+          h('div', { class: 'tray-card__token' }, unitArt(id, lv, { size: 56 })),
           h(
             'div',
             { class: 'tray-card__main' },

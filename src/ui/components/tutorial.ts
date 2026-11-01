@@ -9,7 +9,7 @@ import { h, prefersReducedMotion, type Child } from '../dom';
 import { icon } from '../icons';
 import { formationGrid } from './formationGrid';
 import { overlayRoot, pushOverlay, registerForceClose } from './overlay';
-import { movementDiagram, pieceToken, rarityChip } from './piece';
+import { CONCEPT, movementDiagram, pieceToken, rarityChip, unitArt } from './piece';
 
 interface Slide {
   key: string;
@@ -32,7 +32,7 @@ function goalArt(): Child {
       'div',
       { class: 'tut-goal__row' },
       CHARACTER_IDS.map((id, i) =>
-        h('span', { class: 'tut-goal__enemy', style: `--i:${i}` }, pieceToken(id, 1, 1, 'md'), h('span', { class: 'tut-goal__x' }, icon('close', 18))),
+        h('span', { class: 'tut-goal__enemy', style: `--i:${i}` }, unitArt(id, 1, { size: 56, owner: 1 }), h('span', { class: 'tut-goal__x' }, icon('close', 18))),
       ),
     ),
     h('span', { class: 'tut-goal__trophy' }, icon('trophy', 40)),
@@ -48,7 +48,9 @@ function charactersArt(): Child {
         'div',
         { class: 'tut-char' },
         h('div', { class: 'tut-char__diagram' }, movementDiagram(id, 1, { cell: 9 })),
-        h('div', { class: 'tut-char__name' }, pieceToken(id, 1, 0, 'xs'), CHARACTERS[id].nameKo),
+        unitArt(id, 1, { size: 52 }),
+        h('div', { class: 'tut-char__name' }, CHARACTERS[id].nameKo),
+        h('div', { class: 'tut-char__concept' }, CONCEPT[id]),
         rarityChip(CHARACTERS[id].rarity),
         h('div', { class: 'tut-char__move' }, SHORT_MOVE[id]),
       ),

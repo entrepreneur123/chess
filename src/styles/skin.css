@@ -1567,3 +1567,129 @@ body {
   font-size: 30px;
   text-shadow: 0 0 16px rgba(255, 194, 71, 0.6);
 }
+
+/* ---- Illustrated unit art ------------------------------------------------------------------- */
+.unit-art {
+  --art-size: 64px;
+  --frame: var(--r-common);
+  --frame-glow: rgba(154, 165, 189, 0.35);
+  position: relative;
+  display: inline-block;
+  flex: none;
+  width: var(--art-size);
+  height: var(--art-size);
+  border-radius: 50%;
+  overflow: visible;
+}
+.unit-art.rarity-rare {
+  --frame: var(--r-rare);
+  --frame-glow: rgba(63, 160, 255, 0.5);
+}
+.unit-art.rarity-epic {
+  --frame: var(--r-epic);
+  --frame-glow: rgba(193, 93, 255, 0.55);
+}
+.unit-art.rarity-legendary {
+  --frame: var(--r-legendary);
+  --frame-glow: rgba(255, 182, 39, 0.6);
+}
+.unit-art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  background: #0a0f1d;
+  -webkit-user-drag: none;
+}
+.unit-art--face img {
+  box-shadow:
+    0 0 0 2px var(--frame),
+    0 0 0 4px rgba(0, 0, 0, 0.5),
+    0 0 14px var(--frame-glow),
+    0 4px 10px rgba(0, 0, 0, 0.5);
+}
+.unit-art--face.owner-1 img {
+  box-shadow:
+    0 0 0 2px var(--frame),
+    0 0 0 4px rgba(255, 77, 79, 0.55),
+    0 0 14px rgba(255, 77, 79, 0.45),
+    0 4px 10px rgba(0, 0, 0, 0.5);
+  filter: hue-rotate(-20deg) saturate(1.05);
+}
+.unit-art__lv {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  display: grid;
+  place-items: center;
+  min-width: calc(var(--art-size) * 0.36);
+  height: calc(var(--art-size) * 0.36);
+  padding: 0 4px;
+  border-radius: var(--radius-full);
+  background: #0b1020;
+  color: #fff;
+  border: 1px solid var(--c-outline-strong);
+  font-size: calc(var(--art-size) * 0.2);
+  font-weight: 900;
+  line-height: 1;
+}
+.unit-art--card {
+  --art-size: 112px;
+  width: var(--art-size);
+  height: calc(var(--art-size) * 4 / 3);
+  border-radius: 14px;
+}
+.unit-art--card img {
+  box-shadow:
+    0 0 0 2px var(--frame),
+    0 0 0 4px rgba(0, 0, 0, 0.5),
+    0 0 20px var(--frame-glow),
+    0 8px 18px rgba(0, 0, 0, 0.55);
+}
+.unit-art--card .unit-art__lv {
+  right: 6px;
+  bottom: 6px;
+  min-width: 28px;
+  height: 22px;
+  font-size: 12px;
+  background: rgba(11, 16, 32, 0.9);
+}
+.unit-card__portrait {
+  width: auto;
+  height: auto;
+  padding: 6px;
+  border-radius: 20px;
+}
+.unit-card__portrait .unit-art {
+  position: relative;
+  z-index: 1;
+}
+.unit-card__role b {
+  color: var(--c-gold);
+}
+.tut-char__concept {
+  font-size: var(--fs-tiny);
+  color: var(--c-gold);
+  font-weight: 700;
+}
+.tut-goal__row {
+  gap: var(--s-5);
+}
+.tray-card__token {
+  display: grid;
+  place-items: center;
+  width: 64px;
+}
+.info-card .unit-art {
+  margin-right: 4px;
+}
+.reveal-card .unit-art {
+  margin-bottom: var(--s-2);
+}
+.tut-art--chars {
+  height: auto;
+  min-height: 176px;
+  padding: 10px 6px;
+  align-items: stretch;
+}

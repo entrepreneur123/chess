@@ -6,7 +6,7 @@ import { freeBoxRemainingMs, getProfile, levelUpsAvailable, subscribeProfile, up
 import { formationGrid } from '../components/formationGrid';
 import { showSettings } from '../components/settingsSheet';
 import { isTutorialOpen, showTutorial } from '../components/tutorial';
-import { coinChip, gemChip, pieceToken, rarityChip } from '../components/piece';
+import { coinChip, gemChip, rarityChip, unitArt } from '../components/piece';
 import { Disposables, h, replaceChildren } from '../dom';
 import { icon, type IconName } from '../icons';
 import type { Router, Screen } from '../router';
@@ -163,7 +163,7 @@ export function lobbyScreen(router: Router): Screen {
               h(
                 'div',
                 { class: `squad__unit rarity-${CHARACTERS[id].rarity}` },
-                pieceToken(id, p.characters[id].level, 0, 'md'),
+                unitArt(id, p.characters[id].level, { size: 64 }),
                 h('span', { class: 'squad__name' }, CHARACTERS[id].nameKo),
                 h('span', { class: 'squad__meta' }, rarityChip(CHARACTERS[id].rarity), h('span', { class: 'lv-pill' }, `Lv.${p.characters[id].level}`)),
               ),

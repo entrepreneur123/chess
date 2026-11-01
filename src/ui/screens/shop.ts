@@ -5,7 +5,7 @@ import { freeBoxRemainingMs, getProfile, grantGems, levelUpCost, openBox, subscr
 import { appBar } from '../components/appbar';
 import { confirmDialog } from '../components/dialog';
 import { overlayRoot, pushOverlay, registerForceClose } from '../components/overlay';
-import { coinChip, gemChip, pieceToken, rarityChip } from '../components/piece';
+import { coinChip, gemChip, rarityChip, unitArt } from '../components/piece';
 import { toast } from '../components/toast';
 import { Disposables, h, prefersReducedMotion, replaceChildren } from '../dom';
 import { icon } from '../icons';
@@ -59,14 +59,14 @@ function playBoxOpening(drop: BoxDrop, kind: BoxKind): Promise<void> {
     const cardEl = h(
       'div',
       { class: `reveal-card rarity-${def.rarity}`, 'data-reveal': drop.character },
-      pieceToken(drop.character, prog.level, 0, 'lg'),
+      unitArt(drop.character, prog.level, { size: 128 }),
       h('div', { class: 'reveal-card__name' }, def.nameKo),
       rarityChip(def.rarity),
       h('div', { class: 'reveal-card__amount' }, `카드 +${drop.amount}`),
       h(
         'div',
         { class: 'reveal-card__progress' },
-        cost ? `레벨업까지 ${prog.cards} / ${cost.cards}` : `최대 레벨 · 보유 ${prog.cards}`,
+        cost ? (prog.cards >= cost.cards ? `강화 가능! 카드 ${prog.cards} / ${cost.cards}` : `강화까지 카드 ${prog.cards} / ${cost.cards}`) : `최대 레벨 · 보유 ${prog.cards}`,
       ),
       h('button', { class: 'btn btn--filled btn--block', type: 'button', 'data-action': 'reveal-ok', onclick: close }, '확인'),
     );

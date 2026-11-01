@@ -13,6 +13,9 @@ import { icon } from '../icons';
 
 export const RARITY_LABEL: Record<Rarity, string> = { common: '일반', rare: '희귀', epic: '영웅', legendary: '전설' };
 
+/** Character concept titles shown with the illustrations (UI copy only). */
+export const CONCEPT: Record<CharacterId, string> = { sad: '성기사', marki: '황소 전사', walk: '방패병' };
+
 /** One-letter glyph used on tokens. */
 export function glyphOf(id: CharacterId): string {
   return CHARACTERS[id].nameKo.slice(0, 1);
@@ -43,6 +46,31 @@ export function pieceToken(
     },
     h('span', { class: 'token__glyph' }, glyphOf(character)),
     size === 'xs' ? null : h('span', { class: 'token__lv' }, String(level)),
+  );
+}
+
+/**
+ * Illustrated character art (dark manhwa-style illustrations in public/chars).
+ * `face` = round head-and-shoulders portrait, `card` = 3:4 full illustration.
+ */
+export function unitArt(
+  character: CharacterId,
+  level: Level,
+  opts: { kind?: 'face' | 'card'; size?: number; owner?: PlayerId; cls?: string } = {},
+): HTMLElement {
+  const def = CHARACTERS[character];
+  const kind = opts.kind ?? 'face';
+  const src = `./chars/${character}-lv${level}${kind === 'face' ? '-face' : ''}.jpg`;
+  return h(
+    'span',
+    {
+      class: `unit-art unit-art--${kind} rarity-${def.rarity} owner-${opts.owner ?? 0} ${opts.cls ?? ''}`,
+      style: opts.size ? `--art-size:${opts.size}px` : undefined,
+      role: 'img',
+      'aria-label': `${def.nameKo} 레벨 ${level}`,
+    },
+    h('img', { src, alt: '', loading: 'lazy', decoding: 'async', draggable: 'false' }),
+    h('span', { class: 'unit-art__lv' }, String(level)),
   );
 }
 

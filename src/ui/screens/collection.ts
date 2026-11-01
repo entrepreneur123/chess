@@ -8,7 +8,7 @@ import { MAX_LEVEL } from '../../meta/economy';
 import { canLevelUp, getProfile, levelUp, levelUpCost, subscribeProfile, updateProfile } from '../../meta/profile';
 import { appBar } from '../components/appbar';
 import { confirmDialog } from '../components/dialog';
-import { coinChip, gemChip, movementDiagram, pieceToken, rarityChip } from '../components/piece';
+import { CONCEPT, coinChip, gemChip, movementDiagram, rarityChip, unitArt } from '../components/piece';
 import { toast } from '../components/toast';
 import { Disposables, h, prefersReducedMotion, replaceChildren } from '../dom';
 import { icon } from '../icons';
@@ -98,13 +98,13 @@ export function collectionScreen(router: Router): Screen {
       h(
         'header',
         { class: 'unit-card__head' },
-        h('div', { class: 'unit-card__portrait' }, h('span', { class: 'unit-card__rays', 'aria-hidden': 'true' }), pieceToken(id, prog.level, 0, 'lg')),
+        h('div', { class: 'unit-card__portrait' }, h('span', { class: 'unit-card__rays', 'aria-hidden': 'true' }), unitArt(id, prog.level, { kind: 'card', size: 112 })),
         h(
           'div',
           { class: 'unit-card__title' },
           h('div', { class: 'unit-card__name' }, def.nameKo, h('span', { class: 'unit-card__en' }, def.nameEn)),
           h('div', { class: 'unit-card__chips' }, rarityChip(def.rarity), h('span', { class: 'lv-pill lv-pill--big', 'data-level': prog.level }, `Lv.${prog.level}`)),
-          h('div', { class: 'unit-card__role' }, ROLE[id].role),
+          h('div', { class: 'unit-card__role' }, h('b', null, CONCEPT[id]), ' · ', ROLE[id].role),
         ),
       ),
       h('p', { class: 'unit-card__trait' }, icon('info', 14), ROLE[id].trait),

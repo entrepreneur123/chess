@@ -1,7 +1,7 @@
 /** DOM pieces of the in-game HUD (player bars, timer ring, turn pill, piece info card). */
 import { CHARACTERS, type EndReason, type FormationSlot, type GameState, type Piece, type PlayerId } from '../../engine';
 import { PACING } from '../../meta/economy';
-import { movementDiagram, pieceToken, rarityChip } from '../components/piece';
+import { movementDiagram, pieceToken, rarityChip, unitArt } from '../components/piece';
 import { h } from '../dom';
 import { icon } from '../icons';
 import type { ControllerSnapshot } from './GameController';
@@ -105,7 +105,7 @@ export function pieceInfoCard(piece: Piece, snap: ControllerSnapshot, onClose: (
     h(
       'div',
       { class: 'info-card__row' },
-      pieceToken(piece.character, piece.level, piece.owner, 'md'),
+      unitArt(piece.character, piece.level, { size: 52, owner: piece.owner }),
       h(
         'div',
         { class: 'info-card__main' },
