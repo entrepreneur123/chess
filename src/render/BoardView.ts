@@ -61,7 +61,7 @@ const TAP_SLOP_PX = 14;
 const MAX_PIXEL_RATIO = 2;
 const IDLE_FRAME_MS = 32; // idle pulse (selection / targets) is capped at ~30 fps
 /** Uniform scale of each character model on the board (tile = 1 unit; the bull is long, so smaller). */
-const MODEL_SCALE: Record<CharacterId, number> = { sad: 0.96, marki: 0.86, walk: 0.96 };
+const MODEL_SCALE: Record<CharacterId, number> = { sad: 1.08, marki: 0.92, walk: 1.06 };
 /** Height of the puck top above the tile (models stand on it). */
 const PUCK_TOP = 0.14;
 /** Rows between the zone edge lines (world z of the line between home zone and no-man's land). */
@@ -1008,7 +1008,7 @@ export class BoardView implements IBoardView {
     const cam = this.camera;
     cam.aspect = aspect;
     const portrait = aspect < 0.8;
-    const elevDeg = portrait ? (aspect < 0.7 ? 67 : 64) : aspect < 1.2 ? 60 : 54;
+    const elevDeg = portrait ? (aspect < 0.7 ? 58 : 56) : aspect < 1.2 ? 56 : 52;
     cam.fov = portrait ? 34 : 34;
     cam.updateProjectionMatrix();
     const elev = THREE.MathUtils.degToRad(elevDeg);
@@ -1021,7 +1021,7 @@ export class BoardView implements IBoardView {
       }
     }
     // Tallest piece on the far row.
-    pts.push(new THREE.Vector3(-HALF, 1.6, -HALF), new THREE.Vector3(HALF, 1.6, -HALF));
+    pts.push(new THREE.Vector3(-HALF, 1.5, -HALF), new THREE.Vector3(HALF, 1.5, -HALF));
     const marginX = portrait ? 0.985 : 0.92;
     const marginY = portrait ? 0.95 : 0.92;
     const target = new THREE.Vector3(0, 0, 0);

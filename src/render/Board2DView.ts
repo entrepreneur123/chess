@@ -588,7 +588,7 @@ export class Board2DView implements IBoardView {
     ctx.stroke();
     ctx.restore();
 
-    this.drawGlyph(p.character, p.owner, x, yb + (p.owner === 0 ? -0.03 : 0.03) * u, u * 1.12);
+    this.drawGlyph(p.character, p.owner, p.level, x, yb - 0.1 * u, u * 1.12);
 
     // Level pips (gold) at the bottom of the puck.
     ctx.fillStyle = BOARD_COLORS.pip;
@@ -603,63 +603,132 @@ export class Board2DView implements IBoardView {
     ctx.restore();
   }
 
-  private drawGlyph(ch: CharacterId, owner: PlayerId, x: number, y: number, u: number): void {
+  /** Simple icons matching the 3D concepts: paladin (plume + sword), bull (horns), shield-bearer. */
+  private drawGlyph(ch: CharacterId, owner: PlayerId, level: number, x: number, y: number, u: number): void {
     const ctx = this.ctx;
     const team = TEAM_COLORS[owner];
-    ctx.fillStyle = team.main;
-    ctx.strokeStyle = team.light;
-    ctx.lineWidth = Math.max(1, u * 0.025);
+    const steel = '#C9D0DD';
+    const steelDark = '#7B8599';
+    const gold = '#F3C34F';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = Math.max(1, u * 0.03);
+    ctx.strokeStyle = 'rgba(10,14,28,0.75)';
+    ctx.save();
+    if (level === 3) {
+      ctx.shadowColor = team.glow;
+      ctx.shadowBlur = u * 0.22;
+    }
     switch (ch) {
       case 'sad': {
-        // Plus-shaped crown on an octagonal tower.
-        ctx.fillStyle = team.dark;
-        polygon(ctx, x, y, u * 0.2, 8, Math.PI / 8);
-        ctx.fill();
-        ctx.fillStyle = team.main;
-        const l = u * 0.27;
-        const w = u * 0.085;
-        roundRect(ctx, x - l, y - w, l * 2, w * 2, w * 0.5);
+        // Sword (left), helmet with plume, shoulders.
+        ctx.fillStyle = level === 3 ? '#BFEFFF' : steel;
+        const bl = u * (0.5 + 0.06 * level);
+        roundRect(ctx, x - u * 0.34, y - bl * 0.75, u * 0.07, bl, u * 0.02);
         ctx.fill();
         ctx.stroke();
-        roundRect(ctx, x - w, y - l, w * 2, l * 2, w * 0.5);
+        ctx.fillStyle = level >= 2 ? gold : steelDark;
+        ctx.fillRect(x - u * 0.4, y + bl * 0.15, u * 0.19, u * 0.04);
+        ctx.fillStyle = steel;
+        roundRect(ctx, x - u * 0.2, y + u * 0.02, u * 0.4, u * 0.24, u * 0.07); // shoulders
         ctx.fill();
-        break;
-      }
-      case 'marki': {
-        // Arrowhead pointing in the forward direction (up for player 0, down for player 1).
-        const f = owner === 0 ? -1 : 1;
+        ctx.stroke();
         ctx.beginPath();
-        const yc = y - f * u * 0.02;
-        ctx.moveTo(x, yc + f * u * 0.26);
-        ctx.lineTo(x + u * 0.2, yc + f * u * 0.0);
-        ctx.lineTo(x + u * 0.07, yc + f * u * 0.0);
-        ctx.lineTo(x + u * 0.07, yc - f * u * 0.18);
-        ctx.lineTo(x - u * 0.07, yc - f * u * 0.18);
-        ctx.lineTo(x - u * 0.07, yc + f * u * 0.0);
-        ctx.lineTo(x - u * 0.2, yc + f * u * 0.0);
+        ctx.arc(x, y - u * 0.08, u * 0.17, 0, Math.PI * 2); // helmet
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = steelDark;
+        ctx.fillRect(x - u * 0.12, y - u * 0.1, u * 0.24, u * 0.04); // visor
+        ctx.fillStyle = team.main; // plume
+        ctx.beginPath();
+        ctx.moveTo(x - u * 0.06, y - u * 0.23);
+        ctx.quadraticCurveTo(x - u * 0.02, y - u * (0.42 + 0.05 * level), x + u * 0.1, y - u * 0.33);
+        ctx.quadraticCurveTo(x + u * 0.05, y - u * 0.3, x + u * 0.07, y - u * 0.2);
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
+        ctx.fillStyle = team.dark;
+        ctx.fillRect(x - u * 0.06, y + u * 0.2, u * 0.12, u * 0.14); // tabard
+        break;
+      }
+      case 'marki': {
+        // Bull head: wide curved horns, team scarf, nose ring from Lv2.
+        const hl = u * (0.2 + 0.05 * level);
+        ctx.fillStyle = '#F4ECD6';
+        for (const sd of [-1, 1]) {
+          ctx.beginPath();
+          ctx.moveTo(x + sd * u * 0.1, y - u * 0.05);
+          ctx.quadraticCurveTo(x + sd * u * 0.42, y - u * 0.02, x + sd * u * 0.36, y - hl - u * 0.1);
+          ctx.quadraticCurveTo(x + sd * u * 0.27, y - u * 0.1, x + sd * u * 0.1, y - u * 0.18);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        }
+        ctx.fillStyle = '#8E5B3B';
+        ctx.beginPath();
+        ctx.ellipse(x, y + u * 0.02, u * 0.2, u * 0.2, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#DDB38F';
+        ctx.beginPath();
+        ctx.ellipse(x, y + u * 0.14, u * 0.12, u * 0.08, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = level === 3 ? team.glow : '#252A36';
+        ctx.fillRect(x - u * 0.12, y - u * 0.04, u * 0.06, u * 0.045);
+        ctx.fillRect(x + u * 0.06, y - u * 0.04, u * 0.06, u * 0.045);
+        ctx.fillStyle = team.main; // scarf
+        ctx.fillRect(x - u * 0.2, y + u * 0.22, u * 0.4, u * 0.07);
+        if (level >= 2) {
+          ctx.strokeStyle = gold;
+          ctx.lineWidth = u * 0.025;
+          ctx.beginPath();
+          ctx.arc(x, y + u * 0.2, u * 0.04, 0, Math.PI * 2);
+          ctx.stroke();
+        }
         break;
       }
       case 'walk': {
-        // Orb with a halo ring.
-        ctx.strokeStyle = team.glow;
-        ctx.lineWidth = u * 0.045;
+        // Tower shield with team chevron, helmet peeking above, spear on the side.
+        ctx.strokeStyle = 'rgba(10,14,28,0.75)';
+        ctx.fillStyle = '#8F6A44';
+        ctx.fillRect(x + u * 0.27, y - u * 0.46, u * 0.03, u * 0.8); // spear
+        ctx.fillStyle = steel;
         ctx.beginPath();
-        ctx.ellipse(x, y, u * 0.31, u * 0.25, -0.15, 0, Math.PI * 2);
-        ctx.stroke();
-        const g = ctx.createRadialGradient(x - u * 0.07, y - u * 0.08, u * 0.02, x, y, u * 0.21);
-        g.addColorStop(0, team.light);
-        g.addColorStop(0.45, team.main);
-        g.addColorStop(1, team.dark);
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.arc(x, y, u * 0.2, 0, Math.PI * 2);
+        ctx.moveTo(x + u * 0.285, y - u * (0.58 + 0.03 * level));
+        ctx.lineTo(x + u * 0.33, y - u * 0.44);
+        ctx.lineTo(x + u * 0.24, y - u * 0.44);
+        ctx.closePath();
         ctx.fill();
+        ctx.fillStyle = steel; // helmet
+        ctx.beginPath();
+        ctx.arc(x, y - u * 0.18, u * 0.14, Math.PI, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = team.main; // crest
+        if (level >= 2) ctx.fillRect(x - u * 0.03, y - u * 0.4, u * 0.06, u * 0.1);
+        ctx.fillStyle = level === 1 ? '#8F6A44' : level === 2 ? '#B6BFD0' : '#7C89A6';
+        ctx.strokeStyle = level === 3 ? gold : 'rgba(10,14,28,0.75)';
+        ctx.lineWidth = u * (level === 3 ? 0.05 : 0.03);
+        ctx.beginPath();
+        ctx.moveTo(x - u * 0.24, y - u * 0.12);
+        ctx.lineTo(x + u * 0.24, y - u * 0.12);
+        ctx.lineTo(x + u * 0.24, y + u * 0.14);
+        ctx.quadraticCurveTo(x + u * 0.2, y + u * 0.3, x, y + u * 0.36);
+        ctx.quadraticCurveTo(x - u * 0.2, y + u * 0.3, x - u * 0.24, y + u * 0.14);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.strokeStyle = team.main;
+        ctx.lineWidth = u * 0.06;
+        ctx.beginPath();
+        ctx.moveTo(x - u * 0.13, y + u * 0.02);
+        ctx.lineTo(x, y + u * 0.12);
+        ctx.lineTo(x + u * 0.13, y + u * 0.02);
+        ctx.stroke();
         break;
       }
     }
+    ctx.restore();
   }
 
   // ---------------------------------------------------------------- input
@@ -707,16 +776,6 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.arcTo(x + w, y + h, x, y + h, rr);
   ctx.arcTo(x, y + h, x, y, rr);
   ctx.arcTo(x, y, x + w, y, rr);
-  ctx.closePath();
-}
-
-function polygon(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, n: number, rot: number): void {
-  ctx.beginPath();
-  for (let i = 0; i < n; i++) {
-    const a = rot + (i / n) * Math.PI * 2;
-    if (i === 0) ctx.moveTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
-    else ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
-  }
   ctx.closePath();
 }
 
