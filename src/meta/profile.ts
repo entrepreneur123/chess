@@ -33,7 +33,23 @@ export interface Profile {
   stats: { wins: number; losses: number; draws: number };
   lastFreeBoxAt: number | null;
   difficulty: Difficulty;
+  settings: Settings;
+  onboarding: Onboarding;
 }
+
+export interface Settings {
+  sound: boolean;
+  haptics: boolean;
+}
+
+export interface Onboarding {
+  /** The intro tutorial was completed or skipped. */
+  tutorialSeen: boolean;
+  /** The player made their first move with the in-game coach hints. */
+  firstMoveDone: boolean;
+}
+
+export const DEFAULT_SETTINGS: Settings = { sound: true, haptics: true };
 
 export type MatchOutcome = 'win' | 'loss' | 'draw';
 
@@ -61,6 +77,8 @@ export function createDefaultProfile(): Profile {
     stats: { wins: 0, losses: 0, draws: 0 },
     lastFreeBoxAt: null,
     difficulty: 'normal',
+    settings: { ...DEFAULT_SETTINGS },
+    onboarding: { tutorialSeen: false, firstMoveDone: false },
   };
 }
 
@@ -68,6 +86,7 @@ const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object
 const nonNegInt = (v: unknown, fallback: number): number =>
   typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : fallback;
 const asLevel = (v: unknown): Level => (v === 2 || v === 3 ? v : 1);
+const asBool = (v: unknown, fallback: boolean): boolean => (typeof v === 'boolean' ? v : fallback);
 
 /** Formation slots carry the level, which must always mirror the profile. */
 export function syncFormationLevels(f: Formation, levels: Record<CharacterId, Level>): Formation {
@@ -134,6 +153,11 @@ export function sanitizeProfile(input: unknown, now = Date.now()): Profile {
   }
 
   const stats = isObj(raw.stats) ? raw.stats : {};
+  const settings = isObj(raw.settings) ? raw.settings : {};
+  const onboarding = isObj(raw.onboarding) ? raw.onboarding : {};
+  // Profiles saved before onboarding existed belong to players who already played: don't greet
+  // them with the first-run tutorial / first-move coach marks.
+  const veteran = !isObj(raw.onboarding) && (nonNegInt(stats.wins, 0) + nonNegInt(stats.losses, 0) + nonNegInt(stats.draws, 0) > 0);
   return {
     version: PROFILE_VERSION,
     coins: nonNegInt(raw.coins, def.coins),
@@ -150,6 +174,14 @@ export function sanitizeProfile(input: unknown, now = Date.now()): Profile {
     lastFreeBoxAt:
       typeof raw.lastFreeBoxAt === 'number' && Number.isFinite(raw.lastFreeBoxAt) ? Math.min(raw.lastFreeBoxAt, now) : null,
     difficulty: DIFFICULTIES.includes(raw.difficulty as Difficulty) ? (raw.difficulty as Difficulty) : def.difficulty,
+    settings: {
+      sound: asBool(settings.sound, DEFAULT_SETTINGS.sound),
+      haptics: asBool(settings.haptics, DEFAULT_SETTINGS.haptics),
+    },
+    onboarding: {
+      tutorialSeen: asBool(onboarding.tutorialSeen, veteran),
+      firstMoveDone: asBool(onboarding.firstMoveDone, veteran),
+    },
   };
 }
 

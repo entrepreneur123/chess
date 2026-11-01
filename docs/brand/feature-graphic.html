@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<!-- Google Play feature graphic (1024x500) and Open Graph image (1200x630) source.
+     Rendered by docs/brand/render.mjs. Add ?og to the URL for the 1200x630 layout. -->
+<style>
+  :root { --blue:#1A73E8; --blue-d:#1557B8; --red:#D93025; --amber:#F9AB00; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body {
+    font-family: Roboto, 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
+    color: #fff;
+    background:
+      radial-gradient(900px 500px at 82% 30%, rgba(255,255,255,.18), transparent 60%),
+      linear-gradient(135deg, #3F86F5 0%, #1A73E8 45%, #1250A8 100%);
+    position: relative;
+  }
+  .grid-bg {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,.07) 2px, transparent 2px),
+      linear-gradient(90deg, rgba(255,255,255,.07) 2px, transparent 2px);
+    background-size: 48px 48px;
+    mask-image: linear-gradient(90deg, rgba(0,0,0,.9), rgba(0,0,0,.2) 60%, transparent);
+  }
+  .wrap { position: relative; display: flex; align-items: center; height: 100%; padding: 0 0 0 72px; }
+  .copy { width: 520px; flex: none; z-index: 2; }
+  .brand { display: flex; align-items: center; gap: 18px; margin-bottom: 22px; }
+  .brand img { width: 84px; height: 84px; border-radius: 20px; box-shadow: 0 8px 24px rgba(8,30,80,.35); }
+  .brand h1 { font-size: 64px; font-weight: 800; letter-spacing: -1.5px; line-height: 1; }
+  .brand small { display: block; font-size: 18px; font-weight: 600; opacity: .85; letter-spacing: 1px; margin-top: 8px; }
+  .hook { font-size: 34px; font-weight: 800; line-height: 1.3; letter-spacing: -0.5px; text-shadow: 0 2px 10px rgba(0,0,0,.15); }
+  .hook em { font-style: normal; color: #FFD54F; }
+  .chips { display: flex; gap: 10px; margin-top: 26px; flex-wrap: wrap; }
+  .chip { font-size: 18px; font-weight: 700; padding: 9px 16px; border-radius: 999px; background: rgba(255,255,255,.16); border: 1.5px solid rgba(255,255,255,.35); }
+  .chip--hot { background: #fff; color: var(--blue-d); border-color: #fff; }
+
+  .stage { position: absolute; right: -40px; top: 50%; width: 560px; height: 560px; transform: translateY(-50%); perspective: 1400px; }
+  .board {
+    position: absolute; left: 50%; top: 50%; width: 420px; height: 420px; margin: -210px 0 0 -210px;
+    display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; padding: 14px;
+    background: #fff; border-radius: 28px;
+    transform: rotateX(55deg) rotateZ(-32deg);
+    transform-style: preserve-3d;
+    box-shadow: 0 40px 60px rgba(8,30,80,.45);
+  }
+  .cell { border-radius: 10px; background: #F1F3F4; position: relative; transform-style: preserve-3d; }
+  .cell:nth-child(odd) { background: #E8F0FE; }
+  .cell.zone { background: #D3E3FD; }
+  .cell.zone:nth-child(odd) { background: #C2D7FB; }
+  .cell.hit { background: #FEEFC3 !important; box-shadow: inset 0 0 0 3px var(--amber); }
+  .pc {
+    position: absolute; left: 50%; bottom: 50%; width: 62px; height: 62px; margin-left: -31px;
+    transform-origin: 50% 100%;
+    transform: translateZ(4px) rotateZ(32deg) rotateX(-55deg) translateY(10px);
+    border-radius: 50%; display: grid; place-items: center;
+    font-size: 26px; font-weight: 800; color: #fff;
+    border: 4px solid #fff;
+    box-shadow: 0 10px 14px rgba(8,30,80,.35);
+  }
+  .pc.b { background: radial-gradient(circle at 36% 30%, #6AA6FA, #1A73E8 55%, #1250A8); }
+  .pc.r { background: radial-gradient(circle at 36% 30%, #F47C70, #D93025 55%, #A21F17); }
+  .pc.epic { box-shadow: 0 0 0 4px #A142F4, 0 10px 14px rgba(8,30,80,.35); }
+  .pc.rare { box-shadow: 0 0 0 4px #4285F4, 0 10px 14px rgba(8,30,80,.35); }
+  .pc .lv { position: absolute; right: -8px; bottom: -8px; width: 24px; height: 24px; border-radius: 50%; background: #fff; color: #202124; font-size: 14px; display: grid; place-items: center; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+
+  .badge-soon { position: absolute; right: 28px; bottom: 22px; font-size: 15px; font-weight: 700; padding: 7px 14px; border-radius: 999px; background: rgba(0,0,0,.22); }
+
+  body.og .wrap { padding-left: 84px; }
+  body.og .copy { width: 600px; }
+  body.og .brand h1 { font-size: 76px; }
+  body.og .hook { font-size: 42px; }
+  body.og .stage { right: -30px; width: 640px; height: 640px; }
+  body.og .board { width: 480px; height: 480px; margin: -240px 0 0 -240px; }
+</style>
+</head>
+<body>
+  <div class="grid-bg"></div>
+  <div class="wrap">
+    <div class="copy">
+      <div class="brand">
+        <img src="./out/icon-rounded-512.png" alt="" />
+        <div><h1>Tactics 12</h1><small>12×12 능력 체스</small></div>
+      </div>
+      <p class="hook">말 3개, 144칸,<br /><em>60초</em>의 수 싸움.</p>
+      <div class="chips">
+        <span class="chip chip--hot">1:1 전략 대전</span>
+        <span class="chip">진형 편성</span>
+        <span class="chip">상자 · 레벨업</span>
+      </div>
+    </div>
+  </div>
+  <div class="stage"><div class="board" id="board"></div></div>
+  <div class="badge-soon">Google Play 출시 예정</div>
+<script>
+  if (location.search.includes('og')) document.body.classList.add('og');
+  // 6x6 slice: rows 0-1 enemy side, rows 4-5 our formation zone.
+  const pieces = {
+    '0,1': ['r','사','',1], '1,4': ['r','마','rare',2], '0,3': ['r','월','epic',1],
+    '4,1': ['b','마','rare',2], '5,3': ['b','사','',3], '3,2': ['b','월','epic',2],
+  };
+  const board = document.getElementById('board');
+  for (let r = 0; r < 6; r++) for (let c = 0; c < 6; c++) {
+    const cell = document.createElement('div');
+    cell.className = 'cell' + (r >= 4 ? ' zone' : '') + (r === 2 && c <= 5 ? ' hit' : '');
+    const p = pieces[r + ',' + c];
+    if (p) {
+      const el = document.createElement('div');
+      el.className = `pc ${p[0]} ${p[2]}`;
+      el.innerHTML = `${p[1]}<span class="lv">${p[3]}</span>`;
+      cell.appendChild(el);
+    }
+    board.appendChild(cell);
+  }
+</script>
+</body>
+</html>
