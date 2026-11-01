@@ -65,7 +65,7 @@ export function unitArt(
   return h(
     'span',
     {
-      class: `unit-art unit-art--${kind} rarity-${def.rarity} owner-${opts.owner ?? 0} ${opts.cls ?? ''}`,
+      class: `unit-art unit-art--${kind} rarity-${def.rarity} tier-${level} owner-${opts.owner ?? 0} ${opts.cls ?? ''}`,
       style: opts.size ? `--art-size:${opts.size}px` : undefined,
       role: 'img',
       'aria-label': `${def.nameKo} 레벨 ${level}`,
