@@ -16,7 +16,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     nameKo: '마르키',
     nameEn: 'Marki',
     rarity: 'rare',
-    descKo: ['앞으로만 최대 3칸 직진', '앞으로만 최대 4칸 직진', '앞으로만 최대 6칸 직진'],
+    descKo: ['앞으로만 최대 3칸 직진 · 끝줄에서 방향 전환', '앞으로만 최대 4칸 직진 · 끝줄에서 방향 전환', '앞으로만 최대 6칸 직진 · 끝줄에서 방향 전환'],
     value: [3, 4, 6],
   },
   walk: {
@@ -25,9 +25,9 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     nameEn: 'Walk',
     rarity: 'epic',
     descKo: [
-      '바로 앞줄 5칸 중 원하는 칸으로 점프 (기물 뛰어넘기 가능)',
-      '바로 앞줄 7칸 중 원하는 칸으로 점프 (기물 뛰어넘기 가능)',
-      '바로 앞줄 9칸 중 원하는 칸으로 점프 (기물 뛰어넘기 가능)',
+      '바로 앞줄 5칸 중 원하는 칸으로 점프 (뛰어넘기 가능 · 끝줄에서 방향 전환)',
+      '바로 앞줄 7칸 중 원하는 칸으로 점프 (뛰어넘기 가능 · 끝줄에서 방향 전환)',
+      '바로 앞줄 9칸 중 원하는 칸으로 점프 (뛰어넘기 가능 · 끝줄에서 방향 전환)',
     ],
     value: [4, 6, 8],
   },

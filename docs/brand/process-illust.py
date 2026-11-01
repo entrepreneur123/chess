@@ -12,9 +12,9 @@ OUT = ROOT / 'public/chars'
 OUT.mkdir(parents=True, exist_ok=True)
 # Face crop box as fractions of (w, h): left, top, right, bottom — heads sit in the upper-centre.
 FACE = {
-    'sad': (0.22, 0.04, 0.82, 0.49),
-    'marki': (0.12, 0.05, 0.84, 0.59),
-    'walk': (0.14, 0.04, 0.76, 0.50),
+    'sad': (0.04, 0.03, 0.66, 0.46),
+    'marki': (0.14, 0.06, 0.82, 0.56),
+    'walk': (0.04, 0.06, 0.62, 0.46),
 }
 for f in sorted(SRC.glob('illust-*.jpg')):
     name = f.stem.replace('illust-', '')  # sad-lv1
