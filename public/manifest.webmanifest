@@ -1,0 +1,11 @@
+{
+  "name": "Tactics 12",
+  "short_name": "Tactics 12",
+  "lang": "ko",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F8F9FA",
+  "theme_color": "#F8F9FA",
+  "icons": [{ "src": "./favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}
