@@ -15,6 +15,7 @@ export {
   materialScore,
   adjudicate,
   buildOccupancy,
+  pieceDir,
 } from './rules';
 export type { FastBoard } from './fast';
 export { fastFromState, fastGenMoves, fastHasMoves, fastMake, fastUnmake, fastMoveToMove } from './fast';

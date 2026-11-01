@@ -1,7 +1,7 @@
 import { MAX_CONSECUTIVE_TIMEOUTS, NO_CAPTURE_PLY_LIMIT } from './types';
 import type { Formation, GameState, HistoryEntry, Move, Piece, PlayerId, Pos } from './types';
 import { CHAR_CODE, pieceValue } from './characters';
-import { N_SQUARES, formationToAbsolute, genTargets, isOnBoard, posOf, sqOf } from './board';
+import { N_SQUARES, atTurnRow, formationToAbsolute, forwardDir, genTargets, isOnBoard, posOf, sqOf } from './board';
 import { validateFormation } from './formation';
 
 const other = (p: PlayerId): PlayerId => (p === 0 ? 1 : 0);
@@ -58,8 +58,13 @@ export function buildOccupancy(pieces: Piece[]): { occ: Int8Array; owners: Uint8
 
 const tmpTargets = new Int16Array(64);
 
+/** Current forward direction of a piece (forward-only movers turn around at the far edge). */
+export function pieceDir(piece: Pick<Piece, 'owner' | 'dir'>): 1 | -1 {
+  return piece.dir ?? forwardDir(piece.owner);
+}
+
 function targetsWith(pieces: Piece[], occ: Int8Array, owners: Uint8Array, piece: Piece): Move[] {
-  const n = genTargets(occ, owners, piece.owner, CHAR_CODE[piece.character], piece.level, sqOf(piece.pos), tmpTargets, 0);
+  const n = genTargets(occ, owners, piece.owner, CHAR_CODE[piece.character], piece.level, sqOf(piece.pos), tmpTargets, 0, false, pieceDir(piece));
   const moves: Move[] = [];
   for (let i = 0; i < n; i++) {
     const s = tmpTargets[i];
@@ -94,7 +99,7 @@ function hasAnyMove(pieces: Piece[], player: PlayerId): boolean {
   const { occ, owners } = buildOccupancy(pieces);
   for (const p of pieces) {
     if (p.owner !== player) continue;
-    if (genTargets(occ, owners, p.owner, CHAR_CODE[p.character], p.level, sqOf(p.pos), tmpTargets, 0) > 0) return true;
+    if (genTargets(occ, owners, p.owner, CHAR_CODE[p.character], p.level, sqOf(p.pos), tmpTargets, 0, false, pieceDir(p)) > 0) return true;
   }
   return false;
 }
@@ -158,8 +163,15 @@ export function applyMove(state: GameState, move: Move): GameState {
   const pieces: Piece[] = [];
   for (const p of state.pieces) {
     if (legal.captureId && p.id === legal.captureId) continue;
-    if (p.id === legal.pieceId) pieces.push({ ...p, pos: { r: legal.to.r, c: legal.to.c } });
-    else pieces.push(p);
+    if (p.id === legal.pieceId) {
+      const moved: Piece = { ...p, pos: { r: legal.to.r, c: legal.to.c } };
+      // Forward-only movers turn around when they reach the last row in their direction.
+      if (p.character !== 'sad') {
+        const d = pieceDir(p);
+        if (atTurnRow(moved.pos.r, d)) moved.dir = d === 1 ? -1 : 1;
+      }
+      pieces.push(moved);
+    } else pieces.push(p);
   }
   const ct: [number, number] = [state.consecutiveTimeouts[0], state.consecutiveTimeouts[1]];
   ct[player] = 0;

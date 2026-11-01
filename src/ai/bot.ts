@@ -57,7 +57,7 @@ function buildAttackMaps(b: FastBoard): number[] {
     const s = b.sq[i];
     if (s < 0) continue;
     const side = b.owner[i];
-    const n = genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, attackBuf, 0, true);
+    const n = genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, attackBuf, 0, true, b.dir[i]);
     const v = b.value[i];
     for (let k = 0; k < n; k++) {
       const t = attackBuf[k];
@@ -86,17 +86,20 @@ export function evaluate(b: FastBoard, side: number): number {
     const r = (s / 12) | 0;
     const c = s - r * 12;
     let sc = v;
-    const room = p === 0 ? 11 - r : r; // rows left in front of the piece
+    const dir = b.dir[i];
+    const room = dir > 0 ? 11 - r : r; // rows left in front of the piece (it turns around at 0)
+    // Facing the enemy side is worth more than walking back home after a turn-around.
+    const facingEnemy = dir === (p === 0 ? 1 : -1);
     const centerC = 5.5 - Math.abs(c - 5.5); // 0.5..5.5
     const ch = b.ch[i];
     if (ch === CH_SAD) {
       sc += centerC * 3 + (5.5 - Math.abs(r - 5.5)) * 2;
     } else if (ch === CH_MARKI) {
-      if (room === 0) sc -= v * 0.35;
-      else {
+      if (!facingEnemy) sc -= v * 0.2;
+      {
         // free squares straight ahead (blocked by ally = less potential)
         let free = 0;
-        const dr = p === 0 ? 12 : -12;
+        const dr = dir > 0 ? 12 : -12;
         for (let t = s + dr, k = 0; k < room; k++, t += dr) {
           const o = b.occ[t];
           if (o >= 0 && b.owner[o] === p) break;
@@ -107,8 +110,8 @@ export function evaluate(b: FastBoard, side: number): number {
         if (free === 0) sc -= v * 0.15;
       }
     } else if (ch === CH_WALK) {
-      if (room === 0) sc -= v * 0.3;
-      else sc += centerC * 4 + Math.min(room, 6) * 2;
+      if (!facingEnemy) sc -= v * 0.2;
+      sc += centerC * 4 + Math.min(room, 6) * 2;
     }
     // safety
     const enemy = 1 - p;
@@ -350,7 +353,7 @@ function isAttackedBy(b: FastBoard, sq: number, attacker: number): boolean {
   for (let i = 0; i < b.n; i++) {
     const s = b.sq[i];
     if (s < 0 || b.owner[i] !== attacker) continue;
-    const n = genTargets(b.occ, b.owner, attacker, b.ch[i], b.lvl[i], s, attackBuf, 0);
+    const n = genTargets(b.occ, b.owner, attacker, b.ch[i], b.lvl[i], s, attackBuf, 0, false, b.dir[i]);
     for (let k = 0; k < n; k++) if (attackBuf[k] === sq) return true;
   }
   return false;

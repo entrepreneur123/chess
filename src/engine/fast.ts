@@ -5,7 +5,8 @@
  */
 import type { CharacterId, GameState, Move, PlayerId } from './types';
 import { CHARACTERS, CHAR_CODE } from './characters';
-import { N_SQUARES, genTargets, posOf, sqOf } from './board';
+import { N_SQUARES, atTurnRow, genTargets, posOf, sqOf } from './board';
+import { pieceDir } from './rules';
 
 export interface FastBoard {
   n: number;
@@ -14,6 +15,7 @@ export interface FastBoard {
   owner: Uint8Array;
   ch: Uint8Array;
   lvl: Uint8Array;
+  dir: Int8Array; // current forward direction per piece (+1 / -1)
   value: Int16Array; // material value of each piece
   occ: Int8Array; // piece index or -1
   alive: Int16Array; // [count0, count1]
@@ -32,6 +34,7 @@ export function fastFromState(state: GameState): FastBoard {
     owner: new Uint8Array(n),
     ch: new Uint8Array(n),
     lvl: new Uint8Array(n),
+    dir: new Int8Array(n),
     value: new Int16Array(n),
     occ: new Int8Array(N_SQUARES).fill(-1),
     alive: new Int16Array(2),
@@ -44,6 +47,7 @@ export function fastFromState(state: GameState): FastBoard {
     b.owner[i] = p.owner;
     b.ch[i] = CHAR_CODE[p.character];
     b.lvl[i] = p.level;
+    b.dir[i] = pieceDir(p);
     b.value[i] = CHARACTERS[p.character].value[p.level - 1];
     b.occ[s] = i;
     b.alive[p.owner]++;
@@ -58,7 +62,7 @@ export function fastGenMoves(b: FastBoard, side: number, out: Int32Array, n = 0)
     const s = b.sq[i];
     if (s < 0 || b.owner[i] !== side) continue;
     const start = n;
-    n = genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, out, n);
+    n = genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, out, n, false, b.dir[i]);
     const hi = i << 8;
     for (let k = start; k < n; k++) out[k] |= hi;
   }
@@ -71,12 +75,15 @@ export function fastHasMoves(b: FastBoard, side: number): boolean {
   for (let i = 0; i < b.n; i++) {
     const s = b.sq[i];
     if (s < 0 || b.owner[i] !== side) continue;
-    if (genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, scratch, 0) > 0) return true;
+    if (genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, scratch, 0, false, b.dir[i]) > 0) return true;
   }
   return false;
 }
 
-/** Applies a move (does not flip turn). Returns an undo token. */
+const SAD_CODE = CHAR_CODE.sad;
+const FLIP_BIT = 1 << 16;
+
+/** Applies a move (does not flip turn). Returns an undo token (bit 16 = the mover turned around). */
 export function fastMake(b: FastBoard, mv: number): number {
   const pi = mv >> 8;
   const to = mv & 255;
@@ -90,14 +97,20 @@ export function fastMake(b: FastBoard, mv: number): number {
   b.occ[from] = -1;
   b.occ[to] = pi;
   b.sq[pi] = to;
-  return ((cap + 1) << 8) | from;
+  let undo = ((cap + 1) << 8) | from;
+  if (b.ch[pi] !== SAD_CODE && atTurnRow((to / 12) | 0, b.dir[pi])) {
+    b.dir[pi] = -b.dir[pi];
+    undo |= FLIP_BIT;
+  }
+  return undo;
 }
 
 export function fastUnmake(b: FastBoard, mv: number, undo: number): void {
   const pi = mv >> 8;
   const to = mv & 255;
   const from = undo & 255;
-  const cap = (undo >> 8) - 1;
+  const cap = ((undo & 0xffff) >> 8) - 1;
+  if (undo & FLIP_BIT) b.dir[pi] = -b.dir[pi];
   b.sq[pi] = from;
   b.occ[from] = pi;
   if (cap >= 0) {

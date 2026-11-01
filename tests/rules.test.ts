@@ -115,18 +115,40 @@ describe('no moves / stalemate / move limit', () => {
     expect(s2.turn).toBe(0);
     expect(s2.history.map((h) => h.kind === 'pass' && h.reason)).toEqual(['timeout', 'noMoves']);
   });
-  it('stalemate when neither side can move, adjudicated by material', () => {
-    // p0 marki moves to last row, leaving both sides without moves.
+  it('reaching the last row no longer stalls the game: the mover turns around', () => {
     const s = makeState([
       [0, 'marki', 1, 10, 3],
       [0, 'walk', 3, 11, 0],
       [1, 'walk', 1, 0, 5],
     ]);
     const s2 = applyMove(s, { pieceId: 'p0-marki', from: { r: 10, c: 3 }, to: { r: 11, c: 3 } });
+    expect(s2.status).toBe('playing');
+    expect(s2.pieces.find((p) => p.id === 'p0-marki')!.dir).toBe(-1);
+    // p1's walk was placed on row 0 facing the edge (artificial), so p1 auto-passes and p0 moves again.
+    expect(s2.history[s2.history.length - 1]).toEqual({ kind: 'pass', player: 1, reason: 'noMoves' });
+    expect(s2.turn).toBe(0);
+  });
+  it('stalemate when neither side can move (all pieces boxed in), adjudicated by material', () => {
+    // p0: sad boxed in the corner by its own pieces; marki blocked by the ally ahead; walk facing the edge.
+    // p1: a lone walk facing the edge. After p1 times out, nobody can move -> stalemate.
+    const base = makeState(
+      [
+        [0, 'sad', 1, 0, 0],
+        [0, 'marki', 1, 1, 0],
+        [0, 'walk', 1, 0, 1],
+        [1, 'walk', 1, 11, 5],
+      ],
+      1,
+    );
+    const s = {
+      ...base,
+      pieces: base.pieces.map((p) => (p.id === 'p0-marki' || p.id === 'p0-walk' ? { ...p, dir: -1 as const } : p.id === 'p1-walk' ? { ...p, dir: 1 as const } : p)),
+    };
+    const s2 = applyTimeout(s);
     expect(s2.status).toBe('ended');
     expect(s2.endReason).toBe('stalemate');
     expect(s2.winner).toBe(0);
-    expect(materialScore(s2, 0)).toBe(3 + 8);
+    expect(materialScore(s2, 0)).toBe(3 + 3 + 4);
     expect(materialScore(s2, 1)).toBe(4);
   });
   it('move limit adjudication: winner by material, or draw', () => {

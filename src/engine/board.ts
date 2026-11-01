@@ -41,6 +41,12 @@ export function posOf(sq: number): Pos {
 
 const SAD_DIRS = [1, 0, -1, 0, 0, 1, 0, -1];
 
+/** True when a forward-only mover standing on row `r` with direction `dir` has no row ahead: it turns around. */
+export function atTurnRow(r: number, dir: number): boolean {
+  const next = r + dir;
+  return next < 0 || next >= BOARD_SIZE;
+}
+
 /**
  * Core move generator shared by the public engine API and the AI.
  *
@@ -59,6 +65,8 @@ export function genTargets(
   out: { [i: number]: number },
   n: number,
   includeAllies = false,
+  /** Forward direction of this piece (+1 toward r=11). Defaults to the owner's base direction. */
+  dir: number = owner === 0 ? 1 : -1,
 ): number {
   const r = (sq / BOARD_SIZE) | 0;
   const c = sq - r * BOARD_SIZE;
@@ -85,7 +93,7 @@ export function genTargets(
     }
     return n;
   }
-  const dr = owner === 0 ? 1 : -1;
+  const dr = dir;
   if (ch === CH_MARKI) {
     const L = MARKI_RANGE[level];
     let nr = r;
