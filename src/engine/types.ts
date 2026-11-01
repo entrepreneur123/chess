@@ -35,6 +35,12 @@ export interface Piece {
   character: CharacterId;
   level: Level;
   pos: Pos;
+  /**
+   * Forward direction (+1 toward r=11, -1 toward r=0). Defaults to forwardDir(owner).
+   * Forward-only movers (marki, walk) turn around when they reach the last row they can advance to,
+   * so they are never stuck at the far edge. Renderers should face the piece by this value.
+   */
+  dir?: 1 | -1;
 }
 
 /**
