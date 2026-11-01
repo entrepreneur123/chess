@@ -1,7 +1,7 @@
 {
   "id": "./",
-  "name": "Tactics 12 — 12×12 능력 체스",
-  "short_name": "Tactics 12",
+  "name": "GRID CLASH — 12×12 전술 아레나",
+  "short_name": "GRID CLASH",
   "description": "말 3개, 144칸, 60초의 수 싸움. 진형을 짜고 봇과 1:1로 겨루는 전략 보드게임.",
   "lang": "ko",
   "dir": "ltr",
@@ -9,8 +9,8 @@
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#F8F9FA",
-  "theme_color": "#F8F9FA",
+  "background_color": "#0B1020",
+  "theme_color": "#0B1020",
   "categories": ["games", "strategy", "board"],
   "icons": [
     { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },

@@ -1,9 +1,11 @@
+import { haptic, sfx } from '../../audio/sfx';
 import { CHARACTERS } from '../../engine';
 import { BOX, GEM_PACKS } from '../../meta/economy';
-import { freeBoxRemainingMs, getProfile, levelUpCost, openBox, subscribeProfile, updateProfile, type BoxDrop, type BoxKind } from '../../meta/profile';
+import { freeBoxRemainingMs, getProfile, grantGems, levelUpCost, openBox, subscribeProfile, updateProfile, type BoxDrop, type BoxKind } from '../../meta/profile';
 import { appBar } from '../components/appbar';
+import { confirmDialog } from '../components/dialog';
 import { overlayRoot, pushOverlay, registerForceClose } from '../components/overlay';
-import { coinChip, pieceToken, rarityChip } from '../components/piece';
+import { coinChip, gemChip, pieceToken, rarityChip } from '../components/piece';
 import { toast } from '../components/toast';
 import { Disposables, h, prefersReducedMotion, replaceChildren } from '../dom';
 import { icon } from '../icons';
@@ -43,6 +45,8 @@ function playBoxOpening(drop: BoxDrop, kind: BoxKind): Promise<void> {
       if (stage === 'revealed' || closed) return;
       stage = 'revealed';
       root.classList.add('is-revealed');
+      sfx('reveal');
+      haptic(def.rarity === 'common' ? 'select' : 'win');
     };
 
     const boxEl = h(
@@ -80,6 +84,7 @@ function playBoxOpening(drop: BoxDrop, kind: BoxKind): Promise<void> {
     const unforce = registerForceClose(close);
     overlayRoot().appendChild(root);
     requestAnimationFrame(() => root.classList.add('is-in'));
+    if (!reduced) sfx('boxShake');
     timers.push(window.setTimeout(reveal, reduced ? 50 : 1300));
   });
 }
@@ -100,6 +105,24 @@ export function shopScreen(router: Router): Screen {
       toast(res.reason === 'coins' ? '코인이 부족합니다. 대전에서 코인을 모아보세요' : '무료 상자는 24시간마다 열 수 있어요', { tone: 'warn' });
       return;
     }
+    if (kind === 'basic') {
+      // Spending step: confirm so a stray tap never costs coins.
+      busy = true;
+      const ok = await confirmDialog({
+        title: '일반 상자를 열까요?',
+        body: h('div', { class: 'confirm-cost' }, h('div', { class: 'confirm-cost__row' }, h('span', null, '소모 코인'), h('b', { class: 'confirm-cost__coin' }, icon('coin', 16), String(BOX.basicPrice))), h('p', { class: 'confirm-cost__note' }, '캐릭터 카드 1종 (1–3장)을 얻어요.')),
+        confirmLabel: '열기',
+      });
+      busy = false;
+      if (!ok) return;
+      const again = openBox(getProfile(), kind);
+      if (!again.ok) return;
+      busy = true;
+      updateProfile(() => again.profile);
+      await playBoxOpening(again.drop, kind);
+      busy = false;
+      return;
+    }
     busy = true;
     updateProfile(() => res.profile);
     await playBoxOpening(res.drop, kind);
@@ -114,12 +137,28 @@ export function shopScreen(router: Router): Screen {
 
   const odds = () => {
     const w = BOX.rarityWeights;
-    return `일반 ${w.common}% · 희귀 ${w.rare}% · 에픽 ${w.epic}% · 카드 ${BOX.amountMin}–${BOX.amountMax}장`;
+    return `일반 ${w.common}% · 희귀 ${w.rare}% · 영웅 ${w.epic}% · 카드 ${BOX.amountMin}–${BOX.amountMax}장`;
+  };
+
+  const claimGems = async (gems: number) => {
+    if (busy) return;
+    busy = true;
+    const ok = await confirmDialog({
+      title: `보석 ${gems.toLocaleString('ko-KR')}개 받기`,
+      body: h('p', null, '테스트 버전에서는 결제 없이 무료로 지급됩니다. 정식 출시 후 인앱 결제로 전환됩니다.'),
+      confirmLabel: '받기',
+    });
+    busy = false;
+    if (!ok) return;
+    updateProfile((q) => grantGems(q, gems));
+    sfx('coin');
+    haptic('select');
+    toast(`보석 ${gems.toLocaleString('ko-KR')}개를 받았어요`, { tone: 'success' });
   };
 
   const render = () => {
     const p = getProfile();
-    replaceChildren(coinHost, coinChip(p.coins));
+    replaceChildren(coinHost, h('div', { class: 'wallet wallet--bar' }, coinChip(p.coins), gemChip(p.gems)));
     tickFree();
     replaceChildren(
       body,
@@ -156,21 +195,22 @@ export function shopScreen(router: Router): Screen {
         ),
       ),
       h('p', { class: 'hint hint--pad' }, icon('info', 16), odds()),
-      h('h3', { class: 'section-title section-title--pad' }, '보석'),
+      h('h3', { class: 'section-title section-title--pad' }, icon('gem', 18), '보석 충전'),
       h(
         'div',
-        { class: 'card list-card' },
-        GEM_PACKS.map((g) =>
+        { class: 'gem-grid' },
+        GEM_PACKS.map((g, i) =>
           h(
-            'div',
-            { class: 'list-row' },
-            h('span', { class: 'gem-icon' }, icon('gem', 22)),
-            h('div', { class: 'list-row__main' }, h('div', { class: 'list-row__title' }, `보석 ${g.gems.toLocaleString('ko-KR')}개`), h('div', { class: 'list-row__sub' }, g.priceLabel)),
-            h('button', { class: 'btn btn--tonal btn--sm', type: 'button', disabled: true, 'aria-label': `보석 ${g.gems}개 준비 중` }, '준비 중'),
+            'button',
+            { class: `gem-pack gem-pack--${i}`, type: 'button', 'data-action': 'gem-pack', 'data-pack': g.id, onclick: () => void claimGems(g.gems) },
+            h('span', { class: 'gem-pack__art', 'aria-hidden': 'true' }, icon('gem', 30 + i * 6)),
+            h('span', { class: 'gem-pack__amount' }, g.gems.toLocaleString('ko-KR')),
+            h('span', { class: 'gem-pack__price' }, h('s', null, g.priceLabel)),
+            h('span', { class: 'gem-pack__tag' }, g.testGrant ? '테스트 무료' : '준비 중'),
           ),
         ),
       ),
-      h('p', { class: 'hint hint--pad' }, '인앱 결제는 정식 출시 후 제공될 예정입니다.'),
+      h('p', { class: 'hint hint--pad' }, icon('info', 16), '테스트 버전: 보석은 결제 없이 지급됩니다. 캐릭터 강화에 사용하세요.'),
     );
   };
 

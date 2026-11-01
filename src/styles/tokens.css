@@ -1,39 +1,45 @@
-/* Design tokens — Material 3 inspired, light theme. */
+/* GRID CLASH design tokens — dark "tactical arena" theme.
+   One source of truth for colour, type, spacing, shape, elevation and motion. */
 :root {
-  /* Brand / team */
-  --c-blue: #1a73e8;
-  --c-blue-dark: #174ea6;
-  --c-blue-container: #d3e3fd;
-  --c-on-blue-container: #041e49;
-  --c-red: #d93025;
-  --c-red-dark: #a50e0e;
-  --c-red-container: #fce8e6;
-  --c-green: #188038;
-  --c-green-container: #e6f4ea;
-  --c-amber: #f9ab00;
-  --c-amber-container: #fef7e0;
+  /* Team / semantic */
+  --c-blue: #3d8bff;
+  --c-blue-dark: #1d5fd6;
+  --c-blue-container: rgba(61, 139, 255, 0.18);
+  --c-on-blue-container: #d6e5ff;
+  --c-red: #ff4d4f;
+  --c-red-dark: #c62828;
+  --c-red-container: rgba(255, 77, 79, 0.18);
+  --c-green: #3ddc84;
+  --c-green-container: rgba(61, 220, 132, 0.16);
+  --c-amber: #ffc247;
+  --c-amber-container: rgba(255, 194, 71, 0.16);
+  --c-gold: #ffc247;
+  --c-gold-dark: #d99a1e;
+  --c-gem: #5ee0ff;
+  --c-gem-dark: #1aa6cc;
 
-  /* Rarity */
-  --r-common: #9aa0a6;
-  --r-rare: #4285f4;
-  --r-epic: #a142f4;
-  --r-legendary: #f9ab00;
+  /* Rarity (frame, glow, chip) */
+  --r-common: #9aa5bd;
+  --r-rare: #3fa0ff;
+  --r-epic: #c15dff;
+  --r-legendary: #ffb627;
 
   /* Neutrals */
-  --c-bg: #f8f9fa;
-  --c-surface: #ffffff;
-  --c-surface-2: #f1f3f4;
-  --c-surface-3: #e8eaed;
-  --c-outline: #dadce0;
-  --c-outline-strong: #bdc1c6;
-  --c-text: #202124;
-  --c-text-2: #5f6368;
-  --c-text-3: #80868b;
-  --c-scrim: rgba(32, 33, 36, 0.48);
+  --c-bg: #0b1020;
+  --c-bg-2: #111a30;
+  --c-surface: #182238;
+  --c-surface-2: #1f2b45;
+  --c-surface-3: #283555;
+  --c-outline: rgba(255, 255, 255, 0.09);
+  --c-outline-strong: rgba(255, 255, 255, 0.18);
+  --c-text: #f3f6ff;
+  --c-text-2: #aab6d6;
+  --c-text-3: #7d8aad;
+  --c-scrim: rgba(4, 8, 20, 0.72);
 
   /* Type */
   --font: Roboto, 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --fs-display: 28px;
+  --fs-display: 30px;
   --fs-title-l: 22px;
   --fs-title-m: 18px;
   --fs-title-s: 16px;
@@ -59,10 +65,11 @@
   --radius-xl: 28px;
   --radius-full: 999px;
 
-  /* Elevation */
-  --elev-1: 0 1px 2px rgba(60, 64, 67, 0.16), 0 1px 3px 1px rgba(60, 64, 67, 0.08);
-  --elev-2: 0 1px 2px rgba(60, 64, 67, 0.2), 0 2px 6px 2px rgba(60, 64, 67, 0.1);
-  --elev-3: 0 4px 8px 3px rgba(60, 64, 67, 0.12), 0 1px 3px rgba(60, 64, 67, 0.2);
+  /* Elevation (dark surfaces: shadow + 1px top highlight) */
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.25);
+  --elev-2: 0 2px 4px rgba(0, 0, 0, 0.4), 0 6px 16px rgba(0, 0, 0, 0.35);
+  --elev-3: 0 8px 28px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
+  --inset-hi: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 
   /* Motion */
   --t-fast: 150ms;
@@ -70,6 +77,7 @@
   --t-slow: 320ms;
   --ease: cubic-bezier(0.2, 0, 0, 1);
   --ease-emph: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
 
   /* Safe areas */
   --sat: env(safe-area-inset-top, 0px);
@@ -78,6 +86,7 @@
   --sar: env(safe-area-inset-right, 0px);
 
   --touch: 48px;
+  color-scheme: dark;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -12,10 +12,10 @@ import {
   type Formation,
   type Level,
 } from '../engine';
-import { BOX, LEVEL_UP_COST, MATCH_REWARD, MAX_LEVEL, MIN_MOVES_FOR_REWARD, START_COINS } from './economy';
+import { BOX, LEVEL_UP_COST, MATCH_GEM_REWARD, MATCH_REWARD, MAX_LEVEL, MIN_MOVES_FOR_REWARD, START_COINS, START_GEMS } from './economy';
 import { defaultRng, randInt, weightedPick, type Rng } from './rng';
 
-export const PROFILE_VERSION = 1;
+export const PROFILE_VERSION = 2;
 const STORAGE_KEY = 'tactics12.profile';
 
 export interface CharacterProgress {
@@ -26,6 +26,8 @@ export interface CharacterProgress {
 export interface Profile {
   version: number;
   coins: number;
+  /** Premium test currency used for level-ups. */
+  gems: number;
   characters: Record<CharacterId, CharacterProgress>;
   formation: Formation;
   /** False until the user explicitly saves a formation in the editor. */
@@ -71,6 +73,7 @@ export function createDefaultProfile(): Profile {
   return {
     version: PROFILE_VERSION,
     coins: START_COINS,
+    gems: START_GEMS,
     characters,
     formation: defaultFormation(levelsOf({ characters })),
     formationSaved: false,
@@ -95,7 +98,8 @@ export function syncFormationLevels(f: Formation, levels: Record<CharacterId, Le
 
 /** Migrations from older schema versions. Each step takes raw data of version N and returns N+1. */
 const MIGRATIONS: Record<number, (raw: Record<string, unknown>) => Record<string, unknown>> = {
-  // 1: (raw) => ({ ...raw, version: 2, newField: ... }),
+  // v1 -> v2: gems introduced (level-ups cost gems instead of coins).
+  1: (raw) => ({ ...raw, version: 2, gems: START_GEMS }),
 };
 
 function migrate(raw: Record<string, unknown>): Record<string, unknown> {
@@ -161,6 +165,7 @@ export function sanitizeProfile(input: unknown, now = Date.now()): Profile {
   return {
     version: PROFILE_VERSION,
     coins: nonNegInt(raw.coins, def.coins),
+    gems: nonNegInt(raw.gems, def.gems),
     characters,
     formation,
     formationSaved,
@@ -189,18 +194,18 @@ export function sanitizeProfile(input: unknown, now = Date.now()): Profile {
 // Pure progression helpers
 // ---------------------------------------------------------------------------------------------
 
-export function levelUpCost(level: Level): { cards: number; coins: number } | null {
+export function levelUpCost(level: Level): { cards: number; gems: number } | null {
   return level >= MAX_LEVEL ? null : LEVEL_UP_COST[level as 1 | 2];
 }
 
-export type LevelUpCheck = { ok: true } | { ok: false; reason: 'max' | 'cards' | 'coins' };
+export type LevelUpCheck = { ok: true } | { ok: false; reason: 'max' | 'cards' | 'gems' };
 
 export function canLevelUp(p: Profile, id: CharacterId): LevelUpCheck {
   const c = p.characters[id];
   const cost = levelUpCost(c.level);
   if (!cost) return { ok: false, reason: 'max' };
   if (c.cards < cost.cards) return { ok: false, reason: 'cards' };
-  if (p.coins < cost.coins) return { ok: false, reason: 'coins' };
+  if (p.gems < cost.gems) return { ok: false, reason: 'gems' };
   return { ok: true };
 }
 
@@ -211,7 +216,7 @@ export function levelUp(p: Profile, id: CharacterId): Profile {
   const characters = { ...p.characters, [id]: { level: (c.level + 1) as Level, cards: c.cards - cost.cards } };
   return {
     ...p,
-    coins: p.coins - cost.coins,
+    gems: p.gems - cost.gems,
     characters,
     formation: syncFormationLevels(p.formation, levelsOf({ characters })),
   };
@@ -228,13 +233,20 @@ export function applyMatchResult(
   outcome: MatchOutcome,
   difficulty: Difficulty,
   humanMoves = Infinity,
-): { profile: Profile; reward: number } {
+): { profile: Profile; reward: number; gemReward: number } {
   const reward = matchReward(outcome, difficulty, humanMoves);
+  const gemReward = outcome === 'win' ? MATCH_GEM_REWARD[difficulty] : 0;
   const stats = { ...p.stats };
   if (outcome === 'win') stats.wins++;
   else if (outcome === 'loss') stats.losses++;
   else stats.draws++;
-  return { profile: { ...p, coins: p.coins + reward, stats }, reward };
+  return { profile: { ...p, coins: p.coins + reward, gems: p.gems + gemReward, stats }, reward, gemReward };
+}
+
+/** Test-only gem grant (no billing exists). Amount must be positive. */
+export function grantGems(p: Profile, amount: number): Profile {
+  if (!Number.isFinite(amount) || amount <= 0) return p;
+  return { ...p, gems: p.gems + Math.floor(amount) };
 }
 
 export function freeBoxRemainingMs(p: Profile, now = Date.now()): number {

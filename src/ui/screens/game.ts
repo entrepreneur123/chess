@@ -7,6 +7,7 @@ import { DIFFICULTY_LABEL } from '../../meta/opponent';
 import { applyMatchResult, getProfile, updateProfile, type MatchOutcome } from '../../meta/profile';
 import { randInt, defaultRng } from '../../meta/rng';
 import { confetti, countUp } from '../components/celebrate';
+import { pieceToken } from '../components/piece';
 import { confirmDialog, showDialog } from '../components/dialog';
 import { clearToasts, toast } from '../components/toast';
 import { Disposables, h, replaceChildren } from '../dom';
@@ -229,9 +230,11 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     const humanMoves = s.history.filter((e) => e.kind === 'move' && e.player === HUMAN).length;
     const coinsBefore = getProfile().coins;
     let reward = 0;
+    let gemReward = 0;
     updateProfile((p) => {
       const res = applyMatchResult(p, outcome, params.difficulty, humanMoves);
       reward = res.reward;
+      gemReward = res.gemReward;
       return res.profile;
     });
     setCoach('');
@@ -243,9 +246,18 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     const noReward = reward === 0 && outcome !== 'win' && humanMoves < MIN_MOVES_FOR_REWARD;
     const plus = h('span', { class: 'result__plus' }, '+0');
     const total = h('span', { class: 'result__total-value' }, coinsBefore.toLocaleString('ko-KR'));
+    // Hero strip: the player's surviving units celebrate (win) or the opponent's units stand (loss).
+    const heroOwner = outcome === 'loss' ? BOT : HUMAN;
+    const heroPieces = s.pieces.filter((pc) => pc.owner === heroOwner);
+    const hero = h(
+      'div',
+      { class: `result__hero result__hero--${outcome}`, 'aria-hidden': 'true' },
+      heroPieces.map((pc, i) => h('span', { class: 'result__unit', style: `--i:${i}` }, pieceToken(pc.character, pc.level, pc.owner, 'md'))),
+    );
     const body = h(
       'div',
       { class: 'result__body' },
+      hero,
       h('p', { class: 'result__reason', 'data-reason': s.endReason ?? '' }, endReasonText(s.endReason, outcome)),
       outcome === 'loss' && !noReward ? h('p', { class: 'result__cheer' }, '아쉬워요! 진형을 바꿔 다시 도전해 보세요.') : null,
       adjudicated ? h('p', { class: 'result__score' }, `전력  나 ${materialScore(s, HUMAN)} : ${materialScore(s, BOT)} 상대`) : null,
@@ -255,6 +267,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
         h('span', null, '보상'),
         icon('coin', 22),
         plus,
+        gemReward > 0 ? h('span', { class: 'result__gem' }, icon('gem', 20), `+${gemReward}`) : null,
       ),
       noReward
         ? h('p', { class: 'result__note', 'data-note': 'min-moves' }, icon('info', 16), `${MIN_MOVES_FOR_REWARD}수 이상 둬야 보상을 받아요`)

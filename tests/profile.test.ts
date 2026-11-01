@@ -48,12 +48,12 @@ describe('profile sanitizing', () => {
   });
 
   it('never levels past 3 or spends below zero', () => {
-    let p = { ...createDefaultProfile(), coins: 100_000 };
+    let p = { ...createDefaultProfile(), gems: 100_000 };
     p = { ...p, characters: { ...p.characters, sad: { level: 1, cards: 1000 } } };
     for (let i = 0; i < 10; i++) p = levelUp(p, 'sad');
     expect(p.characters.sad.level).toBe(3);
     expect(p.formation.find((s) => s.character === 'sad')?.level).toBe(3);
-    const poor = { ...createDefaultProfile(), coins: 0, characters: { ...p.characters, marki: { level: 1 as const, cards: 99 } } };
+    const poor = { ...createDefaultProfile(), coins: 0, gems: 0, characters: { ...p.characters, marki: { level: 1 as const, cards: 99 } } };
     expect(levelUp(poor, 'marki')).toBe(poor);
     expect(openBox(poor, 'basic').ok).toBe(false);
   });

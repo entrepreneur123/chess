@@ -3,6 +3,7 @@ import { Capacitor } from '@capacitor/core';
 import './styles/tokens.css';
 import './styles/app.css';
 import './styles/ux.css';
+import './styles/skin.css';
 import { APP_NAME } from './meta/economy';
 import { getProfile } from './meta/profile';
 import { Router } from './ui/router';

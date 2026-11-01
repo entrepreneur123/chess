@@ -25,6 +25,7 @@ export type SfxName =
   | 'boxShake'
   | 'reveal'
   | 'coin'
+  | 'levelup'
   | 'page';
 
 type Wave = OscillatorType;
@@ -273,6 +274,15 @@ export function sfx(name: SfxName): void {
       burst(c, out, t, 0.35, { type: 'lowpass', freq: 3000, to: 400, q: 0.6, gain: 0.25 });
       const seq = [N.G5, N.C6, N.E6, N.G5 * 2];
       seq.forEach((f, i) => tone(c, out, f, t + 0.05 + i * 0.06, 0.4, { type: 'sine', gain: 0.08 }));
+      break;
+    }
+    case 'levelup': {
+      // Rising power-up arpeggio with a shimmer tail.
+      const seq = [N.C5, N.E5, N.G5, N.C6, N.E6];
+      seq.forEach((f, i) => tone(c, out, f, t + i * 0.07, 0.26, { type: 'triangle', gain: 0.14 }));
+      const end = t + seq.length * 0.07;
+      for (const f of [N.C6, N.G5 * 2]) tone(c, out, f, end, 0.8, { type: 'sine', gain: 0.08, attack: 0.02 });
+      burst(c, out, end, 0.45, { type: 'highpass', freq: 5000, q: 0.5, gain: 0.04 });
       break;
     }
     case 'coin':

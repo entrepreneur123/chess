@@ -11,7 +11,7 @@ import {
 import { h } from '../dom';
 import { icon } from '../icons';
 
-export const RARITY_LABEL: Record<Rarity, string> = { common: '일반', rare: '희귀', epic: '에픽', legendary: '전설' };
+export const RARITY_LABEL: Record<Rarity, string> = { common: '일반', rare: '희귀', epic: '영웅', legendary: '전설' };
 
 /** One-letter glyph used on tokens. */
 export function glyphOf(id: CharacterId): string {
@@ -43,6 +43,15 @@ export function pieceToken(
     },
     h('span', { class: 'token__glyph' }, glyphOf(character)),
     size === 'xs' ? null : h('span', { class: 'token__lv' }, String(level)),
+  );
+}
+
+export function gemChip(amount: number): HTMLElement {
+  return h(
+    'span',
+    { class: 'coin-chip coin-chip--gem', 'aria-label': `보석 ${amount}` },
+    icon('gem', 18),
+    h('span', { class: 'coin-chip__value' }, amount.toLocaleString('ko-KR')),
   );
 }
 
