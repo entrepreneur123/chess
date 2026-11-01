@@ -430,3 +430,87 @@
     animation: none;
   }
 }
+
+/* ---- Per-level tier themes: the whole card shifts palette with the unit ----- */
+.unit-card.tier-1 {
+  --tier: #aebbd2;
+  --tier-glow: rgba(174, 187, 210, 0.3);
+}
+.unit-card.tier-2 {
+  --tier: var(--blue-300);
+  --tier-glow: rgba(77, 155, 255, 0.55);
+}
+.unit-card.tier-3 {
+  --tier: var(--gold-300);
+  --tier-glow: rgba(255, 195, 40, 0.65);
+}
+.unit-card.tier-2 .unit-card__banner {
+  background:
+    radial-gradient(80% 90% at 75% 40%, rgba(77, 155, 255, 0.28), transparent 70%),
+    linear-gradient(180deg, #10203d, var(--ink-800));
+}
+.unit-card.tier-3 .unit-card__banner {
+  background:
+    radial-gradient(80% 90% at 75% 40%, rgba(255, 195, 40, 0.32), transparent 70%),
+    radial-gradient(60% 50% at 20% 80%, rgba(255, 90, 99, 0.15), transparent 70%),
+    linear-gradient(180deg, #2a1d08, var(--ink-800));
+}
+.unit-card.tier-3 {
+  box-shadow:
+    0 0 0 1px rgba(255, 195, 40, 0.35),
+    0 0 36px -6px var(--tier-glow),
+    var(--sh-2);
+}
+.unit-card.tier-3 .unit-card__name {
+  background: linear-gradient(180deg, #fff6d1, var(--gold-300) 55%, var(--gold-500));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 0 rgba(90, 50, 0, 0.8)) drop-shadow(0 0 14px rgba(255, 195, 40, 0.55));
+  text-shadow: none;
+}
+.unit-card.tier-2 .unit-card__name {
+  text-shadow:
+    0 2px 0 rgba(0, 0, 0, 0.6),
+    0 0 18px rgba(77, 155, 255, 0.7);
+}
+.unit-card__tier {
+  position: absolute;
+  top: var(--s-3);
+  right: var(--s-4);
+  z-index: 2;
+  display: flex;
+  gap: 4px;
+}
+.unit-card__tier i {
+  width: 18px;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.14);
+}
+.unit-card__tier i.is-on {
+  background: var(--tier);
+  box-shadow: 0 0 8px var(--tier-glow);
+}
+.unit-card__aura {
+  position: absolute;
+  inset: -20% -10%;
+  z-index: 1;
+  background:
+    conic-gradient(from 0deg, transparent 0 8%, rgba(255, 214, 86, 0.14) 8% 12%, transparent 12% 30%, rgba(255, 214, 86, 0.12) 30% 34%, transparent 34% 58%, rgba(255, 214, 86, 0.14) 58% 62%, transparent 62% 84%, rgba(255, 214, 86, 0.12) 84% 88%, transparent 88%);
+  animation: aura-spin 18s linear infinite;
+  pointer-events: none;
+}
+.unit-card.tier-3 .unit-card__art {
+  filter: saturate(1.1) contrast(1.05);
+}
+@keyframes aura-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .unit-card__aura {
+    animation: none;
+  }
+}

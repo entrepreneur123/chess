@@ -8,13 +8,20 @@ import { MAX_LEVEL } from '../../meta/economy';
 import { canLevelUp, getProfile, levelUp, levelUpCost, subscribeProfile, updateProfile } from '../../meta/profile';
 import { appBar } from '../components/appbar';
 import { confirmDialog } from '../components/dialog';
-import { CONCEPT, coinChip, gemChip, movementDiagram, rarityChip } from '../components/piece';
+import { coinChip, gemChip, movementDiagram, rarityChip } from '../components/piece';
 import { toast } from '../components/toast';
 import { Disposables, h, prefersReducedMotion, replaceChildren } from '../dom';
 import { icon } from '../icons';
 import type { Router, Screen } from '../router';
 
 /** Short tactical role per character (UI copy only; rules live in the engine). */
+/** Per-level title shown on the card (UI copy only). */
+export const TIER_TITLE: Record<CharacterId, [string, string, string]> = {
+  sad: ['견습 성기사', '은빛 성기사', '신성 성기사'],
+  marki: ['들판의 황소', '철갑 황소', '용암 황소'],
+  walk: ['방패병', '강철 방패병', '마도 방패병'],
+};
+
 export const ROLE: Record<CharacterId, { role: string; trait: string }> = {
   sad: { role: '수비형 탱커', trait: '상하좌우 자유 이동 · 유일하게 후퇴 가능' },
   marki: { role: '돌격형 공격수', trait: '앞으로만 일직선 돌진 · 사거리 최장' },
@@ -92,7 +99,7 @@ export function collectionScreen(router: Router): Screen {
     const leveled = justLeveled === id;
     return h(
       'article',
-      { class: `unit-card rarity-${def.rarity}${leveled ? ' is-leveled' : ''}`, 'data-character': id },
+      { class: `unit-card rarity-${def.rarity} tier-${prog.level}${leveled ? ' is-leveled' : ''}`, 'data-character': id, 'data-level': prog.level },
       h(
         'header',
         { class: 'unit-card__banner' },
@@ -101,11 +108,13 @@ export function collectionScreen(router: Router): Screen {
         h(
           'div',
           { class: 'unit-card__title' },
-          h('div', { class: 'unit-card__role' }, h('b', null, CONCEPT[id]), ' · ', ROLE[id].role),
+          h('div', { class: 'unit-card__role' }, h('b', null, TIER_TITLE[id][prog.level - 1]), ' · ', ROLE[id].role),
           h('div', { class: 'unit-card__name' }, def.nameKo, h('span', { class: 'unit-card__en' }, def.nameEn)),
           h('div', { class: 'unit-card__chips' }, rarityChip(def.rarity), h('span', { class: 'lv-pill lv-pill--big', 'data-level': prog.level }, `Lv.${prog.level}`)),
         ),
         h('div', { class: 'unit-card__stars', 'aria-hidden': 'true' }, levels.map((lv) => icon('star', 16, lv <= prog.level ? 'is-on' : ''))),
+        prog.level === 3 ? h('div', { class: 'unit-card__aura', 'aria-hidden': 'true' }) : null,
+        h('div', { class: 'unit-card__tier', 'aria-hidden': 'true' }, levels.map((lv) => h('i', { class: lv <= prog.level ? 'is-on' : '' }))),
         leveled ? h('div', { class: 'unit-card__burst', 'aria-hidden': 'true' }, h('span', { class: 'unit-card__burst-text' }, 'LEVEL UP!')) : null,
       ),
       h('p', { class: 'unit-card__trait' }, icon('info', 14), ROLE[id].trait),
