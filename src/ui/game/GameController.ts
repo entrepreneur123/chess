@@ -9,6 +9,7 @@ import {
   applyTimeout,
   getLegalMoves,
   getPieceAt,
+  getPieceById,
   getTargetsForPiece,
   isLegalMove,
   resign,
@@ -221,6 +222,24 @@ export class GameController {
     this.emit({ type: 'change' });
   }
 
+  /**
+   * Recompute the current selection against the latest state/phase: drop it if the piece is gone
+   * (e.g. just captured), otherwise refresh its destinations and actionability. Without this a
+   * preview made during the bot's turn kept stale (or ghost) highlights after the bot moved.
+   */
+  private refreshSelection(): void {
+    const sel = this.selection;
+    if (!sel) return;
+    const piece = getPieceById(this._state, sel.pieceId);
+    if (!piece || this._phase === 'ended') {
+      this.selection = null;
+    } else if (piece.owner === HUMAN && this._phase === 'humanTurn') {
+      this.selection = { pieceId: piece.id, moves: getLegalMoves(this._state, piece.id), actionable: true };
+    } else {
+      this.selection = { pieceId: piece.id, moves: getTargetsForPiece(this._state, piece), actionable: false };
+    }
+  }
+
   private enterTurn(): void {
     if (this.disposed) return;
     if (this._state.status === 'ended') {
@@ -231,10 +250,12 @@ export class GameController {
     this.timerStartedAt = null;
     if (this._state.turn === HUMAN) {
       this._phase = 'humanTurn';
+      this.refreshSelection();
       if (!this._paused) this.runTimer();
       this.emit({ type: 'change' });
     } else {
       this._phase = 'botThinking';
+      this.refreshSelection();
       if (!this._paused) this.runTimer();
       this.emit({ type: 'change' });
       void this.runBotTurn();
@@ -330,6 +351,7 @@ export class GameController {
   private checkEndOrContinue(continueTurn: boolean): void {
     if (this._state.status === 'ended') {
       this._phase = 'ended';
+      this.refreshSelection();
       this.stopTimer();
       this.emit({ type: 'change' });
       if (!this.endEmitted) {

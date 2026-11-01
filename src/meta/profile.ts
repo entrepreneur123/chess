@@ -12,7 +12,7 @@ import {
   type Formation,
   type Level,
 } from '../engine';
-import { BOX, LEVEL_UP_COST, MATCH_REWARD, MAX_LEVEL, START_COINS } from './economy';
+import { BOX, LEVEL_UP_COST, MATCH_REWARD, MAX_LEVEL, MIN_MOVES_FOR_REWARD, START_COINS } from './economy';
 import { defaultRng, randInt, weightedPick, type Rng } from './rng';
 
 export const PROFILE_VERSION = 1;
@@ -93,7 +93,7 @@ function migrate(raw: Record<string, unknown>): Record<string, unknown> {
 }
 
 /** Turns arbitrary (possibly corrupt) data into a valid profile. Never throws. */
-export function sanitizeProfile(input: unknown): Profile {
+export function sanitizeProfile(input: unknown, now = Date.now()): Profile {
   const def = createDefaultProfile();
   if (!isObj(input)) return def;
   const raw = migrate(input);
@@ -145,7 +145,10 @@ export function sanitizeProfile(input: unknown): Profile {
       losses: nonNegInt(stats.losses, 0),
       draws: nonNegInt(stats.draws, 0),
     },
-    lastFreeBoxAt: typeof raw.lastFreeBoxAt === 'number' && Number.isFinite(raw.lastFreeBoxAt) ? raw.lastFreeBoxAt : null,
+    // A timestamp in the future (device clock was ahead, then corrected) is clamped to now so the
+    // free box is locked for at most one cooldown instead of until the clock catches up.
+    lastFreeBoxAt:
+      typeof raw.lastFreeBoxAt === 'number' && Number.isFinite(raw.lastFreeBoxAt) ? Math.min(raw.lastFreeBoxAt, now) : null,
     difficulty: DIFFICULTIES.includes(raw.difficulty as Difficulty) ? (raw.difficulty as Difficulty) : def.difficulty,
   };
 }
@@ -182,12 +185,19 @@ export function levelUp(p: Profile, id: CharacterId): Profile {
   };
 }
 
-export function matchReward(outcome: MatchOutcome, difficulty: Difficulty): number {
+/** `humanMoves`: moves the player actually made this match (losses/draws below the minimum pay 0). */
+export function matchReward(outcome: MatchOutcome, difficulty: Difficulty, humanMoves = Infinity): number {
+  if (outcome !== 'win' && humanMoves < MIN_MOVES_FOR_REWARD) return 0;
   return outcome === 'win' ? MATCH_REWARD.win[difficulty] : outcome === 'draw' ? MATCH_REWARD.draw : MATCH_REWARD.loss;
 }
 
-export function applyMatchResult(p: Profile, outcome: MatchOutcome, difficulty: Difficulty): { profile: Profile; reward: number } {
-  const reward = matchReward(outcome, difficulty);
+export function applyMatchResult(
+  p: Profile,
+  outcome: MatchOutcome,
+  difficulty: Difficulty,
+  humanMoves = Infinity,
+): { profile: Profile; reward: number } {
+  const reward = matchReward(outcome, difficulty, humanMoves);
   const stats = { ...p.stats };
   if (outcome === 'win') stats.wins++;
   else if (outcome === 'loss') stats.losses++;
@@ -268,7 +278,14 @@ export function loadProfile(storage: KeyValueStorage | null = browserStorage()):
   }
   if (!text) return createDefaultProfile();
   try {
-    return sanitizeProfile(JSON.parse(text));
+    const raw: unknown = JSON.parse(text);
+    const p = sanitizeProfile(raw);
+    // Persist the clamped free-box timestamp, otherwise every launch would re-clamp to "now"
+    // and the box would stay locked until the device clock reached the stored future time.
+    if (isObj(raw) && typeof raw.lastFreeBoxAt === 'number' && raw.lastFreeBoxAt !== p.lastFreeBoxAt) {
+      persistProfile(p, storage);
+    }
+    return p;
   } catch {
     return createDefaultProfile();
   }

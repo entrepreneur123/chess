@@ -1924,3 +1924,21 @@ body.in-game,
     justify-self: center;
   }
 }
+
+/* Landscape phones: the board is height-bound and centred, so dock the turn pill and the piece
+   info card into the free side columns instead of covering the far / home rows of the board. */
+@media (orientation: landscape) and (max-height: 600px) {
+  .board-overlay {
+    left: auto;
+    right: var(--s-3);
+    align-items: flex-end;
+  }
+  .info-host {
+    right: auto;
+    width: min(320px, calc((100% - 100vh) / 2 + 40px));
+    min-width: 200px;
+  }
+  .info-card__diagram {
+    display: none;
+  }
+}

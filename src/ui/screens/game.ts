@@ -134,7 +134,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     const outcome = outcomeOf(s);
     let reward = 0;
     updateProfile((p) => {
-      const res = applyMatchResult(p, outcome, params.difficulty);
+      const humanMoves = s.history.filter((e) => e.kind === 'move' && e.player === HUMAN).length;
+      const res = applyMatchResult(p, outcome, params.difficulty, humanMoves);
       reward = res.reward;
       return res.profile;
     });

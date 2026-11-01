@@ -78,3 +78,4 @@ Android Studio에서 서명된 AAB(Build › Generate Signed Bundle)를 만들�
 - 월크 "양옆 7칸/9칸"은 앞줄 전체 폭 7칸/9칸(좌우 3/4칸)으로 해석
 - 마르키·월크는 앞으로만 가므로 상대 끝줄에 도달하면 더 이상 움직일 수 없음
 - 등급(일반/희귀/에픽)과 말 가치(판정용)는 임시값
+- Android 프로젝트 생성 후 `android/app/src/main/AndroidManifest.xml`의 Activity에 `android:screenOrientation="portrait"`를 추가해 세로 고정 권장

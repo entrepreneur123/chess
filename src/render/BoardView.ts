@@ -861,6 +861,9 @@ export class BoardView implements IBoardView {
     ev.preventDefault(); // allow restoration
     if (this.rafId) cancelAnimationFrame(this.rafId);
     this.rafId = 0;
+    // No frames are guaranteed until the context comes back (it may never): settle any running
+    // move animation now so the game (which awaits animateMove) cannot stall in 'animating'.
+    this.finishAnimation();
   };
 
   private readonly onContextRestored = (): void => {

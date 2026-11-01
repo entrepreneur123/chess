@@ -20,6 +20,11 @@ export const MATCH_REWARD: { win: Record<Difficulty, number>; draw: number; loss
   draw: 40,
   loss: 25,
 };
+/**
+ * A loss or draw only pays out if the player made at least this many moves; otherwise instant
+ * resigns / AFK timeout forfeits could be farmed for coins.
+ */
+export const MIN_MOVES_FOR_REWARD = 3;
 
 export const BOX = {
   basicPrice: 150,

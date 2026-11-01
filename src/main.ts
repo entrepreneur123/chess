@@ -1,3 +1,5 @@
+import { App } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 import './styles/tokens.css';
 import './styles/app.css';
 import { APP_NAME } from './meta/economy';
@@ -28,6 +30,16 @@ const router = new Router(outlet)
   .register('game', gameScreen);
 
 router.home();
+
+// Android hardware back. Capacitor core has no back handling (the activity would just finish),
+// so route it through the WebView history, which the Router intercepts via popstate (resign
+// confirm, closing dialogs, ...). At the root there is no history left: exit the app.
+if (Capacitor.isNativePlatform()) {
+  void App.addListener('backButton', ({ canGoBack }) => {
+    if (canGoBack) history.back();
+    else void App.exitApp();
+  });
+}
 
 if (import.meta.env.DEV) {
   (window as unknown as Record<string, unknown>).__router = router;

@@ -12,12 +12,13 @@
     "cap:sync": "npm run build && npx cap sync android"
   },
   "dependencies": {
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.3.5",
     "three": "^0.187.0"
   },
   "devDependencies": {
     "@capacitor/android": "^8.3.5",
     "@capacitor/cli": "^8.3.5",
-    "@capacitor/core": "^8.3.5",
     "@types/three": "^0.187.0",
     "typescript": "~5.9.3",
     "vite": "^8.0.0",

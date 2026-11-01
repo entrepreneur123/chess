@@ -15,6 +15,7 @@ export class TimerRing {
   private label: HTMLElement;
   private lastText: string | null = null;
   private lastState = '';
+  private lastOffset = '';
 
   constructor(owner: PlayerId) {
     const ns = 'http://www.w3.org/2000/svg';
@@ -49,7 +50,12 @@ export class TimerRing {
       this.el.classList.toggle('is-paused', paused);
     }
     const frac = active ? Math.max(0, Math.min(1, remainingMs / totalMs)) : 1;
-    this.arc.style.strokeDashoffset = String(RING_C * (1 - frac));
+    // Called every frame: only touch the style when the (rounded) value changes.
+    const offset = (RING_C * (1 - frac)).toFixed(2);
+    if (offset !== this.lastOffset) {
+      this.lastOffset = offset;
+      this.arc.style.strokeDashoffset = offset;
+    }
     const text = active ? String(secs) : '';
     if (text !== this.lastText) {
       this.lastText = text;
