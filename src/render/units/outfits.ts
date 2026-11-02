@@ -10,6 +10,10 @@
  *  walk  shield    kettle helmet + cheek guards (Lv2 nasal + crest, Lv3 horns + glowing visor),
  *                  scarf with sway tails, spear (Lv2 pennant, Lv3 arcane glaive), embossed shield
  *                  emblem, belt; chain mail comes from the palette pattern.
+ *  insaner imp     bald skull cap over the rogue face, horns (Lv1 stubs, Lv2 curved, Lv3 jagged crown),
+ *                  manic grin + fangs, wagging 2-bone tail with a flame tip, rope + rag loincloth and
+ *                  crooked trident (Lv1), bone mask + jester coat + skull chain + violet dagger edges
+ *                  (Lv2), flame cape (2 sway bones), orbiting stolen-weapon shards + wisps (Lv3).
  */
 import * as THREE from 'three';
 import type { CharacterId, Level, PlayerId } from '../../engine/types';
@@ -43,6 +47,8 @@ export interface SecondarySpec {
   /** Extra angle while running / jumping. */
   run: number;
   phase: number;
+  /** Continuous rotation (rad/s) on top of the sway (orbiting FX). */
+  spin?: number;
 }
 
 export interface OutfitCtx {
@@ -81,6 +87,7 @@ function chainSkin(bones: THREE.Bone[], coord: (p: THREE.Vector3) => number): Sk
 export function buildOutfit(ctx: OutfitCtx): void {
   if (ctx.ch === 'sad') paladin(ctx);
   else if (ctx.ch === 'marki') bull(ctx);
+  else if (ctx.ch === 'insaner') imp(ctx);
   else soldier(ctx);
 }
 
@@ -749,4 +756,289 @@ function soldier(ctx: OutfitCtx): void {
       gear.add(new THREE.TorusGeometry(ps.z * 0.46, ps.y * 0.03, 4, 24).rotateY(Math.PI / 2), trs([pc.x + sx * ps.x * 0.38, pc.y - ps.y * 0.1, pc.z]), trimS, arm);
     }
   }
+}
+
+// ====================================================================== imp
+
+/** Zigzag hem offset (0..1 of `depth`) for a tattered edge at parameter u. */
+const ragged = (u: number, teeth: number): number => Math.abs(((u * teeth) % 1) * 2 - 1);
+
+function imp(ctx: OutfitCtx): void {
+  const { gear, level: L, scene, body } = ctx;
+  const head = ctx.bone('head');
+  const chest = ctx.bone('chest');
+  const hips = ctx.bone('hips');
+  const root = ctx.bone('root');
+  const team = ctx.tint(L === 1 ? 'teamMuted' : 'team');
+  const teamLight = ctx.tint('teamLight');
+  const teamDark = ctx.tint(L === 1 ? 'teamMuted' : 'teamDark');
+  // Skin matches the level palette (config.ts) so the skull cap blends with the face.
+  const skin: GearStyle = L === 1 ? { color: '#8E1E3A' } : L === 2 ? { color: '#7A1238' } : { color: '#4A0C2E', pattern: PATTERN.lava };
+  const horn: GearStyle = L === 3 ? { color: '#0A0610', metal: 0.8 } : { color: '#1A1020', metal: 0.55 };
+  const boneS: GearStyle = { color: '#E6D9BE' };
+  const violet: GearStyle = { color: L === 3 ? '#FF3DF0' : '#C85CFF', glow: L === 3 ? 2.2 : 1.5 };
+  const flame: GearStyle = L === 3 ? { color: '#C020FF', glow: 0.45, pattern: PATTERN.flame } : { color: '#7A2BFF', glow: 0.3, pattern: PATTERN.flame };
+  const iron: GearStyle = L === 3 ? { color: '#17101E', metal: 0.9 } : { color: '#2E2232', metal: 0.6 };
+  const TORSO = (t: number): boolean => t === 0;
+
+  // --- skull cap: the rogue head is a face shell (hair stripped in the asset); close it with an
+  // ellipsoid that sits just behind the face surface and rises into a bald dome.
+  const face = body.box((p, t) => t === 3 && Math.abs(p.x) < 0.42);
+  const fc = face.getCenter(new THREE.Vector3());
+  const fs = face.getSize(new THREE.Vector3());
+  const rx = fs.x * 0.52;
+  const ry = fs.y * 0.56;
+  const rz = rx * 1.02;
+  const sc = V(fc.x, fc.y + fs.y * 0.06, face.max.z - rz * 1.04);
+  gear.add(new THREE.SphereGeometry(1, 24, 16), trs(sc, [0, 0, 0], [rx, ry, rz]), skin, head);
+  const top = V(sc.x, sc.y + ry, sc.z);
+
+  // --- horns.
+  const hornOf = (base: THREE.Vector3, dir: THREE.Vector3, len: number, r: number, curl: number, style: GearStyle): void => {
+    const up = V(0, 1, 0);
+    const d1 = dir.clone().normalize();
+    const d2 = d1.clone().lerp(up, curl).normalize();
+    const d3 = d2.clone().lerp(V(0, 0.4, -1).normalize(), curl * 0.6).normalize();
+    const pts = [base, base.clone().addScaledVector(d1, len * 0.35), base.clone().addScaledVector(d1, len * 0.35).addScaledVector(d2, len * 0.35), base.clone().addScaledVector(d1, len * 0.35).addScaledVector(d2, len * 0.35).addScaledVector(d3, len * 0.3)];
+    gear.add(taperTube(pts, (t) => r * (1 - 0.9 * t * t), 10, 7), null, style, head);
+  };
+  const hornLen = [0, fs.y * 0.3, fs.y * 0.55, fs.y * 0.75][L];
+  for (const sx of [-1, 1]) {
+    const base = V(sc.x + sx * rx * 0.62, sc.y + ry * 0.62, sc.z + rz * 0.1);
+    hornOf(base, V(sx * 0.7, 0.75, -0.15), hornLen, fs.y * (L === 1 ? 0.07 : 0.085), L === 1 ? 0.25 : L === 2 ? 0.6 : 0.75, horn);
+    if (L === 3) gear.add(new THREE.OctahedronGeometry(fs.y * 0.035), trs(base.clone().add(V(sx * 0.3 * hornLen, 0.9 * hornLen, -0.25 * hornLen))), violet, head);
+  }
+  if (L === 3) {
+    // Jagged crown of smaller horns around the dome.
+    for (let i = 0; i < 7; i++) {
+      const a = -1.1 + (i / 6) * 2.2;
+      const base = V(sc.x + Math.sin(a) * rx * 0.72, sc.y + ry * 0.74, sc.z + Math.cos(a) * rz * 0.72 - rz * 0.05);
+      const len = fs.y * (0.22 + 0.16 * Math.cos(a * 1.6));
+      hornOf(base, V(Math.sin(a) * 0.45, 1, Math.cos(a) * 0.3 - 0.1), len, fs.y * 0.05, 0.3, horn);
+    }
+    // Floating glowing ring behind the horns.
+    gear.add(new THREE.TorusGeometry(rx * 0.9, fs.y * 0.02, 6, 36), trs([top.x, top.y + fs.y * 0.12, top.z - rz * 0.25], [Math.PI / 2 - 0.3, 0, 0]), { color: '#FF7AF5', glow: 2.0, metal: 1 }, head);
+  }
+
+  // --- manic grin: wide white tooth band with upturned corners, dark mouth behind, fangs.
+  const my = face.min.y + fs.y * 0.3;
+  const mouth = body.sliceY(my, fs.y * 0.05, (t) => t === 3);
+  const front = mouth.cz + mouth.rz;
+  const gw = fs.x * 0.36;
+  const arc: THREE.Vector3[] = [];
+  const arcBack: THREE.Vector3[] = [];
+  for (let i = 0; i <= 8; i++) {
+    const a = -1 + (i / 8) * 2;
+    const x = fc.x + a * gw;
+    const y = my + fs.y * 0.08 * a * a;
+    const z = front - gw * (1 - Math.cos(a * 0.95)) * 0.5;
+    arc.push(V(x, y, z + 0.012));
+    arcBack.push(V(x, y, z - 0.006));
+  }
+  gear.add(taperTube(arcBack, (t) => fs.y * 0.045 * (0.6 + 0.4 * Math.sin(t * Math.PI)), 12, 5, 0.6), null, { color: '#160410' }, head);
+  gear.add(taperTube(arc, (t) => fs.y * 0.026 * (0.5 + 0.5 * Math.sin(t * Math.PI)), 12, 5, 0.5), null, { color: '#F6EEDC', glow: 0.08 }, head);
+  for (const a of [-0.62, -0.2, 0.2, 0.62]) {
+    const x = fc.x + a * gw;
+    const z = front - gw * (1 - Math.cos(a * 0.95)) * 0.5 + 0.02;
+    gear.add(flat(new THREE.ConeGeometry(fs.y * 0.016, fs.y * 0.06, 4)), trs([x, my + fs.y * 0.08 * a * a - fs.y * 0.035, z], [Math.PI, 0, 0]), boneS, head);
+  }
+
+  // --- manic eyes: glowing almond overlays on the rogue eyes + angry V brows.
+  for (const sx of [-1, 1]) {
+    const eb = body.box((p, t) => t === 5 && Math.sign(p.x) === sx);
+    if (eb.isEmpty()) continue;
+    const ec = eb.getCenter(new THREE.Vector3());
+    const es = eb.getSize(new THREE.Vector3());
+    const ew = Math.max(es.x, fs.x * 0.07);
+    gear.add(blade(ew * 1.9, 0.02, 6, 0.5), alongY(V(ec.x - sx * ew * 0.55, ec.y - ew * 0.75, eb.max.z + 0.012), V(sx * 0.55, 1, 0.25), [1, ew * 1.5, 1]), { color: L === 3 ? '#C8FF4A' : '#9CFF3A', glow: L === 3 ? 2.8 : 2.0 }, head);
+    gear.add(flat(new THREE.BoxGeometry(ew * 1.9, ew * 0.42, 0.03)), trs([ec.x + sx * ew * 0.1, ec.y + ew * 1.05, eb.max.z + 0.01], [0.1, 0, sx * -0.5]), { color: '#160410' }, head);
+  }
+
+  // --- bone mask pushed up on the forehead (Lv2): skull-shaped plate, dark sockets, teeth.
+  if (L === 2) {
+    const mc = V(sc.x, sc.y + ry * 0.66, sc.z + rz * 0.68);
+    const M = trs(mc, [-0.8, 0, 0], fs.y * 0.42);
+    const outline: [number, number][] = [[-0.48, 0.1], [-0.42, 0.42], [-0.2, 0.6], [0.2, 0.6], [0.42, 0.42], [0.48, 0.1], [0.34, -0.2], [0.3, -0.55], [-0.3, -0.55], [-0.34, -0.2]];
+    gear.add(plate(outline, 0.1, 0.03), M, boneS, head);
+    for (const sx of [-1, 1]) {
+      gear.add(new THREE.SphereGeometry(0.15, 10, 8), M.clone().multiply(trs([sx * 0.22, 0.08, 0.06], [0, 0, 0], [1, 1.15, 0.5])), { color: '#120816' }, head);
+      gear.add(new THREE.OctahedronGeometry(0.05), M.clone().multiply(trs([sx * 0.22, 0.08, 0.1])), violet, head);
+    }
+    gear.add(flat(new THREE.ConeGeometry(0.07, 0.16, 4)), M.clone().multiply(trs([0, -0.18, 0.06], [Math.PI, 0, 0])), { color: '#120816' }, head);
+    for (let i = 0; i < 5; i++) {
+      gear.add(flat(new THREE.BoxGeometry(0.07, 0.14, 0.06)), M.clone().multiply(trs([(i - 2) * 0.11, -0.48, 0.04])), { color: '#120816' }, head);
+    }
+  }
+
+  // --- tail: two sway bones from the hips, spade tip + flame.
+  const hipY = worldPos(scene, 'hips').y;
+  const hs = body.sliceY(hipY, 0.06, TORSO);
+  const tailRoot = V(hs.cx, hipY - 0.02, hs.cz - hs.rz + 0.02);
+  const tailA = ctx.addBone('fx_tailA', hips, tailRoot);
+  const tailLen = [0, 0.85, 0.95, 1.1][L];
+  const tp = [tailRoot, tailRoot.clone().add(V(0.08, -0.22, -tailLen * 0.3)), tailRoot.clone().add(V(0.2, -0.12, -tailLen * 0.62)), tailRoot.clone().add(V(0.14, 0.26, -tailLen * 0.78))];
+  const tailB = ctx.addBone('fx_tailB', tailA, tp[2]);
+  ctx.secondary.push(
+    { bone: 'fx_tailA', axis: [0, 1, 0], idleAmp: 0.22, idleFreq: 1.35, run: 0.2, phase: 0 },
+    { bone: 'fx_tailB', axis: [0, 1, 0], idleAmp: 0.38, idleFreq: 1.35, run: 0.25, phase: 1.1 },
+  );
+  const curve = new THREE.CatmullRomCurve3(tp);
+  const tailSkin: SkinFn = (p) => {
+    const t = clamp01((tailRoot.z - p.z) / (tailLen * 0.78));
+    if (t < 0.45) return { a: hips, b: tailA, t: clamp01(t / 0.3) };
+    return { a: tailA, b: tailB, t: clamp01((t - 0.45) / 0.3) };
+  };
+  gear.add(taperTube(tp, (t) => 0.06 * (1 - 0.65 * t), 16, 7), null, skin, tailSkin);
+  const tipP = new THREE.Vector3();
+  const tipD = new THREE.Vector3();
+  curve.getPointAt(1, tipP);
+  curve.getTangentAt(1, tipD);
+  gear.add(blade(0.2, 0.05, 6, 0.4), alongY(tipP.clone().addScaledVector(tipD, -0.04), tipD, [1, 0.26, 1]), horn, tailB);
+  const fl = [0, 0.36, 0.48, 0.66][L];
+  gear.add(blade(0.16 * fl / 0.3, 0.09, 6, 0.3), alongY(tipP.clone().addScaledVector(tipD, 0.02), tipD.clone().lerp(V(0, 1, 0), 0.5).normalize(), [1, fl, 1]), flame, tailB);
+  gear.add(blade(0.08, 0.06, 5, 0.35), alongY(tipP.clone().addScaledVector(tipD, 0.04), tipD.clone().lerp(V(0, 1, 0), 0.6).normalize(), [1, fl * 0.55, 1]), { color: L === 3 ? '#FFB0FA' : '#E0B0FF', glow: 1.2 }, tailB);
+
+  // --- waist: rope belt (Lv1) / studded belt (Lv2+) and the rag loincloth / jester coat.
+  const wy = 0.56;
+  const w = body.sliceY(wy, 0.05, TORSO);
+  if (L === 1) {
+    gear.add(new THREE.TorusGeometry(1, 0.03, 6, 26).rotateX(Math.PI / 2), trs([w.cx, wy, w.cz], [0, 0, 0], [w.rx + 0.03, 1, w.rz + 0.03]), { color: '#8A7A58' }, hips);
+    gear.add(new THREE.SphereGeometry(0.045, 8, 6), trs([w.cx + w.rx * 0.55, wy - 0.01, w.cz + w.rz * 0.78]), { color: '#8A7A58' }, hips);
+  } else {
+    gear.add(new THREE.CylinderGeometry(1, 1, 0.085, 26, 1, true), trs([w.cx, wy, w.cz], [0, 0, 0], [w.rx + 0.025, 1, w.rz + 0.025]), { color: '#1C1020' }, hips);
+    for (let k = 0; k < 8; k++) {
+      const a = (k / 8) * Math.PI * 2;
+      gear.add(new THREE.OctahedronGeometry(0.028), trs([w.cx + Math.sin(a) * (w.rx + 0.03), wy, w.cz + Math.cos(a) * (w.rz + 0.03)]), k === 0 ? violet : iron, hips);
+    }
+  }
+  const yT = wy - 0.02;
+  const yB = L === 1 ? 0.22 : L === 2 ? 0.12 : 0.18;
+  const panels = L === 1 ? 2 : 4;
+  for (let k = 0; k < panels; k++) {
+    const a0 = L === 1 ? (k === 0 ? -0.8 : Math.PI - 0.8) : -Math.PI / 4 + (k * Math.PI) / 2 - 0.15;
+    const a1 = a0 + (L === 1 ? 1.6 : Math.PI / 2 - 0.2);
+    const side = Math.sin((a0 + a1) / 2) >= 0 ? 'upperlegl' : 'upperlegr';
+    const leg = ctx.bone(side);
+    const pskin: SkinFn = (p) => ({ a: hips, b: leg, t: 0.7 * clamp01((yT - p.y) / (yT - yB)) });
+    const col = L === 1 ? { color: '#4E3E42' } : k % 2 === 0 ? { color: team, glow: L === 3 ? 0.15 : 0 } : { color: L === 3 ? '#1A0A26' : '#2A1038' };
+    const at = (u: number, v: number, o: THREE.Vector3): void => {
+      const a = lerp(a0, a1, u);
+      const y = lerp(yT, yB, v);
+      const s = body.sliceY(Math.max(y, 0.3), 0.07, (t) => t === 0 || t === 2);
+      const r = Math.max(s.rx, w.rx * 0.9) + 0.03 + 0.05 * v;
+      const hem = L === 1 ? 0.09 * ragged(u, 3) : 0.14 * ragged(u + k * 0.5, 2);
+      o.set(s.cx + Math.sin(a) * r, y + hem * v * v, s.cz + Math.cos(a) * r * (Math.cos(a) > 0 ? 1 : 0.95));
+    };
+    gear.add(sheet(6, 5, at, 0.014), null, col, pskin);
+  }
+
+  // --- Lv2 jester coat details: pointed shoulder flaps + chain with skull trinkets.
+  if (L >= 2) {
+    const sh = body.sliceY(1.12, 0.06, TORSO);
+    for (const sx of [-1, 1]) {
+      const arm = ctx.bone(sx > 0 ? 'upperarml' : 'upperarmr');
+      for (let k = 0; k < 3; k++) {
+        const p = V(sx * (sh.rx * 0.78 + 0.03), 1.2, sh.cz + (k - 1) * 0.12);
+        gear.add(blade(0.16, 0.025, 5, 0.45), alongY(p, V(sx * 0.8, 0.45, (k - 1) * 0.35), [1, 0.26 + (k === 1 ? 0.08 : 0), 1]), k % 2 === 0 ? { color: team } : { color: L === 3 ? '#1A0A26' : '#2A1038' }, arm);
+        gear.add(new THREE.SphereGeometry(0.026, 6, 4), trs(p.clone().add(V(sx * 0.23, 0.12, (k - 1) * 0.095))), L === 3 ? violet : { color: '#E0B64A', metal: 1, glow: 0.2 }, arm);
+      }
+    }
+    const cy = 1.02;
+    const cs = body.sliceY(cy, 0.05, TORSO);
+    gear.add(new THREE.TorusGeometry(1, 0.022, 5, 30).rotateX(Math.PI / 2), trs([cs.cx, cy, cs.cz], [-0.35, 0, 0], [cs.rx + 0.03, 1, cs.rz + 0.03]), iron, chest);
+    for (const a of [-0.5, 0, 0.5]) {
+      const p = V(cs.cx + Math.sin(a) * (cs.rx + 0.03), cy - 0.08 - (a === 0 ? 0.05 : 0), cs.cz + Math.cos(a) * (cs.rz + 0.04));
+      gear.add(new THREE.SphereGeometry(0.05, 10, 8), trs(p, [0, 0, 0], [1, 1.15, 0.9]), boneS, chest);
+      for (const sx of [-1, 1]) gear.add(new THREE.SphereGeometry(0.014, 5, 4), trs(p.clone().add(V(sx * 0.02, 0.005, 0.045))), L === 3 ? violet : { color: '#120816' }, chest);
+    }
+  }
+
+  // --- weapons: crooked trident (Lv1) / glTF knives with glowing edges (Lv2+).
+  if (L === 1) {
+    const hand = ctx.bone('handslotr');
+    const hp = worldPos(scene, 'handslotr');
+    const shaft = [V(hp.x, hp.y, -0.75), V(hp.x + 0.04, hp.y - 0.02, 0.2), V(hp.x - 0.03, hp.y + 0.03, 0.9), V(hp.x, hp.y, 1.45)];
+    gear.add(taperTube(shaft, () => 0.03, 12, 7), null, { color: '#3A2430' }, hand);
+    gear.add(new THREE.CylinderGeometry(0.05, 0.05, 0.07, 8), trs([hp.x, hp.y, 1.42], [Math.PI / 2, 0, 0]), iron, hand);
+    for (const dx of [-1, 0, 1]) {
+      const b = V(hp.x + dx * 0.08, hp.y, 1.44);
+      const pts = dx === 0 ? [b, b.clone().add(V(0, 0, 0.32)), b.clone().add(V(0, 0, 0.5))] : [b, b.clone().add(V(dx * 0.06, 0, 0.14)), b.clone().add(V(dx * 0.05, 0.02, 0.4))];
+      gear.add(taperTube(pts, (t) => 0.028 * (1 - 0.85 * t), 8, 6), null, iron, hand);
+    }
+    gear.add(new THREE.CylinderGeometry(0.06, 0.06, 0.2, 8), trs([hp.x, hp.y, 1.3], [Math.PI / 2, 0, 0]), { color: '#8A7A58' }, hand);
+  } else {
+    engrave(ctx, 'Knife', 'handslotr', { ...violet, pattern: PATTERN.rune });
+    engrave(ctx, 'Knife_Offhand', 'handslotl', { ...violet, pattern: PATTERN.rune });
+  }
+
+  // --- flame cape (Lv3): two sway bones, jagged hem, flame pattern.
+  if (L === 3) {
+    const ct = body.sliceY(1.18, 0.06, TORSO);
+    const yTop = 1.22;
+    const zTop = ct.cz - ct.rz - 0.01;
+    const yBot = 0.1;
+    const len = yTop - yBot;
+    const capeA = ctx.addBone('fx_capeA', chest, V(0, yTop, zTop));
+    const capeB = ctx.addBone('fx_capeB', capeA, V(0, yTop - len * 0.5, zTop - 0.1));
+    ctx.secondary.push(
+      { bone: 'fx_capeA', axis: [1, 0, 0], idleAmp: 0.05, idleFreq: 1.9, run: 0.6, phase: 0 },
+      { bone: 'fx_capeB', axis: [1, 0, 0], idleAmp: 0.09, idleFreq: 1.9, run: 0.32, phase: 0.9 },
+    );
+    const capeSkin: SkinFn = (p) => {
+      const s = clamp01((yTop - p.y) / len);
+      if (s < 0.18) return { a: chest, b: capeA, t: s / 0.18 };
+      return { a: capeA, b: capeB, t: clamp01((s - 0.3) / 0.45) };
+    };
+    const wTop = ct.rx * 1.0;
+    const wBot = ct.rx * 1.7;
+    const capeAt = (u: number, v: number, o: THREE.Vector3): void => {
+      const x = (u * 2 - 1) * lerp(wTop, wBot, v);
+      const bulge = 0.12 * (1 - (u * 2 - 1) ** 2);
+      const hem = 0.22 * ragged(u, 4) * v * v;
+      o.set(x, yTop - v * len + hem, zTop - 0.02 - bulge * (0.4 + 0.6 * v) - v * 0.16);
+    };
+    gear.add(sheet(12, 9, capeAt, 0.016), null, flame, capeSkin);
+    gear.add(sheet(12, 3, (u, v, o) => capeAt(0.15 + u * 0.7, 0.3 + v * 0.55, o.set(0, 0, 0)), 0.02), null, { color: '#FF3DF0', glow: 0.9, pattern: PATTERN.flame }, capeSkin);
+    for (const sx of [-1, 1]) {
+      gear.add(new THREE.OctahedronGeometry(0.06), trs([sx * wTop * 0.85, yTop - 0.02, zTop + 0.02]), violet, chest);
+    }
+  }
+
+  // --- Lv3 orbit: stolen-weapon shards and wisps circling the imp (spinning bone under the root).
+  if (L === 3) {
+    const orbit = ctx.addBone('fx_orbit', root, V(0, 1.05, 0));
+    ctx.secondary.push({ bone: 'fx_orbit', axis: [0, 1, 0], idleAmp: 0.0, idleFreq: 1, run: 0, phase: 0, spin: 1.1 });
+    const obsidian: GearStyle = { color: '#120A1A', metal: 0.9 };
+    const R = 0.95;
+    const shard = (a: number, y: number, kind: number): void => {
+      const p = V(Math.sin(a) * R, y, Math.cos(a) * R);
+      const tangent = V(Math.cos(a), 0, -Math.sin(a));
+      const up = V(0, 1, 0).lerp(tangent, 0.35).normalize();
+      if (kind === 0) {
+        // Sword: blade + guard + glowing fuller.
+        gear.add(blade(0.16, 0.035, 6, 0.75), alongY(p, up, [1, 0.72, 1]), obsidian, orbit);
+        gear.add(new THREE.BoxGeometry(0.03, 0.03, 0.24), alongY(p.clone().addScaledVector(up, -0.02), up), violet, orbit);
+        gear.add(new THREE.BoxGeometry(0.035, 0.5, 0.012), alongY(p.clone().addScaledVector(up, 0.3), up), violet, orbit);
+      } else if (kind === 1) {
+        // Axe: haft + crescent head.
+        gear.add(new THREE.CylinderGeometry(0.02, 0.025, 0.66, 6), alongY(p.clone().addScaledVector(up, 0.33), up), obsidian, orbit);
+        const m = alongY(p.clone().addScaledVector(up, 0.5), up).multiply(trs([0.12, 0, 0], [0, Math.PI / 2, 0]));
+        gear.add(plate([[-0.5, 0.5], [0.5, 0.35], [0.3, 0], [0.5, -0.35], [-0.5, -0.5], [-0.3, 0]], 0.03, 0.01), m.clone().multiply(trs([0, 0, 0], [0, 0, 0], 0.34)), obsidian, orbit);
+        gear.add(plate([[0.5, 0.35], [0.3, 0], [0.5, -0.35], [0.4, -0.3], [0.25, 0], [0.4, 0.3]], 0.045, 0.005), m.multiply(trs([0, 0, 0], [0, 0, 0], 0.34)), violet, orbit);
+      } else {
+        // Curved dagger.
+        gear.add(blade(0.1, 0.03, 6, 0.6), alongY(p, up.clone().lerp(tangent, 0.3).normalize(), [1, 0.42, 1]), obsidian, orbit);
+        gear.add(blade(0.045, 0.034, 6, 0.6), alongY(p, up.clone().lerp(tangent, 0.3).normalize(), [1, 0.4, 1]), violet, orbit);
+      }
+    };
+    shard(0, 0.0, 0);
+    shard((Math.PI * 2) / 3, 0.18, 1);
+    shard((Math.PI * 4) / 3, -0.12, 2);
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2 + Math.PI / 3;
+      gear.add(new THREE.OctahedronGeometry(0.055), trs([Math.sin(a) * R * 1.08, 0.3 - i * 0.22, Math.cos(a) * R * 1.08], [0, a, 0], [1, 1.6, 1]), { color: '#FFB0FA', glow: 2.4 }, orbit);
+    }
+  }
+  void teamLight;
+  void teamDark;
 }

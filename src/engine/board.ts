@@ -1,6 +1,6 @@
 import { BOARD_SIZE, ZONE_DEPTH } from './types';
 import type { PlayerId, Pos } from './types';
-import { CH_MARKI, CH_SAD, MARKI_RANGE, SAD_RANGE, WALK_HALF } from './characters';
+import { CH_INSANER, CH_MARKI, CH_SAD, INSANER_DIAG_LEVEL, INSANER_RANGE, MARKI_RANGE, SAD_RANGE, WALK_HALF } from './characters';
 
 export const N_SQUARES = BOARD_SIZE * BOARD_SIZE;
 
@@ -39,7 +39,13 @@ export function posOf(sq: number): Pos {
   return { r, c: sq - r * BOARD_SIZE };
 }
 
-const SAD_DIRS = [1, 0, -1, 0, 0, 1, 0, -1];
+/** True when column `c` is swallowed by a storm of `storm` columns per side. */
+export function inStorm(c: number, storm: number): boolean {
+  return c < storm || c >= BOARD_SIZE - storm;
+}
+
+const ORTHO_DIRS = [1, 0, -1, 0, 0, 1, 0, -1];
+const DIAG_DIRS = [1, 1, 1, -1, -1, 1, -1, -1];
 
 /** True when a forward-only mover standing on row `r` with direction `dir` has no row ahead: it turns around. */
 export function atTurnRow(r: number, dir: number): boolean {
@@ -47,50 +53,61 @@ export function atTurnRow(r: number, dir: number): boolean {
   return next < 0 || next >= BOARD_SIZE;
 }
 
-/**
- * Core move generator shared by the public engine API and the AI.
- *
- * @param occ     length-144 array: -1 = empty, otherwise an index into `owners`
- * @param owners  owner of each piece index
- * @param includeAllies if true, squares occupied by allies are also emitted (attack/defence maps)
- * @returns new write offset into `out`
- */
-export function genTargets(
+/** Slide up to `L` squares along each (dr, dc) pair in `dirs`; blocked by pieces, edges and storm. */
+function slide(
+  occ: ArrayLike<number>,
+  owners: ArrayLike<number>,
+  owner: number,
+  r: number,
+  c: number,
+  dirs: number[],
+  L: number,
+  out: { [i: number]: number },
+  n: number,
+  includeAllies: boolean,
+  storm: number,
+): number {
+  for (let d = 0; d < dirs.length; d += 2) {
+    const dr = dirs[d];
+    const dc = dirs[d + 1];
+    let nr = r;
+    let nc = c;
+    for (let k = 0; k < L; k++) {
+      nr += dr;
+      nc += dc;
+      if (nr < 0 || nr >= BOARD_SIZE || nc < 0 || nc >= BOARD_SIZE || inStorm(nc, storm)) break;
+      const s = nr * BOARD_SIZE + nc;
+      const o = occ[s];
+      if (o < 0) {
+        out[n++] = s;
+        continue;
+      }
+      if (includeAllies || owners[o] !== owner) out[n++] = s;
+      break;
+    }
+  }
+  return n;
+}
+
+/** One movement pattern (a character at a level) from square (r, c). */
+function genPattern(
   occ: ArrayLike<number>,
   owners: ArrayLike<number>,
   owner: number,
   ch: number,
   level: number,
-  sq: number,
+  r: number,
+  c: number,
   out: { [i: number]: number },
   n: number,
-  includeAllies = false,
-  /** Forward direction of this piece (+1 toward r=11). Defaults to the owner's base direction. */
-  dir: number = owner === 0 ? 1 : -1,
+  includeAllies: boolean,
+  dir: number,
+  storm: number,
 ): number {
-  const r = (sq / BOARD_SIZE) | 0;
-  const c = sq - r * BOARD_SIZE;
-  if (ch === CH_SAD) {
-    const L = SAD_RANGE[level];
-    for (let d = 0; d < 8; d += 2) {
-      const dr = SAD_DIRS[d];
-      const dc = SAD_DIRS[d + 1];
-      let nr = r;
-      let nc = c;
-      for (let k = 0; k < L; k++) {
-        nr += dr;
-        nc += dc;
-        if (nr < 0 || nr >= BOARD_SIZE || nc < 0 || nc >= BOARD_SIZE) break;
-        const s = nr * BOARD_SIZE + nc;
-        const o = occ[s];
-        if (o < 0) {
-          out[n++] = s;
-          continue;
-        }
-        if (includeAllies || owners[o] !== owner) out[n++] = s;
-        break;
-      }
-    }
+  if (ch === CH_SAD) return slide(occ, owners, owner, r, c, ORTHO_DIRS, SAD_RANGE[level], out, n, includeAllies, storm);
+  if (ch === CH_INSANER) {
+    n = slide(occ, owners, owner, r, c, ORTHO_DIRS, INSANER_RANGE[level], out, n, includeAllies, storm);
+    if (level >= INSANER_DIAG_LEVEL) n = slide(occ, owners, owner, r, c, DIAG_DIRS, INSANER_RANGE[level], out, n, includeAllies, storm);
     return n;
   }
   const dr = dir;
@@ -119,9 +136,68 @@ export function genTargets(
   const c1 = c + w >= BOARD_SIZE ? BOARD_SIZE - 1 : c + w;
   const base = nr * BOARD_SIZE;
   for (let nc = c0; nc <= c1; nc++) {
+    if (inStorm(nc, storm)) continue;
     const s = base + nc;
     const o = occ[s];
     if (o < 0 || includeAllies || owners[o] !== owner) out[n++] = s;
+  }
+  return n;
+}
+
+// Dedupe scratch for pieces with absorbed patterns (a square may be reachable by two patterns).
+const seenStamp = new Int32Array(N_SQUARES);
+let stamp = 0;
+
+/**
+ * Core move generator shared by the public engine API and the AI.
+ *
+ * @param occ     length-144 array: -1 = empty, otherwise an index into `owners`
+ * @param owners  owner of each piece index
+ * @param includeAllies if true, squares occupied by allies are also emitted (attack/defence maps)
+ * @param dir     forward direction of this piece (+1 toward r=11); defaults to the owner's base direction
+ * @param storm   columns swallowed by the storm per side (blocked squares)
+ * @param absorb  bitmask of absorbed (character, level) patterns, see `abilityBit`
+ * @returns new write offset into `out`
+ */
+export function genTargets(
+  occ: ArrayLike<number>,
+  owners: ArrayLike<number>,
+  owner: number,
+  ch: number,
+  level: number,
+  sq: number,
+  out: { [i: number]: number },
+  n: number,
+  includeAllies = false,
+  dir: number = owner === 0 ? 1 : -1,
+  storm = 0,
+  absorb = 0,
+): number {
+  const r = (sq / BOARD_SIZE) | 0;
+  const c = sq - r * BOARD_SIZE;
+  // The piece can never be in the storm itself (it would have been removed), but when the
+  // caller passes a storm the origin must still be a legal square: nothing to do here.
+  const start = n;
+  n = genPattern(occ, owners, owner, ch, level, r, c, out, n, includeAllies, dir, storm);
+  if (absorb === 0) return n;
+  stamp++;
+  for (let k = start; k < n; k++) seenStamp[out[k]] = stamp;
+  for (let bit = 0; bit < 12; bit++) {
+    if (!(absorb & (1 << bit))) continue;
+    const ach = (bit / 3) | 0;
+    const alvl = (bit % 3) + 1;
+    if (ach === ch && alvl === level) continue;
+    const from = n;
+    n = genPattern(occ, owners, owner, ach, alvl, r, c, out, n, includeAllies, dir, storm);
+    // Compact: drop squares already emitted.
+    let w = from;
+    for (let k = from; k < n; k++) {
+      const s = out[k];
+      if (seenStamp[s] === stamp) continue;
+      seenStamp[s] = stamp;
+      out[w++] = s;
+    }
+    n = w;
   }
   return n;
 }

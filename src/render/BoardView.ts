@@ -12,6 +12,10 @@
  * captures throw spark streaks + a shockwave and dissolve the victim; new units pop in with a
  * flash. Until the models load (or if they fail) pieces show silhouettes.
  *
+ * Storm (setStorm): consumed outer columns get the storm.ts energy field (one additive draw), their
+ * tiles are dimmed, and pieces that vanish from the piece list while the storm is active (not a
+ * move's capture) dissolve with a magenta storm edge instead of popping out.
+ *
  * Performance notes: tiles are one InstancedMesh, overlays are InstancedMeshes, effects reuse
  * pre-allocated meshes (no per-frame / per-move allocations), one 1024 shadow map, pixel ratio
  * capped at 2. Frames are only requested while something is animating: moves/effects at full
@@ -29,13 +33,16 @@ import { LOOKS, MOVE_CLIP } from './units/config';
 import { UnitLibrary } from './units/library';
 import { DustPool, SparkPool } from './boardFx';
 import { ANIM, BOARD_COLORS, CHARACTER_RARITY, RARITY_COLORS, RARITY_GLOW, TEAM_COLORS } from './palette';
+import { STORM_COLORS, StormFx } from './storm';
 import {
   clamp01,
   containerSize,
   easeInOutCubic,
   easeOutCubic,
+  hexToRgb,
   indexHighlights,
   makeRng,
+  mixRgb,
   posKey,
   pulse01,
   sameLook,
@@ -136,6 +143,11 @@ const easeOutBack = (t: number): number => {
 const DUST = 0xc9b9a0;
 const EMBER = 0xff7a2a;
 const SPAWN_MS = 380;
+/** Storm removal: dissolve length (ms), dust colour and tile tint. */
+const STORM_MS = 520;
+const STORM_DUST = 0x9a4bff;
+const STORM_TILE = hexToRgb(STORM_COLORS.tile);
+const STORM_TILE_STRENGTH = 0.62;
 
 /** Adds a fresnel rim light (team light color) to a standard material's emissive term. */
 function addRim(mat: THREE.MeshStandardMaterial, rimHex: string, strength: number, power = 2.3): void {
@@ -426,6 +438,13 @@ export class BoardView implements IBoardView {
   private readonly zoneHaloMat: Record<PlayerId, THREE.MeshBasicMaterial> = {} as Record<PlayerId, THREE.MeshBasicMaterial>;
   private readonly comet: THREE.Mesh;
   private readonly cometMat: THREE.MeshBasicMaterial;
+  private readonly stormFx: StormFx;
+  /** Storm state (see setStorm). */
+  private storm = 0;
+  private stormNext: number | null = null;
+  /** Pieces being taken by the storm (detached from `visuals`, dissolving) + their shared start. */
+  private readonly fading: PieceVisual[] = [];
+  private tStormFade = -1;
   private tLand = -1;
   private tCap = -1;
   private tShake = -1;
@@ -528,6 +547,8 @@ export class BoardView implements IBoardView {
     const zl = this.buildZoneLines();
     this.comet = zl.comet;
     this.cometMat = zl.cometMat;
+    this.stormFx = new StormFx(OVERLAY_Y + 0.004);
+    this.scene.add(this.stormFx.mesh);
 
     const fx = this.buildFx(glowTex);
     this.landRing = fx.landRing;
@@ -852,7 +873,7 @@ export class BoardView implements IBoardView {
   setPieces(pieces: Piece[]): void {
     if (this.disposed) return;
     this.finishAnimation(false);
-    this.syncPieces(pieces);
+    this.syncPieces(pieces, true);
     this.requestRender();
   }
 
@@ -984,6 +1005,31 @@ export class BoardView implements IBoardView {
     this.requestRender();
   }
 
+  /**
+   * Storm state: `storm` columns consumed per side (0 = none), `nextIn` plies until the next shrink
+   * (null = inactive). Consumed columns get the energy field and dimmed tiles; with nextIn <= 2 the
+   * next columns pulse a warning frame. Storm tiles stay tappable (the engine rejects moves there).
+   */
+  setStorm(storm: number, nextIn: number | null): void {
+    if (this.disposed) return;
+    this.storm = Math.max(0, Math.min(6, Math.floor(storm)));
+    this.stormNext = nextIn;
+    this.stormFx.set(this.storm, nextIn);
+    this.applyHighlights();
+    this.requestRender();
+  }
+
+  /** True while the storm rule is in play (anything vanishing near the edges is a storm removal). */
+  private get stormActive(): boolean {
+    return this.storm > 0 || this.stormNext !== null;
+  }
+
+  /** Column inside the storm, or the next band to be consumed (vanish detection tolerates call order). */
+  private stormColumn(c: number, slack = 0): boolean {
+    const n = this.storm + slack;
+    return c < n || c >= BOARD_SIZE - n;
+  }
+
   resize(): void {
     if (this.disposed) return;
     const { w, h } = containerSize(this.container);
@@ -1025,7 +1071,10 @@ export class BoardView implements IBoardView {
     document.removeEventListener('visibilitychange', this.onVisibility);
     for (const v of this.visuals.values()) v.actor?.dispose();
     this.visuals.clear();
+    for (const v of this.fading) v.actor?.dispose();
+    this.fading.length = 0;
     this.pieceLayer.clear();
+    this.stormFx.dispose();
     this.units?.dispose();
     this.units = null;
     this.dust.dispose();
@@ -1049,7 +1098,11 @@ export class BoardView implements IBoardView {
 
   // ---------------------------------------------------------------- pieces
 
-  private syncPieces(pieces: Piece[]): void {
+  /**
+   * Sync the visuals to `pieces`. With `dissolve`, pieces that vanished while the storm is active
+   * and stood in (or next to) a storm column are taken by the storm (dissolve) instead of popping.
+   */
+  private syncPieces(pieces: Piece[], dissolve = false): void {
     const seen = new Set<string>();
     for (const p of pieces) {
       seen.add(p.id);
@@ -1075,11 +1128,39 @@ export class BoardView implements IBoardView {
     }
     for (const [id, v] of this.visuals) {
       if (!seen.has(id)) {
-        this.removeVisual(v);
         this.visuals.delete(id);
+        if (dissolve && this.stormActive && this.stormColumn(v.piece.pos.c, 1) && v.actor && this.units) this.startStormFade(v);
+        else this.removeVisual(v);
       }
     }
     this.applyLift();
+  }
+
+  /** The storm takes a piece: death clip + magenta dissolve, sparks and a purple dust ring. */
+  private startStormFade(v: PieceVisual): void {
+    const act = v.actor;
+    if (!act || !this.units) {
+      this.removeVisual(v);
+      return;
+    }
+    const now = performance.now();
+    v.root.traverse((o) => {
+      o.castShadow = false;
+    });
+    v.inner.position.y = TILE_TOP;
+    v.inner.scale.set(1, 1, 1);
+    act.play('death', { once: true, hold: true, fade: 0.05, timeScale: act.clipDuration('death') / (STORM_MS / 1000) });
+    act.setDying(this.units.dyingMaterial(v.piece, 'storm'));
+    const p = v.root.position;
+    this.sparks.burst(p.x, 0.8, p.z, 18, 3.2, STORM_COLORS.edge, (now + v.piece.pos.c * 13) % 97);
+    this.dust.ring(p.x, TILE_TOP + 0.05, p.z, 10, 1.6, 0.5, 0.7, STORM_DUST, 0.2);
+    this.flashMat.color.set('#ffffff').lerp(this.tmpC.set(STORM_COLORS.edge), 0.5);
+    this.flash.position.set(p.x, 0.55, p.z);
+    this.flash.visible = true;
+    this.tCap = Math.max(this.tCap, now); // reuse the flash timeline (shock ring / burst stay hidden)
+    this.fading.push(v);
+    this.tStormFade = now;
+    this.requestRender();
   }
 
   private createVisual(p: Piece): PieceVisual {
@@ -1153,8 +1234,9 @@ export class BoardView implements IBoardView {
     const hi = this.hi;
     for (let r = 0; r < BOARD_SIZE; r++) {
       for (let c = 0; c < BOARD_SIZE; c++) {
-        const [cr, cg, cb] = tileRgb(r, c, hi);
-        this.tmpC.setRGB(cr, cg, cb, THREE.SRGBColorSpace);
+        let rgb = tileRgb(r, c, hi);
+        if (this.storm > 0 && this.stormColumn(c)) rgb = mixRgb(rgb, STORM_TILE, STORM_TILE_STRENGTH);
+        this.tmpC.setRGB(rgb[0], rgb[1], rgb[2], THREE.SRGBColorSpace);
         this.tiles.setColorAt(r * BOARD_SIZE + c, this.tmpC);
       }
     }
@@ -1337,7 +1419,8 @@ export class BoardView implements IBoardView {
     const capturedActor = this.anim?.captured?.actor ?? null;
     const busy = animating || fxActive || unitsBusy;
     const idleLoop = this.idleAnim && haveActors && !document.hidden;
-    if (!busy && (this.pulsing || idleLoop)) {
+    const stormLoop = this.stormFx.active && !document.hidden;
+    if (!busy && (this.pulsing || idleLoop || stormLoop)) {
       const cap = this.pulsing ? IDLE_FRAME_MS : IDLE_ANIM_FRAME_MS;
       if (now - this.lastFrame < cap) {
         this.requestRender(); // idle pulse / idle loops are throttled; skip drawing this tick
@@ -1347,16 +1430,18 @@ export class BoardView implements IBoardView {
     // Unit animation clock (clamped so a long pause never makes the mixers jump).
     const dt = this.lastTick > 0 ? Math.min(0.1, Math.max(0, (now - this.lastTick) / 1000)) : 0;
     this.lastTick = now;
-    if (haveActors || capturedActor) {
+    if (haveActors || capturedActor || this.fading.length > 0) {
       const step = busy || this.idleAnim ? dt : 0;
       for (const v of this.visuals.values()) v.actor?.update(step);
       capturedActor?.update(dt);
+      for (const v of this.fading) v.actor?.update(dt);
       this.units?.update(now / 1000);
     }
+    if (stormLoop) this.stormFx.update(now / 1000);
     this.lastFrame = now;
     this.updatePulse(now);
     this.renderer.render(this.scene, this.camera);
-    if (busy || this.pulsing || idleLoop) this.requestRender();
+    if (busy || this.pulsing || idleLoop || stormLoop) this.requestRender();
     else this.lastTick = 0;
   };
 
@@ -1535,6 +1620,21 @@ export class BoardView implements IBoardView {
       }
     }
 
+    if (this.tStormFade >= 0) {
+      const k = (now - this.tStormFade) / STORM_MS;
+      if (k >= 1) {
+        for (const v of this.fading) this.removeVisual(v);
+        this.fading.length = 0;
+        this.tStormFade = -1;
+        this.units?.setDissolve(0, 'storm');
+      } else {
+        active = true;
+        const kk = Math.max(0, k);
+        this.units?.setDissolve(clamp01((kk - 0.1) / 0.9), 'storm');
+        for (const v of this.fading) v.root.position.y = 0.16 * easeOutCubic(kk);
+      }
+    }
+
     if (this.tLand >= 0) {
       const k = (now - this.tLand) / ANIM.pulse;
       if (k >= 1) {
@@ -1650,7 +1750,7 @@ export class BoardView implements IBoardView {
       if (!natural) a.mover.actor.face(a.mover.actor.facing, 0);
       a.mover.actor.idle(natural ? 0.2 : 0);
     }
-    this.syncPieces(a.piecesAfter);
+    this.syncPieces(a.piecesAfter, true);
     this.requestRender();
     a.resolve();
   }

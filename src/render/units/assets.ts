@@ -1,5 +1,5 @@
 /**
- * Loads the three unit GLBs once per page (parallel, meshopt-compressed, decoder bundled locally,
+ * Loads the unit GLBs once per page (parallel, meshopt-compressed, decoder bundled locally,
  * GLTFLoader code-split into its own chunk)
  * and caches the parsed glTF. The cache holds CPU-side data only: every BoardView builds its own
  * merged GPU geometry/materials from it (see library.ts) and disposes them with the view.
@@ -22,7 +22,7 @@ function assetUrl(path: string): string {
 /** Start (or join) loading of all unit models. Rejects if any file fails; callers fall back. */
 export function loadUnitAssets(): Promise<UnitAssets> {
   if (pending) return pending;
-  const ids: CharacterId[] = ['sad', 'marki', 'walk'];
+  const ids = Object.keys(LOOKS) as CharacterId[];
   // Loader + decoder are code-split: the board (with silhouettes) is interactive before they arrive.
   pending = Promise.all([
     import('three/addons/loaders/GLTFLoader.js'),
@@ -34,7 +34,10 @@ export function loadUnitAssets(): Promise<UnitAssets> {
       return Promise.all(ids.map((id) => loader.loadAsync(assetUrl(LOOKS[id].file))));
     })
     .then((list) => {
-      const out = { sad: list[0], marki: list[1], walk: list[2] } as UnitAssets;
+      const out = {} as UnitAssets;
+      ids.forEach((id, i) => {
+        out[id] = list[i];
+      });
       loaded = out;
       return out;
     });

@@ -5,7 +5,7 @@
 import { haptic, sfx } from '../../audio/sfx';
 import { CHARACTERS, CHARACTER_IDS, type CharacterId, type Level } from '../../engine';
 import { MAX_LEVEL } from '../../meta/economy';
-import { canLevelUp, getProfile, levelUp, levelUpCost, subscribeProfile, updateProfile } from '../../meta/profile';
+import { canLevelUp, getProfile, isOwned, levelUp, levelUpCost, subscribeProfile, updateProfile } from '../../meta/profile';
 import { appBar } from '../components/appbar';
 import { confirmDialog } from '../components/dialog';
 import { coinChip, gemChip, movementDiagram, rarityChip } from '../components/piece';
@@ -20,17 +20,19 @@ export const TIER_TITLE: Record<CharacterId, [string, string, string]> = {
   sad: ['견습 성기사', '은빛 성기사', '신성 성기사'],
   marki: ['들판의 황소', '철갑 황소', '용암 황소'],
   walk: ['방패병', '강철 방패병', '마도 방패병'],
+  insaner: ['꼬마 악마', '광기의 악동', '미친 왕'],
 };
 
 export const ROLE: Record<CharacterId, { role: string; trait: string }> = {
   sad: { role: '수비형 탱커', trait: '상하좌우 자유 이동 · 유일하게 후퇴 가능' },
   marki: { role: '돌격형 공격수', trait: '앞으로만 일직선 돌진 · 사거리 최장' },
   walk: { role: '기습형 점퍼', trait: '사이의 말을 뛰어넘는 점프 · 넓은 앞줄 커버' },
+  insaner: { role: '흡수형 광전사', trait: '적을 잡으면 그 말의 이동 능력을 흡수 · Lv.3는 잡은 뒤 한 번 더 이동' },
 };
 
 /** Numeric "reach" per level for the stat bar (max squares reachable on an open board). */
 function reachCount(id: CharacterId, lv: Level): number {
-  const tbl: Record<CharacterId, [number, number, number]> = { sad: [4, 8, 12], marki: [3, 4, 6], walk: [5, 7, 9] };
+  const tbl: Record<CharacterId, [number, number, number]> = { sad: [4, 8, 12], marki: [3, 4, 6], walk: [5, 7, 9], insaner: [8, 12, 24] };
   return tbl[id][lv - 1];
 }
 
@@ -111,9 +113,11 @@ export function collectionScreen(router: Router): Screen {
     const pct = cost ? Math.min(100, (prog.cards / cost.cards) * 100) : 100;
     const levels: Level[] = [1, 2, 3];
     const leveled = justLeveled === id;
+    const owned = isOwned(p, id);
+    const reachMax = reachCount(id, 3) > 12 ? 24 : 12;
     return h(
       'article',
-      { class: `unit-card rarity-${def.rarity} tier-${prog.level}${leveled ? ' is-leveled' : ''}`, 'data-character': id, 'data-level': prog.level },
+      { class: `unit-card rarity-${def.rarity} tier-${prog.level}${leveled ? ' is-leveled' : ''}${owned ? '' : ' is-locked'}`, 'data-character': id, 'data-level': prog.level, 'data-owned': owned ? 'true' : 'false' },
       h(
         'header',
         { class: 'unit-card__banner' },
@@ -127,15 +131,17 @@ export function collectionScreen(router: Router): Screen {
           h('div', { class: 'unit-card__chips' }, rarityChip(def.rarity), h('span', { class: 'lv-pill lv-pill--big', 'data-level': prog.level }, `Lv.${prog.level}`)),
         ),
         h('div', { class: 'unit-card__stars', 'aria-hidden': 'true' }, levels.map((lv) => icon('star', 16, lv <= prog.level ? 'is-on' : ''))),
-        prog.level === 3 ? h('div', { class: 'unit-card__aura', 'aria-hidden': 'true' }) : null,
+        prog.level === 3 && owned ? h('div', { class: 'unit-card__aura', 'aria-hidden': 'true' }) : null,
+        owned ? null : h('div', { class: 'unit-card__lock' }, icon('lock', 22), h('b', null, '미해금'), h('span', null, '상자에서 전설 카드를 뽑으면 해금')),
         h('div', { class: 'unit-card__tier', 'aria-hidden': 'true' }, levels.map((lv) => h('i', { class: lv <= prog.level ? 'is-on' : '' }))),
         leveled ? h('div', { class: 'unit-card__burst', 'aria-hidden': 'true' }, h('span', { class: 'unit-card__burst-text' }, 'LEVEL UP!')) : null,
       ),
       h('p', { class: 'unit-card__trait' }, icon('info', 14), ROLE[id].trait),
+      def.passiveKo ? h('p', { class: 'unit-card__passive' }, icon('magic', 14), h('b', null, '패시브 · 흡수'), ' ', def.passiveKo) : null,
       h(
         'div',
         { class: 'unit-card__stats' },
-        statBar('이동 범위', reachCount(id, prog.level), 12, next ? reachCount(id, next) : undefined),
+        statBar('이동 범위', reachCount(id, prog.level), reachMax, next ? reachCount(id, next) : undefined),
         h(
           'div',
           { class: 'unit-card__compare' },
@@ -162,7 +168,9 @@ export function collectionScreen(router: Router): Screen {
             h('span', { class: `progress__bar${cost && prog.cards >= cost.cards ? ' is-full' : ''}`, style: `width:${pct}%` }),
           ),
         ),
-        prog.level < MAX_LEVEL && cost
+        !owned
+          ? h('div', { class: 'max-note max-note--locked' }, icon('lock', 18), '상자에서 획득하면 강화할 수 있어요')
+          : prog.level < MAX_LEVEL && cost
           ? h(
               'button',
               {
@@ -177,7 +185,7 @@ export function collectionScreen(router: Router): Screen {
               h('span', { class: `btn__cost${p.gems < cost.gems ? ' is-short' : ''}` }, icon('gem', 16), String(cost.gems)),
             )
           : h('div', { class: 'max-note' }, icon('check', 18), '최대 레벨 달성'),
-        !check.ok && check.reason !== 'max'
+        owned && !check.ok && check.reason !== 'max'
           ? h('p', { class: 'upgrade__hint' }, check.reason === 'cards' ? `카드 ${cost!.cards - prog.cards}장 더 필요 · 상자에서 획득` : `보석 ${cost!.gems - p.gems}개 부족 · 상점에서 충전`)
           : null,
       ),

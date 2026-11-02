@@ -9,7 +9,7 @@
     <title>GRID CLASH — 말 3개, 144칸, 60초의 수 싸움 | 12×12 전술 아레나</title>
     <meta
       name="description"
-      content="사드·마르키·월크, 능력이 다른 세 말로 진형을 짜고 봇과 1:1로 겨루는 12×12 전략 보드게임. 설치 없이 지금 바로 무료로 플레이하세요. Google Play 출시 예정."
+      content="사드·마르키·월크·인세이너, 능력이 다른 네 말로 진형을 짜고 봇과 1:1로 겨루는 12×12 전략 보드게임. 설치 없이 지금 바로 무료로 플레이하세요. Google Play 출시 예정."
     />
     <!-- Relative og:image: replace with an absolute https://<domain>/og.png after the domain is fixed. -->
     <meta property="og:type" content="website" />
@@ -42,6 +42,7 @@
         <nav class="topnav" aria-label="섹션">
           <a href="#characters">캐릭터</a>
           <a href="#how">플레이 방법</a>
+          <a href="#rules">신규 규칙</a>
           <a class="btn btn--tonal btn--sm" href="../">플레이</a>
         </nav>
       </div>
@@ -56,7 +57,7 @@
             <h1 class="hero__title">GRID CLASH</h1>
             <p class="hero__hook">말 3개, 144칸,<br /><mark>60초</mark>의 수 싸움.</p>
             <p class="hero__desc">
-              능력이 다른 세 말 <b>사드 · 마르키 · 월크</b>로 진형을 짜고, 봇과 1:1로 겨루세요.
+              능력이 다른 네 말 <b>사드 · 마르키 · 월크 · 인세이너</b>로 진형을 짜고, 봇과 1:1로 겨루세요.
               상대 말 3개를 먼저 모두 잡으면 승리!
             </p>
             <div class="hero__cta">
@@ -69,6 +70,7 @@
                 <li><img src="/chars/sad-lv1-face.jpg" width="320" height="320" alt="사드 — 성기사" class="cast cast--common" /><span>사드</span></li>
                 <li><img src="/chars/marki-lv1-face.jpg" width="320" height="320" alt="마르키 — 황소 전사" class="cast cast--rare" /><span>마르키</span></li>
                 <li><img src="/chars/walk-lv1-face.jpg" width="320" height="320" alt="월크 — 방패병" class="cast cast--epic" /><span>월크</span></li>
+                <li><img src="/chars/insaner-lv1-face.jpg" width="320" height="320" alt="인세이너 — 꼬마 악마" class="cast cast--legendary" /><span>인세이너</span></li>
               </ul>
             </div>
           </div>
@@ -90,8 +92,8 @@
       <section class="section" id="characters" aria-labelledby="chars-title">
         <div class="wrap">
           <p class="eyebrow">캐릭터</p>
-          <h2 id="chars-title" class="section__title">세 개의 말, 세 가지 능력</h2>
-          <p class="section__lead">말마다 움직이는 방식이 완전히 다릅니다. 레벨이 오르면 이동 범위가 넓어져요.</p>
+          <h2 id="chars-title" class="section__title">네 개의 말, 네 가지 능력</h2>
+          <p class="section__lead">말마다 움직이는 방식이 완전히 다릅니다. 레벨이 오르면 이동 범위가 넓어지고, 전설 등급 <b>인세이너</b>는 적의 능력까지 훔쳐요.</p>
 
           <div class="cards">
             <article class="char-card" data-char="sad">
@@ -147,13 +149,36 @@
                 <li><b>Lv.3</b> 바로 앞줄 9칸으로 확장</li>
               </ol>
             </article>
+
+            <article class="char-card char-card--legendary" data-char="insaner">
+              <span class="char-card__badge" aria-label="신규 캐릭터">NEW</span>
+              <header class="char-card__head">
+                <img class="char-card__art" src="/chars/insaner-lv1.jpg" width="540" height="720" alt="" data-art="insaner" />
+                <div>
+                  <h3 class="char-card__name">인세이너 <small>Insaner</small></h3>
+                  <span class="rarity rarity--legendary">전설</span>
+                </div>
+              </header>
+              <p class="char-card__role"><b>꼬마 악마</b> · 미친 장난꾸러기 · 능력을 훔치는 트릭스터</p>
+              <div class="lv-tabs" role="group" aria-label="인세이너 레벨 선택"></div>
+              <div class="move-grid" role="img" aria-label="인세이너 Lv.1 이동 범위: 상하좌우 최대 2칸"></div>
+              <ol class="lv-list">
+                <li><b>Lv.1</b> 상하좌우 최대 2칸</li>
+                <li><b>Lv.2</b> 상하좌우 최대 3칸</li>
+                <li><b>Lv.3</b> 상하좌우·대각선 최대 3칸</li>
+              </ol>
+              <div class="char-card__passive">
+                <p class="passive"><span class="passive__tag">패시브</span>적을 잡으면 그 말의 이동 능력을 흡수</p>
+                <p class="passive passive--lv3"><span class="passive__tag passive__tag--lv3">Lv.3</span>잡은 직후 한 번 더 연쇄 이동</p>
+              </div>
+            </article>
           </div>
 
           <ul class="legend" aria-label="등급">
             <li><span class="rarity rarity--common">일반</span></li>
             <li><span class="rarity rarity--rare">희귀</span></li>
             <li><span class="rarity rarity--epic">영웅</span></li>
-            <li><span class="rarity rarity--legendary">전설</span><small>새 캐릭터 업데이트 예정</small></li>
+            <li><span class="rarity rarity--legendary">전설</span><small>신규 — 인세이너</small></li>
           </ul>
         </div>
       </section>
@@ -218,6 +243,40 @@
         </div>
       </section>
 
+      <section class="section section--tint" id="rules" aria-labelledby="rules-title">
+        <div class="wrap">
+          <p class="eyebrow">신규 규칙</p>
+          <h2 id="rules-title" class="section__title">끝까지 가면 더 빨라진다</h2>
+          <p class="section__lead">말이 줄어들수록 판이 조여옵니다. 시간을 끌며 도망치는 플레이는 통하지 않아요.</p>
+          <ul class="rules">
+            <li class="rule">
+              <div class="rule__viz rule__viz--timer" aria-hidden="true">
+                <span class="tchip tchip--60"><b>60</b>초</span>
+                <i class="tchip__arrow"></i>
+                <span class="tchip tchip--40"><b>40</b>초</span>
+                <i class="tchip__arrow"></i>
+                <span class="tchip tchip--20"><b>20</b>초</span>
+              </div>
+              <h3>말이 줄면 제한시간 단축</h3>
+              <p>기본 <b>60초</b>. 양쪽 중 한쪽이 <b>2개 이하</b>가 되면 턴당 <b>40초</b>, <b>1개 이하</b>면 <b>20초</b>로 줄어듭니다.</p>
+            </li>
+            <li class="rule">
+              <div class="rule__viz rule__viz--storm" aria-hidden="true">
+                <div class="storm-board">
+                  <i class="is-zone"></i><i class="is-zone"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="is-zone"></i><i class="is-zone"></i>
+                  <i class="is-zone"></i><i class="is-zone"></i><i></i><i></i><i></i><i class="is-blue"></i><i></i><i></i><i></i><i></i><i class="is-zone"></i><i class="is-zone"></i>
+                  <i class="is-zone"></i><i class="is-zone"></i><i></i><i></i><i></i><i></i><i></i><i class="is-red"></i><i></i><i></i><i class="is-zone"></i><i class="is-zone"></i>
+                  <i class="is-zone"></i><i class="is-zone"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="is-zone"></i><i class="is-zone"></i>
+                </div>
+                <span class="storm-board__cap">6턴마다 한 줄씩</span>
+              </div>
+              <h3>자기장</h3>
+              <p>한쪽이 <b>1개</b>만 남으면 <b>6턴(각 3수)</b>마다 좌우 바깥 세로줄이 자기장으로 변해 좁혀옵니다. 자기장에 닿은 말은 <b>즉시 사라져요</b>.</p>
+            </li>
+          </ul>
+        </div>
+      </section>
+
       <section class="section store" aria-labelledby="store-title">
         <div class="wrap store__in">
           <h2 id="store-title" class="section__title">Google Play 출시 예정</h2>
@@ -245,7 +304,7 @@
           <span>GRID CLASH</span>
         </div>
         <p>게임 데이터는 내 기기에만 저장됩니다. 현재 광고·유료 결제는 없습니다.</p>
-        <p><a href="../">게임 시작</a> · <a href="#characters">캐릭터</a> · <a href="#how">플레이 방법</a></p>
+        <p><a href="../">게임 시작</a> · <a href="#characters">캐릭터</a> · <a href="#how">플레이 방법</a> · <a href="#rules">신규 규칙</a></p>
         <p class="footer__copy">© 2026 GRID CLASH. All rights reserved.</p>
       </div>
     </footer>

@@ -15,6 +15,7 @@ FACE = {
     'sad': (0.04, 0.03, 0.66, 0.46),
     'marki': (0.14, 0.06, 0.82, 0.56),
     'walk': (0.04, 0.06, 0.62, 0.46),
+    'insaner': (0.12, 0.06, 0.70, 0.48),
 }
 for f in sorted(SRC.glob('illust-*.jpg')):
     name = f.stem.replace('illust-', '')  # sad-lv1

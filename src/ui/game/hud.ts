@@ -81,9 +81,10 @@ export function turnPillContent(snap: ControllerSnapshot): { text: string; cls: 
   if (snap.phase === 'ended') return { text: '대전 종료', cls: 'is-ended' };
   if (snap.paused) return { text: '일시정지', cls: 'is-paused' };
   const mine = snap.state.turn === 0;
-  if (snap.phase === 'botThinking') return { text: '상대가 생각 중', cls: 'is-bot is-thinking' };
-  if (snap.phase === 'animating') return mine ? { text: '내 차례', cls: 'is-me' } : { text: '상대 차례', cls: 'is-bot' };
-  return { text: '내 차례', cls: 'is-me' };
+  const chain = snap.state.bonusPieceId !== null;
+  if (snap.phase === 'botThinking') return chain ? { text: '상대 연쇄 이동 중', cls: 'is-bot is-thinking is-bonus' } : { text: '상대가 생각 중', cls: 'is-bot is-thinking' };
+  if (snap.phase === 'animating') return mine ? { text: chain ? '연쇄 이동' : '내 차례', cls: 'is-me' } : { text: '상대 차례', cls: 'is-bot' };
+  return chain ? { text: '연쇄 이동!', cls: 'is-me is-bonus' } : { text: '내 차례', cls: 'is-me' };
 }
 
 export function pieceInfoCard(piece: Piece, snap: ControllerSnapshot, onClose: () => void): HTMLElement {
@@ -118,6 +119,16 @@ export function pieceInfoCard(piece: Piece, snap: ControllerSnapshot, onClose: (
           h('span', { class: `chip chip--side side-${piece.owner}` }, mine ? '내 말' : '상대 말'),
         ),
         h('div', { class: 'info-card__desc' }, def.descKo[piece.level - 1]),
+        piece.absorbed?.length
+          ? h(
+              'div',
+              { class: 'info-card__absorbed', 'aria-label': '흡수한 능력' },
+              icon('magic', 14),
+              piece.absorbed.map((a) => h('span', { class: `chip chip--absorb rarity-${CHARACTERS[a.character].rarity}` }, `${CHARACTERS[a.character].nameKo} Lv.${a.level}`)),
+            )
+          : def.passiveKo
+            ? h('div', { class: 'info-card__passive' }, icon('magic', 14), def.passiveKo)
+            : null,
       ),
       h('div', { class: 'info-card__diagram' }, movementDiagram(piece.character, piece.level, { cell: 7, owner: piece.owner })),
       h('button', { class: 'icon-btn icon-btn--sm', type: 'button', 'aria-label': '닫기', onclick: onClose }, icon('close', 20)),
@@ -130,6 +141,8 @@ export function endReasonText(reason: EndReason | null, outcome: 'win' | 'loss' 
   switch (reason) {
     case 'elimination':
       return outcome === 'win' ? '상대의 말을 모두 잡았습니다.' : '내 말이 모두 잡혔습니다.';
+    case 'storm':
+      return outcome === 'win' ? '상대의 마지막 말이 자기장에 휩쓸렸습니다.' : outcome === 'loss' ? '내 마지막 말이 자기장에 휩쓸렸습니다.' : '양쪽의 마지막 말이 동시에 자기장에 휩쓸렸습니다.';
     case 'timeoutForfeit':
       return outcome === 'win' ? '상대가 3회 연속 시간을 초과해 기권 처리되었습니다.' : '3회 연속 시간을 초과해 기권 처리되었습니다.';
     case 'resign':

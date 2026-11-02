@@ -1,6 +1,6 @@
 import { BotClient } from '../../ai/botClient';
 import { haptic, sfx } from '../../audio/sfx';
-import { createGame, getPieceById, materialScore, type GameState, type Move, type Piece, type Pos } from '../../engine';
+import { CHARACTERS, createGame, getPieceById, materialScore, type GameState, type Move, type Piece, type Pos } from '../../engine';
 import { createBoardView, type IBoardView } from '../../render';
 import { MIN_MOVES_FOR_REWARD, PACING } from '../../meta/economy';
 import { DIFFICULTY_LABEL } from '../../meta/opponent';
@@ -36,6 +36,16 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     pillText,
   );
   const counter = h('div', { class: 'ply-counter', 'aria-label': '잡기 없는 수' });
+  // Storm status: hidden until a side is down to one piece.
+  const stormText = h('span', { class: 'storm-chip__text' });
+  const stormChip = h('div', { class: 'storm-chip', role: 'status', 'aria-live': 'polite', hidden: true }, h('span', { class: 'storm-chip__icon', 'aria-hidden': 'true' }, icon('bolt', 14)), stormText);
+  // Chain move bar: the player may play one more move with the capturing Insaner, or skip it.
+  const bonusBar = h(
+    'div',
+    { class: 'bonus-bar', hidden: true },
+    h('span', { class: 'bonus-bar__text' }, icon('magic', 16), '인세이너 연쇄 이동 · 한 번 더 움직일 수 있어요'),
+    h('button', { class: 'btn btn--tonal btn--sm bonus-bar__skip', type: 'button', 'data-action': 'skip-bonus', onclick: () => ctrl?.skipBonus() }, '건너뛰기'),
+  );
   // Persistent hint while one side keeps auto-passing (the toast is shown only the first time).
   const passChip = h('div', { class: 'pass-chip', hidden: true });
   // First-match coach mark.
@@ -56,6 +66,21 @@ export function gameScreen(router: Router, params: GameParams): Screen {
         : h('div', { class: 'turn-banner turn-banner--bot' }, '상대 차례'),
       950,
     );
+  };
+  const showBonusBanner = (mine: boolean) => {
+    spawnFx(
+      mine
+        ? h('div', { class: 'turn-banner turn-banner--bonus' }, '연쇄 이동!', h('span', { class: 'turn-banner__sub' }, 'CHAIN MOVE'))
+        : h('div', { class: 'turn-banner turn-banner--bot turn-banner--bonus' }, '상대 연쇄 이동'),
+      1000,
+    );
+  };
+  const showStormFx = (killed: number) => {
+    spawnFx(h('div', { class: 'storm-flash' }), 700);
+    spawnFx(h('div', { class: 'float-text float-text--storm' }, killed > 0 ? `자기장 축소 · ${killed}개 소멸` : '자기장 축소!'), 1300);
+    boardWrap.classList.remove('is-shake');
+    void boardWrap.offsetWidth;
+    boardWrap.classList.add('is-shake');
   };
   const showCaptureFx = (byMe: boolean) => {
     spawnFx(h('div', { class: `hit-flash${byMe ? ' hit-flash--gain' : ''}` }), 560);
@@ -94,7 +119,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     botRing.el,
     resignBtn,
   );
-  const boardWrap = h('div', { class: 'board-wrap' }, boardHost, fx, h('div', { class: 'board-overlay' }, pill, counter, passChip, coach), infoHost);
+  const boardWrap = h('div', { class: 'board-wrap' }, boardHost, fx, h('div', { class: 'board-overlay' }, pill, counter, stormChip, passChip, bonusBar, coach), infoHost);
   const el = h('main', { class: 'game no-select' }, topBar, boardWrap, bottomBar);
 
   // ---------- runtime objects (created on mount)
@@ -108,6 +133,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   let prevPhase: Phase | null = null;
   let prevSel: string | null = null;
   let lastTickSec = -1;
+  let stormKey = '';
   const passToastShown = [false, false];
   let coachOn = !getProfile().onboarding.firstMoveDone;
   let coachMsg = '';
@@ -130,7 +156,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       return;
     }
     const sel = snap.selection;
-    if (sel?.actionable && sel.moves.length > 0) setCoach('빛나는 칸을 탭해 이동하세요');
+    if (snap.state.bonusPieceId !== null) setCoach('한 번 더! 빛나는 칸을 탭하거나 건너뛰세요');
+    else if (sel?.actionable && sel.moves.length > 0) setCoach('빛나는 칸을 탭해 이동하세요');
     else if (sel?.actionable) setCoach('이 말은 지금 못 움직여요. 다른 말을 탭해 보세요');
     else if (sel) setCoach('상대 말이에요. 아래쪽 파란 말을 탭해 보세요');
     else setCoach('내 말(파랑)을 탭해 이동 가능한 칸을 보세요');
@@ -189,7 +216,19 @@ export function gameScreen(router: Router, params: GameParams): Screen {
         });
       }
       board.setInteractive(snap.phase !== 'animating' && snap.phase !== 'ended' && !snap.paused);
+      const sk = `${s.storm}|${s.stormIn}`;
+      if (sk !== stormKey) {
+        stormKey = sk;
+        (board as unknown as { setStorm?: (storm: number, nextIn: number | null) => void }).setStorm?.(s.storm, s.stormIn);
+      }
     }
+    // Storm chip + chain-move bar
+    stormChip.hidden = s.stormIn === null || snap.phase === 'ended';
+    if (s.stormIn !== null) {
+      setText(stormText, s.storm > 0 ? `자기장 · 좌우 ${s.storm}줄 소멸 · ${s.stormIn}턴 후 축소` : `자기장 활성 · ${s.stormIn}턴 후 축소`);
+      stormChip.classList.toggle('is-soon', s.stormIn <= 2);
+    }
+    bonusBar.hidden = !(snap.phase === 'humanTurn' && !snap.paused && s.bonusPieceId !== null);
     // HUD
     // Pieces only disappear through captures, so the count is a sufficient change key.
     if (s.pieces.length !== rosterKey) {
@@ -381,6 +420,17 @@ export function gameScreen(router: Router, params: GameParams): Screen {
             }
             if (e.kind === 'timeout' && e.player === HUMAN) haptic('warn');
             toast(e.message, { tone: e.tone === 'warn' ? 'warn' : 'neutral' });
+          } else if (e.type === 'bonus') {
+            showBonusBanner(e.player === HUMAN);
+            sfx(e.player === HUMAN ? 'levelup' : 'turn');
+            if (e.player === HUMAN) haptic('capture');
+          } else if (e.type === 'absorb') {
+            const who = e.player === HUMAN ? '내 인세이너가' : '상대 인세이너가';
+            toast(`${who} ${CHARACTERS[e.character].nameKo}의 이동 능력을 흡수했어요`, { tone: e.player === HUMAN ? 'success' : 'warn', duration: 2400 });
+          } else if (e.type === 'storm') {
+            showStormFx(e.killed.length);
+            sfx('capture');
+            haptic('warn');
           }
           else if (e.type === 'ended') void showResult(e.state);
         }),

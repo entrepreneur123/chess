@@ -1,13 +1,15 @@
 import {
   CHARACTERS,
   CHARACTER_IDS,
+  PIECES_PER_SIDE,
   defaultFormation,
   randomFormation,
+  squadOf,
   validateFormation,
   type CharacterId,
   type Formation,
 } from '../../engine';
-import { getProfile, levelsOf, syncFormationLevels, updateProfile } from '../../meta/profile';
+import { getProfile, isOwned, levelsOf, syncFormationLevels, updateProfile } from '../../meta/profile';
 import { appBar } from '../components/appbar';
 import { confirmDialog } from '../components/dialog';
 import { formationGrid, ROW_LABELS } from '../components/formationGrid';
@@ -68,6 +70,11 @@ export function formationScreen(router: Router): Screen {
       return;
     }
     const mover = work.find((s) => s.character === selected);
+    // A benched character can only enter the field by replacing a fielded one (3 per squad).
+    if (!mover && !occupant && work.length >= PIECES_PER_SIDE) {
+      toast(`말은 ${PIECES_PER_SIDE}개까지 배치할 수 있어요. 배치된 말을 탭하면 교체됩니다`, { tone: 'warn' });
+      return;
+    }
     const next = work.filter((s) => s.character !== selected && s !== occupant);
     if (occupant && mover) next.push({ ...occupant, row: mover.row, col: mover.col }); // swap
     next.push({ character: selected, level: levels[selected], row, col });
@@ -98,20 +105,27 @@ export function formationScreen(router: Router): Screen {
         const def = CHARACTERS[id];
         const slot = work.find((s) => s.character === id);
         const lv = levels[id];
+        const owned = isOwned(profile, id);
         return h(
           'button',
           {
-            class: `tray-card pressable rarity-${def.rarity}${selected === id ? ' is-selected' : ''}`,
+            class: `tray-card pressable rarity-${def.rarity}${selected === id ? ' is-selected' : ''}${slot ? '' : ' is-benched'}${owned ? '' : ' is-locked'}`,
             type: 'button',
             role: 'option',
             'aria-selected': selected === id ? 'true' : 'false',
+            'aria-disabled': owned ? 'false' : 'true',
             'data-character': id,
             onclick: () => {
+              if (!owned) {
+                toast('상자에서 전설 카드를 뽑으면 해금됩니다', { tone: 'warn' });
+                return;
+              }
               selected = selected === id ? null : id;
               render();
             },
           },
           selected === id ? h('span', { class: 'tray-card__pick' }, '선택됨') : null,
+          owned ? null : h('span', { class: 'tray-card__lock' }, icon('lock', 14), '미해금'),
           h('div', { class: 'tray-card__token' }, unitArt(id, lv, { size: 56 })),
           h(
             'div',
@@ -121,7 +135,7 @@ export function formationScreen(router: Router): Screen {
             h(
               'div',
               { class: `tray-card__where${slot ? '' : ' is-off'}` },
-              slot ? `${ROW_LABELS[slot.row]} · ${slot.col + 1}번 칸` : '미배치',
+              slot ? `${ROW_LABELS[slot.row]} · ${slot.col + 1}번 칸` : owned ? '대기 중 · 배치된 말을 탭해 교체' : '상자에서 획득',
             ),
           ),
           h('div', { class: 'tray-card__diagram' }, movementDiagram(id, lv, { cell: 7 })),
@@ -136,8 +150,10 @@ export function formationScreen(router: Router): Screen {
             { class: `hint${selected ? ' is-holding' : ''}` },
             icon(selected ? 'touch' : 'info', 16),
             selected
-              ? `${CHARACTERS[selected].nameKo}을(를) 놓을 칸을 탭하세요. 다른 말 위에 놓으면 자리를 바꿉니다.`
-              : '캐릭터를 선택한 뒤 칸을 탭해 배치하세요. 배치된 말을 탭하면 집어 듭니다.',
+              ? work.some((s) => s.character === selected)
+                ? `${CHARACTERS[selected].nameKo}을(를) 놓을 칸을 탭하세요. 다른 말 위에 놓으면 자리를 바꿉니다.`
+                : `${CHARACTERS[selected].nameKo}을(를) 투입할 말을 탭하세요. 그 말과 교체됩니다.`
+              : `캐릭터를 선택한 뒤 칸을 탭해 배치하세요. 분대는 ${PIECES_PER_SIDE}명 · 배치된 말을 탭하면 집어 듭니다.`,
           )
         : h('ul', { class: 'errors' }, v.errors.map((e) => h('li', null, e))),
     );
@@ -171,7 +187,7 @@ export function formationScreen(router: Router): Screen {
           type: 'button',
           'data-action': 'recommend',
           onclick: () => {
-            work = defaultFormation(levels);
+            work = defaultFormation(levels, squadOf(work));
             selected = null;
             render();
           },
@@ -186,7 +202,7 @@ export function formationScreen(router: Router): Screen {
           type: 'button',
           'data-action': 'random',
           onclick: () => {
-            work = randomFormation(Math.random, levels);
+            work = randomFormation(Math.random, levels, squadOf(work));
             selected = null;
             render();
           },

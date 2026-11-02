@@ -23,6 +23,7 @@ const SHORT_MOVE: Record<CharacterId, string> = {
   sad: '상하좌우 이동',
   marki: '앞으로 직진 · 끝줄에서 뒤돌아요',
   walk: '앞줄로 점프 · 끝줄에서 뒤돌아요',
+  insaner: '상하좌우 직진 · 잡은 적의 이동을 흡수',
 };
 
 function goalArt(): Child {
@@ -128,10 +129,10 @@ function growArt(): Child {
 
 const SLIDES: Slide[] = [
   { key: 'goal', art: goalArt, title: '상대 말 3개를 모두 잡으면 승리!', body: '12×12 보드 위 1:1 대결. 이동 경로에서 처음 만나는 상대 말을 잡을 수 있어요.' },
-  { key: 'chars', art: charactersArt, title: '세 캐릭터, 세 가지 움직임', body: '파란 칸이 갈 수 있는 곳이에요. 마르키·월크는 앞으로만 가다가 끝줄에 닿으면 뒤돌아요. 월크는 말을 뛰어넘어요.' },
+  { key: 'chars', art: charactersArt, title: '네 캐릭터, 분대는 3명', body: '파란 칸이 갈 수 있는 곳이에요. 마르키·월크는 앞으로만 가다가 끝줄에 닿으면 뒤돌아요. 전설 인세이너는 잡은 적의 이동 능력을 흡수해요.' },
   { key: 'tap', art: tapArt, title: '탭하고, 한 번 더 탭!', body: '내 말을 탭하면 갈 수 있는 칸이 빛나요. 빛나는 칸을 탭하면 이동해요.' },
   { key: 'zone', art: zoneArt, title: '진형은 아래 3줄에서', body: '대전 전에 내 구역(3×12) 안에 말을 자유롭게 배치해 작전을 짜세요.' },
-  { key: 'timer', art: timerArt, title: '한 턴은 60초', body: '시간이 지나면 턴이 넘어가요. 3번 연속 초과하면 기권패!' },
+  { key: 'timer', art: timerArt, title: '한 턴은 60초, 말이 줄면 더 짧게', body: '한쪽이 2개 이하면 40초, 1개면 20초. 1개만 남으면 6턴마다 좌우 바깥 줄이 자기장으로 변해 닿은 말은 소멸해요. 3번 연속 시간 초과는 기권패!' },
   { key: 'grow', art: growArt, title: '상자 열고 레벨업', body: '보상 코인으로 상자를 열어 카드를 모으세요. 레벨이 오르면 이동 범위가 넓어져요.' },
 ];
 

@@ -1,12 +1,20 @@
 import { BOARD_SIZE, PIECES_PER_SIDE, ZONE_DEPTH } from './types';
 import type { CharacterId, Formation, FormationSlot, Level } from './types';
-import { CHARACTERS, CHARACTER_IDS } from './characters';
+import { CHARACTERS, STARTER_IDS } from './characters';
 
 function isLevel(x: unknown): x is Level {
   return x === 1 || x === 2 || x === 3;
 }
 
-/** Validate a formation (local coordinates). Error messages are Korean, suitable for the UI. */
+/** The characters of a formation, in slot order. */
+export function squadOf(f: Formation): CharacterId[] {
+  return f.map((s) => s.character);
+}
+
+/**
+ * Validate a formation (local coordinates): exactly PIECES_PER_SIDE distinct known characters on
+ * distinct squares inside the home zone. Error messages are Korean, suitable for the UI.
+ */
 export function validateFormation(f: Formation): { ok: boolean; errors: string[] } {
   const errors: string[] = [];
   if (!Array.isArray(f)) return { ok: false, errors: ['배치 정보가 올바르지 않습니다.'] };
@@ -44,9 +52,6 @@ export function validateFormation(f: Formation): { ok: boolean; errors: string[]
       seenSquares.add(key);
     }
   }
-  for (const id of CHARACTER_IDS) {
-    if (!seenChars.has(id)) errors.push(`${CHARACTERS[id].nameKo}이(가) 배치되지 않았습니다.`);
-  }
   return { ok: errors.length === 0, errors };
 }
 
@@ -55,24 +60,37 @@ function lv(levels: Partial<Record<CharacterId, Level>> | undefined, id: Charact
   return isLevel(l) ? l : 1;
 }
 
-/** A sensible preset: Marki and Sad on the front row, Walk behind them in the middle. */
-export function defaultFormation(levels?: Partial<Record<CharacterId, Level>>): Formation {
-  return [
-    { character: 'sad', level: lv(levels, 'sad'), row: 2, col: 7 },
-    { character: 'marki', level: lv(levels, 'marki'), row: 2, col: 4 },
-    { character: 'walk', level: lv(levels, 'walk'), row: 1, col: 5 },
-  ];
+/** Preset square per character: Marki and Sad on the front row, Walk / Insaner behind them. */
+const DEFAULT_SLOT: Record<CharacterId, { row: number; col: number }> = {
+  sad: { row: 2, col: 7 },
+  marki: { row: 2, col: 4 },
+  walk: { row: 1, col: 5 },
+  insaner: { row: 1, col: 6 },
+};
+
+/** Normalise a squad: distinct known characters, exactly PIECES_PER_SIDE of them (starters fill in). */
+export function normalizeSquad(squad: readonly CharacterId[] | undefined): CharacterId[] {
+  const out: CharacterId[] = [];
+  for (const id of squad ?? []) if (CHARACTERS[id] && !out.includes(id) && out.length < PIECES_PER_SIDE) out.push(id);
+  for (const id of STARTER_IDS) if (out.length < PIECES_PER_SIDE && !out.includes(id)) out.push(id);
+  return out;
 }
 
-/** Random valid formation (3 distinct squares in the home zone). */
+/** A sensible preset for a squad (default: the three starters). */
+export function defaultFormation(levels?: Partial<Record<CharacterId, Level>>, squad?: readonly CharacterId[]): Formation {
+  return normalizeSquad(squad).map((id) => ({ character: id, level: lv(levels, id), ...DEFAULT_SLOT[id] }));
+}
+
+/** Random valid formation (distinct squares in the home zone) for a squad (default: the starters). */
 export function randomFormation(
   rng: () => number = Math.random,
   levels?: Partial<Record<CharacterId, Level>>,
+  squad?: readonly CharacterId[],
 ): Formation {
   const cells: number[] = [];
   for (let i = 0; i < ZONE_DEPTH * BOARD_SIZE; i++) cells.push(i);
   const out: FormationSlot[] = [];
-  for (const id of CHARACTER_IDS) {
+  for (const id of normalizeSquad(squad)) {
     const k = Math.min(cells.length - 1, Math.floor(rng() * cells.length));
     const cell = cells.splice(k, 1)[0];
     out.push({ character: id, level: lv(levels, id), row: Math.floor(cell / BOARD_SIZE), col: cell % BOARD_SIZE });

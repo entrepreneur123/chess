@@ -16,6 +16,7 @@ import { CHARACTER_RARITY, RARITY_COLORS } from '../palette';
 import { TEAM, disposeKit, groundRing, std, type BuildCtx } from './kit';
 import { buildMarki } from './marki';
 import { buildSad } from './sad';
+import { buildInsaner } from './insaner';
 import { buildWalk } from './walk';
 
 export interface CharacterModelOptions {
@@ -29,6 +30,7 @@ export const CHARACTER_MODEL_HEIGHT: Record<CharacterId, number> = {
   sad: 1.0,
   marki: 0.75,
   walk: 1.0,
+  insaner: 1.0,
 };
 
 /** Uniform scale applied to each builder's output so that all units read at a similar size. */
@@ -36,6 +38,7 @@ const BODY_SCALE: Record<CharacterId, number> = {
   sad: 0.9,
   marki: 0.95,
   walk: 0.94,
+  insaner: 0.92,
 };
 
 /** Head-centre height per character (used by the 'head' marker). */
@@ -43,12 +46,14 @@ const HEAD_POS: Record<CharacterId, [number, number, number]> = {
   sad: [0, 0.79, 0],
   marki: [0, 0.42, 0.45],
   walk: [0, 0.77, 0],
+  insaner: [0, 0.84, 0],
 };
 
 const BUILDERS: Record<CharacterId, (g: THREE.Group, ctx: BuildCtx) => void> = {
   sad: buildSad,
   marki: buildMarki,
   walk: buildWalk,
+  insaner: buildInsaner,
 };
 
 /** Builds a THREE.Group ~1.0 unit tall (feet at y=0, facing +z). See file header for conventions. */

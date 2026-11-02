@@ -9,7 +9,7 @@ import type { Difficulty } from '../../ai/bot';
 import { CHARACTERS, CHARACTER_IDS, type CharacterId, type Level, type Rarity } from '../../engine';
 import { APP_NAME, APP_TAGLINE, MATCH_GEM_REWARD, MATCH_REWARD } from '../../meta/economy';
 import { DIFFICULTY_LABEL } from '../../meta/opponent';
-import { freeBoxRemainingMs, getProfile, levelUpsAvailable, subscribeProfile, updateProfile } from '../../meta/profile';
+import { freeBoxRemainingMs, getProfile, isOwned, levelUpsAvailable, squadOfProfile, subscribeProfile, updateProfile } from '../../meta/profile';
 import { formationGrid } from '../components/formationGrid';
 import { showSettings } from '../components/settingsSheet';
 import { isTutorialOpen, showTutorial } from '../components/tutorial';
@@ -22,9 +22,11 @@ const DIFFS: Difficulty[] = ['easy', 'normal', 'hard'];
 const DIFF_SUB: Record<Difficulty, string> = { easy: '입문', normal: '표준', hard: '고수' };
 const RARITY_RANK: Record<Rarity, number> = { common: 0, rare: 1, epic: 2, legendary: 3 };
 
-/** Squad ordered for the key visual: [featured (highest rarity), left, right]. */
+/** Owned characters ordered for the key visual: [featured (highest rarity), left, right]. */
 function heroOrder(): CharacterId[] {
-  return [...CHARACTER_IDS].sort((a, b) => RARITY_RANK[CHARACTERS[b].rarity] - RARITY_RANK[CHARACTERS[a].rarity]);
+  const p = getProfile();
+  const owned = CHARACTER_IDS.filter((id) => isOwned(p, id));
+  return owned.sort((a, b) => RARITY_RANK[CHARACTERS[b].rarity] - RARITY_RANK[CHARACTERS[a].rarity]).slice(0, 3);
 }
 
 const artSrc = (id: CharacterId, lv: Level) => `./chars/${id}-lv${lv}.jpg`;
@@ -182,7 +184,7 @@ export function lobbyScreen(router: Router): Screen {
   );
 
   const renderHero = (levels: Record<CharacterId, Level>) => {
-    const key = CHARACTER_IDS.map((id) => levels[id]).join('');
+    const key = heroOrder().map((id) => `${id}${levels[id]}`).join('');
     if (key === heroKey) return;
     const first = heroKey === '';
     heroKey = key;
@@ -270,7 +272,7 @@ export function lobbyScreen(router: Router): Screen {
       h(
         'div',
         { class: 'squad__roster' },
-        CHARACTER_IDS.map((id) =>
+        squadOfProfile(p).map((id) =>
           h(
             'div',
             { class: `squad__unit rarity-${CHARACTERS[id].rarity}` },

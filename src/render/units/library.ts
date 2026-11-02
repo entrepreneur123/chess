@@ -38,9 +38,14 @@ interface Template {
   bob: number;
   material: THREE.MeshStandardMaterial;
   opts: Parameters<typeof makeUnitMaterial>[1];
-  dying: { material: THREE.MeshStandardMaterial; uniforms: DissolveUniforms } | null;
+  /** Dissolve variants: capture death (team-coloured edge) and storm removal (magenta edge). */
+  dying: Record<DissolveKind, { material: THREE.MeshStandardMaterial; uniforms: DissolveUniforms } | null>;
   triangles: number;
 }
+
+export type DissolveKind = 'capture' | 'storm';
+/** Hot edge colour of the storm dissolve (matches storm.ts STORM_COLORS.edge). */
+const STORM_EDGE = '#FF3DF0';
 
 /** CPU copy of a palette atlas + per-cell mean luminance (for shading-preserving recolour). */
 interface Atlas {
@@ -109,24 +114,30 @@ export class UnitLibrary {
   }
 
   /**
-   * Dissolve material for a dying unit of this look (cached per template; one capture plays at a
-   * time). Drive it with setDissolve().
+   * Dissolve material for a dying unit of this look (cached per template and kind; one capture
+   * and one storm wave play at a time). Drive it with setDissolve(k, kind).
    */
-  dyingMaterial(p: Piece): THREE.Material {
+  dyingMaterial(p: Piece, kind: DissolveKind = 'capture'): THREE.Material {
     const tpl = this.template(p.character, p.level, p.owner);
-    if (!tpl.dying) {
-      const uniforms: DissolveUniforms = { dissolve: { value: 0 }, edge: { value: new THREE.Color(TEAM_COLORS[p.owner].glow) } };
+    let d = tpl.dying[kind];
+    if (!d) {
+      const edge = kind === 'storm' ? STORM_EDGE : TEAM_COLORS[p.owner].glow;
+      const uniforms: DissolveUniforms = { dissolve: { value: 0 }, edge: { value: new THREE.Color(edge) } };
       const material = makeUnitMaterial(this.uniforms, { ...tpl.opts, dissolve: true }, uniforms);
       this.materials.push(material);
-      tpl.dying = { material, uniforms };
+      d = { material, uniforms };
+      tpl.dying[kind] = d;
     }
-    tpl.dying.uniforms.dissolve.value = 0;
-    return tpl.dying.material;
+    d.uniforms.dissolve.value = 0;
+    return d.material;
   }
 
-  /** Dissolve progress (0..1) of every dying material. */
-  setDissolve(k: number): void {
-    for (const t of this.templates.values()) if (t.dying) t.dying.uniforms.dissolve.value = k;
+  /** Dissolve progress (0..1) of every dying material of a kind. */
+  setDissolve(k: number, kind: DissolveKind = 'capture'): void {
+    for (const t of this.templates.values()) {
+      const d = t.dying[kind];
+      if (d) d.uniforms.dissolve.value = k;
+    }
   }
 
   /** Triangles of a template's merged unit mesh (diagnostics). */
@@ -204,12 +215,16 @@ export class UnitLibrary {
     const baseSkel: THREE.Skeleton = skeleton;
     const partNames = (gltf.scene.userData.parts as string[] | undefined) ?? [];
 
-    // Rest-pose body measurement (tags: humanoid 0 body / 1 arms / 2 legs / 3 head; bull slot).
+    // Rest-pose body measurement (tags: humanoid 0 body / 1 arms / 2 legs / 3 head / 5 eyes; bull slot).
     const body = new BodyCloud();
+    const [gCols, gRows] = look.grid ?? [8, 4];
     for (const sm of skinned) {
       const partAttr = sm.geometry.getAttribute('_part') as THREE.BufferAttribute | undefined;
       const tag = /Head/.test(sm.name) ? 3 : /Arm/.test(sm.name) ? 1 : /Leg/.test(sm.name) ? 2 : 0;
-      body.addSkinned(sm, partAttr ? (i) => Math.round(partAttr.getX(i)) : () => tag);
+      const uv = sm.geometry.getAttribute('uv') as THREE.BufferAttribute | undefined;
+      const eye = (i: number): boolean =>
+        !!uv && look.roles[`${Math.floor(Math.min(0.9999, uv.getX(i)) * gCols)},${Math.floor(Math.min(0.9999, uv.getY(i)) * gRows)}`] === 'eye';
+      body.addSkinned(sm, partAttr ? (i) => Math.round(partAttr.getX(i)) : tag === 3 ? (i) => (eye(i) ? 5 : 3) : () => tag);
     }
 
     // Procedural outfit (+ secondary bones).
@@ -344,7 +359,7 @@ export class UnitLibrary {
       bob: lv.bob ?? 0,
       material: mat,
       opts,
-      dying: null,
+      dying: { capture: null, storm: null },
       triangles: (geometry.index?.count ?? 0) / 3,
     };
   }

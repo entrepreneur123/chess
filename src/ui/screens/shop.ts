@@ -1,7 +1,7 @@
 import { haptic, sfx } from '../../audio/sfx';
 import { CHARACTERS } from '../../engine';
 import { BOX, GEM_PACKS } from '../../meta/economy';
-import { freeBoxRemainingMs, getProfile, grantGems, levelUpCost, openBox, subscribeProfile, updateProfile, type BoxDrop, type BoxKind } from '../../meta/profile';
+import { freeBoxRemainingMs, getProfile, grantGems, isOwned, levelUpCost, openBox, subscribeProfile, updateProfile, type BoxDrop, type BoxKind } from '../../meta/profile';
 import { appBar } from '../components/appbar';
 import { chestArt } from '../components/chest';
 import { confirmDialog } from '../components/dialog';
@@ -24,7 +24,7 @@ function fmtRemaining(ms: number): string {
  * Full-screen box opening: drop + shake -> burst (flash, rarity-coloured light) -> card flip.
  * Tapping during the opening skips straight to the reveal. Resolves when dismissed.
  */
-function playBoxOpening(drop: BoxDrop, kind: BoxKind): Promise<void> {
+function playBoxOpening(drop: BoxDrop, kind: BoxKind, unlocked = false): Promise<void> {
   return new Promise((resolve) => {
     const def = CHARACTERS[drop.character];
     const prog = getProfile().characters[drop.character];
@@ -75,6 +75,7 @@ function playBoxOpening(drop: BoxDrop, kind: BoxKind): Promise<void> {
           { class: 'reveal-card__front rarity-frame' },
           h('img', { class: 'reveal-card__art', src: `./chars/${drop.character}-lv${prog.level}.jpg`, alt: '', decoding: 'async', draggable: 'false' }),
           h('div', { class: 'reveal-card__amount' }, h('span', { class: 'reveal-card__x' }, '×'), String(drop.amount)),
+          unlocked ? h('div', { class: 'reveal-card__new' }, 'NEW · 캐릭터 해금!') : null,
           h(
             'div',
             { class: 'reveal-card__info' },
@@ -87,6 +88,7 @@ function playBoxOpening(drop: BoxDrop, kind: BoxKind): Promise<void> {
     const details = h(
       'div',
       { class: 'reveal-details' },
+      unlocked ? h('p', { class: 'reveal-card__unlock' }, `${def.nameKo}을(를) 분대에 넣을 수 있어요 · 진형 편성에서 투입하세요`) : null,
       h('p', { class: 'reveal-card__progress' }, cost ? (ready ? '강화 가능!' : '다음 강화까지') : '최대 레벨', h('b', null, cost ? `${prog.cards} / ${cost.cards}` : `보유 ${prog.cards}`)),
       h('div', { class: 'progress' }, h('span', { class: `progress__bar${ready ? ' is-full' : ''}`, style: `width:${pct}%` })),
       okBtn,
@@ -147,17 +149,19 @@ export function shopScreen(router: Router): Screen {
       });
       busy = false;
       if (!ok) return;
-      const again = openBox(getProfile(), kind);
+      const before = getProfile();
+      const again = openBox(before, kind);
       if (!again.ok) return;
       busy = true;
       updateProfile(() => again.profile);
-      await playBoxOpening(again.drop, kind);
+      await playBoxOpening(again.drop, kind, !isOwned(before, again.drop.character));
       busy = false;
       return;
     }
     busy = true;
+    const before = getProfile();
     updateProfile(() => res.profile);
-    await playBoxOpening(res.drop, kind);
+    await playBoxOpening(res.drop, kind, !isOwned(before, res.drop.character));
     busy = false;
   };
 
@@ -169,7 +173,7 @@ export function shopScreen(router: Router): Screen {
 
   const odds = () => {
     const w = BOX.rarityWeights;
-    return `일반 ${w.common}% · 희귀 ${w.rare}% · 영웅 ${w.epic}% · 카드 ${BOX.amountMin}–${BOX.amountMax}장`;
+    return `일반 ${w.common}% · 희귀 ${w.rare}% · 영웅 ${w.epic}% · 전설 ${w.legendary}% · 카드 ${BOX.amountMin}–${BOX.amountMax}장`;
   };
 
   const claimGems = async (gems: number) => {

@@ -28,4 +28,11 @@ export interface IBoardView {
   resize(): void;
   /** Stop the render loop and free GPU resources. */
   dispose(): void;
+  /**
+   * Optional: storm ("자기장") state. `storm` = outer columns consumed per side (0 = none: columns
+   * 0..storm-1 and 12-storm..11 are gone), `nextIn` = plies until the next shrink (null = the storm
+   * has not started). Pieces that vanish from the piece list while the storm is active (and are not
+   * a move's capture) dissolve with a storm effect instead of popping out.
+   */
+  setStorm?(storm: number, nextIn: number | null): void;
 }

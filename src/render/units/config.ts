@@ -107,6 +107,13 @@ for (const [k, v] of Object.entries(KNIGHT_ROLES)) {
   WALK_ROLES[`${c + 8},${r}`] = v === 'armor' || v === 'armor2' ? 'steel' : v === 'white' ? 'cloth' : v === 'grip' ? 'leather' : v === 'gem' ? 'team' : v;
 }
 
+/** Rogue palette (8 x 4): skin / hair / eyes / steel / leathers / green tunic + cape / boots. */
+const ROGUE_ROLES: Record<string, string> = {
+  '0,0': 'skin', '1,0': 'hair', '2,0': 'eye', '3,0': 'steel', '4,0': 'dark', '5,0': 'leather', '6,0': 'leather2', '7,0': 'dark',
+  '0,1': 'cloth', '1,1': 'cloth2', '2,1': 'steel', '3,1': 'steel', '4,1': 'dark', '5,1': 'leather', '6,1': 'leather2', '7,1': 'pants',
+  '0,2': 'white', '1,2': 'cloth2', '2,2': 'cloth2', '3,2': 'boots', '4,2': 'leather', '5,2': 'wraps', '6,2': 'dark', '7,2': 'dark',
+};
+
 export const LOOKS: Record<CharacterId, CharacterLook> = {
   // Paladin (KayKit Knight). Lv1 dull field steel -> Lv2 silver-blue + gold trim -> Lv3 holy white/gold.
   sad: {
@@ -349,7 +356,94 @@ export const LOOKS: Record<CharacterId, CharacterLook> = {
       },
     },
   },
+  // Imp (KayKit Rogue). Legendary prankster devil: Lv1 crimson skin + rag loincloth + crooked trident ->
+  // Lv2 bone mask, jester coat, twin violet daggers -> Lv3 horn crown, flame cape, rune-cracked skin, orbit shards.
+  insaner: {
+    file: 'models/insaner.glb',
+    height: 1.42,
+    rim: 0.55,
+    grid: [8, 4],
+    roles: ROGUE_ROLES,
+    impact: 0.38,
+    boneScale: { head: 1.16, chest: 0.96, handl: 1.18, handr: 1.18 },
+    levels: {
+      1: {
+        props: [],
+        scale: 1,
+        glow: '#9CFF3A',
+        patternColor: '#B6FF4A',
+        palette: {
+          skin: { color: '#8E1E3A' },
+          hair: { color: '#2A1030' },
+          eye: { color: '#9CFF3A', glow: 2.2, shade: false },
+          steel: { color: '#3A2A3E', metal: 0.5 },
+          dark: { color: '#1C1020' },
+          leather: { color: '#3C2230' },
+          leather2: { color: '#2A1622' },
+          cloth: { color: '#8E1E3A' },
+          cloth2: { color: 'teamMuted' },
+          white: { color: '#D9C9A8' },
+          pants: { color: '#5A1A44' },
+          boots: { color: '#4A1636' },
+          wraps: { color: 'teamMuted' },
+        },
+        particles: { count: 6, size: 0.06, color: '#9CFF3A', core: '#F2FFD0', radius: 0.3, height: 1.0, speed: 0.4 },
+        idleSpeed: 1.15,
+      },
+      2: {
+        props: ['Knife', 'Knife_Offhand'],
+        propScale: { Knife: 1.15, Knife_Offhand: 1.15 },
+        scale: 1.06,
+        glow: '#C85CFF',
+        patternColor: '#D27CFF',
+        palette: {
+          skin: { color: '#7A1238' },
+          hair: { color: '#160A1E' },
+          eye: { color: '#9CFF3A', glow: 2.4, shade: false },
+          steel: { color: '#1A1020', metal: 0.85 },
+          dark: { color: '#120A16' },
+          leather: { color: '#2E1430' },
+          leather2: { color: '#1E0E22' },
+          cloth: { color: '#3A1452', pattern: 1 },
+          cloth2: { color: 'team' },
+          white: { color: '#EFE4C8' },
+          pants: { color: '#2A0E36' },
+          boots: { color: '#1A0E20', metal: 0.3 },
+          wraps: { color: 'team' },
+        },
+        particles: { count: 12, size: 0.07, color: '#C85CFF', core: '#F6E6FF', radius: 0.36, height: 1.3, speed: 0.45 },
+        idleSpeed: 1.25,
+      },
+      3: {
+        props: ['Knife', 'Knife_Offhand'],
+        propScale: { Knife: 1.3, Knife_Offhand: 1.3 },
+        scale: 1.15,
+        glow: '#FF3DF0',
+        patternColor: '#FF4AF2',
+        palette: {
+          skin: { color: '#4A0C2E', pattern: 2 },
+          hair: { color: '#0C0612' },
+          eye: { color: '#B6FF3A', glow: 3.0, shade: false },
+          steel: { color: '#0E0A14', metal: 0.95 },
+          dark: { color: '#0A0610' },
+          leather: { color: '#2A0E34' },
+          leather2: { color: '#160A1E' },
+          cloth: { color: '#2A0C3E', pattern: 2 },
+          cloth2: { color: 'team', glow: 0.3 },
+          white: { color: '#FFF0E0', glow: 0.2 },
+          pants: { color: '#1C0A2A', pattern: 2 },
+          boots: { color: '#0E0612', metal: 0.5 },
+          wraps: { color: 'team', glow: 0.25 },
+        },
+        particles: { count: 32, size: 0.12, color: '#FF3DF0', core: '#FFE0FB', radius: 0.5, height: 1.9, speed: 0.55 },
+        rune: { color: '#FF3DF0', aura: '#9A1BFF' },
+        shaft: { color: '#FF7AF5', opacity: 0.6 },
+        idleSpeed: 1.45,
+        bob: 0.03,
+      },
+    },
+  },
 };
 
 /** Clip used for each logical action (walk jumps, the others run). */
-export const MOVE_CLIP: Record<CharacterId, ClipName> = { sad: 'run', marki: 'run', walk: 'jump' };
+export const MOVE_CLIP: Record<CharacterId, ClipName> = { sad: 'run', marki: 'run', walk: 'jump', insaner: 'run' };

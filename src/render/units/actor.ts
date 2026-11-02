@@ -1,8 +1,9 @@
 /**
  * One animated unit on the board: an AnimationMixer over a SkeletonUtils clone of a template,
  * logical clip control (idle loop / run / one-shots), a smoothly tweened facing (yaw) and
- * procedural secondary motion (cape / scarf / pennant / wings / plume bones: idle sway plus a
- * flare that eases in while the unit runs or jumps). Allocation-free per frame.
+ * procedural secondary motion (cape / scarf / pennant / wings / plume / tail bones: idle sway plus a
+ * flare that eases in while the unit runs or jumps; `spin` bones rotate continuously for orbiting
+ * FX). Allocation-free per frame.
  */
 import * as THREE from 'three';
 import type { ClipName } from './config';
@@ -209,7 +210,9 @@ export class UnitActor {
       const sp = s.spec;
       const flutter = 1 + this.moving * 1.6;
       const ang =
-        sp.run * this.moving + sp.idleAmp * flutter * Math.sin(t * sp.idleFreq * (1 + this.moving) * Math.PI * 2 + sp.phase);
+        sp.run * this.moving +
+        sp.idleAmp * flutter * Math.sin(t * sp.idleFreq * (1 + this.moving) * Math.PI * 2 + sp.phase) +
+        (sp.spin ?? 0) * t * (1 + this.moving * 0.6);
       tmpQ.setFromAxisAngle(s.axis, ang);
       s.bone.quaternion.copy(s.base).multiply(tmpQ);
     }

@@ -7,12 +7,14 @@ import {
   fastHasMoves,
   fastMake,
   fastMoveToMove,
+  fastPass,
   fastUnmake,
+  fastUnpass,
   genTargets,
   getLegalMoves,
 } from '../engine';
 import type { FastBoard } from '../engine';
-import { CH_MARKI, CH_SAD, CH_WALK } from '../engine/characters';
+import { CHARACTERS, CHAR_BY_CODE, CH_INSANER, CH_MARKI, CH_SAD, CH_WALK } from '../engine/characters';
 
 export type Difficulty = 'easy' | 'normal' | 'hard';
 
@@ -29,8 +31,16 @@ const WIN = 1_000_000;
 const ADJ_WIN = 500_000; // won by adjudication (ply limit / stalemate)
 const INF = 10_000_000;
 const MAX_PLY = 64;
-const MAX_MOVES = 64;
+const MAX_MOVES = 128;
 const UNIT = 100; // material unit
+/** Material worth (in UNIT) of each absorbable pattern bit: half of the pattern owner's value. */
+const BIT_VALUE: number[] = [];
+for (let bit = 0; bit < 12; bit++) BIT_VALUE.push((CHARACTERS[CHAR_BY_CODE[(bit / 3) | 0]].value[bit % 3] * UNIT) / 2);
+function absorbWorth(mask: number): number {
+  let w = 0;
+  for (let bit = 0; mask; bit++, mask >>= 1) if (mask & 1) w += BIT_VALUE[bit];
+  return w;
+}
 
 const now: () => number =
   typeof performance !== 'undefined' && typeof performance.now === 'function'
@@ -57,7 +67,7 @@ function buildAttackMaps(b: FastBoard): number[] {
     const s = b.sq[i];
     if (s < 0) continue;
     const side = b.owner[i];
-    const n = genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, attackBuf, 0, true, b.dir[i]);
+    const n = genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, attackBuf, 0, true, b.dir[i], b.storm, b.absorb[i]);
     const v = b.value[i];
     for (let k = 0; k < n; k++) {
       const t = attackBuf[k];
@@ -94,6 +104,8 @@ export function evaluate(b: FastBoard, side: number): number {
     const ch = b.ch[i];
     if (ch === CH_SAD) {
       sc += centerC * 3 + (5.5 - Math.abs(r - 5.5)) * 2;
+    } else if (ch === CH_INSANER) {
+      sc += centerC * 4 + (5.5 - Math.abs(r - 5.5)) * 2 + absorbWorth(b.absorb[i]);
     } else if (ch === CH_MARKI) {
       if (!facingEnemy) sc -= v * 0.2;
       {
@@ -112,6 +124,13 @@ export function evaluate(b: FastBoard, side: number): number {
     } else if (ch === CH_WALK) {
       if (!facingEnemy) sc -= v * 0.2;
       sc += centerC * 4 + Math.min(room, 6) * 2;
+    }
+    // storm: standing next to (or on) the columns that vanish next is a liability
+    if (b.stormIn >= 0) {
+      const dist = Math.min(c - b.storm, 11 - b.storm - c);
+      const urgency = b.stormIn <= 2 ? 1 : 0.5;
+      if (dist <= 0) sc -= v * 0.6 * urgency;
+      else if (dist === 1) sc -= v * 0.25 * urgency;
     }
     // safety
     const enemy = 1 - p;
@@ -194,7 +213,8 @@ function qsearch(ctx: SearchCtx, alpha: number, beta: number, ply: number, psc: 
   checkTime(ctx);
   const b = ctx.b;
   const side = b.turn;
-  if (b.alive[side] === 0) return -WIN + ply;
+  if (b.alive[side] === 0) return b.alive[1 - side] === 0 ? 0 : -WIN + ply;
+  if (b.alive[1 - side] === 0) return WIN - ply;
   if (psc >= NO_CAPTURE_PLY_LIMIT) return adjudicateScore(b, side, ply);
   const stand = evaluate(b, side);
   if (stand >= beta) return stand;
@@ -210,12 +230,11 @@ function qsearch(ctx: SearchCtx, alpha: number, beta: number, ply: number, psc: 
   for (let k = 0; k < n; k++) {
     const mv = moves[k];
     const undo = fastMake(b, mv);
-    b.turn = (1 - side) as 0 | 1;
     let v: number;
     try {
-      v = -qsearch(ctx, -beta, -alpha, ply + 1, 0, qd - 1);
+      // A chain move keeps the same side on move: no negation, same window.
+      v = b.turn === side ? qsearch(ctx, alpha, beta, ply + 1, 0, qd - 1) : -qsearch(ctx, -beta, -alpha, ply + 1, 0, qd - 1);
     } finally {
-      b.turn = side as 0 | 1;
       fastUnmake(b, mv, undo);
     }
     if (v >= beta) return v;
@@ -228,19 +247,21 @@ function negamax(ctx: SearchCtx, depth: number, alpha: number, beta: number, ply
   checkTime(ctx);
   const b = ctx.b;
   const side = b.turn;
-  if (b.alive[side] === 0) return -WIN + ply;
+  if (b.alive[side] === 0) return b.alive[1 - side] === 0 ? 0 : -WIN + ply;
+  if (b.alive[1 - side] === 0) return WIN - ply;
   if (psc >= NO_CAPTURE_PLY_LIMIT) return adjudicateScore(b, side, ply);
   if (depth <= 0 || ply >= MAX_PLY) return qsearch(ctx, alpha, beta, ply, psc, 6);
   const moves = ctx.moveBufs[ply];
   const scores = ctx.scoreBufs[ply];
   const n = fastGenMoves(b, side, moves, 0);
   if (n === 0) {
-    if (!fastHasMoves(b, 1 - side)) return adjudicateScore(b, side, ply);
-    b.turn = (1 - side) as 0 | 1;
+    // No move (or a boxed-in chain move): the turn passes, exactly like the engine's auto-pass.
+    if (b.bonus < 0 && !fastHasMoves(b, 1 - side)) return adjudicateScore(b, side, ply);
+    fastPass(b);
     try {
       return -negamax(ctx, depth - 1, -beta, -alpha, ply + 1, psc + 1);
     } finally {
-      b.turn = side as 0 | 1;
+      fastUnpass(b);
     }
   }
   orderMoves(ctx, moves, scores, n, ply);
@@ -249,12 +270,11 @@ function negamax(ctx: SearchCtx, depth: number, alpha: number, beta: number, ply
     const mv = moves[k];
     const isCap = b.occ[mv & 255] >= 0;
     const undo = fastMake(b, mv);
-    b.turn = (1 - side) as 0 | 1;
     let v: number;
     try {
-      v = -negamax(ctx, depth - 1, -beta, -alpha, ply + 1, isCap ? 0 : psc + 1);
+      const npsc = isCap ? 0 : psc + 1;
+      v = b.turn === side ? negamax(ctx, depth - 1, alpha, beta, ply + 1, npsc) : -negamax(ctx, depth - 1, -beta, -alpha, ply + 1, npsc);
     } finally {
-      b.turn = side as 0 | 1;
       fastUnmake(b, mv, undo);
     }
     if (v > best) best = v;
@@ -312,12 +332,11 @@ function searchRoot(
         const mv = moves[k];
         const isCap = b.occ[mv & 255] >= 0;
         const undo = fastMake(b, mv);
-        b.turn = (1 - side) as 0 | 1;
         let v: number;
         try {
-          v = -negamax(ctx, depth - 1, -INF, -(alpha - bonus[k]), 1, isCap ? 0 : psc + 1);
+          const npsc = isCap ? 0 : psc + 1;
+          v = b.turn === side ? negamax(ctx, depth - 1, alpha - bonus[k], INF, 1, npsc) : -negamax(ctx, depth - 1, -INF, -(alpha - bonus[k]), 1, npsc);
         } finally {
-          b.turn = side as 0 | 1;
           fastUnmake(b, mv, undo);
         }
         const total = v + bonus[k];
@@ -353,7 +372,7 @@ function isAttackedBy(b: FastBoard, sq: number, attacker: number): boolean {
   for (let i = 0; i < b.n; i++) {
     const s = b.sq[i];
     if (s < 0 || b.owner[i] !== attacker) continue;
-    const n = genTargets(b.occ, b.owner, attacker, b.ch[i], b.lvl[i], s, attackBuf, 0, false, b.dir[i]);
+    const n = genTargets(b.occ, b.owner, attacker, b.ch[i], b.lvl[i], s, attackBuf, 0, false, b.dir[i], b.storm, b.absorb[i]);
     for (let k = 0; k < n; k++) if (attackBuf[k] === sq) return true;
   }
   return false;

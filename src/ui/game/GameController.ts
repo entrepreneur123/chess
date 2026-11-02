@@ -13,7 +13,9 @@ import {
   getTargetsForPiece,
   isLegalMove,
   resign,
-  TURN_TIME_MS,
+  skipBonus,
+  turnTimeMsFor,
+  type CharacterId,
   type GameState,
   type HistoryEntry,
   type Move,
@@ -44,6 +46,12 @@ export interface ControllerSnapshot {
 export type ControllerEvent =
   | { type: 'change' }
   | { type: 'toast'; message: string; tone?: 'neutral' | 'warn'; kind?: 'timeout' | 'pass'; player?: PlayerId }
+  /** A chain move became available to `player` for `pieceId`. */
+  | { type: 'bonus'; player: PlayerId; pieceId: string }
+  /** `pieceId` (an Insaner) absorbed the movement of `character`. */
+  | { type: 'absorb'; player: PlayerId; pieceId: string; character: CharacterId }
+  /** The storm advanced to `storm` columns per side, removing `killed`. */
+  | { type: 'storm'; storm: number; killed: string[] }
   | { type: 'ended'; state: GameState };
 
 export interface ControllerPorts {
@@ -53,6 +61,7 @@ export interface ControllerPorts {
   /** Minimum visible think time for the bot. */
   botThinkDelayMs(): number;
   now?(): number;
+  /** Fixed time per turn (tests). Defaults to the engine's `turnTimeMsFor` (60 / 40 / 20 s). */
   turnTimeMs?: number;
   setTimer?(fn: () => void, ms: number): unknown;
   clearTimer?(id: unknown): void;
@@ -81,7 +90,7 @@ export class GameController {
   private endEmitted = false;
 
   // Turn clock
-  private readonly turnTime: number;
+  private turnTime: number;
   private timerRemaining: number;
   private timerStartedAt: number | null = null;
   private timerHandle: unknown = null;
@@ -93,7 +102,7 @@ export class GameController {
 
   constructor(initial: GameState, private readonly ports: ControllerPorts) {
     this._state = initial;
-    this.turnTime = ports.turnTimeMs ?? TURN_TIME_MS;
+    this.turnTime = ports.turnTimeMs ?? turnTimeMsFor(initial);
     this.timerRemaining = this.turnTime;
     this.now = ports.now ?? (() => performance.now());
     this.setTimer = ports.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
@@ -164,6 +173,19 @@ export class GameController {
       // Enemy piece, or own piece while the bot is thinking: non-actionable reach preview.
       this.setSelection({ pieceId: piece.id, moves: getTargetsForPiece(this._state, piece), actionable: false });
     }
+  }
+
+  /** Decline the pending chain move (human only). Returns false if none is pending. */
+  skipBonus(): boolean {
+    if (this.disposed || this._phase !== 'humanTurn' || this._paused || this._state.bonusPieceId === null) return false;
+    this.gen++;
+    this.stopTimer();
+    const prev = this._state;
+    this.selection = null;
+    this._state = skipBonus(prev);
+    this.announce(prev, this._state, 1);
+    this.checkEndOrContinue(true);
+    return true;
   }
 
   /** Programmatic move (used by tests/debug). Returns false if not allowed now. */
@@ -246,10 +268,14 @@ export class GameController {
       this.checkEndOrContinue(false);
       return;
     }
+    this.turnTime = this.ports.turnTimeMs ?? turnTimeMsFor(this._state);
     this.timerRemaining = this.turnTime;
     this.timerStartedAt = null;
     if (this._state.turn === HUMAN) {
       this._phase = 'humanTurn';
+      // A chain move can only be played by one piece: pre-select it so the player just taps a square.
+      const bonusId = this._state.bonusPieceId;
+      if (bonusId !== null && getPieceById(this._state, bonusId)) this.selection = { pieceId: bonusId, moves: getLegalMoves(this._state, bonusId), actionable: true };
       this.refreshSelection();
       if (!this._paused) this.runTimer();
       this.emit({ type: 'change' });
@@ -317,7 +343,7 @@ export class GameController {
     }
     if (gen !== this.gen || this.disposed) return;
     this._state = next;
-    this.announcePasses(prev, next, 1);
+    this.announce(prev, next, 1);
     this.checkEndOrContinue(true);
   }
 
@@ -331,15 +357,31 @@ export class GameController {
     this._state = applyTimeout(prev);
     if (who === HUMAN) this.emit({ type: 'toast', message: '시간 초과! 턴이 넘어갑니다', tone: 'warn', kind: 'timeout', player: who });
     else this.emit({ type: 'toast', message: '상대가 시간을 초과해 턴이 넘어옵니다', kind: 'timeout', player: who });
-    this.announcePasses(prev, this._state, 1);
+    this.announce(prev, this._state, 1);
     this.checkEndOrContinue(true);
   }
 
-  /** Toast for any 'noMoves' passes the engine auto-inserted after the action. */
-  private announcePasses(prev: GameState, next: GameState, skip: number): void {
+  /**
+   * Events for everything the engine did after the action itself: auto-passes, absorptions,
+   * chain moves granted, and storm advances (`skip` = history entries that were the action).
+   */
+  private announce(prev: GameState, next: GameState, skip: number): void {
+    const action = next.history[prev.history.length];
+    if (action?.kind === 'move' && action.move.captureId) {
+      const before = getPieceById(prev, action.move.pieceId);
+      const after = getPieceById(next, action.move.pieceId);
+      if (before && after && (after.absorbed?.length ?? 0) > (before.absorbed?.length ?? 0)) {
+        const victim = getPieceById(prev, action.move.captureId);
+        if (victim) this.emit({ type: 'absorb', player: action.player, pieceId: after.id, character: victim.character });
+      }
+    }
+    if (next.status === 'playing' && next.bonusPieceId !== null && prev.bonusPieceId === null) {
+      this.emit({ type: 'bonus', player: next.turn, pieceId: next.bonusPieceId });
+    }
     const added = next.history.slice(prev.history.length + skip);
     for (const e of added) {
-      if (e.kind === 'pass' && e.reason === 'noMoves') {
+      if (e.kind === 'storm') this.emit({ type: 'storm', storm: e.storm, killed: e.killed });
+      else if (e.kind === 'pass' && e.reason === 'noMoves') {
         this.emit({
           type: 'toast',
           message: e.player === HUMAN ? '움직일 수 있는 말이 없어 턴을 넘깁니다' : '상대가 움직일 수 없어 턴이 넘어옵니다',

@@ -78,6 +78,7 @@ export const CHARACTER_RARITY: Record<CharacterId, Rarity> = {
   sad: 'common',
   marki: 'rare',
   walk: 'epic',
+  insaner: 'legendary',
 };
 
 export const BOARD_COLORS = {

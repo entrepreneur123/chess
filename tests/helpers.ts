@@ -21,6 +21,9 @@ export function makeState(specs: Spec[], turn: PlayerId = 0, extra: Partial<Game
     winner: null,
     endReason: null,
     history: [],
+    bonusPieceId: null,
+    storm: 0,
+    stormIn: null,
     ...extra,
   };
 }

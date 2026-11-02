@@ -1,7 +1,7 @@
-import { MAX_CONSECUTIVE_TIMEOUTS, NO_CAPTURE_PLY_LIMIT } from './types';
-import type { Formation, GameState, HistoryEntry, Move, Piece, PlayerId, Pos } from './types';
-import { CHAR_CODE, pieceValue } from './characters';
-import { N_SQUARES, atTurnRow, formationToAbsolute, forwardDir, genTargets, isOnBoard, posOf, sqOf } from './board';
+import { MAX_CONSECUTIVE_TIMEOUTS, NO_CAPTURE_PLY_LIMIT, STORM_INTERVAL_PLIES, TURN_TIME_1_MS, TURN_TIME_2_MS, TURN_TIME_MS } from './types';
+import type { AbsorbedAbility, Formation, GameState, HistoryEntry, Move, PassReason, Piece, PlayerId, Pos } from './types';
+import { CHAR_CODE, absorbMaskOf, effectiveValue } from './characters';
+import { N_SQUARES, atTurnRow, formationToAbsolute, forwardDir, genTargets, inStorm, isOnBoard, posOf, sqOf } from './board';
 import { validateFormation } from './formation';
 
 const other = (p: PlayerId): PlayerId => (p === 0 ? 1 : 0);
@@ -32,6 +32,9 @@ export function createGame(f0: Formation, f1: Formation, firstTurn: PlayerId = 0
     winner: null,
     endReason: null,
     history: [],
+    bonusPieceId: null,
+    storm: 0,
+    stormIn: null,
   };
   return settle(state);
 }
@@ -56,15 +59,19 @@ export function buildOccupancy(pieces: Piece[]): { occ: Int8Array; owners: Uint8
   return { occ, owners };
 }
 
-const tmpTargets = new Int16Array(64);
+const tmpTargets = new Int16Array(128);
 
 /** Current forward direction of a piece (forward-only movers turn around at the far edge). */
 export function pieceDir(piece: Pick<Piece, 'owner' | 'dir'>): 1 | -1 {
   return piece.dir ?? forwardDir(piece.owner);
 }
 
-function targetsWith(pieces: Piece[], occ: Int8Array, owners: Uint8Array, piece: Piece): Move[] {
-  const n = genTargets(occ, owners, piece.owner, CHAR_CODE[piece.character], piece.level, sqOf(piece.pos), tmpTargets, 0, false, pieceDir(piece));
+function countTargets(occ: Int8Array, owners: Uint8Array, piece: Piece, storm: number): number {
+  return genTargets(occ, owners, piece.owner, CHAR_CODE[piece.character], piece.level, sqOf(piece.pos), tmpTargets, 0, false, pieceDir(piece), storm, absorbMaskOf(piece.absorbed));
+}
+
+function targetsWith(pieces: Piece[], occ: Int8Array, owners: Uint8Array, piece: Piece, storm: number): Move[] {
+  const n = countTargets(occ, owners, piece, storm);
   const moves: Move[] = [];
   for (let i = 0; i < n; i++) {
     const s = tmpTargets[i];
@@ -79,10 +86,13 @@ function targetsWith(pieces: Piece[], occ: Int8Array, owners: Uint8Array, piece:
 /** Pseudo-moves for ANY piece regardless of whose turn it is (for previewing reach). */
 export function getTargetsForPiece(state: GameState, piece: Piece): Move[] {
   const { occ, owners } = buildOccupancy(state.pieces);
-  return targetsWith(state.pieces, occ, owners, piece);
+  return targetsWith(state.pieces, occ, owners, piece, state.storm);
 }
 
-/** Legal moves of the side to move (optionally for a single piece). [] if the game has ended. */
+/**
+ * Legal moves of the side to move (optionally for a single piece). [] if the game has ended.
+ * While a chain move is pending only the chaining piece may move.
+ */
 export function getLegalMoves(state: GameState, pieceId?: string): Move[] {
   if (state.status !== 'playing') return [];
   const { occ, owners } = buildOccupancy(state.pieces);
@@ -90,16 +100,18 @@ export function getLegalMoves(state: GameState, pieceId?: string): Move[] {
   for (const p of state.pieces) {
     if (p.owner !== state.turn) continue;
     if (pieceId !== undefined && p.id !== pieceId) continue;
-    for (const m of targetsWith(state.pieces, occ, owners, p)) out.push(m);
+    if (state.bonusPieceId !== null && p.id !== state.bonusPieceId) continue;
+    for (const m of targetsWith(state.pieces, occ, owners, p, state.storm)) out.push(m);
   }
   return out;
 }
 
-function hasAnyMove(pieces: Piece[], player: PlayerId): boolean {
+function hasAnyMove(pieces: Piece[], player: PlayerId, storm: number, onlyPieceId: string | null = null): boolean {
   const { occ, owners } = buildOccupancy(pieces);
   for (const p of pieces) {
     if (p.owner !== player) continue;
-    if (genTargets(occ, owners, p.owner, CHAR_CODE[p.character], p.level, sqOf(p.pos), tmpTargets, 0, false, pieceDir(p)) > 0) return true;
+    if (onlyPieceId !== null && p.id !== onlyPieceId) continue;
+    if (countTargets(occ, owners, p, storm) > 0) return true;
   }
   return false;
 }
@@ -113,7 +125,7 @@ export function isLegalMove(state: GameState, move: Move): boolean {
 
 export function materialScore(state: GameState, player: PlayerId): number {
   let s = 0;
-  for (const p of state.pieces) if (p.owner === player) s += pieceValue(p.character, p.level);
+  for (const p of state.pieces) if (p.owner === player) s += effectiveValue(p.character, p.level, p.absorbed);
   return s;
 }
 
@@ -124,33 +136,95 @@ export function adjudicate(state: GameState): PlayerId | null {
   return a > b ? 0 : b > a ? 1 : null;
 }
 
+function countPieces(pieces: Piece[], player: PlayerId): number {
+  let n = 0;
+  for (const p of pieces) if (p.owner === player) n++;
+  return n;
+}
+
+/**
+ * Time allowed for the current turn: 60 s normally, 40 s once either side is down to two pieces,
+ * 20 s once either side is down to one.
+ */
+export function turnTimeMsFor(state: Pick<GameState, 'pieces'>): number {
+  const m = Math.min(countPieces(state.pieces, 0), countPieces(state.pieces, 1));
+  return m <= 1 ? TURN_TIME_1_MS : m <= 2 ? TURN_TIME_2_MS : TURN_TIME_MS;
+}
+
 function end(state: GameState, winner: PlayerId | null, reason: GameState['endReason']): GameState {
   return { ...state, status: 'ended', winner, endReason: reason };
 }
 
 /**
- * Post-ply bookkeeping: elimination, ply-limit adjudication, and automatic passes when the
- * side to move has no legal moves (stalemate if neither side can move).
+ * Hand the move to the other player: appends `entry`, bumps the ply, clears any chain move and
+ * ticks the storm clock (which may advance the storm and remove pieces).
+ */
+function switchTurn(state: GameState, entry: HistoryEntry, pliesSinceCapture: number): GameState {
+  let next: GameState = {
+    ...state,
+    turn: other(state.turn),
+    ply: state.ply + 1,
+    pliesSinceCapture,
+    bonusPieceId: null,
+    history: [...state.history, entry],
+  };
+  if (next.stormIn !== null) {
+    const left = next.stormIn - 1;
+    if (left > 0) next = { ...next, stormIn: left };
+    else {
+      const storm = next.storm + 1;
+      const killed: string[] = [];
+      const pieces = next.pieces.filter((p) => {
+        if (!inStorm(p.pos.c, storm)) return true;
+        killed.push(p.id);
+        return false;
+      });
+      next = { ...next, storm, stormIn: STORM_INTERVAL_PLIES, pieces, history: [...next.history, { kind: 'storm', storm, killed }] };
+    }
+  }
+  return next;
+}
+
+/**
+ * Post-ply bookkeeping: elimination (by capture or storm), storm activation, ply-limit
+ * adjudication, chain moves that cannot be played, and automatic passes when the side to move has
+ * no legal moves (stalemate if neither side can move).
  * `state` must already be a fresh object owned by the caller.
  */
 function settle(state: GameState): GameState {
   if (state.status !== 'playing') return state;
   for (;;) {
-    const has0 = state.pieces.some((p) => p.owner === 0);
-    const has1 = state.pieces.some((p) => p.owner === 1);
-    if (!has0 || !has1) return end(state, has0 ? 0 : has1 ? 1 : null, 'elimination');
+    const n0 = countPieces(state.pieces, 0);
+    const n1 = countPieces(state.pieces, 1);
+    if (n0 === 0 || n1 === 0) {
+      const last = state.history[state.history.length - 1];
+      return end(state, n0 > 0 ? 0 : n1 > 0 ? 1 : null, last?.kind === 'storm' ? 'storm' : 'elimination');
+    }
+    if (state.stormIn === null && (n0 <= 1 || n1 <= 1)) state = { ...state, stormIn: STORM_INTERVAL_PLIES };
     if (state.pliesSinceCapture >= NO_CAPTURE_PLY_LIMIT) return end(state, adjudicate(state), 'moveLimit');
-    if (hasAnyMove(state.pieces, state.turn)) return state;
-    if (!hasAnyMove(state.pieces, other(state.turn))) return end(state, adjudicate(state), 'stalemate');
-    const entry: HistoryEntry = { kind: 'pass', player: state.turn, reason: 'noMoves' };
-    state = {
-      ...state,
-      turn: other(state.turn),
-      ply: state.ply + 1,
-      pliesSinceCapture: state.pliesSinceCapture + 1,
-      history: [...state.history, entry],
-    };
+    if (state.bonusPieceId !== null) {
+      if (hasAnyMove(state.pieces, state.turn, state.storm, state.bonusPieceId)) return state;
+      // The chaining piece is boxed in: the chain move lapses.
+      state = switchTurn(state, { kind: 'pass', player: state.turn, reason: 'bonusSkip' }, state.pliesSinceCapture + 1);
+      continue;
+    }
+    if (hasAnyMove(state.pieces, state.turn, state.storm)) return state;
+    if (!hasAnyMove(state.pieces, other(state.turn), state.storm)) return end(state, adjudicate(state), 'stalemate');
+    state = switchTurn(state, { kind: 'pass', player: state.turn, reason: 'noMoves' }, state.pliesSinceCapture + 1);
   }
+}
+
+/** Union of absorbed abilities (deduplicated, never including the holder's own pattern). */
+function absorbInto(holder: Piece, victim: Piece): AbsorbedAbility[] {
+  const out: AbsorbedAbility[] = [...(holder.absorbed ?? [])];
+  const add = (a: AbsorbedAbility) => {
+    if (a.character === holder.character && a.level === holder.level) return;
+    if (out.some((x) => x.character === a.character && x.level === a.level)) return;
+    out.push({ character: a.character, level: a.level });
+  };
+  add({ character: victim.character, level: victim.level });
+  for (const a of victim.absorbed ?? []) add(a);
+  return out;
 }
 
 /** Pure: returns a new state. Throws if the game is over or the move is illegal. */
@@ -160,16 +234,21 @@ export function applyMove(state: GameState, move: Move): GameState {
   const legal = getLegalMoves(state, move.pieceId).find((m) => samePos(m.from, move.from) && samePos(m.to, move.to));
   if (!legal) throw new Error(`Illegal move: ${JSON.stringify(move)}`);
   const player = state.turn;
+  const mover = state.pieces.find((p) => p.id === legal.pieceId)!;
+  const victim = legal.captureId ? state.pieces.find((p) => p.id === legal.captureId) : undefined;
   const pieces: Piece[] = [];
+  let moved: Piece | null = null;
   for (const p of state.pieces) {
-    if (legal.captureId && p.id === legal.captureId) continue;
+    if (victim && p.id === victim.id) continue;
     if (p.id === legal.pieceId) {
-      const moved: Piece = { ...p, pos: { r: legal.to.r, c: legal.to.c } };
+      moved = { ...p, pos: { r: legal.to.r, c: legal.to.c } };
       // Forward-only movers turn around when they reach the last row in their direction.
       if (p.character !== 'sad') {
         const d = pieceDir(p);
         if (atTurnRow(moved.pos.r, d)) moved.dir = d === 1 ? -1 : 1;
       }
+      // Insaner steals the movement pattern of whatever it captures.
+      if (p.character === 'insaner' && victim) moved.absorbed = absorbInto(p, victim);
       pieces.push(moved);
     } else pieces.push(p);
   }
@@ -177,31 +256,32 @@ export function applyMove(state: GameState, move: Move): GameState {
   ct[player] = 0;
   const recorded: Move = { pieceId: legal.pieceId, from: { ...legal.from }, to: { ...legal.to } };
   if (legal.captureId) recorded.captureId = legal.captureId;
-  return settle({
-    ...state,
-    pieces,
-    turn: other(player),
-    ply: state.ply + 1,
-    pliesSinceCapture: legal.captureId ? 0 : state.pliesSinceCapture + 1,
-    consecutiveTimeouts: ct,
-    history: [...state.history, { kind: 'move', player, move: recorded }],
-  });
+  const entry: HistoryEntry = { kind: 'move', player, move: recorded };
+  const psc = legal.captureId ? 0 : state.pliesSinceCapture + 1;
+  const base: GameState = { ...state, pieces, consecutiveTimeouts: ct };
+  // Chain move: a Level-3 Insaner that captures moves once more (one extra move per turn).
+  if (victim && mover.character === 'insaner' && mover.level === 3 && state.bonusPieceId === null) {
+    return settle({ ...base, ply: state.ply + 1, pliesSinceCapture: psc, bonusPieceId: mover.id, history: [...state.history, entry] });
+  }
+  return settle(switchTurn(base, entry, psc));
+}
+
+/** The player declines the pending chain move. No-op when none is pending. */
+export function skipBonus(state: GameState): GameState {
+  if (state.status !== 'playing' || state.bonusPieceId === null) return state;
+  return settle(switchTurn(state, { kind: 'pass', player: state.turn, reason: 'bonusSkip' }, state.pliesSinceCapture + 1));
 }
 
 /** The side to move ran out of time: pass the turn, or forfeit after MAX_CONSECUTIVE_TIMEOUTS. */
 export function applyTimeout(state: GameState): GameState {
   if (state.status !== 'playing') return state;
+  // Letting a chain move lapse is not a timeout strike: the player already moved this turn.
+  if (state.bonusPieceId !== null) return skipBonus(state);
   const player = state.turn;
   const ct: [number, number] = [state.consecutiveTimeouts[0], state.consecutiveTimeouts[1]];
   ct[player] += 1;
-  const next: GameState = {
-    ...state,
-    turn: other(player),
-    ply: state.ply + 1,
-    pliesSinceCapture: state.pliesSinceCapture + 1,
-    consecutiveTimeouts: ct,
-    history: [...state.history, { kind: 'pass', player, reason: 'timeout' }],
-  };
+  const reason: PassReason = 'timeout';
+  const next = switchTurn({ ...state, consecutiveTimeouts: ct }, { kind: 'pass', player, reason }, state.pliesSinceCapture + 1);
   if (ct[player] >= MAX_CONSECUTIVE_TIMEOUTS) return end(next, other(player), 'timeoutForfeit');
   return settle(next);
 }
@@ -210,4 +290,3 @@ export function resign(state: GameState, player: PlayerId): GameState {
   if (state.status !== 'playing') return state;
   return end({ ...state }, other(player), 'resign');
 }
-

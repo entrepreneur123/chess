@@ -34,7 +34,8 @@ export const MIN_MOVES_FOR_REWARD = 3;
 export const BOX = {
   basicPrice: 150,
   freeCooldownMs: 24 * 60 * 60 * 1000,
-  rarityWeights: { common: 60, rare: 30, epic: 10, legendary: 0 } as Record<Rarity, number>,
+  /** Legendary cards are rare on purpose: the first one unlocks the character. */
+  rarityWeights: { common: 57, rare: 30, epic: 10, legendary: 3 } as Record<Rarity, number>,
   amountMin: 1,
   amountMax: 2,
 };
@@ -55,6 +56,9 @@ export const GEM_PACKS = [
   { id: 'gems_medium', gems: 500, priceLabel: '₩6,500', testGrant: true },
   { id: 'gems_large', gems: 1200, priceLabel: '₩14,000', testGrant: true },
 ];
+
+/** Chance that the bot swaps one of its mirrored squad members for the legendary (when the player has none). */
+export const BOT_LEGENDARY_CHANCE: Record<Difficulty, number> = { easy: 0, normal: 0.2, hard: 0.45 };
 
 export const PACING = {
   searchMinMs: 1200,

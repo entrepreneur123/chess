@@ -6,7 +6,9 @@ import type { Difficulty } from '../ai/bot';
 import {
   CHARACTERS,
   CHARACTER_IDS,
+  STARTER_IDS,
   defaultFormation,
+  squadOf,
   validateFormation,
   type CharacterId,
   type Formation,
@@ -62,6 +64,22 @@ const DIFFICULTIES: Difficulty[] = ['easy', 'normal', 'hard'];
 // ---------------------------------------------------------------------------------------------
 // Defaults / sanitizing
 // ---------------------------------------------------------------------------------------------
+
+/** Starters are always owned; other characters unlock with their first card (or the dev account). */
+export function isOwned(p: Pick<Profile, 'characters' | 'dev'>, id: CharacterId): boolean {
+  if (p.dev || STARTER_IDS.includes(id)) return true;
+  const c = p.characters[id];
+  return !!c && (c.cards > 0 || c.level > 1);
+}
+
+export function ownedCharacters(p: Pick<Profile, 'characters' | 'dev'>): CharacterId[] {
+  return CHARACTER_IDS.filter((id) => isOwned(p, id));
+}
+
+/** The characters currently fielded (formation order). */
+export function squadOfProfile(p: Pick<Profile, 'formation'>): CharacterId[] {
+  return squadOf(p.formation);
+}
 
 export function levelsOf(p: Pick<Profile, 'characters'>): Record<CharacterId, Level> {
   const out = {} as Record<CharacterId, Level>;
@@ -146,7 +164,8 @@ export function sanitizeProfile(input: unknown, now = Date.now()): Profile {
         })),
         levels,
       );
-      if (validateFormation(f).ok) {
+      // Every fielded character must be owned (a legendary cannot be fielded before it is unlocked).
+      if (validateFormation(f).ok && f.every((s) => isOwned({ characters, dev: raw.dev === true }, s.character))) {
         formation = f;
         formationOk = true;
       }

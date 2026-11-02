@@ -1,6 +1,7 @@
-// GRID CLASH unit model pipeline (re-runnable). Produces public/models/{sad,marki,walk}.glb.
+// GRID CLASH unit model pipeline (re-runnable). Produces public/models/{sad,marki,walk,insaner}.glb.
 //
 //   node docs/brand/models/build.mjs --kaykit <KayKit-Adventurers-dir> --bull <Bull.glb> [--out public/models]
+//                                    [--only sad,walk,marki,insaner]   (--bull is only needed for marki)
 //
 // Sources (all CC0, see public/models/LICENSES.md):
 //   --kaykit  checkout of https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0
@@ -18,6 +19,8 @@
 //   walk  (shield bearer)  KayKit Barbarian: body + hat + cape, 1H axe, round shield + team spiked shield
 //                          and team tower shield (knight-atlas props, merged into one 2:1 atlas).
 //   marki (bull)           Quaternius Bull: per-material colours baked into COLOR_0, one material.
+//   insaner (imp)          KayKit Rogue: body + hair head, both knives (Lv2/Lv3 daggers); horns, tail, grin,
+//                          loincloth / jester coat / flame cape and the Lv3 orbit shards are generated at runtime.
 //   Then: keep only the clips the board uses, prune, dedup, resample, quantize, meshopt (EXT_meshopt_compression).
 //   Textures are palette atlases: downscaled to 256 px (512x256 for the merged walk atlas), PNG.
 import { createRequire } from 'node:module';
@@ -50,8 +53,10 @@ const arg = (n, d) => {
 const kaykitDir = arg('--kaykit');
 const bullPath = arg('--bull');
 const outDir = resolve(root, arg('--out', 'public/models'));
-if (!kaykitDir || !bullPath) {
-  console.error('usage: node docs/brand/models/build.mjs --kaykit <dir> --bull <Bull.glb> [--out public/models]');
+const only = arg('--only', 'sad,walk,marki,insaner').split(',');
+const want = (n) => only.includes(n);
+if (!kaykitDir || (want('marki') && !bullPath)) {
+  console.error('usage: node docs/brand/models/build.mjs --kaykit <dir> --bull <Bull.glb> [--out public/models] [--only a,b]');
   process.exit(1);
 }
 const KK = join(resolve(kaykitDir), 'addons/kaykit_character_pack_adventures');
@@ -84,6 +89,13 @@ const CLIPS = {
     run: 'Gallop',
     attack: 'Attack_Headbutt',
     death: 'Death',
+  },
+  insaner: {
+    idle: 'Idle',
+    run: 'Running_A',
+    jump: 'Jump_Full_Short',
+    attack: 'Dualwield_Melee_Attack_Slice',
+    death: 'Death_B',
   },
 };
 
@@ -137,6 +149,33 @@ function remapU(mesh, su, ou, done) {
       uv.setElement(i, el);
     }
     done.add(uv);
+  }
+}
+
+/**
+ * Drop every triangle of `mesh` whose three vertices sample an atlas cell accepted by `cellOf(col,row)`
+ * (8 x 4 KayKit palette grid). Used to strip the rogue's hair so the imp gets a bare, horned skull.
+ */
+function dropCellTriangles(mesh, cellOf) {
+  for (const prim of mesh.listPrimitives()) {
+    const uv = prim.getAttribute('TEXCOORD_0');
+    const idx = prim.getIndices();
+    if (!uv || !idx) continue;
+    const e = [0, 0];
+    const inCell = (i) => {
+      uv.getElement(i, e);
+      return cellOf(Math.floor(e[0] * 8), Math.floor(e[1] * 4));
+    };
+    const keep = [];
+    for (let k = 0; k < idx.getCount(); k += 3) {
+      const a = idx.getScalar(k);
+      const b = idx.getScalar(k + 1);
+      const c = idx.getScalar(k + 2);
+      if (inCell(a) && inCell(b) && inCell(c)) continue;
+      keep.push(a, b, c);
+    }
+    const arr = keep.length > 65535 ? new Uint32Array(keep) : new Uint16Array(keep);
+    prim.setIndices(mesh.getGraph() ? idx.clone().setArray(arr) : idx);
   }
 }
 
@@ -229,7 +268,7 @@ const atlas256 = (f) => sharp(TEX(f)).resize(256, 256, { kernel: 'lanczos3' }).r
 // ------------------------------------------------------------------ sad (paladin, KayKit Knight)
 // Lv1 helmet + short sword; Lv2 + team cape + greatsword + pauldrons; Lv3 golden greatsword (+ runtime gold
 // armour, halo, aura). The team plume is generated at runtime.
-{
+if (want('sad')) {
   const doc = await io.read(CHAR('Knight.glb'));
   keepClips(doc, CLIPS.sad);
   dropNodes(doc, ['1H_Sword_Offhand', 'Rectangle_Shield', 'Spike_Shield', 'Round_Shield', 'Badge_Shield']);
@@ -249,7 +288,7 @@ const atlas256 = (f) => sharp(TEX(f)).resize(256, 256, { kernel: 'lanczos3' }).r
 // Lv1 bear hat + round wooden shield + axe; Lv2 + pauldrons, team kite shield + sword;
 // Lv3 knight helmet + team tower shield (+ runtime dark armour / arcane glow). Knight-atlas props are merged
 // into a 2:1 atlas (barbarian left half, knight right half) so the unit stays one material.
-{
+if (want('walk')) {
   const doc = await io.read(CHAR('Barbarian.glb'));
   keepClips(doc, CLIPS.walk);
   dropNodes(doc, ['1H_Axe_Offhand', '2H_Axe', 'Mug']);
@@ -288,7 +327,7 @@ const atlas256 = (f) => sharp(TEX(f)).resize(256, 256, { kernel: 'lanczos3' }).r
 // Material colours are baked into COLOR_0 plus a `_PART` index (material slot) so the runtime can
 // recolour horns/body per level/team. Lv2/Lv3 armour (KayKit shields as pauldrons + back saddle) is baked the same way
 // (colours sampled from the knight atlas, red heraldry -> `plate_team`) and parented to bones.
-{
+if (want('marki')) {
   const doc = await io.read(resolve(bullPath));
   keepClips(doc, CLIPS.marki);
   const root = doc.getRoot();
@@ -361,4 +400,18 @@ const atlas256 = (f) => sharp(TEX(f)).resize(256, 256, { kernel: 'lanczos3' }).r
   await doc.transform(F.join({ keepNamed: true }));
   root.listScenes()[0].setExtras({ parts });
   await finalize(doc, 'marki.glb');
+}
+
+// ------------------------------------------------------------------ insaner (imp, KayKit Rogue)
+// Small mischievous devil. The Rogue body (hair head, tunic, boots) is recoloured per level at runtime
+// (tunic cells -> skin at Lv1 for a bare chest); Knife + Knife_Offhand are the Lv2/Lv3 curved daggers.
+// Horns, tail, grin, bone mask, loincloth, jester coat, flame cape and orbit shards are procedural.
+if (want('insaner')) {
+  const doc = await io.read(CHAR('Rogue.glb'));
+  keepClips(doc, CLIPS.insaner);
+  dropNodes(doc, ['1H_Crossbow', '2H_Crossbow', 'Throwable', 'Rogue_Cape']);
+  // Bare skull: strip the hair (atlas cell 1,0) from the head; horns are generated at runtime.
+  dropCellTriangles(findNode(doc, 'Rogue_Head').getMesh(), (c, r) => c === 1 && r === 0);
+  unifyMaterial(doc, await atlas256('rogue_texture.png'), 'rogue_atlas');
+  await finalize(doc, 'insaner.glb');
 }

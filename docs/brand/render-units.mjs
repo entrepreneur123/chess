@@ -1,8 +1,8 @@
 // Renders the in-game glTF units (src/render/units: same templates, gear, palettes and FX as the
 // board) to transparent hero PNGs for the collection UI.
-//   node docs/brand/render-units.mjs [--only sad,marki,walk] [--out public/chars] [--sheet /tmp/sheet.png]
+//   node docs/brand/render-units.mjs [--only sad,marki,walk,insaner] [--out public/chars] [--sheet /tmp/sheet.png]
 //                                    [--qa <dir>] [--size 512]
-// Outputs: <out>/unit-{sad|marki|walk}-lv{1..3}-{0|1}.png  (512x512 RGBA, 3/4 hero angle, 3-point light)
+// Outputs: <out>/unit-{sad|marki|walk|insaner}-lv{1..3}-{0|1}.png  (512x512 RGBA, 3/4 hero angle, 3-point light)
 // --qa <dir> also writes close-ups (front / back / side) per character and level for review.
 // Needs playwright + a Chromium with WebGL (headless SwiftShader works). A temporary Vite dev
 // server serves the real modules and public/models; nothing is left behind.
@@ -32,8 +32,8 @@ const outDir = resolve(root, argVal('--out') ?? 'public/chars');
 const sheetPath = argVal('--sheet');
 const qaDir = argVal('--qa');
 const size = Number(argVal('--size') ?? 512);
-const only = (argVal('--only') ?? 'sad,marki,walk').split(',');
-const CHARS = ['sad', 'marki', 'walk'].filter((c) => only.includes(c));
+const only = (argVal('--only') ?? 'sad,marki,walk,insaner').split(',');
+const CHARS = ['sad', 'marki', 'walk', 'insaner'].filter((c) => only.includes(c));
 const LEVELS = [1, 2, 3];
 const OWNERS = [0, 1];
 mkdirSync(outDir, { recursive: true });

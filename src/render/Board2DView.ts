@@ -7,6 +7,7 @@ import { BOARD_SIZE, ZONE_DEPTH } from '../engine/types';
 import type { CharacterId, Move, Piece, PlayerId, Pos } from '../engine/types';
 import type { BoardHighlights, IBoardView } from './types';
 import { ANIM, BOARD_COLORS, CHARACTER_RARITY, RARITY_COLORS, RARITY_GLOW, TEAM_COLORS } from './palette';
+import { STORM_COLORS } from './storm';
 import {
   clamp01,
   containerSize,
@@ -26,6 +27,8 @@ import type { HighlightIndex } from './common';
 const TAP_SLOP_PX = 14;
 const MAX_PIXEL_RATIO = 2;
 const IDLE_FRAME_MS = 32;
+/** Storm removal: dissolve length (ms). */
+const STORM_MS = 520;
 
 interface Layout {
   /** Board origin (top-left of the slab interior) in CSS px. */
@@ -81,6 +84,10 @@ export class Board2DView implements IBoardView {
   private capBurst: { a: number; v: number }[] = [];
   private tTurn = -1;
   private lastFrame = 0;
+  /** Storm state (see setStorm) and the pieces it is taking (ghosts drawn while they dissolve). */
+  private storm = 0;
+  private stormNext: number | null = null;
+  private readonly fading: { piece: Piece; start: number }[] = [];
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -112,8 +119,41 @@ export class Board2DView implements IBoardView {
   setPieces(pieces: Piece[]): void {
     if (this.disposed) return;
     this.finishAnimation(false);
+    this.collectStormVictims(pieces, null);
     this.pieces = clonePieces(pieces);
     this.requestRender();
+  }
+
+  /**
+   * Storm state: `storm` columns consumed per side (0 = none), `nextIn` plies until the next shrink
+   * (null = inactive). Storm columns get a purple field, a glowing boundary line and dimmed tiles;
+   * with nextIn <= 2 the next columns pulse a warning frame.
+   */
+  setStorm(storm: number, nextIn: number | null): void {
+    if (this.disposed) return;
+    this.storm = Math.max(0, Math.min(6, Math.floor(storm)));
+    this.stormNext = nextIn;
+    this.requestRender();
+  }
+
+  private get stormActive(): boolean {
+    return this.storm > 0 || this.stormNext !== null;
+  }
+
+  private stormColumn(c: number, slack = 0): boolean {
+    const n = this.storm + slack;
+    return c < n || c >= BOARD_SIZE - n;
+  }
+
+  /** Pieces missing from `next` (other than `skipId`) that stood near the storm edge dissolve. */
+  private collectStormVictims(next: Piece[], skipId: string | null): void {
+    if (!this.stormActive) return;
+    const seen = new Set(next.map((p) => p.id));
+    const now = performance.now();
+    for (const p of this.pieces) {
+      if (seen.has(p.id) || p.id === skipId || !this.stormColumn(p.pos.c, 1)) continue;
+      this.fading.push({ piece: { ...p, pos: { ...p.pos } }, start: now });
+    }
   }
 
   animateMove(move: Move, piecesAfter: Piece[]): Promise<void> {
@@ -242,7 +282,8 @@ export class Board2DView implements IBoardView {
     return (
       (this.tLand >= 0 && now - this.tLand < ANIM.pulse) ||
       (this.tCap >= 0 && now - this.tCap < ANIM.capture + 90) ||
-      (this.tTurn >= 0 && now - this.tTurn < ANIM.turn)
+      (this.tTurn >= 0 && now - this.tTurn < ANIM.turn) ||
+      this.fading.length > 0
     );
   }
 
@@ -251,13 +292,14 @@ export class Board2DView implements IBoardView {
     if (this.disposed) return;
     if (this.anim) this.tickAnim(now);
     const busy = !!this.anim || this.fxActive(now);
-    if (!busy && this.pulsing && now - this.lastFrame < IDLE_FRAME_MS) {
+    const loop = this.pulsing || this.storm > 0 || (this.stormActive && this.stormNext !== null && this.stormNext <= 2);
+    if (!busy && loop && now - this.lastFrame < IDLE_FRAME_MS) {
       this.requestRender();
       return;
     }
     this.lastFrame = now;
     this.draw(now);
-    if (busy || this.pulsing) this.requestRender();
+    if (busy || loop) this.requestRender();
   };
 
   private tickAnim(now: number): void {
@@ -293,6 +335,7 @@ export class Board2DView implements IBoardView {
     }
     if (!a) return;
     this.anim = null;
+    this.collectStormVictims(a.piecesAfter, a.captured?.id ?? null);
     this.pieces = a.piecesAfter;
     this.requestRender();
     a.resolve();
@@ -360,6 +403,10 @@ export class Board2DView implements IBoardView {
         ctx.fillStyle = rgbToCss(tileRgb(r, c, this.hi));
         roundRect(ctx, tx, ty, tw, tw, rad);
         ctx.fill();
+        if (this.storm > 0 && this.stormColumn(c)) {
+          ctx.fillStyle = hexAlpha(STORM_COLORS.tile, 0.62);
+          ctx.fill();
+        }
         ctx.fillStyle = 'rgba(255,255,255,0.10)';
         ctx.fillRect(tx + rad * 0.6, ty, tw - rad * 1.2, bw);
         ctx.fillStyle = 'rgba(0,0,0,0.28)';
@@ -368,6 +415,7 @@ export class Board2DView implements IBoardView {
     }
 
     this.drawZoneLines(now);
+    this.drawStorm(now);
 
     // Overlays.
     const h = this.highlights;
@@ -451,8 +499,116 @@ export class Board2DView implements IBoardView {
       this.drawPiece(p, this.cx(p.pos.c), this.cy(p.pos.r), sel ? 1.05 : 1, sel ? 1.05 : 1, 1, bob, now);
     }
     if (moverDraw) moverDraw();
+    this.drawStormGhosts(now);
 
     this.drawFx(now);
+  }
+
+  /** Storm field over the consumed columns, crackling boundary line, warning frame on the next column. */
+  private drawStorm(now: number): void {
+    if (this.storm <= 0 && !(this.stormActive && this.stormNext !== null && this.stormNext <= 2)) return;
+    const ctx = this.ctx;
+    const { x0, y0, cell } = this.layout;
+    const size = cell * BOARD_SIZE;
+    const t = now / 1000;
+    const warn = this.stormActive && this.stormNext !== null && this.stormNext <= 2 && this.storm < 6;
+    ctx.save();
+    for (const side of [-1, 1] as const) {
+      // Consumed band: [x0, xIn] on the left, [xIn, x0 + size] on the right.
+      const xIn = side < 0 ? x0 + this.storm * cell : x0 + size - this.storm * cell;
+      if (this.storm > 0) {
+        const bx = side < 0 ? x0 : xIn;
+        const bw = this.storm * cell;
+        const g = ctx.createLinearGradient(side < 0 ? x0 : x0 + size, 0, xIn, 0);
+        g.addColorStop(0, hexAlpha(STORM_COLORS.field, 0.3));
+        g.addColorStop(1, hexAlpha(STORM_COLORS.edge, 0.42));
+        ctx.fillStyle = g;
+        ctx.fillRect(bx, y0, bw, size);
+        // Drifting veins.
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = hexAlpha(STORM_COLORS.edge, 0.55);
+        ctx.lineWidth = Math.max(1, cell * 0.04);
+        for (let k = 0; k < this.storm * 2; k++) {
+          const ph = t * 0.6 + k * 1.7;
+          ctx.beginPath();
+          for (let i = 0; i <= 12; i++) {
+            const yy = y0 + (i / 12) * size;
+            const xx = bx + bw * (0.5 + 0.42 * Math.sin(ph + i * 0.9 + k) * Math.cos(t * 0.8 + i * 0.5 + k * 2.1));
+            if (i === 0) ctx.moveTo(xx, yy);
+            else ctx.lineTo(xx, yy);
+          }
+          ctx.stroke();
+        }
+        // Boundary wall: glowing line + crackling arcs.
+        ctx.shadowColor = STORM_COLORS.edge;
+        ctx.shadowBlur = cell * 0.5;
+        ctx.strokeStyle = hexAlpha(STORM_COLORS.core, 0.9);
+        ctx.lineWidth = Math.max(2, cell * 0.08);
+        ctx.beginPath();
+        ctx.moveTo(xIn, y0);
+        ctx.lineTo(xIn, y0 + size);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = hexAlpha(STORM_COLORS.edge, 0.8);
+        ctx.lineWidth = Math.max(1, cell * 0.035);
+        for (let k = 0; k < 2; k++) {
+          ctx.beginPath();
+          for (let i = 0; i <= 24; i++) {
+            const yy = y0 + (i / 24) * size;
+            const xx = xIn + side * cell * 0.3 * Math.sin(i * 2.3 + t * (7 + k * 3) + k * 4) * Math.sin(i * 0.7 - t * 2);
+            if (i === 0) ctx.moveTo(xx, yy);
+            else ctx.lineTo(xx, yy);
+          }
+          ctx.stroke();
+        }
+        ctx.globalCompositeOperation = 'source-over';
+      }
+      if (warn) {
+        const pulse = 0.5 + 0.5 * Math.sin(t * 7);
+        const wx = side < 0 ? xIn : xIn - cell;
+        ctx.fillStyle = hexAlpha(STORM_COLORS.edge, 0.1 + 0.18 * pulse);
+        ctx.fillRect(wx, y0, cell, size);
+        ctx.strokeStyle = hexAlpha(STORM_COLORS.edge, 0.55 + 0.45 * pulse);
+        ctx.lineWidth = Math.max(1.5, cell * 0.06);
+        ctx.strokeRect(wx + ctx.lineWidth / 2, y0 + ctx.lineWidth / 2, cell - ctx.lineWidth, size - ctx.lineWidth);
+      }
+    }
+    ctx.restore();
+  }
+
+  /** Pieces the storm is taking: shrink + fade with an expanding magenta ring, then forget them. */
+  private drawStormGhosts(now: number): void {
+    if (this.fading.length === 0) return;
+    const ctx = this.ctx;
+    const cell = this.layout.cell;
+    for (let i = this.fading.length - 1; i >= 0; i--) {
+      const f = this.fading[i];
+      const k = clamp01((now - f.start) / STORM_MS);
+      if (k >= 1) {
+        this.fading.splice(i, 1);
+        continue;
+      }
+      const x = this.cx(f.piece.pos.c);
+      const y = this.cy(f.piece.pos.r);
+      const s = 1 - easeOutCubic(k) * 0.9;
+      this.drawPiece(f.piece, x, y - k * cell * 0.3, s, s, 1 - k * k, 0, now);
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = hexAlpha(STORM_COLORS.edge, 0.9 * (1 - k));
+      ctx.lineWidth = cell * 0.07 * (1 - k * 0.5);
+      ctx.beginPath();
+      ctx.arc(x, y, cell * (0.25 + 0.6 * easeOutCubic(k)), 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = hexAlpha(STORM_COLORS.core, 0.8 * (1 - k));
+      for (let b = 0; b < 8; b++) {
+        const a = (b / 8) * Math.PI * 2 + k * 2;
+        const d = easeOutCubic(k) * cell * 0.55;
+        ctx.beginPath();
+        ctx.arc(x + Math.cos(a) * d, y + Math.sin(a) * d - k * cell * 0.2, cell * 0.05 * (1 - k * 0.6), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
   }
 
   /** Glowing home-zone edge lines; the side to move is brighter and sweeps on turn change. */
@@ -683,6 +839,80 @@ export class Board2DView implements IBoardView {
           ctx.beginPath();
           ctx.arc(x, y + u * 0.2, u * 0.04, 0, Math.PI * 2);
           ctx.stroke();
+        }
+        break;
+      }
+      case 'insaner': {
+        // Imp: round crimson head, horns, glowing eyes, wide grin, pointed tail, trident.
+        ctx.fillStyle = '#3A2430';
+        ctx.fillRect(x + u * 0.26, y - u * 0.42, u * 0.03, u * 0.78); // trident shaft
+        ctx.fillStyle = level === 3 ? '#FF3DF0' : '#5C5664';
+        for (const dx of [-0.05, 0, 0.05]) {
+          ctx.beginPath();
+          ctx.moveTo(x + u * (0.275 + dx), y - u * (0.56 + (dx === 0 ? 0.04 : 0)));
+          ctx.lineTo(x + u * (0.3 + dx), y - u * 0.42);
+          ctx.lineTo(x + u * (0.25 + dx), y - u * 0.42);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.strokeStyle = level === 3 ? '#FF3DF0' : '#8E1E3A'; // tail
+        ctx.lineWidth = u * 0.035;
+        ctx.beginPath();
+        ctx.moveTo(x - u * 0.1, y + u * 0.2);
+        ctx.quadraticCurveTo(x - u * 0.38, y + u * 0.3, x - u * 0.34, y - u * 0.02);
+        ctx.stroke();
+        ctx.fillStyle = level === 3 ? '#FF3DF0' : '#9A4BFF';
+        ctx.beginPath();
+        ctx.moveTo(x - u * 0.34, y - u * 0.12);
+        ctx.lineTo(x - u * 0.29, y - u * 0.0);
+        ctx.lineTo(x - u * 0.39, y - u * 0.0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(10,14,28,0.75)';
+        ctx.fillStyle = level === 3 ? '#4A0C2E' : level === 2 ? '#7A1238' : '#8E1E3A';
+        const hornN = level === 3 ? 5 : 2;
+        for (let i = 0; i < hornN; i++) {
+          const sgn = hornN === 2 ? (i === 0 ? -1 : 1) : (i - 2) / 2;
+          const hx = x + sgn * u * (hornN === 2 ? 0.14 : 0.16);
+          const hl = u * (level === 1 ? 0.12 : level === 2 ? 0.2 : 0.26 - Math.abs(sgn) * 0.08);
+          ctx.fillStyle = '#1A1020';
+          ctx.beginPath();
+          ctx.moveTo(hx - u * 0.04, y - u * 0.14);
+          ctx.lineTo(hx + sgn * u * 0.08, y - u * 0.14 - hl);
+          ctx.lineTo(hx + u * 0.04, y - u * 0.14);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        }
+        ctx.fillStyle = level === 3 ? '#4A0C2E' : level === 2 ? '#7A1238' : '#8E1E3A';
+        ctx.beginPath();
+        ctx.arc(x, y - u * 0.02, u * 0.2, 0, Math.PI * 2); // head
+        ctx.fill();
+        ctx.stroke();
+        if (level === 2) {
+          ctx.fillStyle = '#E6D9BE';
+          ctx.beginPath();
+          ctx.ellipse(x, y - u * 0.17, u * 0.12, u * 0.06, 0, Math.PI, 0);
+          ctx.fill();
+        }
+        ctx.fillStyle = '#9CFF3A';
+        for (const sgn of [-1, 1]) {
+          ctx.beginPath();
+          ctx.ellipse(x + sgn * u * 0.08, y - u * 0.05, u * 0.045, u * 0.025, sgn * 0.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.strokeStyle = '#F6EEDC';
+        ctx.lineWidth = u * 0.03;
+        ctx.beginPath();
+        ctx.arc(x, y + u * 0.0, u * 0.13, 0.25, Math.PI - 0.25); // grin
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(10,14,28,0.75)';
+        ctx.lineWidth = Math.max(1, u * 0.03);
+        ctx.fillStyle = team.main; // collar / scarf
+        ctx.fillRect(x - u * 0.12, y + u * 0.18, u * 0.24, u * 0.07);
+        if (level >= 2) {
+          ctx.fillStyle = '#C85CFF';
+          ctx.fillRect(x - u * 0.2, y + u * 0.26, u * 0.4, u * 0.04);
         }
         break;
       }

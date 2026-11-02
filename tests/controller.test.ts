@@ -183,3 +183,85 @@ describe('GameController races', () => {
     expect(ended.length).toBe(1);
   });
 });
+
+describe('chain move, storm and timer scaling in the controller', () => {
+  const chainPosition = () =>
+    makeState([
+      [0, 'insaner', 3, 5, 5],
+      [1, 'walk', 1, 5, 6],
+      [1, 'sad', 1, 11, 11],
+      [1, 'marki', 1, 11, 0],
+      [0, 'sad', 1, 0, 0],
+    ]);
+
+  it('emits bonus + absorb, pre-selects the chaining piece, and skipBonus hands the turn over', async () => {
+    const { ctrl, flush, finishAnims, botCalls } = harness(chainPosition());
+    const events: string[] = [];
+    ctrl.on((e) => {
+      if (e.type === 'bonus') events.push(`bonus:${e.player}:${e.pieceId}`);
+      if (e.type === 'absorb') events.push(`absorb:${e.player}:${e.character}`);
+    });
+    ctrl.start();
+    await flush();
+    expect(ctrl.tryHumanMove({ pieceId: 'p0-insaner', from: { r: 5, c: 5 }, to: { r: 5, c: 6 } })).toBe(true);
+    await flush();
+    await finishAnims();
+    expect(events).toEqual(['absorb:0:walk', 'bonus:0:p0-insaner']);
+    expect(ctrl.phase).toBe('humanTurn');
+    expect(ctrl.state.bonusPieceId).toBe('p0-insaner');
+    const snap = ctrl.snapshot();
+    expect(snap.selection?.pieceId).toBe('p0-insaner');
+    expect(snap.selection?.actionable).toBe(true);
+    // Other own pieces cannot be moved during the chain.
+    expect(ctrl.tryHumanMove({ pieceId: 'p0-sad', from: { r: 0, c: 0 }, to: { r: 1, c: 0 } })).toBe(false);
+    expect(ctrl.skipBonus()).toBe(true);
+    await flush();
+    expect(ctrl.state.bonusPieceId).toBeNull();
+    expect(ctrl.state.turn).toBe(1);
+    expect(ctrl.phase).toBe('botThinking');
+    expect(botCalls.length).toBe(1);
+    expect(ctrl.skipBonus()).toBe(false);
+  });
+
+  it('uses the shrinking turn clock and reports storm advances', async () => {
+    // 1 v 2 from the start: the clock is 20 s and the storm activates on the first settle.
+    const initial = makeState([
+      [0, 'sad', 3, 5, 5],
+      [1, 'sad', 3, 8, 8],
+      [1, 'marki', 1, 11, 0],
+    ]);
+    const bot = (s: GameState) => {
+      // Red shuffles its sad back and forth; the marki stays on column 0 and will be swallowed.
+      const me = s.pieces.find((p) => p.id === 'p1-sad')!;
+      const to = me.pos.c === 8 ? { r: 8, c: 7 } : { r: 8, c: 8 };
+      return { pieceId: 'p1-sad', from: { ...me.pos }, to };
+    };
+    const { ctrl, flush, finishAnims, advance } = harness(initial, { botMove: bot });
+    (ctrl as unknown as { ports: { turnTimeMs?: number } }).ports.turnTimeMs = undefined;
+    const storms: number[] = [];
+    ctrl.on((e) => {
+      if (e.type === 'storm') storms.push(e.storm);
+    });
+    ctrl.start();
+    await flush();
+    expect(ctrl.turnTimeMs).toBe(20_000);
+    expect(ctrl.state.stormIn).toBeNull(); // makeState bypasses createGame; the first ply settles it
+    let col = 5;
+    for (let i = 0; i < 4 && ctrl.state.status === 'playing'; i++) {
+      const me = ctrl.state.pieces.find((p) => p.id === 'p0-sad')!;
+      const to = { r: 5, c: col === 5 ? 6 : 5 };
+      col = to.c;
+      expect(ctrl.tryHumanMove({ pieceId: 'p0-sad', from: { ...me.pos }, to })).toBe(true);
+      await flush();
+      await finishAnims();
+      await advance(0);
+      await finishAnims();
+      await flush();
+      if (i === 0) expect(ctrl.state.stormIn).toBeGreaterThan(0);
+    }
+    expect(storms).toEqual([1]);
+    expect(ctrl.state.storm).toBe(1);
+    expect(ctrl.state.pieces.some((p) => p.id === 'p1-marki')).toBe(false);
+    expect(ctrl.state.status).toBe('playing');
+  });
+});
