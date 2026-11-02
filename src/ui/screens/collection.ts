@@ -34,6 +34,20 @@ function reachCount(id: CharacterId, lv: Level): number {
   return tbl[id][lv - 1];
 }
 
+/** Rendered 3D look of the unit at a level (blue team), from `docs/brand/render-units.mjs`. */
+function unitPreview(id: CharacterId, lv: Level) {
+  return h('img', {
+    class: `compare__model tier-${lv}`,
+    src: `./chars/unit-${id}-lv${lv}-0.png`,
+    alt: `${CHARACTERS[id].nameKo} Lv.${lv} 3D 모델`,
+    width: '96',
+    height: '96',
+    loading: 'lazy',
+    decoding: 'async',
+    draggable: 'false',
+  });
+}
+
 export function collectionScreen(router: Router): Screen {
   const bag = new Disposables();
   const wallet = h('div', { class: 'wallet wallet--bar' });
@@ -125,11 +139,11 @@ export function collectionScreen(router: Router): Screen {
         h(
           'div',
           { class: 'unit-card__compare' },
-          h('div', { class: 'compare__col' }, h('span', { class: 'compare__cap' }, `Lv.${prog.level} 현재`), movementDiagram(id, prog.level, { cell: 8 }), h('span', { class: 'compare__desc' }, def.descKo[prog.level - 1])),
+          h('div', { class: 'compare__col' }, h('span', { class: 'compare__cap' }, `Lv.${prog.level} 현재`), unitPreview(id, prog.level), movementDiagram(id, prog.level, { cell: 8 }), h('span', { class: 'compare__desc' }, def.descKo[prog.level - 1])),
           next
             ? [
                 h('span', { class: 'compare__arrow' }, icon('chevron', 22)),
-                h('div', { class: 'compare__col compare__col--next' }, h('span', { class: 'compare__cap' }, `Lv.${next} 강화 후`), movementDiagram(id, next, { cell: 8 }), h('span', { class: 'compare__desc' }, def.descKo[next - 1])),
+                h('div', { class: 'compare__col compare__col--next' }, h('span', { class: 'compare__cap' }, `Lv.${next} 강화 후`), unitPreview(id, next), movementDiagram(id, next, { cell: 8 }), h('span', { class: 'compare__desc' }, def.descKo[next - 1])),
               ]
             : h('div', { class: 'compare__col compare__col--max' }, icon('trophy', 28), h('span', { class: 'compare__cap' }, '최대 레벨')),
         ),

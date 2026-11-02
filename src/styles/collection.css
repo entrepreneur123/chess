@@ -224,6 +224,34 @@
   box-shadow: inset 0 0 0 1px var(--line-1);
   text-align: center;
 }
+/* 3D model preview per level: the level-up is sold visually, not just by numbers. */
+.compare__model {
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+  margin: -4px 0 -6px;
+  filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.55));
+  transition: transform var(--dur-3) var(--ease-spring);
+}
+.compare__model.tier-3 {
+  filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 10px rgba(255, 195, 40, 0.45));
+}
+.compare__col--next .compare__model {
+  transform: scale(1.06);
+}
+.unit-card.is-leveled .compare__model {
+  animation: model-pop var(--dur-4) var(--ease-pop) both;
+}
+@keyframes model-pop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
 .compare__col--next {
   background: linear-gradient(180deg, rgba(63, 224, 143, 0.12), rgba(63, 224, 143, 0.03));
   box-shadow: inset 0 0 0 1px rgba(63, 224, 143, 0.45);
