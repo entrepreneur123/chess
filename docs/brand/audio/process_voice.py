@@ -38,9 +38,10 @@ CHAR = {
 #   qmin/qmax: clamp on the pitch ratio. Big shifts of shouted TTS takes sound processed, so the
 #   character weight comes mostly from the voice design prompt, formant scale and effect layers.
     "sad": dict(f0=150.0, formant=1.0, tempo=1.0, pull=0.35, tail=0.2, qmin=0.8, qmax=1.2),
-    "marki": dict(f0=110.0, formant=0.86, tempo=1.04, pull=0.35, tail=0.15, qmin=0.55, qmax=1.0),
+    # marki is voiced by cloning a deep VoiceDesign take (see lines.json), so only a modest shift.
+    "marki": dict(f0=92.0, formant=0.86, tempo=1.0, pull=0.4, tail=0.15, qmin=0.75, qmax=1.05),
     "walk": dict(f0=135.0, formant=1.0, tempo=0.96, pull=0.4, tail=0.08, qmin=0.8, qmax=1.2),
-    "insaner": dict(f0=560.0, formant=1.1, tempo=0.9, pull=0.3, tail=0.12, qmin=0.85, qmax=1.35),
+    "insaner": dict(f0=560.0, formant=1.1, tempo=0.9, pull=0.3, tail=0.12, qmin=0.85, qmax=1.35, mintempo=0.66),
 }
 MAX_DUR = {"death": 1.9, "victory": 1.8, "skill": 1.7}
 MIN_TEMPO = 0.78  # never speed a take up by more than ~1.28x (rubberband stays natural-sounding)
@@ -105,6 +106,12 @@ def centroid(x: np.ndarray, sr: int = SR) -> float:
     keep = e > e.max() * 0.05
     c = (mag[:, keep] * f[:, None]).sum(axis=0) / (mag[:, keep].sum(axis=0) + 1e-12)
     return float(np.median(c))
+
+
+def method_bias(method: str, q: float) -> float:
+    """Tie-breaker: rubberband sounds more natural for moderate shifts, WORLD for large ones."""
+    large = q < 0.7 or q > 1.45
+    return 0.03 if (method == "world") != large else 0.0
 
 
 def expected_dur(text: str) -> float:
@@ -361,9 +368,9 @@ def fx_insaner(x):
     low = ffilter(x, "rubberband=pitch=0.5:formant=shifted:pitchq=quality:transients=mixed")
     low = low[: len(x)] if len(low) >= len(x) else np.pad(low, (0, len(x) - len(low)))
     crushed = bitcrush(y / peak, bits=6, hold=2) * peak
-    y = 0.82 * y + 0.18 * crushed + 0.12 * low
+    y = 0.88 * y + 0.12 * crushed + 0.08 * low
     y = np.tanh(1.4 * y / peak) * peak
-    y = chorus(y, depth_ms=1.8, base_ms=5.0, rate=0.9, mix=0.32)
+    y = chorus(y, depth_ms=1.8, base_ms=5.0, rate=0.9, mix=0.25)
     y = biquad(y, "peak", 3200, 2.0, 1.0)
     y = biquad(y, "lp", 10500)
     y = compress(y, -22, 3.0)
@@ -426,7 +433,7 @@ def main() -> None:
             for k in cands[line["id"]]:
                 d = k["dur"] * P["tempo"]
                 # Prefer intelligible, punchy takes: CER first, then over-budget / slow delivery.
-                score = (k["cer"] + 0.8 * max(0.0, d * MIN_TEMPO / P["tempo"] - budget)
+                score = (k["cer"] + 0.8 * max(0.0, d * P.get("mintempo", MIN_TEMPO) / P["tempo"] - budget)
                          + 0.25 * max(0.0, d / natural - 1.0) + 0.4 * max(0.0, 0.35 - d))
                 if k["vr"] > 0.35 and k["f0"] > 0:
                     score += 0.15 * abs(math.log2(k["f0"] / raw_mean))
@@ -451,7 +458,7 @@ def main() -> None:
                 q = float(np.clip(math.exp(log_shift), P["qmin"], P["qmax"]))
                 s = P["tempo"]
                 if k["dur"] * s > budget:
-                    s = max(budget / k["dur"], MIN_TEMPO)
+                    s = max(budget / k["dur"], P.get("mintempo", MIN_TEMPO))
                 for method in ("rb", "world"):
                     y = pitch_formant(k["x"] / (np.abs(k["x"]).max() + 1e-9) * 0.7, q, P["formant"], s, method)
                     y = FX[char](y)
@@ -463,7 +470,7 @@ def main() -> None:
                     h = asr(z)  # judge what actually ships (post-AAC)
                     d = len(z) / SR
                     score = (cer(ref, h) + 0.25 * max(0.0, (d - P["tail"]) / natural - 1.0)
-                             + (0.0 if method == "rb" else 0.03))
+                             + method_bias(method, q))
                     print(f"  {char}:{line['id']} {k['file']} {method} q={q:.2f} s={s:.2f} -> {h} ({score:.2f})",
                           flush=True)
                     if best is None or score < best[0]:

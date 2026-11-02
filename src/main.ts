@@ -11,6 +11,7 @@ import './styles/formation.css';
 import './styles/matchmaking.css';
 import './styles/overlays.css';
 import './styles/game.css';
+import { installAudio } from './audio/sfx';
 import { APP_NAME } from './meta/economy';
 import { getProfile } from './meta/profile';
 import { Router } from './ui/router';
@@ -28,6 +29,8 @@ document.addEventListener('contextmenu', (e) => e.preventDefault());
 document.addEventListener('dblclick', (e) => e.preventDefault(), { passive: false });
 
 getProfile(); // load + sanitize persisted data early
+// Create/resume the AudioContext on the first gesture (autoplay policy); without this the game stays silent.
+installAudio();
 
 const outlet = document.getElementById('app')!;
 const router = new Router(outlet)

@@ -4,34 +4,17 @@
  * animation, pointer-events: none, removes itself; never delays the game flow.
  */
 import { CHARACTERS, type CharacterId, type Level, type PlayerId } from '../../engine';
+import { VOICE_CLIPS, VOICE_TEXT } from '../../audio/voiceManifest';
 import { starsOf } from '../components/piece';
 import { h } from '../dom';
 
 export type CutInKind = 'capture' | 'skill' | 'chain';
 
-/** Short shout shown as the subtitle (matches the voice line theme of each character). */
-export const CUTIN_LINES: Record<CharacterId, Record<CutInKind, string[]>> = {
-  sad: {
-    capture: ['정의의 심판을!', '빛이여!', '물러서라!'],
-    skill: ['빛이여, 길을 열어라!'],
-    chain: ['빛이여!'],
-  },
-  marki: {
-    capture: ['크아아!', '짓밟아주마!', '부숴버린다!'],
-    skill: ['돌격!'],
-    chain: ['크아아!'],
-  },
-  walk: {
-    capture: ['방패로 막고, 친다!', '끝이다!'],
-    skill: ['도약!'],
-    chain: ['끝이다!'],
-  },
-  insaner: {
-    capture: ['냠! 네 거 내 거!', '키히히히! 잡았다!', '장난 좀 쳐볼까?'],
-    skill: ['그 힘, 내 거야!'],
-    chain: ['한 번 더~!'],
-  },
-};
+/** Caption lines per character and cut-in kind: the texts of the matching voice clips. */
+function linesFor(character: CharacterId, kind: CutInKind): string[] {
+  const out = (VOICE_CLIPS[character][kind] ?? VOICE_CLIPS[character].capture ?? []).map((rel) => VOICE_TEXT[rel]).filter(Boolean);
+  return out.length ? out : [CHARACTERS[character].nameKo];
+}
 
 export const CUTIN_MS = 1250;
 
@@ -54,14 +37,14 @@ export interface CutInSpec {
   level: Level;
   owner: PlayerId;
   kind: CutInKind;
-  /** Subtitle; defaults to a line from CUTIN_LINES. */
+  /** Subtitle (the voice line actually spoken); defaults to one of the character's lines. */
   line?: string;
 }
 
 let lineIdx = 0;
 
 export function pickLine(character: CharacterId, kind: CutInKind): string {
-  const lines = CUTIN_LINES[character][kind];
+  const lines = linesFor(character, kind);
   return lines[lineIdx++ % lines.length];
 }
 

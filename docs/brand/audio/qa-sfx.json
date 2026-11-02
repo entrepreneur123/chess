@@ -62,12 +62,12 @@
  "marki-capture": {
   "file": "sfx/marki-capture.m4a",
   "dur": 1.088,
-  "lufs": -16.75,
-  "peak_db": -0.36,
-  "centroid": 2181,
+  "lufs": -17.94,
+  "peak_db": -5.22,
+  "centroid": 2193,
   "lead_ms": 8,
   "trail_ms": 41,
-  "bytes": 10025
+  "bytes": 9999
  },
  "marki-move": {
   "file": "sfx/marki-move.m4a",

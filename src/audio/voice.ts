@@ -205,22 +205,23 @@ function playBuffer(buf: AudioBuffer, gain: number, rate = 1): { src: AudioBuffe
 
 /**
  * Voice line for a character event. Fire-and-forget; safe to call anywhere (no-ops when muted,
- * before the first user gesture, or without Web Audio).
+ * before the first user gesture, or without Web Audio). Returns the clip chosen (a key of
+ * VOICE_TEXT, so the UI can caption exactly what is spoken) or null when nothing will play.
  */
-export function playVoice(character: CharacterId, event: CharAudioEvent, opts: VoiceOptions = {}): void {
+export function playVoice(character: CharacterId, event: CharAudioEvent, opts: VoiceOptions = {}): string | null {
   try {
-    if (!hasBrowserAudio() || !voiceOn()) return;
+    if (!hasBrowserAudio() || !voiceOn()) return null;
     const list = VOICE_CLIPS[character]?.[event];
-    if (!list || list.length === 0) return;
+    if (!list || list.length === 0) return null;
     const chance = VOICE_CHANCE[event];
-    if (chance !== undefined && Math.random() > chance) return;
+    if (chance !== undefined && Math.random() > chance) return null;
     const o = audioOut();
-    if (!o) return;
+    if (!o) return null;
     const t = nowMs();
     const prevAt = lastVoiceAt.get(event);
-    if (prevAt !== undefined && t - prevAt < VOICE_COOLDOWN_MS[event]) return;
+    if (prevAt !== undefined && t - prevAt < VOICE_COOLDOWN_MS[event]) return null;
     const priority = PRIORITY[event];
-    if (current && current.priority > priority && o.ctx.currentTime < current.endsAt - 0.08) return;
+    if (current && current.priority > priority && o.ctx.currentTime < current.endsAt - 0.08) return null;
     lastVoiceAt.set(event, t);
 
     const rel = pickVariant(`${character}:${event}`, list);
@@ -245,8 +246,10 @@ export function playVoice(character: CharacterId, event: CharAudioEvent, opts: V
     const buf = ready.get(rel);
     if (buf) start(buf);
     else void load(rel).then((b) => (nowMs() - t <= LATE_WINDOW_MS ? start(b) : undefined));
+    return rel;
   } catch {
     /* never let audio break gameplay */
+    return null;
   }
 }
 

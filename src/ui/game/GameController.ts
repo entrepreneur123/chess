@@ -20,6 +20,7 @@ import {
   type GameState,
   type HistoryEntry,
   type Move,
+  type Piece,
   type PlayerId,
   type Pos,
   MATCH_TIME_MS,
@@ -53,7 +54,7 @@ export type ControllerEvent =
   /** `pieceId` (an Insaner) absorbed the movement of `character`. */
   | { type: 'absorb'; player: PlayerId; pieceId: string; character: CharacterId }
   /** The storm advanced to `storm` columns per side, removing `killed`. */
-  | { type: 'storm'; storm: number; killed: string[] }
+  | { type: 'storm'; storm: number; killed: string[]; /** The removed pieces as they stood. */ lost: Piece[] }
   | { type: 'ended'; state: GameState };
 
 export interface ControllerPorts {
@@ -410,7 +411,7 @@ export class GameController {
     }
     const added = next.history.slice(prev.history.length + skip);
     for (const e of added) {
-      if (e.kind === 'storm') this.emit({ type: 'storm', storm: e.storm, killed: e.killed });
+      if (e.kind === 'storm') this.emit({ type: 'storm', storm: e.storm, killed: e.killed, lost: prev.pieces.filter((p) => e.killed.includes(p.id)) });
       else if (e.kind === 'pass' && e.reason === 'noMoves') {
         this.emit({
           type: 'toast',

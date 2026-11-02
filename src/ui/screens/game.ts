@@ -1,5 +1,7 @@
 import { BotClient } from '../../ai/botClient';
 import { haptic, sfx } from '../../audio/sfx';
+import { playCharSfx, playVoice, preloadCharacterAudio, stopVoice } from '../../audio/voice';
+import { VOICE_TEXT } from '../../audio/voiceManifest';
 import { CHARACTERS, createGame, getPieceById, materialScore, suddenDeathIn, type GameState, type Move, type Piece, type Pos } from '../../engine';
 import { createBoardView, type IBoardView } from '../../render';
 import { MIN_MOVES_FOR_REWARD, PACING } from '../../meta/economy';
@@ -247,11 +249,28 @@ export function gameScreen(router: Router, params: GameParams): Screen {
    * the board's onImpact, or the end of the animation on boards without it) and the landing.
    */
   let mover: Piece | null = null;
+  let victim: Piece | null = null;
   let impactDone: Move | null = null;
+  /** Caption of the capture shout, so the cut-in shows exactly what is heard. */
+  let shout: string | null = null;
   const moveFeedbackStart = (move: Move, before: GameState) => {
     mover = getPieceById(before, move.pieceId) ?? null;
+    victim = move.captureId ? (getPieceById(before, move.captureId) ?? null) : null;
     impactDone = null;
+    shout = null;
     sfx(mover?.character === 'walk' ? 'jump' : 'move');
+    if (!mover) return;
+    const vo = { level: mover.level, owner: mover.owner };
+    const dist = Math.max(Math.abs(move.to.r - move.from.r), Math.abs(move.to.c - move.from.c));
+    // Signature moves: Marki's long charge, Walk's wide leap.
+    const signature = (mover.character === 'marki' && dist >= 3) || (mover.character === 'walk' && Math.abs(move.to.c - move.from.c) >= 2);
+    playCharSfx(mover.character, signature ? 'skill' : 'move');
+    if (move.captureId) {
+      // Insaner sometimes shouts its absorb line instead of a capture line.
+      const ev = mover.character === 'insaner' && Math.random() < 0.5 ? 'skill' : 'capture';
+      const rel = playVoice(mover.character, ev, vo);
+      shout = rel ? (VOICE_TEXT[rel] ?? null) : null;
+    } else playVoice(mover.character, signature ? 'skill' : 'move', vo);
   };
   const impact = (move: Move) => {
     if (impactDone === move || !move.captureId) return;
@@ -260,7 +279,11 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     sfx('capture');
     haptic('capture');
     showCaptureFx(byMe);
-    if (mover && mover.id === move.pieceId) spawnFx(cutInEl({ character: mover.character, level: mover.level, owner: mover.owner, kind: 'capture' }), CUTIN_MS);
+    if (mover && mover.id === move.pieceId) {
+      playCharSfx(mover.character, 'capture');
+      spawnFx(cutInEl({ character: mover.character, level: mover.level, owner: mover.owner, kind: 'capture', line: shout ?? undefined }), CUTIN_MS);
+    }
+    if (victim && victim.id === move.captureId) playCharSfx(victim.character, 'death');
   };
   const moveFeedbackEnd = (move: Move) => {
     if (move.captureId) impact(move);
@@ -366,6 +389,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
         if (snap.selection.actionable) {
           sfx('select');
           haptic('light');
+          const sp = getPieceById(s, snap.selection.pieceId);
+          if (sp) playVoice(sp.character, 'select', { level: sp.level, owner: sp.owner });
         } else sfx('tap');
       }
       prevSel = selKey;
@@ -467,6 +492,9 @@ export function gameScreen(router: Router, params: GameParams): Screen {
         { label: '다시 하기', value: 'again', variant: 'filled' },
       ],
     });
+    // The winning side's leading survivor has the last word.
+    const speaker = outcome === 'draw' ? undefined : heroPieces[0];
+    if (speaker) playVoice(speaker.character, 'victory', { level: speaker.level, owner: speaker.owner });
     if (outcome === 'win') {
       sfx('win');
       haptic('win');
@@ -525,6 +553,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
         if (!bag.isDisposed) impact(move);
       });
       preloadCutIns([...params.playerFormation, ...params.botFormation]);
+      void preloadCharacterAudio([...new Set([...params.playerFormation, ...params.botFormation].map((f) => f.character))]);
+      bag.add(() => stopVoice());
 
       bag.add(
         c.on((e) => {
@@ -539,6 +569,11 @@ export function gameScreen(router: Router, params: GameParams): Screen {
             toast(e.message, { tone: e.tone === 'warn' ? 'warn' : 'neutral' });
           } else if (e.type === 'bonus') {
             showBonusBanner(e.player === HUMAN);
+            const bp = getPieceById(c.state, e.pieceId);
+            if (bp) {
+              playVoice(bp.character, 'chain', { level: bp.level, owner: bp.owner });
+              playCharSfx(bp.character, 'chain');
+            }
             sfx(e.player === HUMAN ? 'levelup' : 'turn');
             if (e.player === HUMAN) haptic('capture');
           } else if (e.type === 'absorb') {
@@ -546,6 +581,10 @@ export function gameScreen(router: Router, params: GameParams): Screen {
             toast(`${who} ${CHARACTERS[e.character].nameKo}의 이동 능력을 흡수했어요`, { tone: e.player === HUMAN ? 'success' : 'warn', duration: 2400 });
           } else if (e.type === 'storm') {
             showStormFx(e.killed.length);
+            // Pieces swallowed by the storm: their death sound, and one last word from the first.
+            const gone = e.lost;
+            gone.forEach((p) => playCharSfx(p.character, 'death'));
+            if (gone[0]) playVoice(gone[0].character, 'death', { level: gone[0].level, owner: gone[0].owner });
             sfx('capture');
             haptic('warn');
           }

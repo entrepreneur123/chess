@@ -67,8 +67,13 @@ src/ai/       봇 (알파베타 탐색) + Web Worker + 클라이언트(실패 �
 src/render/   Three.js 3D 보드 + WebGL이 없을 때 쓰는 Canvas2D 보드, 디자인 토큰
 src/ui/       라우터, 화면(로비/진형/매칭/게임/캐릭터/상점), GameController 상태 머신
 src/meta/     localStorage 프로필(버전/검증/복구), 경제 수치, 봇 상대 생성
+src/audio/    합성 효과음(sfx.ts) + 캐릭터 AI 음성·전용 효과음(voice.ts, public/audio/)
 tests/        vitest
 ```
+
+- 대전 화면: 말을 탭하면 이동 가능 칸만 표시(내 말 흰색, 상대 말 빨간색). 상세 정보는 오른쪽 위 ≡ 버튼의 "현재 진형" 패널.
+- 캐릭터 음성: Qwen3-TTS(Apache-2.0)로 만든 한국어 대사 41개, 효과음 18개는 직접 합성. 출처·라이선스는 `public/audio/LICENSES.md`, 재생성 방법은 `docs/brand/audio/README.md`.
+- 3D 모델 출처·라이선스는 `public/models/LICENSES.md`.
 
 ## Android (Google Play) 빌드
 

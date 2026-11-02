@@ -12,7 +12,7 @@ import numpy as np
 import soundfile as sf
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # run with -I: add our own dir explicitly
-from process_voice import centroid, edge_silence_ms, edge_trim, encode_m4a, fades, limit, load, lufs
+from process_voice import centroid, edge_silence_ms, edge_trim, encode_checked, fades, limit, lufs
 
 SR = 48000
 TARGET_LUFS = -17.0  # a hair under the voice lines (-16) so dialogue sits on top
@@ -37,8 +37,7 @@ def main() -> None:
         x = fades(edge_trim(x, SR, -44.0, 8.0), SR, fin=0.001, fout=0.03)
         name = f[:-4]
         path = os.path.join(a.out, name + ".m4a")
-        encode_m4a(x, path, bitrate="64k", sr=SR)
-        z = load(path, SR)
+        x, z = encode_checked(x, path, bitrate="64k", sr=SR)  # decoded peak <= -1 dBFS
         lead, trail = edge_silence_ms(z, SR)
         qa[name] = dict(file=f"sfx/{name}.m4a", dur=round(len(z) / SR, 3), lufs=round(lufs(z, SR), 2),
                         peak_db=round(20 * math.log10(np.abs(z).max() + 1e-12), 2), centroid=round(centroid(z, SR)),
