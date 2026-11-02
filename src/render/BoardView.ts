@@ -1416,7 +1416,7 @@ export class BoardView implements IBoardView {
     const cam = this.camera;
     cam.aspect = aspect;
     const portrait = aspect < 0.8;
-    const tiltDeg = portrait ? (aspect < 0.7 ? 58 : 56) : aspect < 1.2 ? 56 : 52;
+    const tiltDeg = portrait ? (aspect < 0.7 ? 47 : 47) : aspect < 1.2 ? 50 : 48;
     // Top-down: almost straight down (89deg keeps lookAt well-defined with +y up) and a narrower
     // field of view so units look the same anywhere on the board.
     const t = this.viewT;
