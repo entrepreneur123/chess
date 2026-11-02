@@ -74,7 +74,7 @@ export const LOOKS: Record<CharacterId, CharacterLook> = {
     impact: 0.45,
     rim: 0.45,
     clips: {
-      idle: { src: 'Sword_Idle' },
+      idle: { src: 'Idle_Shield_Loop' },
       run: { src: 'Jog_Fwd_Loop' },
       attack: { src: 'Sword_Regular_A' },
       hit: { src: 'Hit_Chest' },

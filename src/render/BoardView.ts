@@ -292,9 +292,12 @@ class PieceKit {
     return mat;
   }
 
-  /** Base puck + rarity ring + level pips merged into one vertex-coloured geometry. */
-  private puck(r: Rarity, level: Level): THREE.BufferGeometry {
-    const key = `${r}:${level}`;
+  /**
+   * Base puck + glowing team disc + rarity ring + level pips merged into one vertex-coloured
+   * geometry. The team disc keeps blue/red readable from straight above (top-down view).
+   */
+  private puck(r: Rarity, level: Level, owner: PlayerId): THREE.BufferGeometry {
+    const key = `${r}:${level}:${owner}`;
     let geo = this.pucks.get(key);
     if (geo) return geo;
     const profile = [
@@ -312,6 +315,12 @@ class PieceKit {
         geo: new THREE.TorusGeometry(0.41, 0.058, 8, 48).rotateX(Math.PI / 2).translate(0, 0.07, 0),
         color: RARITY_COLORS[r],
         emit: 0.5 + 1.0 * RARITY_GLOW[r],
+        rim: 0,
+      },
+      {
+        geo: new THREE.CircleGeometry(0.315, 40).rotateX(-Math.PI / 2).translate(0, 0.1415, 0),
+        color: TEAM_COLORS[owner].main,
+        emit: 0.6,
         rim: 0,
       },
     ];
@@ -390,7 +399,7 @@ class PieceKit {
     root.add(inner);
 
     // Puck + rarity ring + level pips: one draw (+ one shadow draw).
-    const puck = new THREE.Mesh(this.puck(rar, p.level), this.puckMat);
+    const puck = new THREE.Mesh(this.puck(rar, p.level, p.owner), this.puckMat);
     puck.castShadow = false; // the decal already carries the contact shadow
     puck.receiveShadow = false;
     puck.raycast = () => undefined;
@@ -1424,7 +1433,7 @@ export class BoardView implements IBoardView {
       }
     }
     // Tallest piece on the far row (only matters for the tilted view).
-    const topY = 1.95 * (1 - t) + 0.4 * t;
+    const topY = 2.2 * (1 - t) + 0.4 * t; // TILE_TOP + PUCK_TOP + UNIT_MAX_HEIGHT
     pts.push(new THREE.Vector3(-HALF, topY, -HALF), new THREE.Vector3(HALF, topY, -HALF));
     const marginX = portrait ? 0.985 : 0.92;
     const marginY = portrait ? 0.95 : 0.92;
