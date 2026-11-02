@@ -22,6 +22,10 @@ export function isWebGLAvailable(): boolean {
 
 /** Create the 3D board; falls back to the flat Canvas2D board if WebGL fails for any reason. */
 export function createBoardView(container: HTMLElement): IBoardView {
+  // DEV only: `?board2d` forces the Canvas2D fallback (to check it without disabling WebGL).
+  if (import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).has('board2d')) {
+    return new Board2DView(container);
+  }
   if (isWebGLAvailable()) {
     try {
       return new BoardView(container);

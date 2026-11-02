@@ -33,16 +33,20 @@ rng = np.random.default_rng(7)
 # Per-character voice treatment.
 #   f0: target median pitch (Hz) after processing.   formant: spectral-envelope scale (<1 = bigger body).
 #   tempo: duration ratio (<1 = faster).             pull: how far each line is pulled to the target (0..1).
+#   tail: seconds of reverb tail the effect chain adds (counted in the duration budget).
 CHAR = {
-    "sad": dict(f0=150.0, formant=0.95, tempo=1.0, pull=0.45),
-    "marki": dict(f0=92.0, formant=0.84, tempo=1.04, pull=0.45),
-    "walk": dict(f0=128.0, formant=0.98, tempo=0.96, pull=0.5),
-    "insaner": dict(f0=470.0, formant=1.13, tempo=0.9, pull=0.4),
+#   qmin/qmax: clamp on the pitch ratio. Big shifts of shouted TTS takes sound processed, so the
+#   character weight comes mostly from the voice design prompt, formant scale and effect layers.
+    "sad": dict(f0=150.0, formant=1.0, tempo=1.0, pull=0.35, tail=0.2, qmin=0.8, qmax=1.2),
+    "marki": dict(f0=110.0, formant=0.86, tempo=1.04, pull=0.35, tail=0.15, qmin=0.55, qmax=1.0),
+    "walk": dict(f0=135.0, formant=1.0, tempo=0.96, pull=0.4, tail=0.08, qmin=0.8, qmax=1.2),
+    "insaner": dict(f0=560.0, formant=1.1, tempo=0.9, pull=0.3, tail=0.12, qmin=0.85, qmax=1.35),
 }
-MAX_DUR = {"death": 1.9, "victory": 1.9, "skill": 1.7}
+MAX_DUR = {"death": 1.9, "victory": 1.8, "skill": 1.7}
+MIN_TEMPO = 0.78  # never speed a take up by more than ~1.28x (rubberband stays natural-sounding)
 DEFAULT_MAX_DUR = 1.6
 TARGET_LUFS = -16.0
-PEAK_DB = -1.5  # leaves room for AAC overshoot; decoded files are checked against -1 dBFS
+PEAK_DB = -2.0  # leaves room for AAC overshoot; decoded files are checked against -1 dBFS
 
 
 # ------------------------------------------------------------------------------------------------
@@ -62,7 +66,7 @@ def ffilter(x: np.ndarray, af: str, sr: int = SR) -> np.ndarray:
     return np.frombuffer(p.stdout, dtype=np.float32).astype(np.float64)
 
 
-def encode_m4a(x: np.ndarray, path: str, bitrate: str = "48k", sr: int = SR) -> None:
+def encode_m4a(x: np.ndarray, path: str, bitrate: str = "64k", sr: int = SR) -> None:
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "f32le", "-ar", str(sr), "-ac", "1", "-i", "-",
                     "-c:a", "aac", "-b:a", bitrate, "-movflags", "+faststart", "-map_metadata", "-1", path],
                    input=x.astype(np.float32).tobytes(), check=True)
@@ -103,6 +107,12 @@ def centroid(x: np.ndarray, sr: int = SR) -> float:
     return float(np.median(c))
 
 
+def expected_dur(text: str) -> float:
+    """Rough natural duration of a short Korean bark: 0.2 s + 0.15 s per syllable."""
+    syl = sum(1 for ch in text if "\uac00" <= ch <= "\ud7a3")
+    return 0.2 + 0.15 * max(1, syl)
+
+
 def norm_text(s: str) -> str:
     return "".join(ch for ch in s if ch.isalnum())
 
@@ -122,8 +132,8 @@ def cer(ref: str, hyp: str) -> float:
 
 
 class Asr:
-    def __init__(self, model_dir: str):
-        self.m = WhisperModel(model_dir, device="cpu", compute_type="int8", cpu_threads=os.cpu_count() or 4)
+    def __init__(self, model_dir: str, threads: int = 0):
+        self.m = WhisperModel(model_dir, device="cpu", compute_type="int8", cpu_threads=threads or os.cpu_count() or 4)
 
     def __call__(self, x: np.ndarray, sr: int = SR) -> str:
         a = signal.resample_poly(x, 16000, sr).astype(np.float32)
@@ -235,14 +245,37 @@ def bitcrush(x, bits=6, hold=3):
     return y
 
 
-def pitch_formant(x, q, r, s, sr=SR):
-    """q: pitch ratio, r: formant ratio, s: duration ratio. asetrate scales pitch+formant+speed by r,
-    rubberband (formant preserved) then fixes pitch to q and duration to s."""
+def pitch_formant(x, q, r, s, method="rb", sr=SR):
+    """q: pitch ratio, r: formant ratio, s: duration ratio.
+    rb:    asetrate scales pitch+formant+speed by r, rubberband (formant preserved) then fixes pitch
+           to q and duration to s. Usually the most natural for moderate shifts.
+    world: WORLD vocoder analysis/resynthesis (harvest F0, CheapTrick envelope warped by r, D4C)."""
+    if method == "world":
+        return world_shift(x, q, r, s, sr)
     rate = int(round(sr * r))
     af = (f"asetrate={rate},aresample={sr}:resampler=soxr,"
           f"rubberband=pitch={q / r:.5f}:tempo={1 / (r * s):.5f}:formant=preserved:pitchq=quality:"
           f"transients=mixed:window=standard:phase=laminar")
     return ffilter(x, af, sr)
+
+
+def world_shift(x, q, r, s, sr=SR):
+    x = x.astype(np.float64)
+    f0, t = pw.harvest(x, sr, f0_floor=55, f0_ceil=1000, frame_period=5)
+    sp = pw.cheaptrick(x, f0, t, sr)
+    ap = pw.d4c(x, f0, t, sr)
+    nb = sp.shape[1]
+    src = np.clip(np.arange(nb) / r, 0, nb - 1)  # envelope warp: r > 1 moves formants up
+    sp = np.stack([np.interp(src, np.arange(nb), row) for row in sp])
+    ap = np.stack([np.interp(src, np.arange(nb), row) for row in ap])
+    n = len(f0)
+    m = max(2, int(round(n * s)))
+    pos = np.linspace(0, n - 1, m)
+    i0 = np.floor(pos).astype(int)
+    f0n = f0[np.clip(np.round(pos).astype(int), 0, n - 1)] * q  # nearest: keeps voicing decisions crisp
+    spn = sp[i0]
+    apn = ap[i0]
+    return pw.synthesize(np.ascontiguousarray(f0n), np.ascontiguousarray(spn), np.ascontiguousarray(apn), sr, 5)
 
 
 def limit(x, peak_db=PEAK_DB, look_ms=2.0, release=0.06, sr=SR):
@@ -256,6 +289,19 @@ def limit(x, peak_db=PEAK_DB, look_ms=2.0, release=0.06, sr=SR):
         prev = v if v < prev else a * prev + (1 - a) * v
         out[i] = prev
     return np.clip(x * out, -thr, thr)
+
+
+def encode_checked(y: np.ndarray, path: str, bitrate: str = "64k", sr: int = SR):
+    """Encode; AAC can overshoot a few dB on sharp transients, so re-encode quieter until the
+    decoded peak is <= -1 dBFS. Returns (pre-encode signal, decoded signal)."""
+    for _ in range(4):
+        encode_m4a(y, path, bitrate, sr)
+        z = load(path, sr)
+        over = 20 * math.log10(np.abs(z).max() + 1e-12) + 1.0
+        if over <= 0:
+            break
+        y = y * 10 ** (-(over + 0.3) / 20)
+    return y, z
 
 
 def loudness_normalise(x, target=TARGET_LUFS):
@@ -277,7 +323,7 @@ def fx_sad(x):
     y = biquad(y, "peak", 2800, 2.0, 1.0)
     y = biquad(y, "peak", 7000, -2.0, 1.2)
     y = compress(y, -22, 2.5)
-    return reverb(y, 1.25, 0.22, predelay=0.028, lp=5500, tail=0.28)
+    return reverb(y, 1.0, 0.15, predelay=0.025, lp=5000, tail=0.2)
 
 
 def fx_marki(x):
@@ -296,7 +342,7 @@ def fx_marki(x):
     y = biquad(y, "highshelf", 4500, -4.0)
     y = biquad(y, "lp", 9000)
     y = compress(y, -20, 3.5)
-    return reverb(y, 0.65, 0.12, predelay=0.012, lp=3500, tail=0.18)
+    return reverb(y, 0.65, 0.12, predelay=0.012, lp=3500, tail=0.15)
 
 
 def fx_walk(x):
@@ -305,7 +351,7 @@ def fx_walk(x):
     y = biquad(y, "peak", 2600, 3.0, 1.1)
     y = biquad(y, "highshelf", 6500, 1.0)
     y = compress(y, -24, 3.0, attack=0.003, release=0.06)
-    return reverb(y, 0.35, 0.09, predelay=0.008, lp=6000, tail=0.1)
+    return reverb(y, 0.35, 0.09, predelay=0.008, lp=6000, tail=0.08)
 
 
 def fx_insaner(x):
@@ -321,7 +367,7 @@ def fx_insaner(x):
     y = biquad(y, "peak", 3200, 2.0, 1.0)
     y = biquad(y, "lp", 10500)
     y = compress(y, -22, 3.0)
-    return reverb(y, 0.5, 0.12, predelay=0.01, lp=7000, tail=0.15)
+    return reverb(y, 0.5, 0.12, predelay=0.01, lp=7000, tail=0.12)
 
 
 FX = {"sad": fx_sad, "marki": fx_marki, "walk": fx_walk, "insaner": fx_insaner}
@@ -340,9 +386,10 @@ def main() -> None:
     ap.add_argument("--qa", required=True)
     ap.add_argument("--wav-out", default="", help="optional dir for the processed wavs (pre-encode)")
     ap.add_argument("--only-char", default="")
+    ap.add_argument("--threads", type=int, default=0, help="ASR threads (default: all cores)")
     a = ap.parse_args()
     spec = json.load(open(a.lines, encoding="utf-8"))
-    asr = Asr(a.asr)
+    asr = Asr(a.asr, a.threads)
     os.makedirs(a.out, exist_ok=True)
     qa = json.load(open(a.qa, encoding="utf-8")) if os.path.exists(a.qa) else {}
 
@@ -361,50 +408,74 @@ def main() -> None:
                 hyp = asr(x)
                 f0, vr = f0_stats(x)
                 lst.append(dict(file=f, x=x, hyp=hyp, cer=cer(ref, hyp), dur=len(x) / SR, f0=f0, vr=vr))
+            if not lst:
+                print(f"WARNING: no takes for {char}:{line['id']}", flush=True)
+                continue
             cands[line["id"]] = lst
         voiced = [k["f0"] for v in cands.values() for k in v if k["vr"] > 0.35 and k["f0"] > 0]
         raw_mean = float(np.exp(np.mean(np.log(voiced))))
 
-        # Pass 2: choose a take per line.
-        chosen = {}
+        # Pass 2: shortlist the two best raw takes per line.
+        shortlist = {}
         for line in c["lines"]:
-            max_d = MAX_DUR.get(line["event"], DEFAULT_MAX_DUR)
-            best, best_score = None, 1e9
+            if line["id"] not in cands:
+                continue
+            budget = MAX_DUR.get(line["event"], DEFAULT_MAX_DUR) - P["tail"]
+            natural = expected_dur(line["text"])
+            scored = []
             for k in cands[line["id"]]:
                 d = k["dur"] * P["tempo"]
-                score = k["cer"] + 0.6 * max(0.0, d - max_d) + 0.4 * max(0.0, 0.35 - d)
+                # Prefer intelligible, punchy takes: CER first, then over-budget / slow delivery.
+                score = (k["cer"] + 0.8 * max(0.0, d * MIN_TEMPO / P["tempo"] - budget)
+                         + 0.25 * max(0.0, d / natural - 1.0) + 0.4 * max(0.0, 0.35 - d))
                 if k["vr"] > 0.35 and k["f0"] > 0:
                     score += 0.15 * abs(math.log2(k["f0"] / raw_mean))
-                if score < best_score:
-                    best, best_score = k, score
-            chosen[line["id"]] = best
-        sel_f0 = [k["f0"] for k in chosen.values() if k["vr"] > 0.35 and k["f0"] > 0]
+                scored.append((score, k))
+            scored.sort(key=lambda e: e[0])
+            shortlist[line["id"]] = [k for _, k in scored[:2]]
+        sel_f0 = [ks[0]["f0"] for ks in shortlist.values() if ks[0]["vr"] > 0.35 and ks[0]["f0"] > 0]
         char_mean = float(np.exp(np.mean(np.log(sel_f0))))
 
-        # Pass 3: process, encode, QA.
+        # Pass 3: process each shortlisted take with both pitch methods, keep the variant that
+        # survives processing best (ASR on the processed audio), then encode + QA it.
         for line in c["lines"]:
-            k = chosen[line["id"]]
+            if line["id"] not in shortlist:
+                continue
             ref = line.get("asr", line["text"])
-            lf0 = k["f0"] if (k["vr"] > 0.35 and k["f0"] > 0) else char_mean
-            log_shift = math.log(P["f0"] / char_mean) + P["pull"] * math.log(char_mean / lf0)
-            q = float(np.clip(math.exp(log_shift), 0.33, 2.4))
-            max_d = MAX_DUR.get(line["event"], DEFAULT_MAX_DUR)
-            s = P["tempo"]
-            if k["dur"] * s > max_d:
-                s = max(max_d / k["dur"], s * 0.8)
-            y = pitch_formant(k["x"] / (np.abs(k["x"]).max() + 1e-9) * 0.7, q, P["formant"], s)
-            y = FX[char](y)
-            y = trim(y, rel_db=-45, pre_ms=8, post_ms=60)
-            y = fades(edge_trim(loudness_normalise(y)), fout=0.04)
+            budget = MAX_DUR.get(line["event"], DEFAULT_MAX_DUR) - P["tail"]
+            natural = expected_dur(line["text"])
+            best = None
+            for k in shortlist[line["id"]]:
+                lf0 = k["f0"] if (k["vr"] > 0.35 and k["f0"] > 0) else char_mean
+                log_shift = math.log(P["f0"] / char_mean) + P["pull"] * math.log(char_mean / lf0)
+                q = float(np.clip(math.exp(log_shift), P["qmin"], P["qmax"]))
+                s = P["tempo"]
+                if k["dur"] * s > budget:
+                    s = max(budget / k["dur"], MIN_TEMPO)
+                for method in ("rb", "world"):
+                    y = pitch_formant(k["x"] / (np.abs(k["x"]).max() + 1e-9) * 0.7, q, P["formant"], s, method)
+                    y = FX[char](y)
+                    y = trim(y, rel_db=-45, pre_ms=8, post_ms=60)
+                    y = fades(edge_trim(loudness_normalise(y)), fout=0.04)
+                    tmp = os.path.join(a.out, f".tmp-{char}-{line['id']}-{method}.m4a")
+                    y, z = encode_checked(y, tmp)
+                    os.remove(tmp)
+                    h = asr(z)  # judge what actually ships (post-AAC)
+                    d = len(z) / SR
+                    score = (cer(ref, h) + 0.25 * max(0.0, (d - P["tail"]) / natural - 1.0)
+                             + (0.0 if method == "rb" else 0.03))
+                    print(f"  {char}:{line['id']} {k['file']} {method} q={q:.2f} s={s:.2f} -> {h} ({score:.2f})",
+                          flush=True)
+                    if best is None or score < best[0]:
+                        best = (score, y, k, q, s, method, h)
+            _, y, k, q, s, method, hyp = best
             name = f"{char}-{line['id']}"
             if a.wav_out:
                 os.makedirs(a.wav_out, exist_ok=True)
                 import soundfile as sf
                 sf.write(os.path.join(a.wav_out, name + ".wav"), y.astype(np.float32), SR, subtype="FLOAT")
             path = os.path.join(a.out, name + ".m4a")
-            encode_m4a(y, path)
-            z = load(path)
-            hyp = asr(z)
+            y, z = encode_checked(y, path)
             f0, vr = f0_stats(z)
             lead, trail = edge_silence_ms(z)
             rec = dict(file=f"vo/{name}.m4a", character=char, event=line["event"], text=line["text"], ref=ref,
@@ -413,7 +484,7 @@ def main() -> None:
                        f0=round(f0, 1), voiced=round(vr, 2), centroid=round(centroid(z)),
                        lufs=round(lufs(z), 2), peak_db=round(20 * math.log10(np.abs(z).max() + 1e-12), 2),
                        lead_ms=round(lead), trail_ms=round(trail), bytes=os.path.getsize(path),
-                       pitch_ratio=round(q, 3), tempo=round(s, 3))
+                       pitch_ratio=round(q, 3), tempo=round(s, 3), method=method)
             qa[name] = rec
             print(json.dumps(rec, ensure_ascii=False), flush=True)
         json.dump(qa, open(a.qa, "w", encoding="utf-8"), ensure_ascii=False, indent=1)

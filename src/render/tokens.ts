@@ -149,7 +149,7 @@ void main() {
   // Face illustration (or a team-tinted placeholder while it loads), vignetted toward the rim.
   vec3 face;
   if (uHasMap > 0.5) {
-    face = texture2D(uMap, p * 0.5 * 0.86 + vec2(0.5, 0.52)).rgb;
+    face = texture2D(uMap, p * 0.5 * 0.8 + vec2(0.5, 0.49)).rgb;
   } else {
     face = mix(uTeamDark * 0.55, vec3(0.02, 0.025, 0.05), smoothstep(0.0, 0.85, length(p - vec2(0.0, 0.15))));
   }

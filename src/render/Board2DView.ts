@@ -1267,8 +1267,8 @@ function paintToken(g: CanvasRenderingContext2D, S: number, img: HTMLImageElemen
   if (img) {
     const w = img.naturalWidth;
     const h = img.naturalHeight;
-    const sw = Math.min(w, h) * 0.86;
-    g.drawImage(img, (w - sw) / 2, (h - sw) / 2 - h * 0.02, sw, sw, c - R * 0.775, c - R * 0.775, R * 1.55, R * 1.55);
+    const sw = Math.min(w, h) * 0.8;
+    g.drawImage(img, (w - sw) / 2, (h - sw) / 2 + h * 0.01, sw, sw, c - R * 0.775, c - R * 0.775, R * 1.55, R * 1.55);
   } else {
     const pg = g.createRadialGradient(c, c * 0.8, 0, c, c, R * 0.8);
     pg.addColorStop(0, team.dark);

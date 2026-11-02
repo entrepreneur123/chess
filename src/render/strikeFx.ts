@@ -64,12 +64,12 @@ void main() {
     float wd = abs(fract(a) - 0.5 + jag) * 6.2831853 * r / 11.0;
     float len = (0.45 + 0.4 * hash1(cell + uSeed * 3.1)) * min(1.0, e * 1.8);
     float taper = smoothstep(len, len * 0.3, r);
-    float crack = smoothstep(0.022 * taper + 0.004, 0.0, wd) * step(r, len) * pow(fade, 0.5);
-    float halo = smoothstep(0.07, 0.0, wd) * step(r, len) * taper * 0.35 * fade;
+    float crack = smoothstep(0.034 * taper + 0.006, 0.0, wd) * step(r, len) * pow(fade, 0.5);
+    float halo = smoothstep(0.1, 0.0, wd) * step(r, len) * taper * 0.5 * fade;
     float core = smoothstep(R, 0.0, r) * 0.22 * fade * fade;
     col = uColor * (ring * 1.3 + crack * 2.2 + halo) + uColor2 * core;
   } else if (uMode < 1.5) {
-    // Shield-shaped shock ring (point toward +y = the strike direction) + an echo and a flash core.
+    // Shield-shaped shock ring (its point at -y; BoardView turns it toward the strike) + an echo and a flash core.
     float s = 0.18 + 0.78 * e;
     float d = sdShield(p / s * 1.08) * s;
     float line = exp(-pow(d / (0.025 + 0.03 * k), 2.0)) * fade;
@@ -120,7 +120,7 @@ void main() {
   float head = uK * 1.45;
   float vis = smoothstep(head - 0.8, head, s) * step(s, head) * step(0.0, s) * step(s, 1.0);
   float mid = sin(clamp(s, 0.0, 1.0) * 3.14159);
-  float th = 0.04 + 0.16 * mid;
+  float th = 0.05 + 0.2 * mid;
   float d = r - 0.8;
   float blade = smoothstep(th, 0.0, abs(d + th * 0.6)) * step(d, 0.02);
   float edge = exp(-pow(d / 0.018, 2.0)) * (0.4 + mid);
@@ -181,9 +181,9 @@ attribute vec4 aSeed; // delay (s), phase, spread, size
 varying float vA;
 varying float vS;
 void main() {
-  float tt = (uT - aSeed.x) / 0.5;
+  float tt = (uT - aSeed.x) / 0.55;
   float s = clamp(tt, 0.0, 1.0);
-  vec3 mid = (uFrom + uTo) * 0.5 + vec3(0.0, 0.75 + aSeed.z * 0.5, 0.0);
+  vec3 mid = (uFrom + uTo) * 0.5 + vec3(0.0, 1.1 + aSeed.z * 0.6, 0.0);
   vec3 p = mix(mix(uFrom, mid, s), mix(mid, uTo, s), s);
   float w = sin(s * 3.14159) * 0.28 * (0.4 + aSeed.z);
   float ph = aSeed.y * 6.2831853 + s * 10.0;
@@ -399,7 +399,7 @@ export class StrikeFx {
       seeds[i * 4] = (i / SOUL_COUNT) * 0.34 + h(12.9898) * 0.04;
       seeds[i * 4 + 1] = h(78.233);
       seeds[i * 4 + 2] = h(39.425);
-      seeds[i * 4 + 3] = 0.07 + 0.09 * h(11.135);
+      seeds[i * 4 + 3] = 0.12 + 0.12 * h(11.135);
     }
     soulGeo.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 4));
     soulGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(SOUL_COUNT * 3), 3));
@@ -509,7 +509,7 @@ export class StrikeFx {
   /** Crescent sword slash at a point (camera-facing, diagonal); `flip` mirrors the sweep. */
   slash(x: number, y: number, z: number, size: number, color: string, core: string, flip: boolean, now: number): void {
     this.slashT.t0 = now;
-    this.slashT.dur = 300;
+    this.slashT.dur = 380;
     (this.slashMat.uniforms.uColor.value as THREE.Color).set(color);
     (this.slashMat.uniforms.uCore.value as THREE.Color).set(core);
     this.slashMat.uniforms.uK.value = 0;

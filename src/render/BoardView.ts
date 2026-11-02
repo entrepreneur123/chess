@@ -151,8 +151,10 @@ interface PieceVisual {
   proxy: THREE.Mesh;
   /** Holds the 3D body; scaled away as the camera blends into the top-down view. */
   figure: THREE.Group;
-  /** Rarity ring on the ground (shared material per rarity). */
+  /** Rarity ring on the ground (shared material per rarity), base puck and ground decal. */
   ring: THREE.Mesh;
+  puck: THREE.Mesh;
+  decal: THREE.Mesh;
   /** Top-down illustrated token and its own material (fade / flash / dissolve uniforms). */
   token: THREE.Mesh;
   tokenMat: THREE.ShaderMaterial;
@@ -441,7 +443,7 @@ class PieceKit {
     return geo;
   }
 
-  build(p: Piece): { root: THREE.Group; inner: THREE.Group } {
+  build(p: Piece): { root: THREE.Group; inner: THREE.Group; puck: THREE.Mesh; decal: THREE.Mesh } {
     const root = new THREE.Group();
     root.userData.pieceId = p.id;
     const rar = CHARACTER_RARITY[p.character];
@@ -463,7 +465,7 @@ class PieceKit {
     puck.receiveShadow = false;
     puck.raycast = () => undefined;
     inner.add(puck);
-    return { root, inner };
+    return { root, inner, puck, decal };
   }
 
   /** Simple team-coloured capsule unit (models loading / failed to load). */
@@ -1455,7 +1457,20 @@ export class BoardView implements IBoardView {
     token.raycast = noRaycast;
     b.inner.add(token);
     if (this.viewTo === 1 || this.viewT > 0) this.tokens.load(p.character, p.level);
-    const v: PieceVisual = { piece: p, root: b.root, inner: b.inner, actor: null, body: null, proxy, figure, ring, token, tokenMat };
+    const v: PieceVisual = {
+      piece: p,
+      root: b.root,
+      inner: b.inner,
+      actor: null,
+      body: null,
+      proxy,
+      figure,
+      ring,
+      puck: b.puck,
+      decal: b.decal,
+      token,
+      tokenMat,
+    };
     this.attachBody(v, p);
     this.blendVisual(v);
     return v;
@@ -1871,8 +1886,12 @@ export class BoardView implements IBoardView {
       u.uDissolve.value = ck;
       const sw = 1 + 0.14 * easeOutCubic(ck);
       cv.token.scale.set(sw, 1, sw);
+      // The base (ring, puck, floor decal) sinks away with the body.
       const rs = Math.max(0.001, 1 - easeOutCubic(ck));
       cv.ring.scale.set(rs, 1, rs);
+      const ps = Math.max(0.001, 1 - easeOutCubic(clamp01((ck - 0.25) / 0.75)));
+      cv.puck.scale.set(ps, ps, ps);
+      cv.decal.scale.set(ps, 1, ps);
     }
     return true;
   }
@@ -1891,7 +1910,7 @@ export class BoardView implements IBoardView {
     let flash = 0.45;
     switch (ch) {
       case 'sad':
-        this.strike.slash(at.x - a.dirX * 0.15, 0.8, at.z - a.dirZ * 0.15, 1.75, fx.primary, fx.core, a.dirX < 0, now);
+        this.strike.slash(at.x - a.dirX * 0.1, 0.85, at.z - a.dirZ * 0.1, 2.3, fx.primary, fx.core, a.dirX < 0, now);
         this.strike.pillar(at.x, TILE_TOP, at.z, fx.primary, fx.secondary, fx.core, false, 600, now);
         this.strike.ground(0, GROUND_MODE.sigil, at.x, gy, at.z, 1.05, fx.primary, fx.secondary, 600, now);
         this.sparks.burst(at.x, 0.85, at.z, 20 + mp.level * 4, 3.8, fx.primary, seed);
@@ -1910,7 +1929,7 @@ export class BoardView implements IBoardView {
         flash = 0.6;
         break;
       case 'walk':
-        this.strike.ground(0, GROUND_MODE.shield, at.x, gy, at.z, 1.25, fx.primary, fx.core, 540, now, Math.atan2(-a.dirX, -a.dirZ));
+        this.strike.ground(0, GROUND_MODE.shield, at.x, gy, at.z, 1.25, fx.primary, fx.core, 540, now, Math.atan2(a.dirX, a.dirZ));
         this.sparks.burst(at.x, 0.75, at.z, 20 + mp.level * 4, 3.5, fx.secondary, seed);
         shake = this.reducedMotion ? 0.6 : 1.5;
         flash = 0.15;
@@ -1920,7 +1939,7 @@ export class BoardView implements IBoardView {
         this.strike.ground(0, GROUND_MODE.flame, at.x, gy, at.z, 1.1, fx.primary, fx.secondary, 660, now);
         this.sparks.burst(at.x, 0.8, at.z, 14, 3.4, fx.primary, seed);
         this.sparks.burst(at.x, 0.6, at.z, 10, 2.6, fx.secondary, (seed + 31) % 97);
-        this.strike.soul(at.x, 0.75, at.z, '#B65CFF', '#FFE6FF', now);
+        this.strike.soul(at.x, 0.75, at.z, '#8FB8FF', '#FFFFFF', now);
         this.soulTarget = a.mover;
         this.strike.setSoulTarget(a.mover.root.position.x, 0.75, a.mover.root.position.z);
         this.lastCapture = { id: mp.id, t: now };
