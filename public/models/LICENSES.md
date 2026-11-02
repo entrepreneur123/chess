@@ -16,5 +16,7 @@ License texts:
 
 Modifications (all ours, also CC0-compatible): unused clips/meshes removed, clips renamed
 (`idle`, `run`, `jump`, `attack`, `death`), props re-parented, atlases downscaled/merged, bull
-material colours baked to vertex colours, meshopt + quantization compression. Team colours,
-gold/dark armour, plume, halo and auras are applied at runtime (`src/render/units/`).
+material colours baked to vertex colours, meshopt + quantization compression. At runtime
+(`src/render/units/`) the palette atlas is baked into per-level vertex colours, and all extra gear
+(capes, plumes, crowns, wings, visors, barding, mane, horn wraps, spears, pennants, shield emblems),
+team colours, patterns and auras are generated procedurally; no third-party assets are added.

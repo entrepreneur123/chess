@@ -5,8 +5,12 @@
  * i.e. player 0 at the bottom of the screen), y = up. Tile tops are at y = TILE_TOP.
  *
  * Units are animated glTF characters (src/render/units, public/models/*.glb): one merged skinned
- * draw call each, AnimationMixer per piece (idle loop / run / jump / attack / death), facing from
- * Piece.dir with a smooth turn. Until the models load (or if they fail) pieces show silhouettes.
+ * draw call each (body + procedural gear), AnimationMixer per piece (idle loop / run / jump /
+ * attack / death) plus cloth/wing secondary motion, facing from Piece.dir with a smooth turn.
+ * Per piece: ground decal (shadow + rarity glow) and puck (base + ring + level pips) are one draw
+ * each; Lv2 adds idle particles, Lv3 a rotating rune and a light shaft. Moves kick up pooled dust,
+ * captures throw spark streaks + a shockwave and dissolve the victim; new units pop in with a
+ * flash. Until the models load (or if they fail) pieces show silhouettes.
  *
  * Performance notes: tiles are one InstancedMesh, overlays are InstancedMeshes, effects reuse
  * pre-allocated meshes (no per-frame / per-move allocations), one 1024 shadow map, pixel ratio
@@ -17,13 +21,13 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { BOARD_SIZE, ZONE_DEPTH } from '../engine/types';
-import type { Move, Piece, PlayerId, Pos, Rarity } from '../engine/types';
+import type { Level, Move, Piece, PlayerId, Pos, Rarity } from '../engine/types';
 import type { BoardHighlights, IBoardView } from './types';
 import { UnitActor } from './units/actor';
 import { loadUnitAssets, unitAssetsIfLoaded } from './units/assets';
 import { LOOKS, MOVE_CLIP } from './units/config';
-import { unitPointScale } from './units/fx';
 import { UnitLibrary } from './units/library';
+import { DustPool, SparkPool } from './boardFx';
 import { ANIM, BOARD_COLORS, CHARACTER_RARITY, RARITY_COLORS, RARITY_GLOW, TEAM_COLORS } from './palette';
 import {
   clamp01,
@@ -117,9 +121,21 @@ interface RunningAnim {
   deathMs: number;
   attackStart: number;
   attackFired: boolean;
+  /** Next footstep dust time (ms since start). */
+  nextDust: number;
   piecesAfter: Piece[];
   resolve: () => void;
 }
+
+const easeOutBack = (t: number): number => {
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+};
+/** Dust colours (sRGB hex numbers). */
+const DUST = 0xc9b9a0;
+const EMBER = 0xff7a2a;
+const SPAWN_MS = 380;
 
 /** Adds a fresnel rim light (team light color) to a standard material's emissive term. */
 function addRim(mat: THREE.MeshStandardMaterial, rimHex: string, strength: number, power = 2.3): void {
@@ -137,15 +153,61 @@ function addRim(mat: THREE.MeshStandardMaterial, rimHex: string, strength: numbe
   mat.customProgramCacheKey = () => `rim${power}-${strength}`;
 }
 
+/**
+ * Ground decal under a piece in ONE draw: contact shadow (darkens, alpha) + rarity glow (adds),
+ * premultiplied blending (src ONE, dst ONE_MINUS_SRC_ALPHA).
+ */
+function makeGroundDecalMaterial(blob: THREE.Texture, glow: THREE.Texture, color: string, glowAmt: number): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    uniforms: { uBlob: { value: blob }, uGlow: { value: glow }, uColor: { value: new THREE.Color(color) }, uGlowAmt: { value: glowAmt } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `uniform sampler2D uBlob; uniform sampler2D uGlow; uniform vec3 uColor; uniform float uGlowAmt; varying vec2 vUv;
+      void main(){
+        // Shadow blob: 1.12 wide, offset (+0.04, +0.06) inside the 1.5-wide decal.
+        vec2 bu = (vUv - 0.5) * (1.5 / 1.12) + 0.5 - vec2(0.04, -0.06) / 1.12;
+        float sh = texture2D(uBlob, clamp(bu, 0.0, 1.0)).a * 0.7 * step(0.0, bu.x) * step(bu.x, 1.0) * step(0.0, bu.y) * step(bu.y, 1.0);
+        float g = texture2D(uGlow, vUv).a * uGlowAmt;
+        gl_FragColor = vec4(uColor * g, sh);
+      }`,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.CustomBlending,
+    blendSrc: THREE.OneFactor,
+    blendDst: THREE.OneMinusSrcAlphaFactor,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
+  });
+}
+
+/** Puck material: vertex colours + per-vertex emissive (x) and rim (y) from `aEmit`. */
+function makePuckMaterial(rimHex: string): THREE.MeshStandardMaterial {
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.38, metalness: 0.05 });
+  const rim = new THREE.Color(rimHex);
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uRim = { value: rim };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute vec2 aEmit;\nvarying vec2 vEmit;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvEmit = aEmit;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform vec3 uRim;\nvarying vec2 vEmit;')
+      .replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>
+        totalEmissiveRadiance += diffuseColor.rgb * vEmit.x;
+        totalEmissiveRadiance += uRim * pow(1.0 - saturate(dot(normalize(normal), normalize(vViewPosition))), 2.0) * vEmit.y;`,
+      );
+  };
+  mat.customProgramCacheKey = () => 'puck-v2';
+  return mat;
+}
+
 /** Shared geometries & materials for every piece (one set per BoardView instance). */
 class PieceKit {
   readonly geometries: THREE.BufferGeometry[] = [];
   readonly materials: THREE.Material[] = [];
   readonly textures: THREE.Texture[] = [];
 
-  readonly base: THREE.BufferGeometry;
-  readonly rarityRing: THREE.BufferGeometry;
-  readonly pip: THREE.BufferGeometry;
   readonly groundPlane: THREE.BufferGeometry;
   readonly burstBit: THREE.BufferGeometry;
   /** Loading / failure silhouette (capsule body + head) and the invisible pick proxy. */
@@ -154,11 +216,11 @@ class PieceKit {
   readonly proxyGeo: THREE.BufferGeometry;
   readonly proxyMat: THREE.MeshBasicMaterial;
   readonly silhouette: Record<PlayerId, THREE.MeshStandardMaterial>;
-  readonly rarity: Record<Rarity, THREE.MeshStandardMaterial>;
-  readonly rarityHalo: Record<Rarity, THREE.MeshBasicMaterial>;
-  readonly baseMat: THREE.MeshStandardMaterial;
-  readonly pipMat: THREE.MeshStandardMaterial;
-  readonly blobMat: THREE.MeshBasicMaterial;
+  readonly puckMat: THREE.MeshStandardMaterial;
+  private readonly decal = new Map<Rarity, THREE.ShaderMaterial>();
+  private readonly pucks = new Map<string, THREE.BufferGeometry>();
+  private readonly glowTex: THREE.Texture;
+  private readonly blobTex: THREE.Texture;
 
   constructor() {
     const g = <T extends THREE.BufferGeometry>(geo: T): T => {
@@ -170,8 +232,44 @@ class PieceKit {
       return mat;
     };
 
-    // Base puck: soft lathe profile (radius ~0.43 so units fill their square).
-    const baseProfile = [
+    this.groundPlane = g(new THREE.PlaneGeometry(1.5, 1.5).rotateX(-Math.PI / 2));
+    this.burstBit = g(new THREE.IcosahedronGeometry(0.095, 0));
+    this.capsule = g(new THREE.CapsuleGeometry(0.2, 0.36, 6, 16).translate(0, 0.38, 0));
+    this.capsuleHead = g(new THREE.SphereGeometry(0.17, 16, 12).translate(0, 0.84, 0));
+    this.proxyGeo = g(new THREE.CylinderGeometry(1, 1, 1, 10).translate(0, 0.5, 0));
+    this.proxyMat = m(new THREE.MeshBasicMaterial({ visible: false }));
+
+    const sil = (id: PlayerId): THREE.MeshStandardMaterial => {
+      const mat = m(
+        new THREE.MeshStandardMaterial({ color: TEAM_COLORS[id].main, roughness: 0.5, metalness: 0.05, emissive: TEAM_COLORS[id].dark, emissiveIntensity: 0.25 }),
+      );
+      addRim(mat, TEAM_COLORS[id].light, 0.8, 2.2);
+      return mat;
+    };
+    this.silhouette = { 0: sil(0), 1: sil(1) };
+    this.glowTex = makeGlowTexture();
+    this.blobTex = makeBlobTexture();
+    this.textures.push(this.glowTex, this.blobTex);
+    this.puckMat = m(makePuckMaterial('#B7C8F5'));
+  }
+
+  /** Contact shadow + rarity floor glow material (cached per rarity). */
+  private decalMat(r: Rarity): THREE.ShaderMaterial {
+    let mat = this.decal.get(r);
+    if (!mat) {
+      mat = makeGroundDecalMaterial(this.blobTex, this.glowTex, RARITY_COLORS[r], 0.12 + 0.5 * RARITY_GLOW[r]);
+      this.materials.push(mat);
+      this.decal.set(r, mat);
+    }
+    return mat;
+  }
+
+  /** Base puck + rarity ring + level pips merged into one vertex-coloured geometry. */
+  private puck(r: Rarity, level: Level): THREE.BufferGeometry {
+    const key = `${r}:${level}`;
+    let geo = this.pucks.get(key);
+    if (geo) return geo;
+    const profile = [
       new THREE.Vector2(0, 0),
       new THREE.Vector2(0.375, 0),
       new THREE.Vector2(0.4, 0.022),
@@ -180,113 +278,95 @@ class PieceKit {
       new THREE.Vector2(0.33, 0.14),
       new THREE.Vector2(0, 0.14),
     ];
-    this.base = g(new THREE.LatheGeometry(baseProfile, 32));
-    this.rarityRing = g(new THREE.TorusGeometry(0.41, 0.058, 8, 48).rotateX(Math.PI / 2).translate(0, 0.07, 0));
-    this.pip = g(new THREE.SphereGeometry(0.063, 12, 8));
-    this.groundPlane = g(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2));
-
-    this.burstBit = g(new THREE.IcosahedronGeometry(0.095, 0));
-    this.capsule = g(new THREE.CapsuleGeometry(0.2, 0.36, 6, 16).translate(0, 0.38, 0));
-    this.capsuleHead = g(new THREE.SphereGeometry(0.17, 16, 12).translate(0, 0.84, 0));
-    this.proxyGeo = g(new THREE.CylinderGeometry(1, 1, 1, 10).translate(0, 0.5, 0));
-    this.proxyMat = m(new THREE.MeshBasicMaterial({ visible: false }));
-
-    const std = (color: string, roughness: number, emissive?: string, ei = 0): THREE.MeshStandardMaterial =>
-      m(new THREE.MeshStandardMaterial({ color, roughness, metalness: 0.05, emissive: emissive ?? '#000000', emissiveIntensity: ei }));
-
-    const sil = (id: PlayerId): THREE.MeshStandardMaterial => {
-      const mat = std(TEAM_COLORS[id].main, 0.5, TEAM_COLORS[id].dark, 0.25);
-      addRim(mat, TEAM_COLORS[id].light, 0.8, 2.2);
-      return mat;
-    };
-    this.silhouette = { 0: sil(0), 1: sil(1) };
-
-    const glowTex = makeGlowTexture();
-    const blobTex = makeBlobTexture();
-    this.textures.push(glowTex, blobTex);
-    const ring = (r: Rarity): THREE.MeshStandardMaterial => {
-      const k = RARITY_GLOW[r];
-      return std(RARITY_COLORS[r], 0.35, RARITY_COLORS[r], 0.5 + 1.0 * k);
-    };
-    const halo = (r: Rarity): THREE.MeshBasicMaterial =>
-      m(
-        new THREE.MeshBasicMaterial({
-          map: glowTex,
-          color: RARITY_COLORS[r],
-          transparent: true,
-          opacity: 0.12 + 0.5 * RARITY_GLOW[r],
-          blending: THREE.AdditiveBlending,
-          depthWrite: false,
-          polygonOffset: true,
-          polygonOffsetFactor: -1,
-          polygonOffsetUnits: -1,
-        }),
-      );
-    this.rarity = { common: ring('common'), rare: ring('rare'), epic: ring('epic'), legendary: ring('legendary') };
-    this.rarityHalo = { common: halo('common'), rare: halo('rare'), epic: halo('epic'), legendary: halo('legendary') };
-    this.baseMat = std(BOARD_COLORS.pieceBase, 0.4, BOARD_COLORS.pieceBase, 0.12);
-    addRim(this.baseMat, '#B7C8F5', 0.9, 2.0);
-    this.pipMat = std(BOARD_COLORS.pip, 0.3, BOARD_COLORS.pip, 1.1);
-    this.blobMat = m(
-      new THREE.MeshBasicMaterial({
-        map: blobTex,
-        transparent: true,
-        opacity: 0.7,
-        depthWrite: false,
-        polygonOffset: true,
-        polygonOffsetFactor: -1,
-        polygonOffsetUnits: -1,
-      }),
-    );
+    const parts: { geo: THREE.BufferGeometry; color: string; emit: number; rim: number }[] = [
+      { geo: new THREE.LatheGeometry(profile, 32), color: BOARD_COLORS.pieceBase, emit: 0.12, rim: 0.9 },
+      {
+        geo: new THREE.TorusGeometry(0.41, 0.058, 8, 48).rotateX(Math.PI / 2).translate(0, 0.07, 0),
+        color: RARITY_COLORS[r],
+        emit: 0.5 + 1.0 * RARITY_GLOW[r],
+        rim: 0,
+      },
+    ];
+    // Level pips: gold gems on the puck lip facing the camera (+z), centered.
+    const spread = 0.34;
+    for (let i = 0; i < level; i++) {
+      const a = (i - (level - 1) / 2) * spread;
+      parts.push({
+        geo: new THREE.SphereGeometry(0.063, 12, 8).translate(Math.sin(a) * 0.35, 0.145, Math.cos(a) * 0.35),
+        color: BOARD_COLORS.pip,
+        emit: 1.1,
+        rim: 0,
+      });
+    }
+    let vCount = 0;
+    let iCount = 0;
+    for (const p of parts) {
+      vCount += p.geo.attributes.position.count;
+      iCount += p.geo.index ? p.geo.index.count : p.geo.attributes.position.count;
+    }
+    const pos = new Float32Array(vCount * 3);
+    const nor = new Float32Array(vCount * 3);
+    const col = new Float32Array(vCount * 3);
+    const emit = new Float32Array(vCount * 2);
+    const idx = new Uint16Array(iCount);
+    let vo = 0;
+    let io = 0;
+    const c = new THREE.Color();
+    for (const p of parts) {
+      const P = p.geo.attributes.position;
+      const N = p.geo.attributes.normal;
+      c.set(p.color);
+      for (let i = 0; i < P.count; i++) {
+        pos.set([P.getX(i), P.getY(i), P.getZ(i)], (vo + i) * 3);
+        nor.set([N.getX(i), N.getY(i), N.getZ(i)], (vo + i) * 3);
+        col.set([c.r, c.g, c.b], (vo + i) * 3);
+        emit[(vo + i) * 2] = p.emit;
+        emit[(vo + i) * 2 + 1] = p.rim;
+      }
+      if (p.geo.index) {
+        for (let k = 0; k < p.geo.index.count; k++) idx[io + k] = p.geo.index.getX(k) + vo;
+        io += p.geo.index.count;
+      } else {
+        for (let k = 0; k < P.count; k++) idx[io + k] = vo + k;
+        io += P.count;
+      }
+      vo += P.count;
+      p.geo.dispose();
+    }
+    geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    geo.setAttribute('aEmit', new THREE.BufferAttribute(emit, 2));
+    geo.setIndex(new THREE.BufferAttribute(idx, 1));
+    geo.computeBoundingSphere();
+    this.geometries.push(geo);
+    this.pucks.set(key, geo);
+    return geo;
   }
 
   build(p: Piece): { root: THREE.Group; inner: THREE.Group } {
     const root = new THREE.Group();
     root.userData.pieceId = p.id;
-    const noPick = (me: THREE.Mesh): void => {
-      me.raycast = () => undefined;
-    };
-
-    // Contact shadow blob + rarity floor halo (ground level, never lifted).
-    const blob = new THREE.Mesh(this.groundPlane, this.blobMat);
-    blob.scale.set(1.12, 1, 1.12);
-    blob.position.set(0.04, TILE_TOP + 0.004, 0.06);
-    blob.renderOrder = 1;
-    noPick(blob);
-    root.add(blob);
     const rar = CHARACTER_RARITY[p.character];
-    const halo = new THREE.Mesh(this.groundPlane, this.rarityHalo[rar]);
-    halo.scale.set(1.5, 1, 1.5);
-    halo.position.y = TILE_TOP + 0.006;
-    halo.renderOrder = 1;
-    noPick(halo);
-    root.add(halo);
+
+    // Contact shadow + rarity floor glow (ground level, never lifted): one decal draw.
+    const decal = new THREE.Mesh(this.groundPlane, this.decalMat(rar));
+    decal.position.y = TILE_TOP + 0.005;
+    decal.renderOrder = 1;
+    decal.raycast = () => undefined;
+    root.add(decal);
 
     const inner = new THREE.Group();
     inner.position.y = TILE_TOP;
     root.add(inner);
 
-    const mesh = (geo: THREE.BufferGeometry, mat: THREE.Material, parent: THREE.Object3D): THREE.Mesh => {
-      const me = new THREE.Mesh(geo, mat);
-      me.castShadow = true;
-      me.receiveShadow = false;
-      parent.add(me);
-      return me;
-    };
-
-    mesh(this.base, this.baseMat, inner);
-    mesh(this.rarityRing, this.rarity[rar], inner).castShadow = false;
-
-    // Level pips: gold gems on the puck lip facing the camera (+z), centered.
-    const n = p.level;
-    const spread = 0.34; // radians between pips
-    for (let i = 0; i < n; i++) {
-      const a = (i - (n - 1) / 2) * spread;
-      const pip = mesh(this.pip, this.pipMat, inner);
-      pip.castShadow = false;
-      pip.position.set(Math.sin(a) * 0.35, 0.145, Math.cos(a) * 0.35);
-    }
-
+    // Puck + rarity ring + level pips: one draw (+ one shadow draw).
+    const puck = new THREE.Mesh(this.puck(rar, p.level), this.puckMat);
+    puck.castShadow = false; // the decal already carries the contact shadow
+    puck.receiveShadow = false;
+    puck.raycast = () => undefined;
+    inner.add(puck);
     return { root, inner };
   }
 
@@ -305,6 +385,8 @@ class PieceKit {
     for (const geo of this.geometries) geo.dispose();
     for (const mat of this.materials) mat.dispose();
     for (const t of this.textures) t.dispose();
+    this.decal.clear();
+    this.pucks.clear();
   }
 }
 
@@ -354,7 +436,14 @@ export class BoardView implements IBoardView {
   private readonly visuals = new Map<string, PieceVisual>();
   /** glTF unit factory (null until the models are loaded, or if loading failed). */
   private units: UnitLibrary | null = null;
-  private readonly unitGlowTex: THREE.Texture;
+  /** Point-sprite scale shared with the unit FX (drawing-buffer px per world unit at distance 1). */
+  private readonly pointScale = { value: 600 };
+  private readonly dust: DustPool;
+  private readonly sparks: SparkPool;
+  /** Spawn-in (match start / level change): start time and the visuals popping in. */
+  private tSpawn = -1;
+  private readonly spawning: PieceVisual[] = [];
+  private lastFx = 0;
   /** Unit idle loops (breathing etc.) at ~24 fps; off for prefers-reduced-motion. */
   private idleAnim = true;
   private lastTick = 0;
@@ -415,7 +504,6 @@ export class BoardView implements IBoardView {
 
     const glowTex = makeGlowTexture();
     this.ownTextures.push(glowTex);
-    this.unitGlowTex = glowTex;
     try {
       this.idleAnim = !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     } catch {
@@ -450,6 +538,9 @@ export class BoardView implements IBoardView {
     this.flashMat = fx.flashMat;
     this.burst = fx.burst;
     this.burstMat = fx.burstMat;
+    this.dust = new DustPool(160, this.pointScale);
+    this.sparks = new SparkPool(40);
+    this.fxLayer.add(this.dust.points, this.sparks.mesh);
 
     this.scene.add(this.pieceLayer, this.fxLayer);
     this.applyHighlights();
@@ -474,13 +565,13 @@ export class BoardView implements IBoardView {
   private initUnits(): void {
     const ready = unitAssetsIfLoaded();
     if (ready) {
-      this.units = new UnitLibrary(ready, this.unitGlowTex);
+      this.units = new UnitLibrary(ready, this.pointScale);
       return;
     }
     loadUnitAssets().then(
       (assets) => {
         if (this.disposed) return;
-        this.units = new UnitLibrary(assets, this.unitGlowTex);
+        this.units = new UnitLibrary(assets, this.pointScale);
         this.rebuildBodies();
       },
       (err: unknown) => {
@@ -848,6 +939,7 @@ export class BoardView implements IBoardView {
         deathMs,
         attackStart,
         attackFired: false,
+        nextDust: 0,
         piecesAfter,
         resolve,
       };
@@ -899,7 +991,7 @@ export class BoardView implements IBoardView {
     this.renderer.setSize(w, h, false);
     this.fitCamera(w / h, h);
     // Spark point sizes: drawing-buffer px per world unit at distance 1.
-    unitPointScale.value =
+    this.pointScale.value =
       (h * this.renderer.getPixelRatio()) / (2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)));
     this.requestRender();
   }
@@ -936,6 +1028,8 @@ export class BoardView implements IBoardView {
     this.pieceLayer.clear();
     this.units?.dispose();
     this.units = null;
+    this.dust.dispose();
+    this.sparks.dispose();
     this.kit.dispose();
     for (const g of this.ownGeometries) g.dispose();
     for (const m of this.ownMaterials) m.dispose();
@@ -964,10 +1058,12 @@ export class BoardView implements IBoardView {
         this.removeVisual(v);
         v = undefined;
       }
+      let fresh = false;
       if (!v) {
         v = this.createVisual(p);
         this.visuals.set(p.id, v);
         this.pieceLayer.add(v.root);
+        fresh = true;
       } else if (v.actor) {
         // Forward direction changed (turn-around at the far edge) or a move ended: turn smoothly.
         v.actor.face(forwardYaw(p), TURN_S);
@@ -975,6 +1071,7 @@ export class BoardView implements IBoardView {
       v.piece = { ...p, pos: { ...p.pos } };
       v.inner.scale.set(1, 1, 1);
       v.root.position.set(cellX(p.pos.c), 0, cellZ(p.pos.r));
+      if (fresh && this.idleAnim) this.startSpawn(v);
     }
     for (const [id, v] of this.visuals) {
       if (!seen.has(id)) {
@@ -1026,7 +1123,11 @@ export class BoardView implements IBoardView {
 
   /** Swap every silhouette for its glTF unit once the models are ready. */
   private rebuildBodies(): void {
-    for (const v of this.visuals.values()) if (!v.actor) this.attachBody(v, v.piece);
+    for (const v of this.visuals.values()) {
+      if (v.actor) continue;
+      this.attachBody(v, v.piece);
+      if (this.idleAnim) this.startSpawn(v);
+    }
     this.requestRender();
   }
 
@@ -1306,9 +1407,12 @@ export class BoardView implements IBoardView {
     } else {
       inner.position.y = TILE_TOP + 0.045 * Math.sin(Math.PI * k);
     }
+    if (t < a.moveDur && t >= a.nextDust) this.footstep(a, t);
     if (!a.landed && t >= a.moveDur) {
       a.landed = true;
       this.startLandFx(a.to, TEAM_COLORS[a.mover.piece.owner].glow, now);
+      const big = a.jump || a.mover.piece.character === 'marki';
+      this.dust.ring(a.to.x, TILE_TOP + 0.04, a.to.z, a.jump ? 12 : 6, a.jump ? 1.8 : 1.0, big ? 0.55 : 0.38, 0.6, DUST, k);
       if (a.mover.actor && !a.captured && !a.jump) a.mover.actor.idle(0.12);
     }
     if (!a.attackFired && t >= a.attackStart && a.mover.actor) {
@@ -1321,15 +1425,25 @@ export class BoardView implements IBoardView {
       if (!a.capFired) {
         a.capFired = true;
         this.startCaptureFx(a.capturedAt, a.capturedOwner, now);
+        const mp = a.mover.piece;
+        const hit = LOOKS[mp.character].levels[mp.level].glow;
+        this.sparks.burst(a.capturedAt.x, 0.85, a.capturedAt.z, 22 + mp.level * 6, 3.6 + mp.level * 0.5, hit, now % 97);
+        this.dust.ring(a.capturedAt.x, TILE_TOP + 0.05, a.capturedAt.z, 10, 2.1, 0.5, 0.65, DUST, 0.3);
         const act = cv.actor;
-        if (act) act.play('death', { once: true, hold: true, fade: 0.05, timeScale: act.clipDuration('death') / (a.deathMs / 1000) });
+        if (act) {
+          act.play('death', { once: true, hold: true, fade: 0.05, timeScale: act.clipDuration('death') / (a.deathMs / 1000) });
+          if (this.units) act.setDying(this.units.dyingMaterial(cv.piece));
+        }
       }
-      // Knock-back first (death clip), then shrink away into the burst.
+      // Knock-back (death clip) while the body dissolves from a hot edge; silhouettes shrink.
       const ck = clamp01((t - a.captureStart) / a.deathMs);
-      const sk = clamp01((ck - 0.45) / 0.55);
-      const s = 1 - easeOutCubic(sk);
-      cv.root.scale.setScalar(Math.max(0.001, s));
-      cv.root.position.y = 0.12 * easeOutCubic(sk);
+      if (cv.actor && this.units) {
+        this.units.setDissolve(clamp01((ck - 0.12) / 0.88));
+      } else {
+        const sk = clamp01((ck - 0.45) / 0.55);
+        cv.root.scale.setScalar(Math.max(0.001, 1 - easeOutCubic(sk)));
+      }
+      cv.root.position.y = 0.08 * easeOutCubic(ck);
     }
     return true;
   }
@@ -1339,6 +1453,43 @@ export class BoardView implements IBoardView {
     this.landMat.color.set(hex).lerp(this.tmpC.set('#ffffff'), 0.45);
     this.landRing.position.set(at.x, OVERLAY_Y + 0.002, at.z);
     this.landRing.visible = true;
+  }
+
+  /** Footstep / hoof dust behind a running unit. */
+  private footstep(a: RunningAnim, t: number): void {
+    const bull = a.mover.piece.character === 'marki';
+    a.nextDust = t + (a.jump ? 1e9 : bull ? 50 : 70);
+    const p = a.mover.root.position;
+    let dx = a.to.x - a.from.x;
+    let dz = a.to.z - a.from.z;
+    const d = Math.hypot(dx, dz) || 1;
+    dx /= d;
+    dz /= d;
+    const y = TILE_TOP + 0.03;
+    if (a.jump) {
+      this.dust.ring(p.x, y, p.z, 7, 1.1, 0.36, 0.5, DUST, 0);
+      return;
+    }
+    const side = ((t / 70) | 0) % 2 === 0 ? 1 : -1;
+    const lx = -dz * side * (bull ? 0.24 : 0.12);
+    const lz = dx * side * (bull ? 0.24 : 0.12);
+    const back = bull ? 0.35 : 0.12;
+    this.dust.emit(p.x - dx * back + lx, y, p.z - dz * back + lz, -dx * 0.5 + lx, 0.35, -dz * 0.5 + lz, bull ? 0.6 : 0.36, bull ? 0.65 : 0.5, DUST);
+    if (bull) {
+      this.dust.emit(p.x - dx * back - lx, y, p.z - dz * back - lz, -dx * 0.5 - lx, 0.45, -dz * 0.5 - lz, 0.55, 0.6, DUST);
+      if (a.mover.piece.level === 3) this.dust.emit(p.x - dx * back, y + 0.1, p.z - dz * back, -dx * 0.3, 0.9, -dz * 0.3, 0.2, 0.55, EMBER);
+    }
+  }
+
+  /** Spawn-in for freshly created units: scale pop + white emissive flash (shared uniform). */
+  private startSpawn(v: PieceVisual): void {
+    if (!v.actor) return;
+    if (this.tSpawn < 0) {
+      this.tSpawn = performance.now();
+      this.spawning.length = 0;
+    }
+    v.inner.scale.setScalar(0.001);
+    this.spawning.push(v);
   }
 
   private startCaptureFx(at: THREE.Vector3, owner: PlayerId, now: number): void {
@@ -1359,6 +1510,30 @@ export class BoardView implements IBoardView {
   /** Advance one-shot effects (landing pulse, capture flash/burst, shake, turn sweep). */
   private updateFx(now: number): boolean {
     let active = false;
+    const dt = this.lastFx > 0 ? Math.min(0.05, Math.max(0, (now - this.lastFx) / 1000)) : 1 / 60;
+    this.lastFx = now;
+    if (this.dust.update(dt)) active = true;
+    if (this.sparks.update(dt)) active = true;
+
+    if (this.tSpawn >= 0) {
+      const el = now - this.tSpawn;
+      let done = true;
+      for (const v of this.spawning) {
+        const delay = (v.piece.pos.c + (v.piece.owner === 0 ? v.piece.pos.r : 11 - v.piece.pos.r)) * 14;
+        const k = clamp01((el - delay) / SPAWN_MS);
+        if (k < 1) done = false;
+        v.inner.scale.setScalar(Math.max(0.001, easeOutBack(k)));
+      }
+      if (this.units) this.units.uniforms.spawn.value = el < 650 ? Math.pow(1 - el / 650, 1.4) * 1.1 : 0;
+      if (done && el >= 650) {
+        for (const v of this.spawning) v.inner.scale.set(1, 1, 1);
+        this.spawning.length = 0;
+        this.tSpawn = -1;
+        if (this.units) this.units.uniforms.spawn.value = 0;
+      } else {
+        active = true;
+      }
+    }
 
     if (this.tLand >= 0) {
       const k = (now - this.tLand) / ANIM.pulse;
@@ -1491,6 +1666,15 @@ export class BoardView implements IBoardView {
     this.flash.visible = false;
     this.burst.visible = false;
     this.comet.visible = false;
+    this.dust.clear();
+    this.sparks.clear();
+    this.units?.setDissolve(0);
+    if (this.tSpawn >= 0) {
+      for (const v of this.spawning) v.inner.scale.set(1, 1, 1);
+      this.spawning.length = 0;
+      this.tSpawn = -1;
+      if (this.units) this.units.uniforms.spawn.value = 0;
+    }
     if (this.shaking) {
       this.camera.position.copy(this.camBase);
       this.shaking = false;
