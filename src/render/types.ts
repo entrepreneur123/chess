@@ -10,6 +10,9 @@ export interface BoardHighlights {
   zoneRows?: [number, number] | null;
 }
 
+/** Camera view of the board: tilted 3D arena (default) or straight top-down. */
+export type BoardViewMode = 'tilt' | 'top';
+
 /** Public API of the 3D board. Implemented by src/render/BoardView.ts. */
 export interface IBoardView {
   /** Instantly sync meshes to these pieces (add/remove/move without animation). */
@@ -28,6 +31,8 @@ export interface IBoardView {
   resize(): void;
   /** Stop the render loop and free GPU resources. */
   dispose(): void;
+  /** Switch camera view (optional: the flat 2D fallback is always top-down). */
+  setViewMode?(mode: BoardViewMode, animate?: boolean): void;
   /**
    * Optional: storm ("자기장") state. `storm` = outer columns consumed per side (0 = none: columns
    * 0..storm-1 and 12-storm..11 are gone), `nextIn` = plies until the next shrink (null = the storm

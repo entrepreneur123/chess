@@ -43,9 +43,13 @@ export interface Profile {
   dev: boolean;
 }
 
+export type ViewSetting = 'tilt' | 'top';
+
 export interface Settings {
   sound: boolean;
   haptics: boolean;
+  /** Board camera: tilted 3D arena or top-down. */
+  view: ViewSetting;
 }
 
 export interface Onboarding {
@@ -55,7 +59,7 @@ export interface Onboarding {
   firstMoveDone: boolean;
 }
 
-export const DEFAULT_SETTINGS: Settings = { sound: true, haptics: true };
+export const DEFAULT_SETTINGS: Settings = { sound: true, haptics: true, view: 'tilt' };
 
 export type MatchOutcome = 'win' | 'loss' | 'draw';
 
@@ -204,6 +208,7 @@ export function sanitizeProfile(input: unknown, now = Date.now()): Profile {
     settings: {
       sound: asBool(settings.sound, DEFAULT_SETTINGS.sound),
       haptics: asBool(settings.haptics, DEFAULT_SETTINGS.haptics),
+      view: settings.view === 'top' ? 'top' : 'tilt',
     },
     onboarding: {
       tutorialSeen: asBool(onboarding.tutorialSeen, veteran),

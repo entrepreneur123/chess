@@ -101,3 +101,13 @@ describe('developer account', () => {
     expect(off.characters.sad.level).toBe(1);
   });
 });
+
+describe('board view setting', () => {
+  it('defaults to the tilted view, keeps top, and rejects junk', () => {
+    expect(createDefaultProfile().settings.view).toBe('tilt');
+    const base = createDefaultProfile();
+    expect(sanitizeProfile({ ...base, settings: { ...base.settings, view: 'top' } }).settings.view).toBe('top');
+    expect(sanitizeProfile({ ...base, settings: { sound: false, haptics: true, view: 'iso' } }).settings.view).toBe('tilt');
+    expect(sanitizeProfile({ ...base, settings: { sound: false, haptics: true } }).settings).toEqual({ sound: false, haptics: true, view: 'tilt' });
+  });
+});

@@ -25,6 +25,7 @@ const TIPS = [
   '한쪽이 1개만 남으면 6턴마다 좌우 바깥 줄이 자기장으로 변해요. 닿으면 즉시 소멸!',
   '전설 인세이너는 잡은 적의 이동 능력을 흡수해요',
   'Lv.3 인세이너는 적을 잡은 직후 한 번 더 움직여요',
+  '대전 중 오른쪽 아래 버튼으로 3D 시점과 탑뷰를 바꿀 수 있어요',
 ];
 
 /** The unit a side "leads" with on the VS card: highest rarity, then highest level. */

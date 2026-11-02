@@ -26,7 +26,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { BOARD_SIZE, ZONE_DEPTH } from '../engine/types';
 import type { Level, Move, Piece, PlayerId, Pos, Rarity } from '../engine/types';
-import type { BoardHighlights, IBoardView } from './types';
+import type { BoardHighlights, BoardViewMode, IBoardView } from './types';
 import { UnitActor } from './units/actor';
 import { loadUnitAssets, unitAssetsIfLoaded } from './units/assets';
 import { LOOKS, MOVE_CLIP } from './units/config';
@@ -72,6 +72,11 @@ const SLAB_SIZE = BOARD_SIZE + SLAB_MARGIN * 2;
 const OVERLAY_Y = TILE_TOP + 0.005;
 const SELECT_LIFT = 0.12;
 const TAP_SLOP_PX = 14;
+/** Camera blend between the tilted arena view and the top-down view. */
+const VIEW_TRANSITION_MS = 520;
+const TILT_FOV = 34;
+const TOP_FOV = 24;
+const TOP_ELEVATION_DEG = 89;
 const MAX_PIXEL_RATIO = 2;
 const IDLE_FRAME_MS = 32; // idle pulse (selection / targets) is capped at ~30 fps
 const IDLE_ANIM_FRAME_MS = 41; // unit idle loops alone run at ~24 fps
@@ -482,6 +487,17 @@ export class BoardView implements IBoardView {
   private disposed = false;
   private resizeObserver: ResizeObserver | null = null;
   private down: { id: number; x: number; y: number } | null = null;
+
+  /**
+   * Camera view: 0 = tilted 3D arena view, 1 = top-down. Animated between the two by
+   * setViewMode (viewFrom -> viewTo over VIEW_TRANSITION_MS starting at tView).
+   */
+  private viewT = 0;
+  private viewFrom = 0;
+  private viewTo = 0;
+  private tView = -1;
+  private lastAspect = 1;
+  private lastHeightPx = 1;
 
   // Camera shake basis (computed in fitCamera).
   private readonly camBase = new THREE.Vector3();
@@ -1035,11 +1051,57 @@ export class BoardView implements IBoardView {
     const { w, h } = containerSize(this.container);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO));
     this.renderer.setSize(w, h, false);
-    this.fitCamera(w / h, h);
+    this.lastAspect = w / h;
+    this.lastHeightPx = h;
+    this.refitCamera();
+    this.requestRender();
+  }
+
+  /**
+   * Switch between the tilted arena camera and the top-down camera. Animated unless
+   * `animate` is false (or reduced motion is preferred). Safe to call repeatedly.
+   */
+  setViewMode(mode: BoardViewMode, animate = true): void {
+    if (this.disposed) return;
+    const to = mode === 'top' ? 1 : 0;
+    if (to === this.viewTo && (this.tView >= 0 || this.viewT === to)) return;
+    this.viewTo = to;
+    if (!animate || !this.idleAnim) {
+      this.viewT = to;
+      this.tView = -1;
+      this.refitCamera();
+      this.requestRender();
+      return;
+    }
+    this.viewFrom = this.viewT;
+    this.tView = performance.now();
+    this.requestRender();
+  }
+
+  getViewMode(): BoardViewMode {
+    return this.viewTo === 1 ? 'top' : 'tilt';
+  }
+
+  /** Fit the camera for the current size and view blend; refresh the point-sprite scale. */
+  private refitCamera(): void {
+    this.fitCamera(this.lastAspect, this.lastHeightPx);
     // Spark point sizes: drawing-buffer px per world unit at distance 1.
     this.pointScale.value =
-      (h * this.renderer.getPixelRatio()) / (2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)));
-    this.requestRender();
+      (this.lastHeightPx * this.renderer.getPixelRatio()) / (2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)));
+  }
+
+  /** Advance the view transition; returns true while it is still running. */
+  private tickView(now: number): boolean {
+    if (this.tView < 0) return false;
+    const k = Math.min(1, (now - this.tView) / VIEW_TRANSITION_MS);
+    const e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2; // easeInOutCubic
+    this.viewT = this.viewFrom + (this.viewTo - this.viewFrom) * e;
+    if (k >= 1) {
+      this.viewT = this.viewTo;
+      this.tView = -1;
+    }
+    this.refitCamera();
+    return this.tView >= 0;
   }
 
   /** Render stats for diagnostics (draw calls / triangles of the last frame). */
@@ -1323,8 +1385,12 @@ export class BoardView implements IBoardView {
     const cam = this.camera;
     cam.aspect = aspect;
     const portrait = aspect < 0.8;
-    const elevDeg = portrait ? (aspect < 0.7 ? 58 : 56) : aspect < 1.2 ? 56 : 52;
-    cam.fov = portrait ? 34 : 34;
+    const tiltDeg = portrait ? (aspect < 0.7 ? 58 : 56) : aspect < 1.2 ? 56 : 52;
+    // Top-down: almost straight down (89deg keeps lookAt well-defined with +y up) and a narrower
+    // field of view so units look the same anywhere on the board.
+    const t = this.viewT;
+    const elevDeg = tiltDeg + (TOP_ELEVATION_DEG - tiltDeg) * t;
+    cam.fov = TILT_FOV + (TOP_FOV - TILT_FOV) * t;
     cam.updateProjectionMatrix();
     const elev = THREE.MathUtils.degToRad(elevDeg);
     const dir = new THREE.Vector3(0, Math.sin(elev), Math.cos(elev));
@@ -1335,8 +1401,9 @@ export class BoardView implements IBoardView {
         pts.push(new THREE.Vector3(x, -SLAB_H, z), new THREE.Vector3(x, 0, z));
       }
     }
-    // Tallest piece on the far row.
-    pts.push(new THREE.Vector3(-HALF, 1.95, -HALF), new THREE.Vector3(HALF, 1.95, -HALF));
+    // Tallest piece on the far row (only matters for the tilted view).
+    const topY = 1.95 * (1 - t) + 0.4 * t;
+    pts.push(new THREE.Vector3(-HALF, topY, -HALF), new THREE.Vector3(HALF, topY, -HALF));
     const marginX = portrait ? 0.985 : 0.92;
     const marginY = portrait ? 0.95 : 0.92;
     const target = new THREE.Vector3(0, 0, 0);
@@ -1408,7 +1475,8 @@ export class BoardView implements IBoardView {
     this.rafId = 0;
     if (this.disposed) return;
     const animating = this.tickAnimation(now);
-    const fxActive = this.updateFx(now);
+    const viewMoving = this.tickView(now);
+    const fxActive = this.updateFx(now) || viewMoving;
     let unitsBusy = false;
     let haveActors = false;
     for (const v of this.visuals.values()) {
@@ -1844,13 +1912,11 @@ export class BoardView implements IBoardView {
     if (planePos) {
       const k = posKey(planePos);
       if (this.hi.moves.has(k) || this.hi.captures.has(k)) return planePos;
-      for (const v of this.visuals.values()) {
-        if (posKey(v.piece.pos) === k) return planePos; // a piece standing on the tapped square
-      }
     }
 
-    // Otherwise forgive taps on a tall piece body, but only close to its own square so a tall
-    // piece never steals the tap meant for an empty square far behind it.
+    // Then the unit actually drawn under the finger (front-most along the ray): a tall unit in
+    // front of another piece's square takes the tap, matching what the player sees. Only close
+    // to its own square, so a unit never steals a tap meant for a square far behind it.
     this.pieceLayer.updateMatrixWorld(); // proxies may not have been rendered since the last sync
     this.pickList.length = 0;
     for (const v of this.visuals.values()) this.pickList.push(v.proxy);

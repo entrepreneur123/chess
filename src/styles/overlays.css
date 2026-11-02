@@ -750,3 +750,33 @@
     animation: none;
   }
 }
+
+/* Segmented control (settings: board view) */
+.seg {
+  display: inline-flex;
+  flex: none;
+  padding: 3px;
+  border-radius: var(--r-full);
+  background: var(--surface-well);
+  box-shadow: inset 0 0 0 1px var(--line-1);
+}
+.seg__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--r-full);
+  background: transparent;
+  color: var(--text-2);
+  font-size: var(--fs-label);
+  font-weight: var(--fw-bold);
+  cursor: pointer;
+  transition: background var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out);
+}
+.seg__btn.is-active {
+  background: linear-gradient(180deg, var(--gold-300), var(--gold-500));
+  color: var(--text-on-gold);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 2px 0 var(--gold-700);
+}

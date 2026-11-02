@@ -1,7 +1,7 @@
 /** Settings bottom sheet (sound / haptics / replay tutorial). Values persist in the profile. */
 import { haptic, primeAudio, sfx } from '../../audio/sfx';
 import { APP_NAME, DEV_CODE } from '../../meta/economy';
-import { getProfile, setDevMode, subscribeProfile, updateProfile, type Settings } from '../../meta/profile';
+import { getProfile, setDevMode, subscribeProfile, updateProfile, type Settings, type ViewSetting } from '../../meta/profile';
 import { h, replaceChildren } from '../dom';
 import { confirmDialog } from './dialog';
 import { toast } from './toast';
@@ -11,7 +11,9 @@ import { showTutorial } from './tutorial';
 
 let openSheet: { close(): void } | null = null;
 
-function switchRow(key: keyof Settings, label: string, sub: string, ic: IconName): HTMLElement {
+type BoolSetting = { [K in keyof Settings]: Settings[K] extends boolean ? K : never }[keyof Settings];
+
+function switchRow(key: BoolSetting, label: string, sub: string, ic: IconName): HTMLElement {
   const id = `set-${key}`;
   const btn = h('button', {
     class: 'switch',
@@ -40,6 +42,53 @@ function switchRow(key: keyof Settings, label: string, sub: string, ic: IconName
     h('span', { class: 'set-row__icon' }, icon(ic, 22)),
     h('label', { class: 'set-row__main', id: `${id}-label`, for: id }, h('span', { class: 'set-row__title' }, label), h('span', { class: 'set-row__sub' }, sub)),
     btn,
+  );
+}
+
+/** Board camera: tilted 3D arena or top-down (segmented control). */
+function viewRow(): HTMLElement {
+  const opts: { value: ViewSetting; label: string; ic: IconName }[] = [
+    { value: 'tilt', label: '3D', ic: 'cube' },
+    { value: 'top', label: '탑뷰', ic: 'topview' },
+  ];
+  const seg = h('div', { class: 'seg', role: 'radiogroup', 'aria-label': '보드 시점' });
+  const sync = () => {
+    const cur = getProfile().settings.view;
+    for (const b of Array.from(seg.children)) {
+      const on = (b as HTMLElement).dataset.view === cur;
+      b.classList.toggle('is-active', on);
+      b.setAttribute('aria-checked', String(on));
+    }
+  };
+  for (const o of opts) {
+    seg.appendChild(
+      h(
+        'button',
+        {
+          class: 'seg__btn',
+          type: 'button',
+          role: 'radio',
+          'data-view': o.value,
+          'data-setting': 'view',
+          onclick: () => {
+            if (getProfile().settings.view === o.value) return;
+            updateProfile((p) => ({ ...p, settings: { ...p.settings, view: o.value } }));
+            sync();
+            sfx('select');
+          },
+        },
+        icon(o.ic, 16),
+        o.label,
+      ),
+    );
+  }
+  sync();
+  return h(
+    'div',
+    { class: 'set-row' },
+    h('span', { class: 'set-row__icon' }, icon('topview', 22)),
+    h('span', { class: 'set-row__main' }, h('span', { class: 'set-row__title' }, '보드 시점'), h('span', { class: 'set-row__sub' }, '3D 아레나 또는 위에서 내려다보기')),
+    seg,
   );
 }
 
@@ -142,6 +191,7 @@ export function showSettings(): void {
       { class: 'set-group' },
       switchRow('sound', '효과음', '이동 · 잡기 · 승리 사운드', 'volume'),
       switchRow('haptics', '진동', canVibrate ? '잡기 · 내 차례 · 승리 시 짧은 진동' : '이 기기에서는 지원되지 않을 수 있어요', 'vibration'),
+      viewRow(),
     ),
     h(
       'div',

@@ -105,6 +105,32 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     topRoster,
     topRing.el,
   );
+  // Camera toggle: 3D arena <-> top-down (persisted in settings).
+  const viewIcon = h('span', { class: 'view-toggle__icon', 'aria-hidden': 'true' });
+  const viewLabel = h('span', { class: 'view-toggle__label' });
+  const viewBtn = h(
+    'button',
+    { class: 'view-toggle', type: 'button', 'data-action': 'toggle-view', onclick: () => toggleView() },
+    viewIcon,
+    viewLabel,
+  );
+  const syncViewBtn = () => {
+    const top = getProfile().settings.view === 'top';
+    // The button shows the view it switches TO.
+    replaceChildren(viewIcon, icon(top ? 'cube' : 'topview', 18));
+    setText(viewLabel, top ? '3D' : '탑뷰');
+    viewBtn.setAttribute('aria-label', top ? '3D 시점으로 보기' : '위에서 내려다보기');
+    viewBtn.classList.toggle('is-top', top);
+  };
+  const toggleView = () => {
+    const next = getProfile().settings.view === 'top' ? 'tilt' : 'top';
+    updateProfile((p) => ({ ...p, settings: { ...p.settings, view: next } }));
+    board?.setViewMode?.(next);
+    syncViewBtn();
+    sfx('select');
+    haptic('light');
+  };
+  syncViewBtn();
   const resignBtn = h(
     'button',
     { class: 'icon-btn icon-btn--outlined', type: 'button', 'aria-label': '기권', 'data-action': 'resign', onclick: () => void askResign() },
@@ -119,7 +145,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     botRing.el,
     resignBtn,
   );
-  const boardWrap = h('div', { class: 'board-wrap' }, boardHost, fx, h('div', { class: 'board-overlay' }, pill, counter, stormChip, passChip, bonusBar, coach), infoHost);
+  const boardWrap = h('div', { class: 'board-wrap' }, boardHost, fx, h('div', { class: 'board-overlay' }, pill, counter, stormChip, passChip, bonusBar, coach), viewBtn, infoHost);
   const el = h('main', { class: 'game no-select' }, topBar, boardWrap, bottomBar);
 
   // ---------- runtime objects (created on mount)
@@ -405,6 +431,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       }));
       bag.add(() => c.dispose());
 
+      board?.setViewMode?.(getProfile().settings.view, false);
       board?.setPieces(initial.pieces);
       syncedPieces = initial.pieces;
       board?.onCellClick((pos: Pos) => c.tapCell(pos));
