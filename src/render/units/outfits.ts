@@ -850,14 +850,14 @@ function imp(ctx: OutfitCtx): void {
     const ec = eb.getCenter(new THREE.Vector3());
     const es = eb.getSize(new THREE.Vector3());
     const ew = Math.max(es.x, fs.x * 0.07);
-    gear.add(blade(ew * 1.9, 0.02, 6, 0.5), alongY(V(ec.x - sx * ew * 0.55, ec.y - ew * 0.75, eb.max.z + 0.012), V(sx * 0.55, 1, 0.25), [1, ew * 1.5, 1]), { color: L === 3 ? '#C8FF4A' : '#9CFF3A', glow: L === 3 ? 2.8 : 2.0 }, head);
-    gear.add(flat(new THREE.BoxGeometry(ew * 1.9, ew * 0.42, 0.03)), trs([ec.x + sx * ew * 0.1, ec.y + ew * 1.05, eb.max.z + 0.01], [0.1, 0, sx * -0.5]), { color: '#160410' }, head);
+    gear.add(blade(ew * 1.25, 0.02, 6, 0.5), alongY(V(ec.x - sx * ew * 0.3, ec.y - ew * 0.5, eb.max.z + 0.012), V(sx * 0.5, 1, 0.25), [1, ew * 1.05, 1]), { color: L === 3 ? '#C8FF4A' : '#9CFF3A', glow: L === 3 ? 2.8 : 2.0 }, head);
+    gear.add(flat(new THREE.BoxGeometry(ew * 1.6, ew * 0.32, 0.03)), trs([ec.x + sx * ew * 0.1, ec.y + ew * 0.85, eb.max.z + 0.01], [0.1, 0, sx * -0.55]), { color: '#160410' }, head);
   }
 
   // --- bone mask pushed up on the forehead (Lv2): skull-shaped plate, dark sockets, teeth.
   if (L === 2) {
-    const mc = V(sc.x, sc.y + ry * 0.66, sc.z + rz * 0.68);
-    const M = trs(mc, [-0.8, 0, 0], fs.y * 0.42);
+    const mc = V(sc.x, sc.y + ry * 0.7, sc.z + rz * 0.66);
+    const M = trs(mc, [-0.85, 0, 0], fs.y * 0.5);
     const outline: [number, number][] = [[-0.48, 0.1], [-0.42, 0.42], [-0.2, 0.6], [0.2, 0.6], [0.42, 0.42], [0.48, 0.1], [0.34, -0.2], [0.3, -0.55], [-0.3, -0.55], [-0.34, -0.2]];
     gear.add(plate(outline, 0.1, 0.03), M, boneS, head);
     for (const sx of [-1, 1]) {
