@@ -1,5 +1,5 @@
 // Renders the in-game glTF units (src/render/units: same templates, gear, palettes and FX as the
-// board) to transparent hero PNGs for the collection UI.
+// board) to transparent hero PNGs for the collection UI (models: public/models/{hero,imp,anims}.glb).
 //   node docs/brand/render-units.mjs [--only sad,marki,walk,insaner] [--out public/chars] [--sheet /tmp/sheet.png]
 //                                    [--qa <dir>] [--size 512]
 // Outputs: <out>/unit-{sad|marki|walk|insaner}-lv{1..3}-{0|1}.png  (512x512 RGBA, 3/4 hero angle, 3-point light)
@@ -255,7 +255,9 @@ try {
   for (const character of CHARS) {
     for (const level of LEVELS) {
       for (const owner of OWNERS) {
-        const r = await page.evaluate((p) => window.draw(p), { character, level, owner, size, yaw: 0.62, elev: 14, tight: true });
+        // The paladin's fencing idle turns the torso to its right: aim the 3/4 view at its chest.
+        const yaw = character === 'sad' ? -0.35 : 0.62;
+        const r = await page.evaluate((p) => window.draw(p), { character, level, owner, size, yaw, elev: 14, tight: true });
         const f = join(outDir, `unit-${character}-lv${level}-${owner}.png`);
         save(f, r.url);
         files.push(f);

@@ -7,7 +7,7 @@
  */
 import * as THREE from 'three';
 import type { ClipName } from './config';
-import type { SecondarySpec } from './outfits';
+import type { SecondarySpec } from './kit';
 
 export interface ActorOptions {
   secondary?: SecondarySpec[];
@@ -27,6 +27,9 @@ interface SecondaryBone {
 }
 
 const tmpQ = new THREE.Quaternion();
+const tmpQP = new THREE.Quaternion();
+const tmpQR = new THREE.Quaternion();
+const tmpQA = new THREE.Quaternion();
 
 export interface PlayOptions {
   /** Cross-fade time in seconds. */
@@ -214,7 +217,19 @@ export class UnitActor {
         sp.idleAmp * flutter * Math.sin(t * sp.idleFreq * (1 + this.moving) * Math.PI * 2 + sp.phase) +
         (sp.spin ?? 0) * t * (1 + this.moving * 0.6);
       tmpQ.setFromAxisAngle(s.axis, ang);
-      s.bone.quaternion.copy(s.base).multiply(tmpQ);
+      s.bone.quaternion.copy(s.base);
+      const hang = sp.hang ?? 0;
+      if (hang > 0 && s.bone.parent) {
+        // Blend the animated world rotation toward the rest world rotation (= the model root's).
+        s.bone.parent.updateWorldMatrix(true, false);
+        s.bone.parent.getWorldQuaternion(tmpQP);
+        this.model.getWorldQuaternion(tmpQR);
+        const anim = tmpQA.copy(tmpQP).multiply(s.bone.quaternion);
+        anim.slerp(tmpQR, hang);
+        s.bone.quaternion.copy(tmpQP.invert().multiply(anim));
+      }
+      s.bone.quaternion.multiply(tmpQ);
+      if (hang > 0) s.bone.updateWorldMatrix(false, false);
     }
     if (this.rig && this.bob > 0) {
       this.rig.position.y = this.restY + this.bob * (1 - this.moving) * (0.5 + 0.5 * Math.sin(t * 2.2));

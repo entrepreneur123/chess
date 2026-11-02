@@ -27,10 +27,10 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { BOARD_SIZE, ZONE_DEPTH } from '../engine/types';
 import type { Level, Move, Piece, PlayerId, Pos, Rarity } from '../engine/types';
 import type { BoardHighlights, BoardViewMode, IBoardView } from './types';
-import { UnitActor } from './units/actor';
+import type { UnitActor } from './units/actor';
 import { loadUnitAssets, unitAssetsIfLoaded } from './units/assets';
 import { LOOKS, MOVE_CLIP } from './units/config';
-import { UnitLibrary } from './units/library';
+import type { UnitLibrary } from './units/library';
 import { DustPool, SparkPool } from './boardFx';
 import { ANIM, BOARD_COLORS, CHARACTER_RARITY, RARITY_COLORS, RARITY_GLOW, TEAM_COLORS } from './palette';
 import { STORM_COLORS, StormFx } from './storm';
@@ -98,6 +98,17 @@ const BURST_COUNT = 14;
 
 const cellX = (c: number): number => c - HALF;
 const cellZ = (r: number): number => HALF - r;
+
+/** Lazily loaded unit library module (code-split with the glTF loader). */
+let unitLibraryModule: typeof import('./units/library') | null = null;
+let unitLibraryLoading: Promise<typeof import('./units/library')> | null = null;
+function loadUnitLibraryModule(): Promise<typeof import('./units/library')> {
+  unitLibraryLoading ??= import('./units/library').then((m) => (unitLibraryModule = m));
+  unitLibraryLoading.catch(() => {
+    unitLibraryLoading = null;
+  });
+  return unitLibraryLoading;
+}
 
 interface PieceVisual {
   piece: Piece;
@@ -601,15 +612,26 @@ export class BoardView implements IBoardView {
   /** Use the cached unit models, or load them; pieces show silhouettes until they arrive. */
   private initUnits(): void {
     const ready = unitAssetsIfLoaded();
-    if (ready) {
-      this.units = new UnitLibrary(ready, this.pointScale);
+    if (ready && unitLibraryModule) {
+      // Looks built by an earlier view are cached: create units right away, warm the rest when idle.
+      this.units = new unitLibraryModule.UnitLibrary(ready, this.pointScale);
+      void this.units.prepare([]);
       return;
     }
-    loadUnitAssets().then(
-      (assets) => {
+    // The unit code is code-split like the loader: the board (with silhouettes) is interactive first.
+    Promise.all([loadUnitAssets(), loadUnitLibraryModule()]).then(
+      ([assets, mod]) => {
         if (this.disposed) return;
-        this.units = new UnitLibrary(assets, this.pointScale);
-        this.rebuildBodies();
+        // Build the looks on the board in small async steps (silhouettes stay meanwhile), then swap.
+        const lib = new mod.UnitLibrary(assets, this.pointScale);
+        void lib.prepare([...this.visuals.values()].map((v) => v.piece)).then(() => {
+          if (this.disposed) {
+            lib.dispose();
+            return;
+          }
+          this.units = lib;
+          this.rebuildBodies();
+        });
       },
       (err: unknown) => {
         console.warn('[render] unit models failed to load, using silhouettes:', err);

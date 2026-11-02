@@ -1,14 +1,25 @@
 /**
- * Loads the unit GLBs once per page (parallel, meshopt-compressed, decoder bundled locally,
- * GLTFLoader code-split into its own chunk)
- * and caches the parsed glTF. The cache holds CPU-side data only: every BoardView builds its own
- * merged GPU geometry/materials from it (see library.ts) and disposes them with the view.
+ * Loads the unit GLBs once per page (parallel, meshopt-compressed, WebP textures, decoder bundled
+ * locally, GLTFLoader code-split into its own chunk) and caches the parsed glTF:
+ *   hero.glb   heroic human body + outfit parts (sad, marki, walk)
+ *   imp.glb    the imp body (insaner)
+ *   anims.glb  the shared clips (one rig for every body)
+ * The cache holds CPU-side data (+ the two textures): every BoardView builds its own merged GPU
+ * geometry/materials from it (see library.ts) and disposes them with the view.
  */
 import type { GLTF } from 'three/addons/loaders/GLTFLoader.js';
-import type { CharacterId } from '../../engine/types';
-import { LOOKS } from './config';
 
-export type UnitAssets = Record<CharacterId, GLTF>;
+export interface UnitAssets {
+  hero: GLTF;
+  imp: GLTF;
+  anims: GLTF;
+}
+
+const FILES: Record<keyof UnitAssets, string> = {
+  hero: 'models/hero.glb',
+  imp: 'models/imp.glb',
+  anims: 'models/anims.glb',
+};
 
 let pending: Promise<UnitAssets> | null = null;
 let loaded: UnitAssets | null = null;
@@ -22,7 +33,7 @@ function assetUrl(path: string): string {
 /** Start (or join) loading of all unit models. Rejects if any file fails; callers fall back. */
 export function loadUnitAssets(): Promise<UnitAssets> {
   if (pending) return pending;
-  const ids = Object.keys(LOOKS) as CharacterId[];
+  const keys = Object.keys(FILES) as (keyof UnitAssets)[];
   // Loader + decoder are code-split: the board (with silhouettes) is interactive before they arrive.
   pending = Promise.all([
     import('three/addons/loaders/GLTFLoader.js'),
@@ -31,12 +42,12 @@ export function loadUnitAssets(): Promise<UnitAssets> {
     .then(([{ GLTFLoader }, { MeshoptDecoder }]) => {
       const loader = new GLTFLoader();
       loader.setMeshoptDecoder(MeshoptDecoder);
-      return Promise.all(ids.map((id) => loader.loadAsync(assetUrl(LOOKS[id].file))));
+      return Promise.all(keys.map((k) => loader.loadAsync(assetUrl(FILES[k]))));
     })
     .then((list) => {
       const out = {} as UnitAssets;
-      ids.forEach((id, i) => {
-        out[id] = list[i];
+      keys.forEach((k, i) => {
+        out[k] = list[i];
       });
       loaded = out;
       return out;

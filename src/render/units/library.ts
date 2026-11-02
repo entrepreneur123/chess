@@ -1,33 +1,47 @@
 /**
- * Per-BoardView unit factory: turns the cached glTF assets into merged, team-tinted, per-level
- * templates (one skinned draw call each: body + glTF props + procedural gear) and spawns animated
- * UnitActors from them.
+ * Per-BoardView unit factory: turns the cached glTF assets into per-level templates (one skinned
+ * draw call each: textured body + armour shells + procedural gear) and spawns animated UnitActors.
  *
- * Template build (once per character x level x team, cached):
- *  1. clone the glTF scene, stylise proportions (bone scales), scale props;
- *  2. measure the rest-pose body and build the procedural outfit (outfits.ts) incl. extra
- *     secondary-motion bones;
- *  3. bake the KayKit palette atlas (or the bull's slot colours) into vertex colours through the
- *     level palette (config.ts roles) -> no textures; glow/metal/pattern go to `aFx`;
- *  4. merge everything into one SkinnedMesh bound to the (extended) skeleton;
- *  5. add the level FX: idle particles (Lv2+), ground rune + light shaft (Lv3).
+ * Template build (once per character x level, cached; the team variant only swaps the material):
+ *  1. clone the body scene (bones), apply the character's bone scales;
+ *  2. run the character's outfit builder (outfits/*.ts): hides covered body triangles, adds armour
+ *     shells (body regions pushed out, same skin weights), procedural gear and secondary bones;
+ *  3. assemble everything into ONE skinned geometry (body texture + flat / team / glowing styles);
+ *  4. per team: material (team tones are uniforms, the geometry is shared) and level FX: idle
+ *     particles (Lv2+), ground rune + light shaft (Lv3).
+ * Clips come from anims.glb, retargeted by bone name (rotations + pelvis translation scaled to the
+ * body), trimmed / chained per character (config.ts ClipSpec).
  *
- * Ownership: every GPU resource created here (geometries, materials, textures) is tracked and
- * freed by dispose(). The parsed glTF data in assets.ts is never uploaded itself.
+ * Ownership: every GPU resource created here (geometries, materials, textures) is tracked and freed
+ * by dispose(). The parsed glTF data in assets.ts is never uploaded itself (its two body textures
+ * are uploaded through the unit materials and released on dispose; a later view re-uploads them).
  */
 import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
-import type { GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import type { CharacterId, Level, Piece, PlayerId } from '../../engine/types';
 import { TEAM_COLORS } from '../palette';
 import { UnitActor } from './actor';
 import type { UnitAssets } from './assets';
-import { LOOKS, type CharacterLook, type LevelLook, type RoleStyle, type Tint } from './config';
+import { BodySource, assemble, buildShell, sourcePart, triMask, vertexMask, type Part } from './body';
+import { LOOKS, type ClipName, type ClipSpec } from './config';
 import { makeAuraGeometry, makeAuraMaterial, makeParticleGeometry, makeParticleMaterial, makeRuneTexture } from './fx';
-import { BodyCloud, GearBuilder, mixHex } from './gear';
-import { makeUnitMaterial, type DissolveUniforms, type UnitUniforms } from './material';
-import { mergeSkinned, smoothNormals, type MergePart } from './merge';
-import { buildOutfit, type OutfitCtx, type SecondarySpec } from './outfits';
+import { GearBuilder, mixHex } from './gear';
+import type { OutfitCtx, SecondarySpec } from './kit';
+import { makeUnitMaterial, type DissolveUniforms, type UnitMaterialOptions, type UnitUniforms } from './material';
+import { buildOutfit } from './outfits';
+import type { Style } from './style';
+
+/** Team-independent part of a template. */
+interface Base {
+  root: THREE.Group;
+  geometry: THREE.BufferGeometry;
+  height: number;
+  secondary: SecondarySpec[];
+  triangles: number;
+  patScale: number;
+  map: THREE.Texture | null;
+  teamKey: number;
+}
 
 interface Template {
   root: THREE.Group;
@@ -37,7 +51,7 @@ interface Template {
   idleSpeed: number;
   bob: number;
   material: THREE.MeshStandardMaterial;
-  opts: Parameters<typeof makeUnitMaterial>[1];
+  opts: UnitMaterialOptions;
   /** Dissolve variants: capture death (team-coloured edge) and storm removal (magenta edge). */
   dying: Record<DissolveKind, { material: THREE.MeshStandardMaterial; uniforms: DissolveUniforms } | null>;
   triangles: number;
@@ -47,19 +61,15 @@ export type DissolveKind = 'capture' | 'storm';
 /** Hot edge colour of the storm dissolve (matches storm.ts STORM_COLORS.edge). */
 const STORM_EDGE = '#FF3DF0';
 
-/** CPU copy of a palette atlas + per-cell mean luminance (for shading-preserving recolour). */
-interface Atlas {
-  data: Uint8ClampedArray;
-  w: number;
-  h: number;
-  flipY: boolean;
-  cellMean: Map<string, number>;
-}
-
+const sources = new WeakMap<object, BodySource>();
 /**
- * Rest-pose world bounds of a merged skinned geometry. Merged vertices live in "skin space"
- * (quantization is folded into the inverse bind matrices), so bounds must be skinned on the CPU.
+ * Team-independent bases, shared by every library (view) of the same loaded assets: built once per
+ * session. Their geometry keeps its CPU arrays when a view disposes it, so a later view re-uploads
+ * instead of rebuilding.
  */
+const baseCache = new WeakMap<object, Map<string, Base>>();
+
+/** Rest-pose world bounds of a skinned geometry bound to `skel` (bones at rest). */
 function restBox(geometry: THREE.BufferGeometry, skel: THREE.Skeleton): THREE.Box3 {
   const tmp = new THREE.SkinnedMesh(geometry);
   tmp.bind(skel, new THREE.Matrix4());
@@ -67,24 +77,25 @@ function restBox(geometry: THREE.BufferGeometry, skel: THREE.Skeleton): THREE.Bo
   return (tmp.boundingBox ?? new THREE.Box3()).clone();
 }
 
-/** Linear-ish luminance of 0..1 sRGB components. */
-const lum = (r: number, g: number, b: number): number => 0.299 * r + 0.587 * g + 0.114 * b;
-
 const tmpQ = new THREE.Quaternion();
-const tmpQ2 = new THREE.Quaternion();
 const tmpV = new THREE.Vector3();
+
+/** Team tones (main, light, dark, muted, deep) of a player. */
+export function teamTones(owner: PlayerId): [string, string, string, string, string] {
+  const t = TEAM_COLORS[owner];
+  return [t.main, t.light, t.dark, mixHex(t.main, '#6E7078', 0.42), mixHex(t.dark, '#0A0A12', 0.35)];
+}
 
 export class UnitLibrary {
   /** Shared uniforms of every unit material / FX of this view. */
   readonly uniforms: UnitUniforms;
   private readonly assets: UnitAssets;
+  private readonly bases: Map<string, Base>;
   private readonly templates = new Map<string, Template>();
   private readonly geometries: THREE.BufferGeometry[] = [];
   private readonly materials: THREE.Material[] = [];
   private readonly textures: THREE.Texture[] = [];
-  private readonly atlases = new Map<CharacterId, Atlas | null>();
   private readonly clipCache = new Map<CharacterId, THREE.AnimationClip[]>();
-  private readonly restHeights = new Map<CharacterId, number>();
   private runeTex: THREE.Texture | null = null;
   private spawnCount = 0;
 
@@ -92,6 +103,12 @@ export class UnitLibrary {
   constructor(assets: UnitAssets, pointScale: { value: number } = { value: 600 }) {
     this.assets = assets;
     this.uniforms = { time: { value: 0 }, spawn: { value: 0 }, pointScale };
+    let b = baseCache.get(assets);
+    if (!b) {
+      b = new Map();
+      baseCache.set(assets, b);
+    }
+    this.bases = b;
   }
 
   /** Create an animated actor for a piece (facing +z; the caller sets the yaw). */
@@ -145,12 +162,20 @@ export class UnitLibrary {
     return this.template(p.character, p.level, p.owner).triangles;
   }
 
+  /** Unit height on the board (tile units, idle rest pose incl. helmet / horns). */
+  height(p: Pick<Piece, 'character' | 'level' | 'owner'>): number {
+    return this.template(p.character, p.level, p.owner).height;
+  }
+
   /** Per-frame shared animation state. */
   update(timeSec: number): void {
     this.uniforms.time.value = timeSec;
   }
 
+  private disposed = false;
+
   dispose(): void {
+    this.disposed = true;
     for (const g of this.geometries) g.dispose();
     for (const m of this.materials) m.dispose();
     for (const t of this.textures) t.dispose();
@@ -158,6 +183,50 @@ export class UnitLibrary {
     this.materials.length = 0;
     this.textures.length = 0;
     this.templates.clear();
+    // Shared bases stay cached (CPU data); free this view's GPU copies of their geometry.
+    for (const b of this.bases.values()) b.geometry.dispose();
+  }
+
+  /** True when the team-independent part of a look is built (createActor will be cheap). */
+  isPrepared(ch: CharacterId, level: Level): boolean {
+    return this.bases.has(`${ch}:${level}`);
+  }
+
+  /**
+   * Build the looks of `pieces` (then, if `all`, every other look) one per macrotask, so no single
+   * long task blocks the main thread. Resolves when the pieces' looks are ready.
+   */
+  prepare(pieces: Pick<Piece, 'character' | 'level'>[], all = true): Promise<void> {
+    const order: [CharacterId, Level][] = [];
+    const seen = new Set<string>();
+    const push = (ch: CharacterId, level: Level): void => {
+      const k = `${ch}:${level}`;
+      if (seen.has(k) || this.bases.has(k)) return;
+      seen.add(k);
+      order.push([ch, level]);
+    };
+    for (const p of pieces) push(p.character, p.level);
+    const first = order.length;
+    if (all) for (const ch of Object.keys(LOOKS) as CharacterId[]) for (const l of [1, 2, 3] as Level[]) push(ch, l);
+    return new Promise((resolve) => {
+      let i = 0;
+      const step = (): void => {
+        if (this.disposed) return resolve();
+        if (i >= first) resolve();
+        if (i >= order.length) return;
+        const [ch, level] = order[i++];
+        try {
+          this.base(ch, level);
+        } catch (err) {
+          console.warn('[render] unit look build failed:', err);
+        }
+        // Looks needed now: next macrotask; background warm-up: idle time only.
+        const ric = (globalThis as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+        if (i < first || !ric) setTimeout(step, 0);
+        else ric(step, { timeout: 3000 });
+      };
+      step();
+    });
   }
 
   // ---------------------------------------------------------------- templates
@@ -172,86 +241,120 @@ export class UnitLibrary {
     return t;
   }
 
-  private tint(owner: PlayerId, t: Tint): string {
-    const team = TEAM_COLORS[owner];
-    switch (t) {
-      case 'team':
-        return team.main;
-      case 'teamLight':
-        return team.light;
-      case 'teamDark':
-        return team.dark;
-      case 'teamMuted':
-        return mixHex(team.main, '#6E7078', 0.42);
-      case 'teamDeep':
-        return mixHex(team.dark, '#0A0A12', 0.35);
-      default:
-        return t;
+  private source(body: 'hero' | 'imp'): BodySource {
+    const gltf = this.assets[body];
+    let s = sources.get(gltf);
+    if (!s) {
+      s = new BodySource(gltf);
+      sources.set(gltf, s);
     }
+    return s;
   }
 
   private buildTemplate(ch: CharacterId, level: Level, owner: PlayerId): Template {
     const look = LOOKS[ch];
     const lv = look.levels[level];
-    const gltf = this.assets[ch];
+    const base = this.base(ch, level);
     const team = TEAM_COLORS[owner];
-
-    // Fresh clone of the glTF scene: bones + original meshes (used only as merge input).
-    const scene = cloneSkinned(gltf.scene) as THREE.Object3D;
-    if (look.boneScale) {
-      for (const [name, k] of Object.entries(look.boneScale)) scene.getObjectByName(name)?.scale.multiplyScalar(k);
-    }
-    for (const [name, k] of Object.entries(lv.propScale ?? {})) scene.getObjectByName(name)?.scale.multiplyScalar(k);
-    scene.updateMatrixWorld(true);
-    let skeleton: THREE.Skeleton | null = null;
-    const skinned: THREE.SkinnedMesh[] = [];
-    scene.traverse((o) => {
-      const sm = o as THREE.SkinnedMesh;
-      if (!sm.isSkinnedMesh) return;
-      skinned.push(sm);
-      if (!skeleton) skeleton = sm.skeleton;
+    const opts: UnitMaterialOptions = {
+      rim: team.light,
+      rimStrength: look.rim * (level === 3 ? 1.25 : 1),
+      glowColor: lv.glow,
+      pulse: level === 3,
+      patternColor: lv.patternColor ?? lv.glow,
+      team: teamTones(owner),
+      eyeColor: lv.eye ?? '#000000',
+      teamKey: base.teamKey,
+      map: this.map(look.body),
+      patScale: base.patScale,
+    };
+    const mat = makeUnitMaterial(this.uniforms, opts);
+    this.materials.push(mat);
+    const root = cloneSkinned(base.root) as THREE.Group;
+    root.name = `tpl-${ch}-lv${level}-p${owner}`;
+    root.traverse((o) => {
+      if ((o as THREE.SkinnedMesh).isSkinnedMesh) (o as THREE.SkinnedMesh).material = mat;
     });
-    if (!skeleton) throw new Error(`unit ${ch}: no skinned mesh`);
-    const baseSkel: THREE.Skeleton = skeleton;
-    const partNames = (gltf.scene.userData.parts as string[] | undefined) ?? [];
+    this.addFx(root, ch, level, owner, base.height);
+    return {
+      root,
+      clips: this.clips(ch),
+      height: base.height,
+      secondary: base.secondary,
+      idleSpeed: lv.idleSpeed ?? 1,
+      bob: lv.bob ?? 0,
+      material: mat,
+      opts,
+      dying: { capture: null, storm: null },
+      triangles: base.triangles,
+    };
+  }
 
-    // Rest-pose body measurement (tags: humanoid 0 body / 1 arms / 2 legs / 3 head / 5 eyes; bull slot).
-    const body = new BodyCloud();
-    const [gCols, gRows] = look.grid ?? [8, 4];
-    for (const sm of skinned) {
-      const partAttr = sm.geometry.getAttribute('_part') as THREE.BufferAttribute | undefined;
-      const tag = /Head/.test(sm.name) ? 3 : /Arm/.test(sm.name) ? 1 : /Leg/.test(sm.name) ? 2 : 0;
-      const uv = sm.geometry.getAttribute('uv') as THREE.BufferAttribute | undefined;
-      const eye = (i: number): boolean =>
-        !!uv && look.roles[`${Math.floor(Math.min(0.9999, uv.getX(i)) * gCols)},${Math.floor(Math.min(0.9999, uv.getY(i)) * gRows)}`] === 'eye';
-      body.addSkinned(sm, partAttr ? (i) => Math.round(partAttr.getX(i)) : tag === 3 ? (i) => (eye(i) ? 5 : 3) : () => tag);
+  /** Team-independent template: rig + merged geometry. */
+  private base(ch: CharacterId, level: Level): Base {
+    const key = `${ch}:${level}`;
+    const cached = this.bases.get(key);
+    if (cached) return cached;
+    const look = LOOKS[ch];
+    const lv = look.levels[level];
+    const gltf = this.assets[look.body];
+    const src = this.source(look.body);
+
+    // Fresh clone of the body scene: bones (+ original meshes, removed below).
+    const scene = cloneSkinned(gltf.scene) as THREE.Object3D;
+    for (const [name, k] of Object.entries(look.boneScale ?? {})) {
+      const b = scene.getObjectByName(name);
+      if (b) b.scale.multiply(tmpV.set(k[0], k[1], k[2]));
     }
+    scene.updateMatrixWorld(true);
+    const bones = src.bones.map((n) => {
+      const b = scene.getObjectByName(n);
+      if (!b || !(b as THREE.Bone).isBone) throw new Error(`unit ${ch}: bone ${n} missing`);
+      return b as THREE.Bone;
+    });
+    const boneIdx = new Map(bones.map((b, i) => [b.name, i]));
+    const inverses = src.bindInv.map((m) => m.clone());
+    const skinM = bones.map((b, j) => new THREE.Matrix4().multiplyMatrices(b.matrixWorld, inverses[j]));
 
-    // Procedural outfit (+ secondary bones).
+    // Idle pose sample (world matrices of every bone), for pose-aware gear placement.
+    const idleWorld = this.sampleIdle(ch, scene, bones);
+
+    // Outfit.
     const gear = new GearBuilder();
-    const extraBones: THREE.Bone[] = [];
-    const extraInv = new Map<THREE.Bone, THREE.Matrix4>();
     const secondary: SecondarySpec[] = [];
-    const bindOf = (b: THREE.Bone): THREE.Matrix4 | undefined => {
-      const i = baseSkel.bones.indexOf(b);
-      return i >= 0 ? baseSkel.boneInverses[i] : extraInv.get(b);
+    const used = new Map<string, (i: number) => Style>();
+    const hidden = new Map<string, Uint8Array>();
+    const shells: Part[] = [];
+    const keep = (mesh: string): Uint8Array => {
+      let k = hidden.get(mesh);
+      if (!k) {
+        k = new Uint8Array(src.mesh(mesh).index.length / 3).fill(1);
+        hidden.set(mesh, k);
+      }
+      return k;
+    };
+    const hide = (mesh: string, tris: Uint8Array): void => {
+      const k = keep(mesh);
+      for (let i = 0; i < tris.length; i++) if (tris[i]) k[i] = 0;
+    };
+    const boneOf = (name: string): number => {
+      const i = boneIdx.get(name);
+      if (i === undefined) throw new Error(`unit ${ch}: bone ${name} missing`);
+      return i;
     };
     const ctx: OutfitCtx = {
       ch,
       level,
-      owner,
       look: lv,
-      scene,
-      body,
+      src,
       gear,
       secondary,
-      tint: (t) => this.tint(owner, t),
-      bone: (name) => {
-        const b = scene.getObjectByName(name);
-        if (!b || !(b as THREE.Bone).isBone) throw new Error(`unit ${ch}: bone ${name} missing`);
-        return b as THREE.Bone;
-      },
-      addBone: (name, parent, at) => {
+      bone: boneOf,
+      at: (name) => new THREE.Vector3().setFromMatrixPosition(bones[boneOf(name)].matrixWorld),
+      boneWorld: (name) => bones[boneOf(name)].matrixWorld.clone(),
+      addBone: (name, parentName, at) => {
+        const pi = boneOf(parentName);
+        const parent = bones[pi];
         const b = new THREE.Bone();
         b.name = name;
         parent.add(b);
@@ -261,70 +364,60 @@ export class UnitLibrary {
         b.quaternion.copy(tmpQ.invert());
         b.updateMatrixWorld(true);
         // Keep skin space consistent: B_new * Binv_new = B_parent * Binv_parent.
-        const pInv = bindOf(parent) ?? new THREE.Matrix4();
-        const m = new THREE.Matrix4().copy(parent.matrixWorld).multiply(pInv);
-        extraInv.set(b, new THREE.Matrix4().copy(b.matrixWorld).invert().multiply(m));
-        extraBones.push(b);
-        return b;
+        inverses.push(new THREE.Matrix4().copy(b.matrixWorld).invert().multiply(skinM[pi]));
+        skinM.push(skinM[pi].clone());
+        bones.push(b);
+        boneIdx.set(name, bones.length - 1);
+        return bones.length - 1;
+      },
+      use: (mesh, style) => {
+        used.set(mesh, style);
+      },
+      hide,
+      shell: (mesh, spec, hideCovered = true) => {
+        const p = buildShell(src.mesh(mesh), spec);
+        if (p) shells.push(p);
+        if (hideCovered) hide(mesh, spec.tris);
+      },
+      vmask: (mesh, pred) => vertexMask(src, src.mesh(mesh), pred),
+      tris: (mesh, pred, need = 3) => triMask(src.mesh(mesh), vertexMask(src, src.mesh(mesh), pred), need),
+      world: (mesh, i, out = new THREE.Vector3()) => {
+        const m = src.mesh(mesh);
+        const p = tmpV.fromArray(m.pos, i * 3);
+        out.set(0, 0, 0);
+        for (let k = 0; k < 4; k++) {
+          const w = m.sw[i * 4 + k];
+          if (w > 0) out.addScaledVector(p.clone().applyMatrix4(skinM[m.si[i * 4 + k]]), w);
+        }
+        return out;
+      },
+      srcMesh: (mesh) => src.mesh(mesh),
+      texel: (u, v) => this.texel(look.body, u, v),
+      idleToRest: (name) => {
+        const i = boneOf(name);
+        return bones[i].matrixWorld.clone().multiply(idleWorld[i].clone().invert());
+      },
+      rigid: (name) => boneOf(name),
+      blend: (a, b, from, to) => {
+        const ia = boneOf(a);
+        const ib = boneOf(b);
+        const d = to.clone().sub(from);
+        const l2 = Math.max(1e-6, d.lengthSq());
+        return (p) => ({ a: ia, b: ib, t: Math.max(0, Math.min(1, p.clone().sub(from).dot(d) / l2)) });
       },
     };
-    buildOutfit(ctx);
-    const skel =
-      extraBones.length > 0
-        ? new THREE.Skeleton(
-            baseSkel.bones.concat(extraBones),
-            baseSkel.boneInverses.concat(extraBones.map((b) => extraInv.get(b) as THREE.Matrix4)),
-          )
-        : baseSkel;
+    const outfit = buildOutfit(ctx);
 
-    // Merge body + props + gear with baked palette colours.
-    const palette = this.resolvePalette(lv, owner);
-    const atlas = ch === 'marki' ? null : this.atlas(ch, gltf);
-    const parts: MergePart[] = [];
-    let bodyVerts = 0;
-    scene.traverse((o) => {
-      const mesh = o as THREE.Mesh;
-      if (!mesh.isMesh) return;
-      const isSkinned = (mesh as THREE.SkinnedMesh).isSkinnedMesh === true;
-      if (!isSkinned && !lv.props.includes(mesh.name)) return;
-      const part: MergePart = { mesh };
-      if (ch === 'marki') this.bullVertex(part, look, partNames, palette);
-      else if (atlas) this.atlasVertex(part, look, atlas, palette);
-      if (isSkinned) {
-        parts.unshift(part);
-        bodyVerts += mesh.geometry.attributes.position.count;
-      } else parts.push(part);
-    });
-    const gearMesh = gear.build(skel);
-    if (gearMesh) parts.push({ mesh: gearMesh, world: true });
-    const geometry = mergeSkinned(skel, parts);
-    gearMesh?.geometry.dispose();
-    if (look.smooth) smoothNormals(geometry, bodyVerts);
-    this.geometries.push(geometry);
-
-    // Fit: height normalised per character on the bare Lv1 body, then the level scale.
-    const bb = restBox(geometry, skel);
-    const len = Math.max(0.01, bb.max.z - bb.min.z);
-    let s = look.height / this.restHeight(ch, skinned, baseSkel);
-    if (look.maxLength) s = Math.min(s, look.maxLength / len);
-    s *= lv.scale;
-    const h = Math.max(0.01, bb.max.y - Math.min(0, bb.min.y));
-    const bodyH = this.restHeights.get(ch) ?? h;
-    const offset = new THREE.Vector3(0, 0, 0);
-    if (ch === 'marki') offset.set(-(bb.min.x + bb.max.x) / 2, -bb.min.y, -(bb.min.z + bb.max.z) / 2);
-
-    // Material (patterns normalised to a ~2.4-unit tall model).
-    const opts = {
-      rim: team.light,
-      rimStrength: look.rim * (level === 3 ? 1.25 : 1),
-      glowColor: lv.glow,
-      pulse: level === 3,
-      patternColor: lv.patternColor ?? lv.glow,
-      patScale: 2.4 / Math.max(1e-4, geometry.boundingBox ? Math.max(...geometry.boundingBox.getSize(new THREE.Vector3()).toArray()) : 1),
-    };
-    const mat = makeUnitMaterial(this.uniforms, opts);
-    mat.roughness = ch === 'marki' ? 0.72 : 0.62;
-    this.materials.push(mat);
+    // Assemble: kept source triangles, shells, gear.
+    const parts: Part[] = [];
+    for (const [mesh, style] of used) {
+      const p = sourcePart(src.mesh(mesh), hidden.get(mesh) ?? null, style);
+      if (p) parts.push(p);
+    }
+    parts.push(...shells);
+    const gp = gear.build(skinM);
+    if (gp) parts.push(gp);
+    const geometry = assemble(parts);
 
     // Replace the source meshes with the merged skinned mesh.
     const remove: THREE.Object3D[] = [];
@@ -332,183 +425,147 @@ export class UnitLibrary {
       if ((o as THREE.Mesh).isMesh) remove.push(o);
     });
     for (const o of remove) o.removeFromParent();
-    const merged = new THREE.SkinnedMesh(geometry, mat);
+    const skel = new THREE.Skeleton(bones, inverses);
+    const merged = new THREE.SkinnedMesh(geometry);
     merged.name = `unit-${ch}`;
     merged.castShadow = true;
     merged.receiveShadow = false;
     scene.add(merged);
     merged.bind(skel, new THREE.Matrix4());
 
+    // Fit: the bare body height is normalised per character, then the level scale.
+    const bodyH = this.bodyHeight(src);
+    const s = (look.height / bodyH) * lv.scale;
+    const bb = restBox(geometry, skel);
+    const h = Math.max(0.01, bb.max.y - Math.min(0, bb.min.y));
     const holder = new THREE.Group();
-    holder.name = `tpl-${ch}-lv${level}-p${owner}`;
-    const st = look.stretch ?? [1, 1, 1];
-    scene.scale.set(s * st[0], s * st[1], s * st[2]);
-    scene.position.copy(offset).multiplyScalar(s);
-    scene.userData.restY = scene.position.y;
+    scene.scale.setScalar(s);
+    scene.userData.restY = 0;
     holder.add(scene);
-
-    const unitH = Math.min(h, bodyH * 1.25) * s;
-    this.addFx(holder, ch, lv, level, owner, unitH);
-
-    return {
+    const size = bb.getSize(new THREE.Vector3());
+    const base: Base = {
       root: holder,
-      clips: this.clips(ch, gltf, look, baseSkel),
-      height: unitH,
+      geometry,
+      height: Math.min(h, bodyH * 1.3) * s,
       secondary,
-      idleSpeed: lv.idleSpeed ?? 1,
-      bob: lv.bob ?? 0,
-      material: mat,
-      opts,
-      dying: { capture: null, storm: null },
       triangles: (geometry.index?.count ?? 0) / 3,
+      patScale: 2.4 / Math.max(1e-4, Math.max(size.x, size.y, size.z)),
+      map: this.map(look.body),
+      teamKey: outfit.teamKey ?? 0,
     };
+    this.bases.set(key, base);
+    return base;
   }
 
-  /** Resolve team tints of a level palette to linear colours. */
-  private resolvePalette(lv: LevelLook, owner: PlayerId): Map<string, { style: RoleStyle; color: THREE.Color }> {
-    const out = new Map<string, { style: RoleStyle; color: THREE.Color }>();
-    for (const [role, style] of Object.entries(lv.palette)) out.set(role, { style, color: new THREE.Color(this.tint(owner, style.color)) });
+  private readonly pixels = new Map<string, { data: Uint8ClampedArray; w: number; h: number } | null>();
+
+  /** CPU read of the body texture (build time only; cached per body). */
+  private texel(body: 'hero' | 'imp', u: number, v: number): [number, number, number] | null {
+    let px = this.pixels.get(body);
+    if (px === undefined) {
+      px = null;
+      const img = this.map(body)?.image as (CanvasImageSource & { width: number; height: number }) | undefined;
+      if (img && img.width && typeof document !== 'undefined') {
+        const c = document.createElement('canvas');
+        c.width = Math.min(512, img.width);
+        c.height = Math.min(512, img.height);
+        const g = c.getContext('2d', { willReadFrequently: true });
+        if (g) {
+          g.drawImage(img, 0, 0, c.width, c.height);
+          px = { data: g.getImageData(0, 0, c.width, c.height).data, w: c.width, h: c.height };
+        }
+      }
+      this.pixels.set(body, px);
+    }
+    if (!px) return null;
+    const x = Math.min(px.w - 1, Math.max(0, Math.floor((u - Math.floor(u)) * px.w)));
+    const y = Math.min(px.h - 1, Math.max(0, Math.floor((v - Math.floor(v)) * px.h)));
+    const o = (y * px.w + x) * 4;
+    return [px.data[o] / 255, px.data[o + 1] / 255, px.data[o + 2] / 255];
+  }
+
+  /** World matrices of the bones in the idle clip (30% in); the rest pose is restored afterwards. */
+  private sampleIdle(ch: CharacterId, scene: THREE.Object3D, bones: THREE.Bone[]): THREE.Matrix4[] {
+    const idle = this.clips(ch).find((c) => c.name === 'idle');
+    const saved = bones.map((b) => [b.position.clone(), b.quaternion.clone(), b.scale.clone()] as const);
+    const mixer = new THREE.AnimationMixer(scene);
+    if (idle) {
+      mixer.clipAction(idle).play();
+      mixer.setTime(idle.duration * 0.3);
+    }
+    scene.updateMatrixWorld(true);
+    const out = bones.map((b) => b.matrixWorld.clone());
+    mixer.stopAllAction();
+    mixer.uncacheRoot(scene);
+    bones.forEach((b, i) => {
+      b.position.copy(saved[i][0]);
+      b.quaternion.copy(saved[i][1]);
+      b.scale.copy(saved[i][2]);
+    });
+    scene.updateMatrixWorld(true);
     return out;
   }
 
-  /** CPU copy of the character's palette atlas (null if it cannot be read). */
-  private atlas(ch: CharacterId, gltf: GLTF): Atlas | null {
-    if (this.atlases.has(ch)) return this.atlases.get(ch) ?? null;
+  private bodyHeight(src: BodySource): number {
+    const m = src.mesh('Body');
+    let top = 0;
+    for (let i = 1; i < m.pos.length; i += 3) top = Math.max(top, m.pos[i]);
+    return top;
+  }
+
+  /** The body texture (uploaded through the unit materials; tracked for disposal). */
+  private map(body: 'hero' | 'imp'): THREE.Texture | null {
     let map: THREE.Texture | null = null;
-    gltf.scene.traverse((o) => {
+    this.assets[body].scene.traverse((o) => {
       const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
       if (!map && m && m.map) map = m.map;
     });
-    let atlas: Atlas | null = null;
-    const tex = map as THREE.Texture | null;
-    const img = tex?.image as (CanvasImageSource & { width: number; height: number }) | undefined;
-    if (tex && img && img.width) {
-      const c = document.createElement('canvas');
-      c.width = img.width;
-      c.height = img.height;
-      const g = c.getContext('2d', { willReadFrequently: true });
-      if (g) {
-        g.drawImage(img, 0, 0);
-        const data = g.getImageData(0, 0, c.width, c.height).data;
-        const [cols, rows] = LOOKS[ch].grid ?? [8, 4];
-        const cellMean = new Map<string, number>();
-        const cw = c.width / cols;
-        const chh = c.height / rows;
-        for (let r = 0; r < rows; r++) {
-          for (let k = 0; k < cols; k++) {
-            let sum = 0;
-            let n = 0;
-            for (let y = Math.floor(r * chh); y < Math.floor((r + 1) * chh); y++) {
-              for (let x = Math.floor(k * cw); x < Math.floor(k * cw + cw * 0.75); x++) {
-                const o = (y * c.width + x) * 4;
-                sum += lum(data[o] / 255, data[o + 1] / 255, data[o + 2] / 255);
-                n++;
-              }
-            }
-            cellMean.set(`${k},${r}`, Math.max(0.04, sum / Math.max(1, n)));
-          }
-        }
-        atlas = { data, w: c.width, h: c.height, flipY: tex.flipY, cellMean };
-      }
+    const t = map as THREE.Texture | null;
+    if (t) {
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.anisotropy = 4;
+      if (!this.textures.includes(t)) this.textures.push(t);
     }
-    this.atlases.set(ch, atlas);
-    return atlas;
+    return t;
   }
 
-  /** Humanoids: sample the atlas at each vertex UV, remap by role through the level palette. */
-  private atlasVertex(part: MergePart, look: CharacterLook, atlas: Atlas, palette: ReturnType<UnitLibrary['resolvePalette']>): void {
-    const uv = part.mesh.geometry.getAttribute('uv') as THREE.BufferAttribute | undefined;
-    if (!uv) return;
-    const [cols, rows] = look.grid ?? [8, 4];
-    part.vertex = (i, color, fx) => {
-      const u = Math.min(0.9999, Math.max(0, uv.getX(i)));
-      let v = Math.min(0.9999, Math.max(0, uv.getY(i)));
-      if (atlas.flipY) v = 1 - v;
-      const px = Math.floor(u * atlas.w);
-      const py = Math.floor(v * atlas.h);
-      const o = (py * atlas.w + px) * 4;
-      const r = atlas.data[o] / 255;
-      const g = atlas.data[o + 1] / 255;
-      const b = atlas.data[o + 2] / 255;
-      const cell = `${Math.floor(u * cols)},${Math.floor(v * rows)}`;
-      const role = look.roles[cell];
-      const entry = role ? palette.get(role) : undefined;
-      if (!entry) {
-        color.setRGB(r, g, b, THREE.SRGBColorSpace);
-        return;
-      }
-      const shade = entry.style.shade === false ? 1 : Math.min(1.45, Math.max(0.55, lum(r, g, b) / (atlas.cellMean.get(cell) ?? 0.5)));
-      color.copy(entry.color).multiplyScalar(shade);
-      fx.set(entry.style.glow ?? 0, entry.style.metal ?? 0, entry.style.pattern ?? 0, 0);
-    };
-  }
-
-  /** Bull: material slot (`_part`) -> role -> level palette. */
-  private bullVertex(part: MergePart, look: CharacterLook, names: string[], palette: ReturnType<UnitLibrary['resolvePalette']>): void {
-    const attr = part.mesh.geometry.getAttribute('_part') as THREE.BufferAttribute | undefined;
-    if (!attr) return;
-    const bySlot = names.map((n) => palette.get(look.roles[n] ?? n));
-    part.vertex = (i, color, fx) => {
-      const e = bySlot[Math.round(attr.getX(i))];
-      if (!e) return;
-      color.copy(e.color);
-      fx.set(e.style.glow ?? 0, e.style.metal ?? 0, e.style.pattern ?? 0, 0);
-    };
-  }
-
-  /** Height of the bare body (skinned parts only) in model units. */
-  private restHeight(ch: CharacterId, skinned: THREE.SkinnedMesh[], skel: THREE.Skeleton): number {
-    let h = this.restHeights.get(ch);
-    if (h !== undefined) return h;
-    const g = mergeSkinned(
-      skel,
-      skinned.map((mesh) => ({ mesh })),
-    );
-    const box = restBox(g, skel);
-    g.dispose();
-    h = Math.max(0.01, box.max.y - Math.min(0, box.min.y));
-    this.restHeights.set(ch, h);
-    return h;
-  }
-
-  /** Clips with per-bone pitch offsets folded in (bull: lowered, charging head). */
-  private clips(ch: CharacterId, gltf: GLTF, look: CharacterLook, skel: THREE.Skeleton): THREE.AnimationClip[] {
+  /** Logical clips of a character, retargeted to its body (pelvis height) and trimmed / chained. */
+  private clips(ch: CharacterId): THREE.AnimationClip[] {
     let c = this.clipCache.get(ch);
     if (c) return c;
-    if (!look.bonePitch) {
-      c = gltf.animations;
-    } else {
-      const pitch = look.bonePitch;
-      c = gltf.animations.map((clip) => {
-        const out = clip.clone();
-        for (const track of out.tracks) {
-          const [boneName, prop] = track.name.split('.');
-          const ang = pitch[boneName];
-          if (ang === undefined || prop !== 'quaternion') continue;
-          const bone = skel.bones.find((b) => b.name === boneName);
-          if (!bone) continue;
-          // World +x at rest expressed in the bone's own frame.
-          bone.getWorldQuaternion(tmpQ2);
-          tmpV.set(1, 0, 0).applyQuaternion(tmpQ2.invert()).normalize();
-          tmpQ.setFromAxisAngle(tmpV, ang);
-          const vals = track.values;
-          const q = new THREE.Quaternion();
-          for (let k = 0; k < vals.length; k += 4) {
-            q.set(vals[k], vals[k + 1], vals[k + 2], vals[k + 3]).multiply(tmpQ);
-            vals[k] = q.x;
-            vals[k + 1] = q.y;
-            vals[k + 2] = q.z;
-            vals[k + 3] = q.w;
-          }
-        }
-        return out;
-      });
+    const look = LOOKS[ch];
+    const anims = this.assets.anims;
+    const byName = new Map(anims.animations.map((a) => [a.name, a]));
+    // Pelvis translation ratio: body pelvis height / mannequin pelvis height.
+    const src = this.source(look.body);
+    const animPelvis = new THREE.Vector3();
+    anims.scene.updateMatrixWorld(true);
+    anims.scene.getObjectByName('pelvis')?.getWorldPosition(animPelvis);
+    const ratio = src.bonePos('pelvis').y / Math.max(0.01, animPelvis.y);
+    const make = (spec: ClipSpec): THREE.AnimationClip => {
+      const clip = byName.get(spec.src);
+      if (!clip) throw new Error(`clip ${spec.src} missing`);
+      let out = trimClip(clip, spec.from ?? 0, spec.to ?? clip.duration);
+      if (spec.then) out = chainClips(out, make(spec.then));
+      return out;
+    };
+    c = [];
+    for (const [name, spec] of Object.entries(look.clips) as [ClipName, ClipSpec][]) {
+      const clip = make(spec);
+      clip.name = name;
+      // Drop tracks of bones this body does not have (the imp has no pinkies).
+      clip.tracks = clip.tracks.filter((t) => src.boneIndex.has(t.name.slice(0, t.name.lastIndexOf('.'))));
+      for (const t of clip.tracks) {
+        if (t.name === 'pelvis.position') for (let k = 0; k < t.values.length; k++) t.values[k] *= ratio;
+      }
+      c.push(clip);
     }
     this.clipCache.set(ch, c);
     return c;
   }
 
-  private addFx(holder: THREE.Group, ch: CharacterId, lv: LevelLook, level: Level, owner: PlayerId, height: number): void {
+  private addFx(holder: THREE.Group, ch: CharacterId, level: Level, owner: PlayerId, height: number): void {
+    const lv = LOOKS[ch].levels[level];
     const team = TEAM_COLORS[owner];
     if (lv.particles) {
       const geo = makeParticleGeometry(lv.particles.count, level * 7 + lv.particles.count + owner * 3 + ch.length);
@@ -544,4 +601,44 @@ export class UnitLibrary {
       holder.add(aura);
     }
   }
+}
+
+// ---------------------------------------------------------------- clip helpers
+
+/** Sub-range [from, to] of a clip (seconds), re-timed to start at 0; boundary keys interpolated. */
+export function trimClip(clip: THREE.AnimationClip, from: number, to: number): THREE.AnimationClip {
+  const tracks = clip.tracks.map((t) => {
+    const size = t.getValueSize();
+    const interp = (t as unknown as { createInterpolant(): THREE.Interpolant }).createInterpolant();
+    const times: number[] = [];
+    const values: number[] = [];
+    const push = (time: number, v: ArrayLike<number>): void => {
+      times.push(time - from);
+      for (let k = 0; k < size; k++) values.push(v[k]);
+    };
+    push(from, Array.from(interp.evaluate(from)));
+    for (let i = 0; i < t.times.length; i++) {
+      const tt = t.times[i];
+      if (tt > from + 1e-4 && tt < to - 1e-4) push(tt, t.values.subarray(i * size, i * size + size));
+    }
+    push(to, Array.from(interp.evaluate(to)));
+    const Ctor = t.constructor as new (name: string, times: number[], values: number[]) => THREE.KeyframeTrack;
+    return new Ctor(t.name, times, values);
+  });
+  return new THREE.AnimationClip(clip.name, to - from, tracks);
+}
+
+/** `b` appended after `a` (tracks matched by name). */
+export function chainClips(a: THREE.AnimationClip, b: THREE.AnimationClip): THREE.AnimationClip {
+  const gap = 1 / 30;
+  const bt = new Map(b.tracks.map((t) => [t.name, t]));
+  const tracks = a.tracks.map((t) => {
+    const u = bt.get(t.name);
+    if (!u) return t.clone();
+    const times = Array.from(t.times).concat(Array.from(u.times, (x) => x + a.duration + gap));
+    const values = Array.from(t.values).concat(Array.from(u.values));
+    const Ctor = t.constructor as new (name: string, times: number[], values: number[]) => THREE.KeyframeTrack;
+    return new Ctor(t.name, times, values);
+  });
+  return new THREE.AnimationClip(a.name, a.duration + gap + b.duration, tracks);
 }

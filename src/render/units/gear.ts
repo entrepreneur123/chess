@@ -1,26 +1,18 @@
 /**
- * Procedural gear for the glTF units, authored in REST-POSE WORLD space of the (bone-scaled)
- * character scene and skinned to its bones (rigidly, or blended between two bones for cloth).
- * Everything ends up in the unit's single merged skinned mesh (merge.ts, `world` parts), so the
- * extra detail costs vertices, not draw calls. Build-time only (cached per template).
+ * Procedural gear for the glTF units (weapons, shields, helmets, capes, horns, plumes, ...), authored
+ * in REST-POSE WORLD space of the (bone-scaled) character and skinned to its bones (rigidly, or
+ * blended between two bones for cloth). build() converts it to bind space (exact inverse of the
+ * blended rest skin transform) so it lands in the unit's single merged skinned mesh: extra detail
+ * costs vertices, not draw calls. Build-time only (cached per template).
  */
 import * as THREE from 'three';
+import { PartWriter, type Part } from './body';
+import type { Style } from './style';
 
-export interface GearStyle {
-  /** sRGB colour. */
-  color: THREE.ColorRepresentation;
-  /** Emissive strength (0..2). */
-  glow?: number;
-  /** Metal look (0..1). */
-  metal?: number;
-  /** Pattern id (material.ts PATTERN). */
-  pattern?: number;
-}
-
-/** Per-vertex skinning: up to two bones. */
+/** Per-vertex skinning: up to two bones (indices into the unit skeleton). */
 export interface SkinPick {
-  a: THREE.Bone;
-  b?: THREE.Bone;
+  a: number;
+  b?: number;
   /** Weight of `b` (0..1). */
   t?: number;
 }
@@ -30,15 +22,15 @@ export type SkinFn = (p: THREE.Vector3) => SkinPick;
 const tmpV = new THREE.Vector3();
 const tmpN = new THREE.Vector3();
 const tmpNM = new THREE.Matrix3();
-const tmpC = new THREE.Color();
+const tmpW = new THREE.Matrix4();
 
 export class GearBuilder {
   private readonly pos: number[] = [];
   private readonly nor: number[] = [];
-  private readonly col: number[] = [];
-  private readonly fx: number[] = [];
-  private readonly boneA: THREE.Bone[] = [];
-  private readonly boneB: (THREE.Bone | null)[] = [];
+  private readonly styles: Style[] = [];
+  private readonly styleOf: number[] = [];
+  private readonly boneA: number[] = [];
+  private readonly boneB: number[] = [];
   private readonly wB: number[] = [];
   private readonly idx: number[] = [];
 
@@ -46,17 +38,20 @@ export class GearBuilder {
     return this.boneA.length;
   }
 
+  get triangleCount(): number {
+    return this.idx.length / 3;
+  }
+
   /** Add a geometry (disposed afterwards) transformed by `m` into rest world space. */
-  add(geo: THREE.BufferGeometry, m: THREE.Matrix4 | null, style: GearStyle, skin: THREE.Bone | SkinFn): void {
+  add(geo: THREE.BufferGeometry, m: THREE.Matrix4 | null, style: Style | ((p: THREE.Vector3) => Style), skin: number | SkinFn): void {
     const P = geo.attributes.position;
     if (!geo.attributes.normal) geo.computeVertexNormals();
     const N = geo.attributes.normal;
     const base = this.boneA.length;
     if (m) tmpNM.getNormalMatrix(m);
-    tmpC.set(style.color);
-    const glow = style.glow ?? 0;
-    const metal = style.metal ?? 0;
-    const pattern = style.pattern ?? 0;
+    const fixed = typeof style === 'function' ? -1 : this.styles.push(style) - 1;
+    const styleAt = typeof style === 'function' ? style : null;
+    const seen = new Map<Style, number>();
     for (let i = 0; i < P.count; i++) {
       tmpV.fromBufferAttribute(P, i);
       tmpN.fromBufferAttribute(N, i);
@@ -66,17 +61,24 @@ export class GearBuilder {
       }
       this.pos.push(tmpV.x, tmpV.y, tmpV.z);
       this.nor.push(tmpN.x, tmpN.y, tmpN.z);
-      this.col.push(tmpC.r, tmpC.g, tmpC.b);
-      this.fx.push(glow, metal, pattern, 0);
-      if (skin instanceof THREE.Bone) {
+      if (styleAt) {
+        const st = styleAt(tmpV);
+        let k = seen.get(st);
+        if (k === undefined) {
+          k = this.styles.push(st) - 1;
+          seen.set(st, k);
+        }
+        this.styleOf.push(k);
+      } else this.styleOf.push(fixed);
+      if (typeof skin === 'number') {
         this.boneA.push(skin);
-        this.boneB.push(null);
+        this.boneB.push(-1);
         this.wB.push(0);
       } else {
         const s = skin(tmpV);
         this.boneA.push(s.a);
-        this.boneB.push(s.b ?? null);
-        this.wB.push(s.b ? (s.t ?? 0) : 0);
+        this.boneB.push(s.b ?? -1);
+        this.wB.push(s.b !== undefined ? (s.t ?? 0) : 0);
       }
     }
     if (geo.index) {
@@ -87,36 +89,40 @@ export class GearBuilder {
     geo.dispose();
   }
 
-  /** A mesh carrying the gear (world-space, skin attributes for `skeleton`), or null if empty. */
-  build(skeleton: THREE.Skeleton): THREE.Mesh | null {
+  /**
+   * Bind-space part. `skinM[j]` = bone_j.matrixWorld * boneInverse_j at rest (identity unless the
+   * bones are scaled): v_bind = (sum_k w_k skinM_k)^-1 * v_world.
+   */
+  build(skinM: THREE.Matrix4[]): Part | null {
     const n = this.boneA.length;
     if (n === 0) return null;
-    const si = new Uint16Array(n * 4);
-    const sw = new Float32Array(n * 4);
-    const lookup = new Map<THREE.Bone, number>();
-    skeleton.bones.forEach((b, i) => lookup.set(b, i));
+    const w = new PartWriter();
+    const si = [0, 0, 0, 0];
+    const sw = [0, 0, 0, 0];
     for (let i = 0; i < n; i++) {
-      const a = lookup.get(this.boneA[i]) ?? 0;
-      const bb = this.boneB[i];
-      const t = bb ? this.wB[i] : 0;
-      si[i * 4] = a;
-      sw[i * 4] = 1 - t;
-      if (bb) {
-        si[i * 4 + 1] = lookup.get(bb) ?? a;
-        sw[i * 4 + 1] = t;
+      const a = this.boneA[i];
+      const b = this.boneB[i];
+      const t = b >= 0 ? this.wB[i] : 0;
+      const e = tmpW.elements;
+      const ea = skinM[a].elements;
+      if (b >= 0 && t > 0) {
+        const eb = skinM[b].elements;
+        for (let q = 0; q < 16; q++) e[q] = ea[q] * (1 - t) + eb[q] * t;
+      } else {
+        for (let q = 0; q < 16; q++) e[q] = ea[q];
       }
+      tmpW.invert();
+      tmpNM.getNormalMatrix(tmpW);
+      tmpV.fromArray(this.pos, i * 3).applyMatrix4(tmpW);
+      tmpN.fromArray(this.nor, i * 3).applyMatrix3(tmpNM).normalize();
+      si[0] = a;
+      sw[0] = 1 - t;
+      si[1] = b >= 0 ? b : 0;
+      sw[1] = b >= 0 ? t : 0;
+      w.vertexSkin(tmpV, tmpN, this.styles[this.styleOf[i]], si, sw);
     }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
-    g.setAttribute('normal', new THREE.Float32BufferAttribute(this.nor, 3));
-    g.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
-    g.setAttribute('aFx', new THREE.Float32BufferAttribute(this.fx, 4));
-    g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
-    g.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4));
-    g.setIndex(n > 65535 ? new THREE.Uint32BufferAttribute(this.idx, 1) : new THREE.Uint16BufferAttribute(this.idx, 1));
-    const mesh = new THREE.Mesh(g);
-    mesh.userData.generated = true;
-    return mesh;
+    for (let k = 0; k < this.idx.length; k += 3) w.tri(this.idx[k], this.idx[k + 1], this.idx[k + 2]);
+    return w.part();
   }
 }
 
@@ -299,65 +305,6 @@ export function crossOutline(arm: number): [number, number][] {
     [-0.36, a + 0.08],
     [-a, a + 0.08],
   ];
-}
-
-// ---------------------------------------------------------------- body measurement
-
-/** Rest-pose world positions of a character's body vertices (with an optional tag per vertex). */
-export class BodyCloud {
-  readonly points: THREE.Vector3[] = [];
-  readonly tags: number[] = [];
-
-  addSkinned(mesh: THREE.SkinnedMesh, tag: (i: number) => number = () => 0): void {
-    const P = mesh.geometry.attributes.position;
-    for (let i = 0; i < P.count; i++) {
-      const v = new THREE.Vector3();
-      mesh.getVertexPosition(i, v);
-      v.applyMatrix4(mesh.matrixWorld);
-      this.points.push(v);
-      this.tags.push(tag(i));
-    }
-  }
-
-  /** Bounds of points matching a filter. */
-  box(filter: (p: THREE.Vector3, tag: number) => boolean): THREE.Box3 {
-    const b = new THREE.Box3();
-    for (let i = 0; i < this.points.length; i++) if (filter(this.points[i], this.tags[i])) b.expandByPoint(this.points[i]);
-    return b;
-  }
-
-  /** Ellipse fit (centre + half extents in x/z) of the slice |y - y0| < band. */
-  sliceY(y0: number, band: number, tagOk: (t: number) => boolean = () => true): { cx: number; cz: number; rx: number; rz: number } {
-    const b = this.box((p, t) => Math.abs(p.y - y0) < band && tagOk(t));
-    if (b.isEmpty()) return { cx: 0, cz: 0, rx: 0.1, rz: 0.1 };
-    return { cx: (b.min.x + b.max.x) / 2, cz: (b.min.z + b.max.z) / 2, rx: (b.max.x - b.min.x) / 2, rz: (b.max.z - b.min.z) / 2 };
-  }
-
-  /** Slice across z (quadrupeds): centre y + half extents in x/y of |z - z0| < band. */
-  sliceZ(z0: number, band: number, tagOk: (t: number) => boolean = () => true, yMin = -Infinity): { cx: number; cy: number; rx: number; ry: number; top: number } {
-    const b = this.box((p, t) => Math.abs(p.z - z0) < band && p.y > yMin && tagOk(t));
-    if (b.isEmpty()) return { cx: 0, cy: 0, rx: 0.1, ry: 0.1, top: 0 };
-    return { cx: (b.min.x + b.max.x) / 2, cy: (b.min.y + b.max.y) / 2, rx: (b.max.x - b.min.x) / 2, ry: (b.max.y - b.min.y) / 2, top: b.max.y };
-  }
-}
-
-/** World position of a named object. */
-export function worldPos(root: THREE.Object3D, name: string): THREE.Vector3 {
-  const o = root.getObjectByName(name);
-  const v = new THREE.Vector3();
-  if (o) o.getWorldPosition(v);
-  return v;
-}
-
-/** World-space bounds of a (rigid) mesh by name. */
-export function meshBox(root: THREE.Object3D, name: string): THREE.Box3 {
-  const m = root.getObjectByName(name) as THREE.Mesh | undefined;
-  const b = new THREE.Box3();
-  if (!m || !m.isMesh) return b;
-  const P = m.geometry.attributes.position;
-  const v = new THREE.Vector3();
-  for (let i = 0; i < P.count; i++) b.expandByPoint(v.fromBufferAttribute(P, i).applyMatrix4(m.matrixWorld));
-  return b;
 }
 
 /** Mix two sRGB hex colours (t = 0 -> a). Returns a hex string. */

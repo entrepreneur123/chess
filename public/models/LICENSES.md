@@ -1,25 +1,31 @@
 # Unit model licenses
 
-All four unit models are built from public-domain (CC0 1.0) assets by
-`docs/brand/models/build.mjs` (bull: converted first with `docs/brand/models/blend2glb.py`).
-CC0 needs no attribution; credits are kept here as a courtesy.
+The three unit files are built by `docs/brand/models/build.mjs` from free "Standard" packs by
+Quaternius (https://quaternius.com). Armour, weapons, shields, capes, helmets, horns, the bull head,
+tails, crowns, orbiting weapons and all colours / FX are generated at runtime by our own code
+(`src/render/units/`); no other third-party assets are used.
 
-| File | Source asset | Author | License | URL |
+| File | Source assets | Author | License | URL |
 | --- | --- | --- | --- | --- |
-| `sad.glb` (paladin) | KayKit Character Pack: Adventurers 1.0, `Knight.glb` + `sword_2handed_color`, `shield_round` | Kay Lousberg (kaylousberg.com) | CC0 1.0 | https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0 · https://kaylousberg.itch.io/kaykit-adventurers |
-| `walk.glb` (shield bearer) | KayKit Character Pack: Adventurers 1.0, `Barbarian.glb` + `Knight_Helmet` (from `Knight.glb`), `shield_badge_color`, `shield_square_color`, `shield_round`, `sword_1handed` | Kay Lousberg | CC0 1.0 | same as above |
-| `marki.glb` (bull) | Quaternius "Ultimate Animated Animals" (July 2021), `Bull.blend`; armour plates from KayKit `shield_round_color` / `shield_spikes_color` | Quaternius (quaternius.com), Kay Lousberg | CC0 1.0 | https://quaternius.com/packs/ultimateanimatedanimals.html |
-| `insaner.glb` (imp) | KayKit Character Pack: Adventurers 1.0, `Rogue.glb` (body, face, `Knife`, `Knife_Offhand`; hair triangles stripped) + `rogue_texture.png` | Kay Lousberg | CC0 1.0 | same as `sad.glb` |
+| `hero.glb` (sad, marki, walk) | Universal Base Characters [Standard]: `Superhero_Male_FullBody` (body, eyes, eyebrows) + `T_Superhero_Male_Dark` texture | Quaternius | CC0 1.0 | https://quaternius.com/packs/universalbasecharacters.html |
+| `hero.glb` (walk outfit) | Modular Character Outfits - Fantasy [Standard]: `Male_Ranger_Body`, `_Arms`, `_Legs`, `_Feet_Boots`, `_Acc_Pauldron` + `T_Ranger_BaseColor` | Quaternius | CC0 1.0 | https://quaternius.com/packs/modularcharacteroutfitsfantasy.html |
+| `imp.glb` (insaner) | Bestiary - Dungeon Monsters Kit [Standard]: `Imp.glb` (body, shorts, chains, spiked collar; the mace is not used) + `T_Imp_BaseColor_1`, `T_Imp_Emissive` | Quaternius | **Quaternius Asset License (QAL) v1.0** | https://quaternius.com/packs/bestiarydungeonmonsterskit.html · https://quaternius.com/license.html |
+| `anims.glb` (all units) | Universal Animation Library [Standard] `UAL1_Standard.glb` (Idle_Loop, Sword_Idle, Jog_Fwd_Loop, Sprint_Loop, Sword_Attack, Punch_Cross, Hit_Chest, Death01) and Universal Animation Library 2 [Standard] `UAL2_Standard.glb` (Idle_Shield_Loop, Idle_FoldArms_Loop, Shield_OneShot, Shield_Dash, Sword_Regular_A, Sword_Regular_B, Melee_Hook, NinjaJump_Start, NinjaJump_Land) | Quaternius | CC0 1.0 | https://quaternius.com/packs/universalanimationlibrary.html · https://quaternius.com/packs/universalanimationlibrary2.html |
 
 License texts:
-- KayKit: `LICENSE.txt` in the pack — "License: (Creative Commons Zero, CC0) http://creativecommons.org/publicdomain/zero/1.0/ — free to use in personal, educational and commercial projects."
-- Quaternius: pack page states "CC0 License" (https://creativecommons.org/publicdomain/zero/1.0/).
+- CC0 packs: `License.txt` / `License_Standard.txt` in each pack — "CC0 1.0 Universal (CC0 1.0) Public
+  Domain Dedication, https://creativecommons.org/publicdomain/zero/1.0/". No attribution required;
+  credited here as a courtesy.
+- Bestiary (imp): "Quaternius Asset License (QAL) v1.0 (https://quaternius.com/license.html)" — free
+  use in personal, educational and commercial games and other products, no credit required; the
+  assets themselves (original or modified) may NOT be resold or redistributed as standalone assets /
+  asset packs. Here the imp is only shipped inside the game build as part of the product; do not
+  publish `imp.glb` (or the source files) separately, e.g. in an asset or mod download.
 
-Modifications (all ours, also CC0-compatible): unused clips/meshes removed, clips renamed
-(`idle`, `run`, `jump`, `attack`, `death`), props re-parented, atlases downscaled/merged, bull
-material colours baked to vertex colours, the rogue's hair triangles removed (bald imp skull),
-meshopt + quantization compression. At runtime (`src/render/units/`) the palette atlas is baked into
-per-level vertex colours, and all extra gear (capes, plumes, crowns, wings, visors, barding, mane,
-horn wraps, spears, pennants, shield emblems, the imp's skull cap, horns, grin, tail, loincloth,
-jester coat, bone mask, trident, flame cape and orbit shards), team colours, patterns and auras are
-generated procedurally; no third-party assets are added.
+Modifications (ours): leaf bones, unused meshes (the imp's mace) and all other clips removed; outfit
+parts re-fitted (re-skinned) from the Regular_Male to the Superhero_Male skeleton and simplified with
+meshoptimizer; eyes / eyebrows baked to vertex colours; textures downscaled and re-encoded as WebP
+(hero body + Ranger outfit share one 2048x1024 atlas; the imp's emissive map is stored in the alpha
+channel); normal / roughness / ORM maps dropped; animation clips reduced to bone rotations + the pelvis
+translation, resampled, quantized and meshopt-compressed. At runtime the bodies are partly hidden,
+recoloured and covered by generated armour shells and gear.
