@@ -1,0 +1,66 @@
+{
+  "_note": "Voice script for GRID CLASH. 'voice' is the Qwen3-TTS VoiceDesign timbre description shared by every line of a character; 'style' is appended per line. 'asr' (optional) is the reference text used for the character-error-rate check when the spoken text contains non-lexical sounds.",
+  "characters": {
+    "sad": {
+      "voice": "An adult male paladin knight, about 35 years old. Deep warm baritone, noble, heroic and confident, resonant chest voice, low register, clear pronunciation.",
+      "lines": [
+        { "id": "select-1", "event": "select", "text": "명을 받들겠습니다.", "style": "Calm, loyal and dignified, moderate volume." },
+        { "id": "select-2", "event": "select", "text": "성검과 함께.", "style": "Quiet resolve, dignified and steady." },
+        { "id": "move-1", "event": "move", "text": "전진한다!", "style": "Confident command, firm and brief." },
+        { "id": "move-2", "event": "move", "text": "따르라!", "style": "Leading his troops, firm and brief." },
+        { "id": "capture-1", "event": "capture", "text": "정의의 심판을!", "style": "A determined battle cry, forceful but controlled, not screaming." },
+        { "id": "capture-2", "event": "capture", "text": "빛이여!", "style": "A powerful heroic shout while striking with a holy sword." },
+        { "id": "capture-3", "event": "capture", "text": "물러서라!", "style": "A stern, commanding shout while striking." },
+        { "id": "skill-1", "event": "skill", "text": "성스러운 빛이여!", "style": "Invoking holy power, solemn and powerful." },
+        { "id": "death-1", "event": "death", "text": "크윽… 여기까지인가…", "style": "Mortally wounded, pained, weak and breathy, fading." },
+        { "id": "victory-1", "event": "victory", "text": "빛의 승리다!", "style": "Triumphant and proud, ringing declaration." }
+      ]
+    },
+    "marki": {
+      "voice": "A gigantic minotaur warrior, a male beast with a massive chest. Extremely deep, low-pitched bass voice, rough, raspy and gravelly, slow and heavy, intimidating, low register throughout.",
+      "lines": [
+        { "id": "select-1", "event": "select", "text": "흐음… 누구냐.", "style": "A low, slow, suspicious grunt." },
+        { "id": "select-2", "event": "select", "text": "피 냄새가 난다.", "style": "Low, slow and menacing, savoring it." },
+        { "id": "move-1", "event": "move", "text": "비켜라!", "style": "A heavy, angry bark." },
+        { "id": "move-2", "event": "move", "text": "길을 비켜!", "style": "A heavy, angry bark." },
+        { "id": "capture-1", "event": "capture", "text": "크아아! 박살이다!", "style": "A deep roaring war cry like a beast, furious.", "asr": "크아아 박살이다" },
+        { "id": "capture-2", "event": "capture", "text": "으깨주마!", "style": "Growling a threat with menace, forceful but in a low register, not screaming." },
+        { "id": "capture-3", "event": "capture", "text": "부숴버린다!", "style": "Furious, brutal growl, forceful but in a low register." },
+        { "id": "skill-1", "event": "skill", "text": "돌격이다!", "style": "A thunderous charging roar, furious." },
+        { "id": "death-1", "event": "death", "text": "크르륵… 이럴 수가…", "style": "Dying beast, a weak gurgling growl, fading." },
+        { "id": "victory-1", "event": "victory", "text": "약하다! 약해!", "style": "Mocking, booming laughter-like contempt." }
+      ]
+    },
+    "walk": {
+      "voice": "A disciplined adult male soldier in his late twenties, a shield guardian. Calm, firm, steady mid-low voice, clear crisp military diction, short and decisive delivery.",
+      "lines": [
+        { "id": "select-1", "event": "select", "text": "준비 완료.", "style": "Calm and alert, reporting for duty." },
+        { "id": "select-2", "event": "select", "text": "명령을.", "style": "Calm and alert, awaiting orders." },
+        { "id": "move-1", "event": "move", "text": "간다.", "style": "Short, calm and determined." },
+        { "id": "move-2", "event": "move", "text": "이동한다.", "style": "Short, calm and determined." },
+        { "id": "capture-1", "event": "capture", "text": "방패로 막고, 친다!", "style": "Focused and forceful, striking with a shield." },
+        { "id": "capture-2", "event": "capture", "text": "끝이다!", "style": "A sharp, decisive shout." },
+        { "id": "capture-3", "event": "capture", "text": "뚫었다!", "style": "A sharp, decisive shout." },
+        { "id": "skill-1", "event": "skill", "text": "도약!", "style": "A sharp effort shout while leaping." },
+        { "id": "death-1", "event": "death", "text": "방어선이… 무너졌다…", "style": "Wounded and exhausted, quiet and pained." },
+        { "id": "victory-1", "event": "victory", "text": "임무 완수.", "style": "Calm, proud and satisfied." }
+      ]
+    },
+    "insaner": {
+      "voice": "A small mischievous devil imp. Very high-pitched, squeaky, nasal, bratty childish voice, playful, cheeky and a little crazy, fast talking.",
+      "lines": [
+        { "id": "select-1", "event": "select", "text": "키히히! 나 불렀어?", "style": "Giggling mischievously, cheeky.", "asr": "키히히 나 불렀어" },
+        { "id": "select-2", "event": "select", "text": "뭐 할까~?", "style": "Playful and sing-song, bored and curious." },
+        { "id": "move-1", "event": "move", "text": "어디 가볼까~", "style": "Playful sing-song, skipping along." },
+        { "id": "move-2", "event": "move", "text": "룰루랄라~", "style": "Humming a playful sing-song." },
+        { "id": "capture-1", "event": "capture", "text": "냠! 네 거 내 거!", "style": "Greedy and gleeful, snatching something." },
+        { "id": "capture-2", "event": "capture", "text": "키히히히! 잡았다!", "style": "Laughing crazily, delighted.", "asr": "키히히히 잡았다" },
+        { "id": "capture-3", "event": "capture", "text": "장난 좀 쳐볼까?", "style": "Sly and teasing, mischievous." },
+        { "id": "skill-1", "event": "skill", "text": "그 힘, 내 거야!", "style": "Greedy, excited and a little unhinged." },
+        { "id": "chain-1", "event": "chain", "text": "한 번 더~!", "style": "Excited, gleeful and hyper." },
+        { "id": "death-1", "event": "death", "text": "에잇… 재미없어.", "style": "Sulking and pouting, annoyed." },
+        { "id": "victory-1", "event": "victory", "text": "내가 최고야! 키히히!", "style": "Triumphant, bratty and cackling.", "asr": "내가 최고야 키히히" }
+      ]
+    }
+  }
+}

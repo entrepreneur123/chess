@@ -5,7 +5,7 @@
  * Everything else a move changes (turn, chain move, absorbed abilities, storm clock and storm
  * kills) is pushed on an internal LIFO history so make/unmake stay exact.
  */
-import { STORM_INTERVAL_PLIES } from './types';
+import { STORM_INTERVAL_PLIES, SUDDEN_DEATH_PLY } from './types';
 import type { CharacterId, GameState, Move, PlayerId } from './types';
 import { CHARACTERS, CHAR_BY_CODE, CHAR_CODE, CH_INSANER, abilityBit, absorbMaskOf } from './characters';
 import { N_SQUARES, atTurnRow, genTargets, inStorm, posOf, sqOf } from './board';
@@ -31,6 +31,10 @@ export interface FastBoard {
   storm: number;
   /** Turn changes until the storm advances; -1 while inactive. */
   stormIn: number;
+  /** Plies played (drives sudden death). */
+  ply: number;
+  /** Material difference (side 0 minus side 1) of a storm that swallowed both sides' last pieces. */
+  wipe: number;
   /** LIFO scratch for make/unmake bookkeeping. */
   hist: Int32Array;
   histTop: number;
@@ -55,6 +59,8 @@ export function fastFromState(state: GameState): FastBoard {
     bonus: -1,
     storm: state.storm,
     stormIn: state.stormIn ?? -1,
+    ply: state.ply,
+    wipe: 0,
     hist: new Int32Array(4096),
     histTop: 0,
   };
@@ -126,6 +132,7 @@ function switchSide(b: FastBoard): void {
   b.bonus = -1;
   b.turn = (1 - b.turn) as PlayerId;
   let killed = 0;
+  const oldWipe = b.wipe;
   if (b.stormIn > 0) {
     b.stormIn--;
     if (b.stormIn === 0) {
@@ -135,14 +142,16 @@ function switchSide(b: FastBoard): void {
         const s = b.sq[i];
         if (s < 0) continue;
         if (inStorm(s % 12, b.storm)) {
+          if (killed === 0) b.wipe = b.material[0] - b.material[1];
           kill(b, i);
           killed++;
         }
       }
     }
   }
-  if (b.stormIn < 0 && (b.alive[0] <= 1 || b.alive[1] <= 1) && b.alive[0] > 0 && b.alive[1] > 0) b.stormIn = STORM_INTERVAL_PLIES;
+  if (b.stormIn < 0 && (b.alive[0] <= 1 || b.alive[1] <= 1 || b.ply >= SUDDEN_DEATH_PLY) && b.alive[0] > 0 && b.alive[1] > 0) b.stormIn = STORM_INTERVAL_PLIES;
   const h = b.hist;
+  h[b.histTop++] = oldWipe;
   h[b.histTop++] = killed;
   h[b.histTop++] = oldStormIn;
   h[b.histTop++] = oldStorm;
@@ -155,6 +164,7 @@ function undoSwitch(b: FastBoard): void {
   b.storm = h[--b.histTop];
   b.stormIn = h[--b.histTop];
   const killed = h[--b.histTop];
+  b.wipe = h[--b.histTop];
   for (let k = 0; k < killed; k++) {
     const rec = h[--b.histTop];
     const i = rec >> 8;
@@ -192,6 +202,7 @@ export function fastMake(b: FastBoard, mv: number): number {
   const oldAbsorb = b.absorb[pi];
   const oldBonus = b.bonus;
   const oldStormIn = b.stormIn;
+  b.ply++;
   let chained = 0;
   if (cap >= 0 && b.ch[pi] === CH_INSANER) {
     b.absorb[pi] |= abilityBit(b.ch[cap], b.lvl[cap]) | b.absorb[cap];
@@ -200,7 +211,7 @@ export function fastMake(b: FastBoard, mv: number): number {
       b.bonus = pi;
       chained = 1;
       // The engine activates the storm right after the capture, before the chain move is played.
-      if (b.stormIn < 0 && (b.alive[0] <= 1 || b.alive[1] <= 1)) b.stormIn = STORM_INTERVAL_PLIES;
+      if (b.stormIn < 0 && (b.alive[0] <= 1 || b.alive[1] <= 1 || b.ply >= SUDDEN_DEATH_PLY)) b.stormIn = STORM_INTERVAL_PLIES;
     }
   }
   if (!chained) switchSide(b);
@@ -219,6 +230,7 @@ export function fastUnmake(b: FastBoard, mv: number, undo: number): void {
   const oldAbsorb = h[--b.histTop];
   const oldStormIn = h[--b.histTop];
   if (!chained) undoSwitch(b);
+  b.ply--;
   b.bonus = oldBonus;
   b.stormIn = oldStormIn;
   const pi = mv >> 8;
@@ -241,11 +253,13 @@ export function fastUnmake(b: FastBoard, mv: number, undo: number): void {
 
 /** The side to move passes (no legal move / chain move declined). Reverse with `fastUnpass`. */
 export function fastPass(b: FastBoard): void {
+  b.ply++;
   switchSide(b);
 }
 
 export function fastUnpass(b: FastBoard): void {
   undoSwitch(b);
+  b.ply--;
 }
 
 /** Convert an encoded move (before it is made) into an engine Move. */

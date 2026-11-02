@@ -101,7 +101,7 @@ function devRow(): { el: HTMLElement; dispose: () => void } {
       'span',
       { class: 'set-row__main' },
       h('span', { class: 'set-row__title' }, '개발자 계정', on ? h('span', { class: 'chip chip--dev' }, 'DEV') : null),
-      h('span', { class: 'set-row__sub' }, on ? '무제한 재화 · 전 캐릭터 최대 레벨' : '테스트용 코드를 입력하면 활성화돼요'),
+      h('span', { class: 'set-row__sub' }, on ? '무제한 재화 · 전 캐릭터 최대 성급' : '테스트용 코드를 입력하면 활성화돼요'),
     );
     if (on) {
       replaceChildren(
@@ -117,7 +117,7 @@ function devRow(): { el: HTMLElement; dispose: () => void } {
             onclick: async () => {
               const ok = await confirmDialog({
                 title: '일반 계정으로 전환할까요?',
-                body: '개발자 계정의 재화와 레벨은 초기화되고 새 계정으로 시작합니다.',
+                body: '개발자 계정의 재화와 성급은 초기화되고 새 계정으로 시작합니다.',
                 confirmLabel: '전환',
                 danger: true,
               });
@@ -190,6 +190,7 @@ export function showSettings(): void {
       'div',
       { class: 'set-group' },
       switchRow('sound', '효과음', '이동 · 잡기 · 승리 사운드', 'volume'),
+      switchRow('voice', '캐릭터 음성', '선택 · 공격 · 스킬 대사', 'person'),
       switchRow('haptics', '진동', canVibrate ? '잡기 · 내 차례 · 승리 시 짧은 진동' : '이 기기에서는 지원되지 않을 수 있어요', 'vibration'),
       viewRow(),
     ),

@@ -1,0 +1,74 @@
+import { describe, expect, it } from 'vitest';
+import type { CharacterId } from '../src/engine/types';
+import { playCharSfx, playVoice, preloadCharacterAudio, stopVoice } from '../src/audio/voice';
+import { CHAR_SFX, GENERIC_SFX, VOICE_CLIPS, type CharAudioEvent } from '../src/audio/voiceManifest';
+
+// The project has no @types/node: load the few fs helpers through an untyped dynamic import.
+interface Fs {
+  existsSync(p: string): boolean;
+  readdirSync(p: string): string[];
+  statSync(p: string): { size: number };
+}
+const nodeFs = 'node:fs';
+const fsP: Promise<Fs> = import(/* @vite-ignore */ nodeFs);
+const audioDir = decodeURIComponent(new URL('../public/audio/', import.meta.url).pathname);
+const join = (...parts: string[]) => parts.join('/').replace(/\/+/g, '/');
+const CHARS: CharacterId[] = ['sad', 'marki', 'walk', 'insaner'];
+const VOICE_EVENTS: CharAudioEvent[] = ['select', 'move', 'capture', 'skill', 'death', 'victory'];
+const SFX_EVENTS: CharAudioEvent[] = ['select', 'move', 'capture', 'skill'];
+
+function allFiles(): string[] {
+  const out = new Set<string>();
+  for (const c of CHARS) {
+    for (const list of Object.values(VOICE_CLIPS[c])) for (const f of list ?? []) out.add(f);
+    for (const f of Object.values(CHAR_SFX[c])) if (f) out.add(f);
+  }
+  for (const f of Object.values(GENERIC_SFX)) if (f) out.add(f);
+  return [...out];
+}
+
+describe('character audio manifest', () => {
+  it('has a voice line for every character x event the game uses', () => {
+    for (const c of CHARS) {
+      for (const e of VOICE_EVENTS) expect(VOICE_CLIPS[c][e]?.length ?? 0, `${c}.${e}`).toBeGreaterThan(0);
+      // Captures are the most frequent highlight: at least two variants so it does not repeat.
+      expect(VOICE_CLIPS[c].capture!.length, `${c}.capture variants`).toBeGreaterThanOrEqual(2);
+    }
+    expect(VOICE_CLIPS.insaner.chain?.length ?? 0).toBeGreaterThan(0);
+  });
+
+  it('has character sound effects for select/move/capture/skill, a chain chime and a shared death', () => {
+    for (const c of CHARS) for (const e of SFX_EVENTS) expect(CHAR_SFX[c][e], `${c}.${e}`).toBeTruthy();
+    expect(CHAR_SFX.insaner.chain).toBeTruthy();
+    expect(GENERIC_SFX.death).toBeTruthy();
+  });
+
+  it('every listed file exists under public/audio and is a small m4a', async () => {
+    const { existsSync, statSync } = await fsP;
+    for (const f of allFiles()) {
+      expect(f, f).toMatch(/^(vo|sfx)\/[a-z0-9-]+\.m4a$/);
+      const p = join(audioDir, f);
+      expect(existsSync(p), p).toBe(true);
+      const size = statSync(p).size;
+      expect(size, f).toBeGreaterThan(1000);
+      expect(size, f).toBeLessThan(40_000);
+    }
+  });
+
+  it('keeps the whole audio payload under 1.2 MB', async () => {
+    const { readdirSync, statSync } = await fsP;
+    let total = 0;
+    for (const sub of ['vo', 'sfx']) {
+      const dir = join(audioDir, sub);
+      for (const f of readdirSync(dir)) total += statSync(join(dir, f)).size;
+    }
+    expect(total).toBeLessThan(1.2 * 1024 * 1024);
+  });
+
+  it('is a safe no-op without Web Audio (node test environment)', async () => {
+    expect(() => playVoice('sad', 'capture', { level: 3, owner: 1 })).not.toThrow();
+    expect(() => playCharSfx('insaner', 'chain')).not.toThrow();
+    expect(() => stopVoice()).not.toThrow();
+    await expect(preloadCharacterAudio(CHARS)).resolves.toBeUndefined();
+  });
+});

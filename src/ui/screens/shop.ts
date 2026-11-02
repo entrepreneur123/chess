@@ -89,7 +89,7 @@ function playBoxOpening(drop: BoxDrop, kind: BoxKind, unlocked = false): Promise
       'div',
       { class: 'reveal-details' },
       unlocked ? h('p', { class: 'reveal-card__unlock' }, `${def.nameKo}을(를) 분대에 넣을 수 있어요 · 진형 편성에서 투입하세요`) : null,
-      h('p', { class: 'reveal-card__progress' }, cost ? (ready ? '강화 가능!' : '다음 강화까지') : '최대 레벨', h('b', null, cost ? `${prog.cards} / ${cost.cards}` : `보유 ${prog.cards}`)),
+      h('p', { class: 'reveal-card__progress' }, cost ? (ready ? '강화 가능!' : '다음 강화까지') : '최대 성급', h('b', null, cost ? `${prog.cards} / ${cost.cards}` : `보유 ${prog.cards}`)),
       h('div', { class: 'progress' }, h('span', { class: `progress__bar${ready ? ' is-full' : ''}`, style: `width:${pct}%` })),
       okBtn,
     );

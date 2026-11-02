@@ -13,13 +13,11 @@ export const BOARD_SIZE = 12;
 export const ZONE_DEPTH = 3; // each player places pieces only within their own 3 x 12 home zone
 export const PIECES_PER_SIDE = 3; // a squad is any 3 distinct characters
 /** Base time per turn. It shrinks as pieces are lost: see `turnTimeMsFor`. */
-export const TURN_TIME_MS = 60_000;
+export const TURN_TIME_MS = 45_000;
 /** Time per turn once either side is down to 2 pieces or fewer. */
 export const TURN_TIME_2_MS = 40_000;
 /** Time per turn once either side is down to 1 piece. */
 export const TURN_TIME_1_MS = 20_000;
-/** Plies (half-moves, passes included) without any capture before the game is adjudicated. */
-export const NO_CAPTURE_PLY_LIMIT = 60;
 /** A player who times out this many turns in a row forfeits (anti-AFK). */
 export const MAX_CONSECUTIVE_TIMEOUTS = 3;
 /**
@@ -28,6 +26,14 @@ export const MAX_CONSECUTIVE_TIMEOUTS = 3;
  * storm column is removed at once; nothing may move into or through the storm.
  */
 export const STORM_INTERVAL_PLIES = 6;
+/**
+ * Sudden death: the storm also starts on its own once this many plies were played (20 moves
+ * each), whatever the piece count. Together with STORM_INTERVAL_PLIES this bounds a match to
+ * SUDDEN_DEATH_PLY + 6 * STORM_INTERVAL_PLIES plies (the storm swallows the whole board).
+ */
+export const SUDDEN_DEATH_PLY = 40;
+/** Wall-clock cap for a match (pauses excluded): when it runs out the game is decided by material. */
+export const MATCH_TIME_MS = 10 * 60_000;
 
 export type PlayerId = 0 | 1;
 export type CharacterId = 'sad' | 'marki' | 'walk' | 'insaner';
@@ -91,11 +97,11 @@ export interface Move {
 
 export type EndReason =
   | 'elimination' // all enemy pieces captured
-  | 'storm' // the last piece(s) of a side were swallowed by the storm
+  | 'storm' // the last piece(s) of a side were swallowed by the storm (both at once: by material)
   | 'timeoutForfeit' // MAX_CONSECUTIVE_TIMEOUTS reached
   | 'resign'
-  | 'moveLimit' // NO_CAPTURE_PLY_LIMIT reached -> adjudicated by material
-  | 'stalemate'; // neither side has any legal move -> adjudicated by material
+  | 'stalemate' // neither side has any legal move -> adjudicated by material
+  | 'timeUp'; // MATCH_TIME_MS ran out -> adjudicated by material
 
 export type PassReason =
   | 'timeout'
@@ -126,7 +132,10 @@ export interface GameState {
   bonusPieceId: string | null;
   /** Columns swallowed by the storm on each side (0 = none; 2 = columns 0,1 and 10,11 are gone). */
   storm: number;
-  /** Turn changes until the storm advances next; null while the storm is not active yet. */
+  /**
+   * Turn changes until the storm advances next; null while the storm is not active yet. The storm
+   * starts when a side is down to one piece or at SUDDEN_DEATH_PLY, whichever comes first.
+   */
   stormIn: number | null;
 }
 

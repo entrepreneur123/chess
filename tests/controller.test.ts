@@ -4,7 +4,7 @@ import { GameController, type ControllerPorts } from '../src/ui/game/GameControl
 import { makeState } from './helpers';
 
 /** Manual clock + timers so races can be driven deterministically. */
-function harness(initial: GameState, opts: { botMove?: (s: GameState) => Move | null } = {}) {
+function harness(initial: GameState, opts: { botMove?: (s: GameState) => Move | null; matchTimeMs?: number } = {}) {
   let t = 0;
   let nextId = 1;
   const timers = new Map<number, { at: number; fn: () => void }>();
@@ -20,6 +20,7 @@ function harness(initial: GameState, opts: { botMove?: (s: GameState) => Move | 
     botThinkDelayMs: () => 0,
     now: () => t,
     turnTimeMs: 60_000,
+    matchTimeMs: opts.matchTimeMs,
     setTimer: (fn, ms) => {
       const id = nextId++;
       timers.set(id, { at: t + ms, fn });
@@ -263,5 +264,38 @@ describe('chain move, storm and timer scaling in the controller', () => {
     expect(ctrl.state.storm).toBe(1);
     expect(ctrl.state.pieces.some((p) => p.id === 'p1-marki')).toBe(false);
     expect(ctrl.state.status).toBe('playing');
+  });
+});
+
+describe('GameController match clock', () => {
+  it('adjudicates by material when the match clock runs out during a turn', async () => {
+    const h = harness(position(), { matchTimeMs: 30_000 });
+    h.ctrl.start();
+    await h.advance(10_000);
+    h.ctrl.pause();
+    await h.advance(100_000); // paused time does not count
+    expect(h.ctrl.phase).toBe('humanTurn');
+    expect(h.ctrl.matchRemainingMs()).toBe(20_000);
+    h.ctrl.resume();
+    await h.advance(20_000);
+    expect(h.ctrl.phase).toBe('ended');
+    expect(h.ctrl.state.endReason).toBe('timeUp');
+    expect(h.ctrl.state.winner).toBe(1); // 3 + 3 + 4 vs Red marki L3 6 + 3 + 4
+  });
+
+  it('lets a move in flight finish before ending on time', async () => {
+    const h = harness(position(), { matchTimeMs: 5_000 });
+    h.ctrl.start();
+    await h.advance(4_000);
+    const m = { pieceId: 'p0-sad', from: { r: 2, c: 5 }, to: { r: 3, c: 5 } };
+    expect(h.ctrl.tryHumanMove(m)).toBe(true);
+    await h.flush();
+    await h.advance(2_000);
+    expect(h.ctrl.phase).toBe('animating');
+    await h.finishAnims();
+    expect(h.ctrl.phase).toBe('ended');
+    expect(h.ctrl.state.endReason).toBe('timeUp');
+    expect(h.ctrl.state.pieces.find((p) => p.id === 'p0-sad')?.pos).toEqual({ r: 3, c: 5 });
+    expect(h.botCalls).toHaveLength(0);
   });
 });

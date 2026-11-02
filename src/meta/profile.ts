@@ -47,6 +47,8 @@ export type ViewSetting = 'tilt' | 'top';
 
 export interface Settings {
   sound: boolean;
+  /** Character voice lines (AI voice actors); also needs `sound`. */
+  voice: boolean;
   haptics: boolean;
   /** Board camera: tilted 3D arena or top-down. */
   view: ViewSetting;
@@ -59,7 +61,7 @@ export interface Onboarding {
   firstMoveDone: boolean;
 }
 
-export const DEFAULT_SETTINGS: Settings = { sound: true, haptics: true, view: 'tilt' };
+export const DEFAULT_SETTINGS: Settings = { sound: true, voice: true, haptics: true, view: 'tilt' };
 
 export type MatchOutcome = 'win' | 'loss' | 'draw';
 
@@ -207,6 +209,7 @@ export function sanitizeProfile(input: unknown, now = Date.now()): Profile {
     difficulty: DIFFICULTIES.includes(raw.difficulty as Difficulty) ? (raw.difficulty as Difficulty) : def.difficulty,
     settings: {
       sound: asBool(settings.sound, DEFAULT_SETTINGS.sound),
+      voice: asBool(settings.voice, DEFAULT_SETTINGS.voice),
       haptics: asBool(settings.haptics, DEFAULT_SETTINGS.haptics),
       view: settings.view === 'top' ? 'top' : 'tilt',
     },

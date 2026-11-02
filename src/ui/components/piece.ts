@@ -17,9 +17,14 @@ export const RARITY_LABEL: Record<Rarity, string> = { common: '일반', rare: '�
 /** Character concept titles shown with the illustrations (UI copy only). */
 export const CONCEPT: Record<CharacterId, string> = { sad: '성기사', marki: '황소 전사', walk: '방패병', insaner: '꼬마 악마' };
 
-/** One-letter glyph used on tokens. */
-export function glyphOf(id: CharacterId): string {
-  return CHARACTERS[id].nameKo.slice(0, 1);
+/** Star grade as filled stars, e.g. 2 -> "★★" (grades are called 1성 / 2성 / 3성). */
+export function starsOf(level: Level): string {
+  return '★'.repeat(level);
+}
+
+/** Face illustration URL for a character grade. */
+export function faceUrl(id: CharacterId, level: Level): string {
+  return `./chars/${id}-lv${level}-face.jpg`;
 }
 
 export function rarityChip(rarity: Rarity): HTMLElement {
@@ -27,10 +32,13 @@ export function rarityChip(rarity: Rarity): HTMLElement {
 }
 
 export function levelBadge(level: Level, cls = ''): HTMLElement {
-  return h('span', { class: `lv-badge ${cls}`, 'aria-label': `레벨 ${level}` }, `Lv.${level}`);
+  return h('span', { class: `lv-badge ${cls}`, 'aria-label': `${level}성` }, `${level}성`);
 }
 
-/** Round piece token: player color fill, rarity ring, glyph and small level pip. */
+/**
+ * Round piece token: the character's face illustration inside a team-coloured rim, wrapped in the
+ * rarity ring (white / orange / purple / rotating rainbow), with a star-grade pip.
+ */
 export function pieceToken(
   character: CharacterId,
   level: Level,
@@ -42,11 +50,11 @@ export function pieceToken(
     'span',
     {
       class: `token token--${size} owner-${owner} rarity-${def.rarity}`,
-      'aria-label': `${def.nameKo} 레벨 ${level}`,
+      'aria-label': `${def.nameKo} ${level}성`,
       role: 'img',
     },
-    h('span', { class: 'token__glyph' }, glyphOf(character)),
-    size === 'xs' ? null : h('span', { class: 'token__lv' }, String(level)),
+    h('img', { class: 'token__art', src: faceUrl(character, level), alt: '', decoding: 'async', draggable: 'false' }),
+    size === 'xs' ? null : h('span', { class: 'token__lv', 'aria-hidden': 'true' }, starsOf(level)),
   );
 }
 
@@ -61,17 +69,17 @@ export function unitArt(
 ): HTMLElement {
   const def = CHARACTERS[character];
   const kind = opts.kind ?? 'face';
-  const src = `./chars/${character}-lv${level}${kind === 'face' ? '-face' : ''}.jpg`;
+  const src = kind === 'face' ? faceUrl(character, level) : `./chars/${character}-lv${level}.jpg`;
   return h(
     'span',
     {
       class: `unit-art unit-art--${kind} rarity-${def.rarity} tier-${level} owner-${opts.owner ?? 0} ${opts.cls ?? ''}`,
       style: opts.size ? `--art-size:${opts.size}px` : undefined,
       role: 'img',
-      'aria-label': `${def.nameKo} 레벨 ${level}`,
+      'aria-label': `${def.nameKo} ${level}성`,
     },
     h('img', { src, alt: '', loading: 'lazy', decoding: 'async', draggable: 'false' }),
-    h('span', { class: 'unit-art__lv' }, String(level)),
+    h('span', { class: 'unit-art__lv', 'aria-hidden': 'true' }, starsOf(level)),
   );
 }
 
@@ -157,7 +165,7 @@ export function movementDiagram(character: CharacterId, level: Level, opts: { ce
   const wrap = h('div', {
     class: `move-diagram owner-${opts.owner ?? 0}`,
     role: 'img',
-    'aria-label': `${CHARACTERS[character].nameKo} 레벨 ${level} 이동 범위: ${CHARACTERS[character].descKo[level - 1]}`,
+    'aria-label': `${CHARACTERS[character].nameKo} ${level}성 이동 범위: ${CHARACTERS[character].descKo[level - 1]}`,
   });
   if (!p) return wrap;
   wrap.style.gridTemplateColumns = `repeat(${p.cols}, ${cell}px)`;

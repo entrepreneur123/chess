@@ -48,11 +48,37 @@ export const TEAM_NAMES: Record<PlayerId, { en: string; ko: string }> = {
   1: { en: 'Red', ko: '레드' },
 };
 
+/**
+ * Rarity accent colours (owner spec): common = clean white, rare = orange, epic = purple,
+ * legendary = gold (its ring under the unit sweeps through a rainbow instead, see RARITY_RING).
+ */
 export const RARITY_COLORS: Record<Rarity, string> = {
-  common: '#9AA0A6',
-  rare: '#4285F4',
-  epic: '#A142F4',
-  legendary: '#F9AB00',
+  common: '#EEF2F8',
+  rare: '#FF9A2E',
+  epic: '#B65CFF',
+  legendary: '#FFC94A',
+};
+
+/**
+ * Rarity ring drawn on the ground around every unit (both views): solid core colour, glow colour
+ * and glow strength. `rainbow` rings sweep the hue around the ring and rotate slowly.
+ */
+export const RARITY_RING: Record<Rarity, { core: string; glow: string; glowAmt: number; rainbow: boolean }> = {
+  common: { core: '#F4F7FC', glow: '#FFFFFF', glowAmt: 0.28, rainbow: false },
+  rare: { core: '#FFB050', glow: '#FF8A1C', glowAmt: 0.85, rainbow: false },
+  epic: { core: '#C98BFF', glow: '#A040FF', glowAmt: 0.95, rainbow: false },
+  legendary: { core: '#FFFFFF', glow: '#FFFFFF', glowAmt: 1.0, rainbow: true },
+};
+
+/**
+ * Per-character strike / skill FX colours (sRGB hex), shared by both views:
+ * sad = holy gold, marki = molten orange + dust, walk = shield blue-white, insaner = violet/crimson.
+ */
+export const CHARACTER_FX: Record<CharacterId, { primary: string; secondary: string; core: string }> = {
+  sad: { primary: '#FFC93A', secondary: '#FFF0B8', core: '#FFFFFF' },
+  marki: { primary: '#FF6A1F', secondary: '#C9B9A0', core: '#FFE2B0' },
+  walk: { primary: '#7CC8FF', secondary: '#DDF2FF', core: '#FFFFFF' },
+  insaner: { primary: '#B24BFF', secondary: '#FF2A5C', core: '#F4DCFF' },
 };
 
 export const RARITY_LABELS: Record<Rarity, { en: string; ko: string }> = {
@@ -94,6 +120,11 @@ export const BOARD_COLORS = {
   /** Soft glowing move-target dot. */
   moveDot: '#9BEBFF',
   moveDotAlpha: 0.95,
+  /** Enemy reach preview (tone 'enemy'): red move markers, selection ring and tile tints. */
+  enemyMoveDot: '#FF4F5E',
+  enemySelected: '#FF3B4E',
+  enemySelectedTint: '#B23040',
+  enemyMoveTint: '#6E2A3A',
   /** Capture target ring + tile tint. */
   capture: '#FF4A4A',
   captureTint: '#8C2A3A',

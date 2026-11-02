@@ -130,7 +130,7 @@ export function formationScreen(router: Router): Screen {
           h(
             'div',
             { class: 'tray-card__main' },
-            h('div', { class: 'tray-card__head' }, h('span', { class: 'tray-card__name' }, def.nameKo), rarityChip(def.rarity), h('span', { class: 'lv-text' }, `Lv.${lv}`)),
+            h('div', { class: 'tray-card__head' }, h('span', { class: 'tray-card__name' }, def.nameKo), rarityChip(def.rarity), h('span', { class: 'lv-text' }, `${lv}성`)),
             h('div', { class: 'tray-card__desc' }, def.descKo[lv - 1]),
             h(
               'div',

@@ -151,6 +151,8 @@ export class SparkPool {
   private readonly v: Float32Array;
   private readonly age: Float32Array;
   private readonly life: Float32Array;
+  /** Per-streak gravity multiplier (1 = falling hit spark, 0 = straight speed line). */
+  private readonly grav: Float32Array;
   private readonly base: THREE.Color[] = [];
   private readonly n: number;
   private next = 0;
@@ -170,6 +172,7 @@ export class SparkPool {
     this.v = new Float32Array(count * 3);
     this.age = new Float32Array(count).fill(1);
     this.life = new Float32Array(count).fill(1);
+    this.grav = new Float32Array(count).fill(1);
     for (let i = 0; i < count; i++) this.base.push(new THREE.Color());
     // Unit streak along -y (the tail trails behind the head at the origin).
     this.geo = new THREE.BoxGeometry(0.06, 1, 0.06).translate(0, -0.5, 0);
@@ -209,8 +212,30 @@ export class SparkPool {
       this.v[i * 3 + 2] = Math.sin(a) * Math.cos(el) * sp;
       this.age[i] = 0;
       this.life[i] = 0.28 + 0.22 * r2;
+      this.grav[i] = 1;
       this.base[i].set(color);
     }
+    this.alive = true;
+    this.mesh.visible = true;
+  }
+
+  /**
+   * One streak with an explicit velocity (speed lines, rising embers): `gravity` scales the fall
+   * (0 = straight line), the streak length follows its speed.
+   */
+  streak(x: number, y: number, z: number, vx: number, vy: number, vz: number, life: number, color: string, gravity = 0): void {
+    const i = this.next;
+    this.next = (this.next + 1) % this.n;
+    this.p[i * 3] = x;
+    this.p[i * 3 + 1] = y;
+    this.p[i * 3 + 2] = z;
+    this.v[i * 3] = vx;
+    this.v[i * 3 + 1] = vy;
+    this.v[i * 3 + 2] = vz;
+    this.age[i] = 0;
+    this.life[i] = Math.max(0.05, life);
+    this.grav[i] = gravity;
+    this.base[i].set(color);
     this.alive = true;
     this.mesh.visible = true;
   }
@@ -227,7 +252,7 @@ export class SparkPool {
         continue;
       }
       any = true;
-      this.v[i * 3 + 1] -= 9.0 * dt;
+      this.v[i * 3 + 1] -= 9.0 * this.grav[i] * dt;
       const drag = Math.exp(-dt * 2.0);
       this.v[i * 3] *= drag;
       this.v[i * 3 + 2] *= drag;

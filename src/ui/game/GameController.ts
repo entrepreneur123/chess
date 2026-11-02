@@ -7,6 +7,7 @@
 import {
   applyMove,
   applyTimeout,
+  applyTimeUp,
   getLegalMoves,
   getPieceAt,
   getPieceById,
@@ -21,6 +22,7 @@ import {
   type Move,
   type PlayerId,
   type Pos,
+  MATCH_TIME_MS,
 } from '../../engine';
 
 export type Phase = 'humanTurn' | 'animating' | 'botThinking' | 'ended';
@@ -61,8 +63,10 @@ export interface ControllerPorts {
   /** Minimum visible think time for the bot. */
   botThinkDelayMs(): number;
   now?(): number;
-  /** Fixed time per turn (tests). Defaults to the engine's `turnTimeMsFor` (60 / 40 / 20 s). */
+  /** Fixed time per turn (tests). Defaults to the engine's `turnTimeMsFor` (45 / 40 / 20 s). */
   turnTimeMs?: number;
+  /** Match clock length (tests). Defaults to MATCH_TIME_MS. */
+  matchTimeMs?: number;
   setTimer?(fn: () => void, ms: number): unknown;
   clearTimer?(id: unknown): void;
 }
@@ -96,6 +100,13 @@ export class GameController {
   private timerHandle: unknown = null;
   private resumeWaiters: (() => void)[] = [];
 
+  // Match clock (whole game, pauses excluded). When it runs out the game is adjudicated.
+  private readonly matchTime: number;
+  private matchRemaining: number;
+  private matchStartedAt: number | null = null;
+  private matchHandle: unknown = null;
+  private matchUp = false;
+
   private readonly now: () => number;
   private readonly setTimer: (fn: () => void, ms: number) => unknown;
   private readonly clearTimer: (id: unknown) => void;
@@ -104,6 +115,8 @@ export class GameController {
     this._state = initial;
     this.turnTime = ports.turnTimeMs ?? turnTimeMsFor(initial);
     this.timerRemaining = this.turnTime;
+    this.matchTime = ports.matchTimeMs ?? MATCH_TIME_MS;
+    this.matchRemaining = this.matchTime;
     this.now = ports.now ?? (() => performance.now());
     this.setTimer = ports.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
     this.clearTimer = ports.clearTimer ?? ((id) => clearTimeout(id as number));
@@ -139,6 +152,7 @@ export class GameController {
   start(): void {
     if (this.started || this.disposed) return;
     this.started = true;
+    if (!this._paused) this.runMatchClock();
     this.enterTurn();
   }
 
@@ -149,6 +163,15 @@ export class GameController {
   }
   get turnTimeMs(): number {
     return this.turnTime;
+  }
+
+  /** Remaining match time in ms (frozen while paused; 0 once it ran out). */
+  matchRemainingMs(): number {
+    if (this.matchStartedAt === null) return this.matchRemaining;
+    return Math.max(0, this.matchRemaining - (this.now() - this.matchStartedAt));
+  }
+  get matchTimeMs(): number {
+    return this.matchTime;
   }
 
   /** Board tap at absolute coordinates. */
@@ -212,12 +235,14 @@ export class GameController {
     if (this._paused || this.disposed) return;
     this._paused = true;
     this.freezeTimer();
+    this.freezeMatchClock();
     this.emit({ type: 'change' });
   }
 
   resume(): void {
     if (!this._paused || this.disposed) return;
     this._paused = false;
+    if (this.started && this._phase !== 'ended') this.runMatchClock();
     if (this._phase === 'humanTurn' || this._phase === 'botThinking') this.runTimer();
     const waiters = this.resumeWaiters.splice(0);
     for (const w of waiters) w();
@@ -229,6 +254,7 @@ export class GameController {
     this.disposed = true;
     this.gen++;
     this.stopTimer();
+    this.freezeMatchClock();
     this.listeners.clear();
     this.resumeWaiters.splice(0).forEach((w) => w());
   }
@@ -266,6 +292,10 @@ export class GameController {
     if (this.disposed) return;
     if (this._state.status === 'ended') {
       this.checkEndOrContinue(false);
+      return;
+    }
+    if (this.matchUp) {
+      this.doTimeUp();
       return;
     }
     this.turnTime = this.ports.turnTimeMs ?? turnTimeMsFor(this._state);
@@ -392,11 +422,22 @@ export class GameController {
     }
   }
 
+  /** The match clock ran out: adjudicate now (an animation in flight finishes first, see enterTurn). */
+  private doTimeUp(): void {
+    if (this.disposed || this._phase === 'ended') return;
+    this.gen++;
+    this.stopTimer();
+    this.selection = null;
+    this._state = applyTimeUp(this._state);
+    this.checkEndOrContinue(false);
+  }
+
   private checkEndOrContinue(continueTurn: boolean): void {
     if (this._state.status === 'ended') {
       this._phase = 'ended';
       this.refreshSelection();
       this.stopTimer();
+      this.freezeMatchClock();
       this.emit({ type: 'change' });
       if (!this.endEmitted) {
         this.endEmitted = true;
@@ -430,5 +471,25 @@ export class GameController {
 
   private stopTimer(): void {
     this.freezeTimer();
+  }
+
+  private runMatchClock(): void {
+    if (this.matchHandle !== null || this.matchUp) return;
+    this.matchStartedAt = this.now();
+    this.matchHandle = this.setTimer(() => {
+      this.matchHandle = null;
+      this.matchStartedAt = null;
+      this.matchRemaining = 0;
+      this.matchUp = true;
+      if (this._phase === 'humanTurn' || this._phase === 'botThinking') this.doTimeUp();
+    }, Math.max(0, this.matchRemaining));
+  }
+
+  private freezeMatchClock(): void {
+    if (this.matchHandle === null) return;
+    this.clearTimer(this.matchHandle);
+    this.matchHandle = null;
+    if (this.matchStartedAt !== null) this.matchRemaining = Math.max(0, this.matchRemaining - (this.now() - this.matchStartedAt));
+    this.matchStartedAt = null;
   }
 }

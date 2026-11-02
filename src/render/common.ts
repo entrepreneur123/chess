@@ -1,6 +1,6 @@
 /** Helpers shared by the WebGL and Canvas2D board views. */
 import { BOARD_SIZE, ZONE_DEPTH } from '../engine/types';
-import type { Move, Piece, PlayerId, Pos } from '../engine/types';
+import type { CharacterId, Level, Move, Piece, PlayerId, Pos } from '../engine/types';
 import type { BoardHighlights } from './types';
 import {
   ANIM,
@@ -64,6 +64,8 @@ const RGB_DARK = hexToRgb(BOARD_COLORS.tileDark);
 const RGB_LAST = hexToRgb(BOARD_COLORS.lastMove);
 const RGB_SEL = hexToRgb(BOARD_COLORS.selectedTint);
 const RGB_CAP = hexToRgb(BOARD_COLORS.captureTint);
+const RGB_ENEMY_SEL = hexToRgb(BOARD_COLORS.enemySelectedTint);
+const RGB_ENEMY_MOVE = hexToRgb(BOARD_COLORS.enemyMoveTint);
 const RGB_TEAM_ZONE: Record<PlayerId, RGB> = {
   0: hexToRgb(TEAM_COLORS[0].zone),
   1: hexToRgb(TEAM_COLORS[1].zone),
@@ -80,6 +82,8 @@ export interface HighlightIndex {
   captures: Set<number>;
   last: Set<number>;
   zone: [number, number] | null;
+  /** Reach preview of an enemy piece (red markers) instead of the player's own piece. */
+  enemy: boolean;
 }
 
 export function indexHighlights(h: BoardHighlights): HighlightIndex {
@@ -100,6 +104,7 @@ export function indexHighlights(h: BoardHighlights): HighlightIndex {
     captures: new Set((h.captures ?? []).map(posKey)),
     last,
     zone,
+    enemy: h.tone === 'enemy',
   };
 }
 
@@ -123,9 +128,24 @@ export function tileRgb(r: number, c: number, hi: HighlightIndex): RGB {
   }
   const k = r * BOARD_SIZE + c;
   if (hi.last.has(k)) col = mixRgb(col, RGB_LAST, LAST_MOVE_TINT_STRENGTH);
+  if (hi.enemy && hi.moves.has(k)) col = mixRgb(col, RGB_ENEMY_MOVE, 0.42);
   if (hi.captures.has(k)) col = mixRgb(col, RGB_CAP, 0.85);
-  if (hi.selected === k) col = mixRgb(col, RGB_SEL, 0.9);
+  if (hi.selected === k) col = mixRgb(col, hi.enemy ? RGB_ENEMY_SEL : RGB_SEL, 0.9);
   return col;
+}
+
+/** Face illustration (round head-and-shoulders crop) of a character level, relative to the page. */
+export function faceUrl(character: CharacterId, level: Level): string {
+  return `./chars/${character}-lv${level}-face.jpg`;
+}
+
+/** True when the OS asks for reduced motion (safe outside browsers). */
+export function prefersReducedMotion(): boolean {
+  try {
+    return typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  } catch {
+    return false;
+  }
 }
 
 export function moveDistance(m: Move): number {

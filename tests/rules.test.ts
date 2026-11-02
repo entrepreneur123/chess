@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   MAX_CONSECUTIVE_TIMEOUTS,
-  NO_CAPTURE_PLY_LIMIT,
+  SUDDEN_DEATH_PLY,
+  STORM_INTERVAL_PLIES,
+  applyTimeUp,
+  suddenDeathIn,
   applyMove,
   applyTimeout,
   createGame,
@@ -91,7 +94,7 @@ describe('timeouts', () => {
   });
 });
 
-describe('no moves / stalemate / move limit', () => {
+describe('no moves / stalemate / sudden death', () => {
   it('auto-passes when the next player has no moves', () => {
     // p1 only has a walk on row 0 (stuck). p0 moves -> p1 auto-passes -> p0 to move again.
     const s = makeState([
@@ -151,58 +154,84 @@ describe('no moves / stalemate / move limit', () => {
     expect(materialScore(s2, 0)).toBe(3 + 3 + 4);
     expect(materialScore(s2, 1)).toBe(4);
   });
-  it('move limit adjudication: winner by material, or draw', () => {
+  it('sudden death: the storm starts on its own at SUDDEN_DEATH_PLY', () => {
     const base = makeState(
       [
-        [0, 'sad', 3, 5, 5],
-        [1, 'sad', 1, 8, 8],
-      ],
-      0,
-      { pliesSinceCapture: NO_CAPTURE_PLY_LIMIT - 1 },
-    );
-    const s2 = applyMove(base, { pieceId: 'p0-sad', from: { r: 5, c: 5 }, to: { r: 5, c: 6 } });
-    expect(s2.status).toBe('ended');
-    expect(s2.endReason).toBe('moveLimit');
-    expect(s2.winner).toBe(0);
-    const eq = makeState(
-      [
         [0, 'sad', 2, 5, 5],
-        [1, 'sad', 2, 8, 8],
-      ],
-      0,
-      { pliesSinceCapture: NO_CAPTURE_PLY_LIMIT - 1 },
-    );
-    const d = applyMove(eq, { pieceId: 'p0-sad', from: { r: 5, c: 5 }, to: { r: 5, c: 6 } });
-    expect(d.status).toBe('ended');
-    expect(d.endReason).toBe('moveLimit');
-    expect(d.winner).toBeNull();
-    // a capture on the last ply resets instead
-    const cap = makeState(
-      [
-        [0, 'sad', 1, 5, 5],
         [0, 'walk', 1, 0, 0],
-        [1, 'sad', 1, 5, 6],
+        [1, 'sad', 2, 8, 8],
         [1, 'walk', 1, 11, 0],
       ],
       0,
-      { pliesSinceCapture: NO_CAPTURE_PLY_LIMIT - 1 },
+      { ply: SUDDEN_DEATH_PLY - 2, pliesSinceCapture: 30 },
     );
-    const c2 = applyMove(cap, { pieceId: 'p0-sad', from: { r: 5, c: 5 }, to: { r: 5, c: 6 } });
-    expect(c2.status).toBe('playing');
-    expect(c2.pliesSinceCapture).toBe(0);
+    expect(suddenDeathIn(base)).toBe(2);
+    const s1 = applyMove(base, mv(base, 'p0-sad', 5, 6));
+    expect(s1.stormIn).toBeNull();
+    expect(suddenDeathIn(s1)).toBe(1);
+    const s2 = applyMove(s1, mv(s1, 'p1-sad', 8, 7));
+    expect(s2.status).toBe('playing');
+    expect(s2.stormIn).toBe(STORM_INTERVAL_PLIES);
+    expect(suddenDeathIn(s2)).toBeNull();
+    // long capture-free stretches no longer end the game: only the storm / elimination do
+    expect(s2.pliesSinceCapture).toBe(32);
   });
-  it('timeouts count toward the ply limit', () => {
+  it('a storm that swallows both last pieces is decided by material', () => {
+    const base = makeState(
+      [
+        [0, 'sad', 3, 5, 1],
+        [1, 'sad', 1, 7, 10],
+      ],
+      0,
+      { stormIn: 1, storm: 1 },
+    );
+    const s2 = applyMove(base, mv(base, 'p0-sad', 6, 1));
+    expect(s2.status).toBe('ended');
+    expect(s2.endReason).toBe('storm');
+    expect(s2.pieces).toHaveLength(0);
+    expect(s2.winner).toBe(0);
+    const eq = makeState(
+      [
+        [0, 'sad', 2, 5, 1],
+        [1, 'sad', 2, 7, 10],
+      ],
+      0,
+      { stormIn: 1, storm: 1 },
+    );
+    const d = applyMove(eq, mv(eq, 'p0-sad', 6, 1));
+    expect(d.endReason).toBe('storm');
+    expect(d.winner).toBeNull();
+  });
+  it('the match clock running out adjudicates by material', () => {
     const s = makeState(
       [
         [0, 'sad', 1, 5, 5],
         [1, 'sad', 2, 8, 8],
       ],
       0,
-      { pliesSinceCapture: NO_CAPTURE_PLY_LIMIT - 1 },
     );
-    const s2 = applyTimeout(s);
-    expect(s2.endReason).toBe('moveLimit');
-    expect(s2.winner).toBe(1);
+    const t = applyTimeUp(s);
+    expect(t.status).toBe('ended');
+    expect(t.endReason).toBe('timeUp');
+    expect(t.winner).toBe(1);
+    expect(applyTimeUp(t)).toBe(t);
+  });
+  it('a capture-free game is bounded by the storm', () => {
+    // Shuffle back and forth without ever capturing: sudden death + storm must end it.
+    let s = makeState(
+      [
+        [0, 'sad', 1, 1, 5],
+        [1, 'sad', 1, 10, 6],
+      ],
+      0,
+    );
+    let guard = 0;
+    while (s.status === 'playing' && guard++ < 200) {
+      const moves = getLegalMoves(s).filter((m) => !m.captureId);
+      s = moves.length ? applyMove(s, moves[guard % moves.length]) : applyTimeout(s);
+    }
+    expect(s.status).toBe('ended');
+    expect(s.ply).toBeLessThanOrEqual(SUDDEN_DEATH_PLY + 6 * STORM_INTERVAL_PLIES);
   });
 });
 

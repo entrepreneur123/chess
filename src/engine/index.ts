@@ -18,6 +18,8 @@ export {
   buildOccupancy,
   pieceDir,
   turnTimeMsFor,
+  suddenDeathIn,
+  applyTimeUp,
 } from './rules';
 export type { FastBoard } from './fast';
 export { fastFromState, fastGenMoves, fastHasMoves, fastMake, fastUnmake, fastPass, fastUnpass, fastMoveToMove } from './fast';

@@ -64,7 +64,7 @@ function drawGrid(el: HTMLElement, ch: Char, level: number): void {
     }
   }
   el.appendChild(frag);
-  el.setAttribute('aria-label', `${el.dataset.name ?? ''} Lv.${level} 이동 범위: ${DESC[ch][level - 1]}`);
+  el.setAttribute('aria-label', `${el.dataset.name ?? ''} ${level}성 이동 범위: ${DESC[ch][level - 1]}`);
 }
 
 function initCards(): void {
@@ -88,7 +88,7 @@ function initCards(): void {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'lv-tab';
-      b.textContent = `Lv.${lv}`;
+      b.textContent = `${lv}성`;
       b.addEventListener('click', () => select(lv));
       buttons.push(b);
       tabs.appendChild(b);
@@ -165,9 +165,9 @@ function initShowcase(): void {
   if (reduced) return;
 
   let step = 0;
-  let timer = 60;
+  let timer = 45;
   const tick = () => {
-    timer = timer <= 1 ? 60 : timer - 1;
+    timer = timer <= 1 ? 45 : timer - 1;
     if (timerEl) timerEl.textContent = String(timer);
   };
   window.setInterval(tick, 1000);

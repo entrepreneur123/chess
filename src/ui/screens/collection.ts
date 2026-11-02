@@ -27,7 +27,7 @@ export const ROLE: Record<CharacterId, { role: string; trait: string }> = {
   sad: { role: '수비형 탱커', trait: '상하좌우 자유 이동 · 유일하게 후퇴 가능' },
   marki: { role: '돌격형 공격수', trait: '앞으로만 일직선 돌진 · 사거리 최장' },
   walk: { role: '기습형 점퍼', trait: '사이의 말을 뛰어넘는 점프 · 넓은 앞줄 커버' },
-  insaner: { role: '흡수형 광전사', trait: '적을 잡으면 그 말의 이동 능력을 흡수 · Lv.3는 잡은 뒤 한 번 더 이동' },
+  insaner: { role: '흡수형 광전사', trait: '적을 잡으면 그 말의 이동 능력을 흡수 · 3성은 잡은 뒤 한 번 더 이동' },
 };
 
 /** Numeric "reach" per level for the stat bar (max squares reachable on an open board). */
@@ -41,7 +41,7 @@ function unitPreview(id: CharacterId, lv: Level) {
   return h('img', {
     class: `compare__model tier-${lv}`,
     src: `./chars/unit-${id}-lv${lv}-0.png`,
-    alt: `${CHARACTERS[id].nameKo} Lv.${lv} 3D 모델`,
+    alt: `${CHARACTERS[id].nameKo} ${lv}성 3D 모델`,
     width: '96',
     height: '96',
     loading: 'lazy',
@@ -62,7 +62,7 @@ export function collectionScreen(router: Router): Screen {
     const check = canLevelUp(p, id);
     if (!check.ok) {
       toast(
-        check.reason === 'cards' ? '카드가 부족해요. 상점에서 상자를 열어보세요' : check.reason === 'gems' ? '보석이 부족해요. 상점에서 보석을 충전하세요' : '최대 레벨입니다',
+        check.reason === 'cards' ? '카드가 부족해요. 상점에서 상자를 열어보세요' : check.reason === 'gems' ? '보석이 부족해요. 상점에서 보석을 충전하세요' : '최대 성급입니다',
         { tone: 'warn' },
       );
       return;
@@ -70,7 +70,7 @@ export function collectionScreen(router: Router): Screen {
     const cost = levelUpCost(p.characters[id].level)!;
     const next = (p.characters[id].level + 1) as Level;
     const ok = await confirmDialog({
-      title: `${CHARACTERS[id].nameKo} Lv.${next}로 강화할까요?`,
+      title: `${CHARACTERS[id].nameKo} ${next}성으로 강화할까요?`,
       body: h(
         'div',
         { class: 'confirm-cost' },
@@ -86,7 +86,7 @@ export function collectionScreen(router: Router): Screen {
     const after = updateProfile((q) => levelUp(q, id));
     sfx('levelup');
     haptic('win');
-    toast(`${CHARACTERS[id].nameKo} Lv.${after.characters[id].level} 달성! 이동 범위가 넓어졌어요`, { tone: 'success', duration: 2600 });
+    toast(`${CHARACTERS[id].nameKo} ${after.characters[id].level}성 달성! 이동 범위가 넓어졌어요`, { tone: 'success', duration: 2600 });
   };
 
   const statBar = (label: string, value: number, max: number, nextValue?: number) =>
@@ -128,7 +128,7 @@ export function collectionScreen(router: Router): Screen {
           { class: 'unit-card__title' },
           h('div', { class: 'unit-card__role' }, h('b', null, TIER_TITLE[id][prog.level - 1]), ' · ', ROLE[id].role),
           h('div', { class: 'unit-card__name' }, def.nameKo, h('span', { class: 'unit-card__en' }, def.nameEn)),
-          h('div', { class: 'unit-card__chips' }, rarityChip(def.rarity), h('span', { class: 'lv-pill lv-pill--big', 'data-level': prog.level }, `Lv.${prog.level}`)),
+          h('div', { class: 'unit-card__chips' }, rarityChip(def.rarity), h('span', { class: 'lv-pill lv-pill--big', 'data-level': prog.level }, `${prog.level}성`)),
         ),
         h('div', { class: 'unit-card__stars', 'aria-hidden': 'true' }, levels.map((lv) => icon('star', 16, lv <= prog.level ? 'is-on' : ''))),
         prog.level === 3 && owned ? h('div', { class: 'unit-card__aura', 'aria-hidden': 'true' }) : null,
@@ -145,13 +145,13 @@ export function collectionScreen(router: Router): Screen {
         h(
           'div',
           { class: 'unit-card__compare' },
-          h('div', { class: 'compare__col' }, h('span', { class: 'compare__cap' }, `Lv.${prog.level} 현재`), unitPreview(id, prog.level), movementDiagram(id, prog.level, { cell: 8 }), h('span', { class: 'compare__desc' }, def.descKo[prog.level - 1])),
+          h('div', { class: 'compare__col' }, h('span', { class: 'compare__cap' }, `${prog.level}성 현재`), unitPreview(id, prog.level), movementDiagram(id, prog.level, { cell: 8 }), h('span', { class: 'compare__desc' }, def.descKo[prog.level - 1])),
           next
             ? [
                 h('span', { class: 'compare__arrow' }, icon('chevron', 22)),
-                h('div', { class: 'compare__col compare__col--next' }, h('span', { class: 'compare__cap' }, `Lv.${next} 강화 후`), unitPreview(id, next), movementDiagram(id, next, { cell: 8 }), h('span', { class: 'compare__desc' }, def.descKo[next - 1])),
+                h('div', { class: 'compare__col compare__col--next' }, h('span', { class: 'compare__cap' }, `${next}성 강화 후`), unitPreview(id, next), movementDiagram(id, next, { cell: 8 }), h('span', { class: 'compare__desc' }, def.descKo[next - 1])),
               ]
-            : h('div', { class: 'compare__col compare__col--max' }, icon('trophy', 28), h('span', { class: 'compare__cap' }, '최대 레벨')),
+            : h('div', { class: 'compare__col compare__col--max' }, icon('trophy', 28), h('span', { class: 'compare__cap' }, '최대 성급')),
         ),
       ),
       h(
@@ -181,10 +181,10 @@ export function collectionScreen(router: Router): Screen {
                 onclick: () => void doLevelUp(id),
               },
               icon('up', 20),
-              `Lv.${prog.level + 1} 강화`,
+              `${prog.level + 1}성 강화`,
               h('span', { class: `btn__cost${p.gems < cost.gems ? ' is-short' : ''}` }, icon('gem', 16), String(cost.gems)),
             )
-          : h('div', { class: 'max-note' }, icon('check', 18), '최대 레벨 달성'),
+          : h('div', { class: 'max-note' }, icon('check', 18), '최대 성급 달성'),
         owned && !check.ok && check.reason !== 'max'
           ? h('p', { class: 'upgrade__hint' }, check.reason === 'cards' ? `카드 ${cost!.cards - prog.cards}장 더 필요 · 상자에서 획득` : `보석 ${cost!.gems - p.gems}개 부족 · 상점에서 충전`)
           : null,
@@ -192,13 +192,13 @@ export function collectionScreen(router: Router): Screen {
       h(
         'table',
         { class: 'ability-table' },
-        h('caption', { class: 'sr-only' }, `${def.nameKo} 레벨별 능력`),
+        h('caption', { class: 'sr-only' }, `${def.nameKo} 성급별 능력`),
         h('tbody', null,
           levels.map((lv) =>
             h(
               'tr',
               { class: `${lv === prog.level ? 'is-current' : ''}${lv < prog.level ? ' is-past' : ''}${lv > prog.level ? ' is-locked' : ''}` },
-              h('th', { scope: 'row' }, lv > prog.level ? icon('lock', 12) : null, `Lv.${lv}`),
+              h('th', { scope: 'row' }, lv > prog.level ? icon('lock', 12) : null, `${lv}성`),
               h('td', { class: 'ability-table__desc' }, def.descKo[lv - 1]),
               h('td', { class: 'ability-table__diagram' }, movementDiagram(id, lv, { cell: 6 })),
             ),

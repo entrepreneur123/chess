@@ -2,20 +2,31 @@
  * Lightweight Canvas2D fallback board (flat, top-down) used when WebGL is unavailable.
  * Same palette, highlights, pieces, animations and API as the WebGL BoardView.
  * Player 0 (row 0) is at the bottom of the screen; col 0 at the left.
+ *
+ * Pieces are illustrated tokens: the character's face art (public/chars/<id>-lv<n>-face.jpg,
+ * HTMLImageElement cached, neutral placeholder until loaded) in a team-coloured rim with gold star
+ * pips, pre-rendered once per (character, level, team, size) into an offscreen canvas; the rarity
+ * ring around it is drawn live (legendary = rotating rainbow, ~30 fps only while one is on board and
+ * motion is allowed). Captures: the attacker slides to strike range, lunges, the strike lands
+ * (onImpact) with the character's FX (sad holy slash + light beam, marki cracks + dust + heavy
+ * shake, walk shield shock ring, insaner violet flames + soul stream), the victim flashes, shakes and
+ * shatters, the attacker steps in. Enemy reach previews (tone 'enemy') are red.
  */
 import { BOARD_SIZE, ZONE_DEPTH } from '../engine/types';
-import type { CharacterId, Move, Piece, PlayerId, Pos } from '../engine/types';
+import type { CharacterId, Level, Move, Piece, PlayerId, Pos } from '../engine/types';
 import type { BoardHighlights, IBoardView } from './types';
-import { ANIM, BOARD_COLORS, CHARACTER_RARITY, RARITY_COLORS, RARITY_GLOW, TEAM_COLORS } from './palette';
+import { ANIM, BOARD_COLORS, CHARACTER_FX, CHARACTER_RARITY, RARITY_RING, TEAM_COLORS } from './palette';
 import { STORM_COLORS } from './storm';
 import {
   clamp01,
   containerSize,
   easeInOutCubic,
   easeOutCubic,
+  faceUrl,
   indexHighlights,
   paintBackdrop,
   posKey,
+  prefersReducedMotion,
   pulse01,
   rgbToCss,
   shakeOffset,
@@ -29,6 +40,18 @@ const MAX_PIXEL_RATIO = 2;
 const IDLE_FRAME_MS = 32;
 /** Storm removal: dissolve length (ms). */
 const STORM_MS = 520;
+/** Capture timeline (ms after the impact): recoil, death (shatter), attacker steps in. */
+const HIT_MS = 140;
+const DEATH_MS = 340;
+const STEP_AT = 200;
+const STEP_MS = 200;
+const STRIKE_RANGE = 0.62;
+const CHAIN_WINDOW_MS = 8000;
+/** Capture FX length (ms). */
+const FX_MS = 620;
+/** Token radius and rarity ring radius (fractions of a cell). */
+const TOKEN_R = 0.39;
+const RING_R = 0.455;
 
 interface Layout {
   /** Board origin (top-left of the slab interior) in CSS px. */
@@ -39,20 +62,48 @@ interface Layout {
 }
 
 interface Anim2D {
+  move: Move;
   start: number;
   duration: number;
   moveDur: number;
   moverId: string;
+  character: CharacterId;
   from: Pos;
   to: Pos;
+  /** End of the approach (fractional board coords): `to`, or strike range for captures. */
+  strike: { r: number; c: number };
   jump: boolean;
+  charge: boolean;
+  chain: boolean;
+  capture: boolean;
   captured: Piece | null;
-  captureStart: number;
+  impactAt: number;
+  impactFired: boolean;
+  deathStart: number;
+  stepStart: number;
   landed: boolean;
-  capFired: boolean;
-  burst: { a: number; v: number }[];
   piecesAfter: Piece[];
   resolve: () => void;
+}
+
+/** Shared face images (the browser caches the files; one decode per session). */
+const faceImages = new Map<string, HTMLImageElement>();
+const faceWaiters = new Set<() => void>();
+
+function faceImage(character: CharacterId, level: Level): HTMLImageElement | null {
+  const url = faceUrl(character, level);
+  let img = faceImages.get(url);
+  if (!img) {
+    if (typeof Image === 'undefined') return null;
+    img = new Image();
+    img.decoding = 'async';
+    img.onload = () => {
+      for (const w of faceWaiters) w();
+    };
+    img.src = url;
+    faceImages.set(url, img);
+  }
+  return img.complete && img.naturalWidth > 0 ? img : null;
 }
 
 export class Board2DView implements IBoardView {
@@ -67,27 +118,49 @@ export class Board2DView implements IBoardView {
   private cssH = 1;
   private dpr = 1;
   private cellCb: ((pos: Pos) => void) | null = null;
+  private impactCb: ((move: Move) => void) | null = null;
   private interactive = true;
   private anim: Anim2D | null = null;
   private rafId = 0;
   private disposed = false;
+  private disposing = false;
   private resizeObserver: ResizeObserver | null = null;
   private down: { id: number; x: number; y: number } | null = null;
   private backdrop: HTMLCanvasElement | null = null;
   private turn: PlayerId = 0;
   private tLand = -1;
-  private landAt: Pos = { r: 0, c: 0 };
-  private landOwner: PlayerId = 0;
+  private landAt: { r: number; c: number } = { r: 0, c: 0 };
+  private landColor = '#ffffff';
+  /** Capture FX: start, kind, place, strike direction (screen), seeds, soul target id. */
   private tCap = -1;
-  private capAt: Pos = { r: 0, c: 0 };
-  private capOwner: PlayerId = 1;
+  private capKind: CharacterId = 'sad';
+  private capAt: { r: number; c: number } = { r: 0, c: 0 };
+  private capDir = { x: 0, y: -1 };
   private capBurst: { a: number; v: number }[] = [];
+  private soulTo: string | null = null;
+  private shakeAmp = 1;
+  private shakeMs: number = ANIM.shake;
+  /** Skill FX: sad glint (start + place), mover trail (screen points, newest last). */
+  private tGlint = -1;
+  private glintAt = { x: 0, y: 0 };
+  private glintColor = '#ffffff';
+  private readonly trail: { x: number; y: number; t: number }[] = [];
+  private trailColor = '#ffffff';
+  private lastCapture: { id: string; t: number } | null = null;
   private tTurn = -1;
   private lastFrame = 0;
   /** Storm state (see setStorm) and the pieces it is taking (ghosts drawn while they dissolve). */
   private storm = 0;
   private stormNext: number | null = null;
   private readonly fading: { piece: Piece; start: number }[] = [];
+  private readonly reducedMotion = prefersReducedMotion();
+  private hasLegendary = false;
+  /** Pre-rendered tokens keyed by look + pixel size. */
+  private readonly sprites = new Map<string, HTMLCanvasElement>();
+  private readonly onFaceLoaded = (): void => {
+    this.sprites.clear();
+    this.requestRender();
+  };
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -107,6 +180,7 @@ export class Board2DView implements IBoardView {
     this.canvas.addEventListener('pointerup', this.onPointerUp);
     this.canvas.addEventListener('pointercancel', this.onPointerCancel);
     this.canvas.addEventListener('contextmenu', this.onContextMenu);
+    faceWaiters.add(this.onFaceLoaded);
     if (typeof ResizeObserver !== 'undefined') {
       this.resizeObserver = new ResizeObserver(() => this.resize());
       this.resizeObserver.observe(container);
@@ -120,8 +194,13 @@ export class Board2DView implements IBoardView {
     if (this.disposed) return;
     this.finishAnimation(false);
     this.collectStormVictims(pieces, null);
-    this.pieces = clonePieces(pieces);
+    this.setPieceList(clonePieces(pieces));
     this.requestRender();
+  }
+
+  private setPieceList(list: Piece[]): void {
+    this.pieces = list;
+    this.hasLegendary = list.some((p) => CHARACTER_RARITY[p.character] === 'legendary');
   }
 
   /**
@@ -161,38 +240,80 @@ export class Board2DView implements IBoardView {
     this.finishAnimation(false);
     const mover = this.pieces.find((p) => p.id === move.pieceId);
     if (!mover) {
-      this.pieces = clonePieces(piecesAfter);
+      this.setPieceList(clonePieces(piecesAfter));
       this.requestRender();
+      if (move.captureId) this.emitImpact(move);
       return Promise.resolve();
     }
+    const now = performance.now();
+    const ch = mover.character;
+    const chain = ch === 'insaner' && this.lastCapture?.id === move.pieceId && now - this.lastCapture.t < CHAIN_WINDOW_MS;
+    this.lastCapture = null;
     const captured = move.captureId ? (this.pieces.find((p) => p.id === move.captureId) ?? null) : null;
-    const jump = mover.character === 'walk';
+    const capture = !!move.captureId;
+    const jump = ch === 'walk';
     const moveDur = jump ? ANIM.jump : slideDuration(move);
-    const captureStart = captured ? moveDur * (jump ? 0.92 : 0.82) : moveDur;
-    const duration = Math.max(moveDur + (jump ? ANIM.land : 40), captured ? captureStart + ANIM.capture + 40 : 0);
-    const burst = Array.from({ length: 10 }, (_, i) => ({
-      a: (i / 10) * Math.PI * 2 + Math.random() * 0.4,
-      v: 0.8 + Math.random() * 0.5,
-    }));
+    const dr = move.to.r - move.from.r;
+    const dc = move.to.c - move.from.c;
+    const dist = Math.hypot(dr, dc);
+    const f = capture && dist > 1e-6 ? Math.max(0, (dist - STRIKE_RANGE) / dist) : 1;
+    const strike = { r: move.from.r + dr * f, c: move.from.c + dc * f };
+    const impactAt = capture ? moveDur + (jump ? 90 : 60) : Infinity;
+    const deathStart = impactAt + HIT_MS;
+    const stepStart = impactAt + STEP_AT;
+    const duration = capture ? Math.max(stepStart + STEP_MS, deathStart + DEATH_MS) + 20 : moveDur + (jump ? ANIM.land : 40);
+    // Skill flavour on move start.
+    this.trail.length = 0;
+    const fx = CHARACTER_FX[ch];
+    if (ch === 'sad') {
+      this.tGlint = now;
+      this.glintAt = { x: this.cx(mover.pos.c), y: this.cy(mover.pos.r) - this.layout.cell * 0.25 };
+      this.glintColor = fx.primary;
+    } else if (chain) {
+      this.tGlint = now;
+      this.glintAt = { x: this.cx(mover.pos.c), y: this.cy(mover.pos.r) };
+      this.glintColor = '#FF4FE8';
+    }
+    this.trailColor = chain ? '#D04BFF' : ch === 'marki' ? '#FFE2B0' : fx.primary;
     return new Promise<void>((resolve) => {
       this.anim = {
-        start: performance.now(),
+        move,
+        start: now,
         duration,
         moveDur,
         moverId: move.pieceId,
+        character: ch,
         from: { ...move.from },
         to: { ...move.to },
+        strike,
         jump,
+        charge: ch === 'marki' && dist >= 2,
+        chain,
+        capture,
         captured,
-        captureStart,
+        impactAt,
+        impactFired: false,
+        deathStart,
+        stepStart,
         landed: false,
-        capFired: false,
-        burst,
         piecesAfter: clonePieces(piecesAfter),
         resolve,
       };
       this.requestRender();
     });
+  }
+
+  /** Register the strike-impact listener (called once per capturing move, at the impact frame). */
+  onImpact(cb: (move: Move) => void): void {
+    this.impactCb = cb;
+  }
+
+  private emitImpact(move: Move): void {
+    try {
+      this.impactCb?.(move);
+    } catch (err) {
+      console.error('[render] onImpact listener failed:', err);
+    }
   }
 
   setHighlights(h: BoardHighlights): void {
@@ -233,14 +354,18 @@ export class Board2DView implements IBoardView {
     const pad = size * 0.022;
     const cell = (size - pad * 2) / BOARD_SIZE;
     this.layout = { x0: (w - size) / 2 + pad, y0: (h - size) / 2 + pad, cell, pad };
+    this.sprites.clear();
     this.buildBackdrop();
     this.requestRender();
   }
 
   dispose(): void {
     if (this.disposed) return;
+    this.disposing = true;
     this.finishAnimation(false);
     this.disposed = true;
+    this.impactCb = null;
+    faceWaiters.delete(this.onFaceLoaded);
     if (this.rafId) cancelAnimationFrame(this.rafId);
     this.rafId = 0;
     this.resizeObserver?.disconnect();
@@ -252,6 +377,7 @@ export class Board2DView implements IBoardView {
     this.canvas.width = 0;
     this.canvas.height = 0;
     this.backdrop = null;
+    this.sprites.clear();
     this.canvas.remove();
     this.pieces = [];
     this.cellCb = null;
@@ -281,18 +407,24 @@ export class Board2DView implements IBoardView {
   private fxActive(now: number): boolean {
     return (
       (this.tLand >= 0 && now - this.tLand < ANIM.pulse) ||
-      (this.tCap >= 0 && now - this.tCap < ANIM.capture + 90) ||
+      (this.tCap >= 0 && now - this.tCap < FX_MS + 300) ||
+      (this.tShake >= 0 && now - this.tShake < this.shakeMs) ||
+      (this.tGlint >= 0 && now - this.tGlint < 320) ||
       (this.tTurn >= 0 && now - this.tTurn < ANIM.turn) ||
+      this.trail.length > 0 ||
       this.fading.length > 0
     );
   }
+
+  private tShake = -1;
 
   private readonly frame = (now: number): void => {
     this.rafId = 0;
     if (this.disposed) return;
     if (this.anim) this.tickAnim(now);
     const busy = !!this.anim || this.fxActive(now);
-    const loop = this.pulsing || this.storm > 0 || (this.stormActive && this.stormNext !== null && this.stormNext <= 2);
+    const ringLoop = this.hasLegendary && !this.reducedMotion && !document.hidden;
+    const loop = this.pulsing || ringLoop || this.storm > 0 || (this.stormActive && this.stormNext !== null && this.stormNext <= 2);
     if (!busy && loop && now - this.lastFrame < IDLE_FRAME_MS) {
       this.requestRender();
       return;
@@ -313,17 +445,34 @@ export class Board2DView implements IBoardView {
     if (!a.landed && t >= a.moveDur) {
       a.landed = true;
       this.tLand = now;
-      this.landAt = a.to;
+      this.landAt = { ...a.strike };
       const m = this.pieces.find((p) => p.id === a.moverId);
-      this.landOwner = m ? m.owner : 0;
+      this.landColor = a.jump ? CHARACTER_FX.walk.primary : TEAM_COLORS[m ? m.owner : 0].glow;
     }
-    if (a.captured && !a.capFired && t >= a.captureStart) {
-      a.capFired = true;
-      this.tCap = now;
-      this.capAt = { ...a.captured.pos };
-      this.capOwner = a.captured.owner;
-      this.capBurst = a.burst;
+    if (a.capture && !a.impactFired && t >= a.impactAt) {
+      a.impactFired = true;
+      this.startImpact(a, now);
+      this.emitImpact(a.move);
     }
+  }
+
+  private startImpact(a: Anim2D, now: number): void {
+    this.tCap = now;
+    this.tShake = now;
+    this.capKind = a.character;
+    this.capAt = a.captured ? { ...a.captured.pos } : { ...a.to };
+    const dc = a.to.c - a.from.c;
+    const dr = a.to.r - a.from.r;
+    const l = Math.hypot(dc, dr) || 1;
+    this.capDir = { x: dc / l, y: -dr / l };
+    this.capBurst = Array.from({ length: 12 }, (_, i) => ({
+      a: (i / 12) * Math.PI * 2 + Math.sin(now + i * 7.3) * 0.35,
+      v: 0.8 + 0.5 * (0.5 + 0.5 * Math.sin(now * 0.37 + i * 3.1)),
+    }));
+    this.shakeAmp = a.character === 'marki' ? (this.reducedMotion ? 0.5 : 2.6) : a.character === 'walk' ? 1.5 : 1;
+    this.shakeMs = a.character === 'marki' ? 260 : ANIM.shake;
+    this.soulTo = a.character === 'insaner' ? a.moverId : null;
+    if (a.character === 'insaner') this.lastCapture = { id: a.moverId, t: now };
   }
 
   private finishAnimation(natural: boolean): void {
@@ -331,12 +480,19 @@ export class Board2DView implements IBoardView {
     if (!natural) {
       this.tLand = -1;
       this.tCap = -1;
+      this.tShake = -1;
       this.tTurn = -1;
+      this.tGlint = -1;
+      this.trail.length = 0;
     }
     if (!a) return;
     this.anim = null;
     this.collectStormVictims(a.piecesAfter, a.captured?.id ?? null);
-    this.pieces = a.piecesAfter;
+    this.setPieceList(a.piecesAfter);
+    if (a.capture && !a.impactFired) {
+      a.impactFired = true;
+      if (!this.disposing) this.emitImpact(a.move);
+    }
     this.requestRender();
     a.resolve();
   }
@@ -364,10 +520,10 @@ export class Board2DView implements IBoardView {
     // Camera micro-shake.
     let sx = 0;
     let sy = 0;
-    if (this.tCap >= 0) {
-      const k = (now - this.tCap) / ANIM.shake;
-      sx = shakeOffset(k, 0);
-      sy = shakeOffset(k, 1);
+    if (this.tShake >= 0) {
+      const k = (now - this.tShake) / this.shakeMs;
+      sx = shakeOffset(k, 0) * this.shakeAmp;
+      sy = shakeOffset(k, 1) * this.shakeAmp;
     }
     ctx.translate(sx, sy);
     const size = cell * BOARD_SIZE;
@@ -417,20 +573,23 @@ export class Board2DView implements IBoardView {
     this.drawZoneLines(now);
     this.drawStorm(now);
 
-    // Overlays.
+    // Overlays: own reach = white/cyan, an enemy's reach preview = red.
     const h = this.highlights;
+    const enemy = this.hi.enemy;
+    const selCol = enemy ? BOARD_COLORS.enemySelected : BOARD_COLORS.selected;
+    const dotCol = enemy ? BOARD_COLORS.enemyMoveDot : BOARD_COLORS.moveDot;
     const sp = pulse01(now, 950);
     if (h.selected) {
       const x = this.cx(h.selected.c);
       const y = this.cy(h.selected.r);
       ctx.save();
-      ctx.shadowColor = BOARD_COLORS.selected;
+      ctx.shadowColor = selCol;
       ctx.shadowBlur = cell * (0.25 + 0.2 * sp);
-      ctx.strokeStyle = BOARD_COLORS.selected;
+      ctx.strokeStyle = selCol;
       ctx.globalAlpha = 0.7 + 0.3 * sp;
       ctx.lineWidth = cell * 0.06;
       ctx.beginPath();
-      ctx.arc(x, y, cell * (0.44 + 0.03 * sp), 0, Math.PI * 2);
+      ctx.arc(x, y, cell * (0.47 + 0.03 * sp), 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
     }
@@ -439,26 +598,14 @@ export class Board2DView implements IBoardView {
       const y = this.cy(p.r);
       const rr = cell * (0.4 + 0.05 * sp);
       const g = ctx.createRadialGradient(x, y, 0, x, y, rr);
-      g.addColorStop(0, hexAlpha(BOARD_COLORS.moveDot, 0.95));
-      g.addColorStop(0.4, hexAlpha(BOARD_COLORS.moveDot, 0.85));
-      g.addColorStop(0.55, hexAlpha(BOARD_COLORS.moveDot, 0.25));
-      g.addColorStop(1, hexAlpha(BOARD_COLORS.moveDot, 0));
+      g.addColorStop(0, hexAlpha(dotCol, 0.95));
+      g.addColorStop(0.4, hexAlpha(dotCol, 0.85));
+      g.addColorStop(0.55, hexAlpha(dotCol, 0.25));
+      g.addColorStop(1, hexAlpha(dotCol, 0));
       ctx.fillStyle = g;
       ctx.beginPath();
       ctx.arc(x, y, rr, 0, Math.PI * 2);
       ctx.fill();
-    }
-    const cp = pulse01(now, 700);
-    for (const p of h.captures ?? []) {
-      ctx.save();
-      ctx.shadowColor = BOARD_COLORS.capture;
-      ctx.shadowBlur = cell * (0.2 + 0.2 * cp);
-      ctx.strokeStyle = hexAlpha(BOARD_COLORS.capture, 0.9);
-      ctx.lineWidth = cell * 0.07;
-      ctx.beginPath();
-      ctx.arc(this.cx(p.c), this.cy(p.r), cell * (0.455 + 0.03 * cp), 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
     }
 
     // Pieces (back rows first so overlaps read naturally).
@@ -466,12 +613,26 @@ export class Board2DView implements IBoardView {
     const t = a ? now - a.start : 0;
     const list = [...this.pieces].sort((p, q) => q.pos.r - p.pos.r);
     let moverDraw: (() => void) | null = null;
+    let moverXY = { x: 0, y: 0 };
     for (const p of list) {
       if (a && p.id === a.moverId) {
         const k = clamp01(t / a.moveDur);
         const e = easeInOutCubic(k);
-        const x = this.cx(a.from.c + (a.to.c - a.from.c) * e);
-        const y = this.cy(a.from.r + (a.to.r - a.from.r) * e);
+        let fr = a.from.r + (a.strike.r - a.from.r) * e;
+        let fc = a.from.c + (a.strike.c - a.from.c) * e;
+        if (a.capture) {
+          const l = Math.hypot(a.to.r - a.from.r, a.to.c - a.from.c) || 1;
+          const lunge = 0.16 * bump(a.impactAt - 110, a.impactAt + 150, t);
+          fr += ((a.to.r - a.from.r) / l) * lunge;
+          fc += ((a.to.c - a.from.c) / l) * lunge;
+          if (t >= a.stepStart) {
+            const ks = easeInOutCubic(clamp01((t - a.stepStart) / STEP_MS));
+            fr = a.strike.r + (a.to.r - a.strike.r) * ks;
+            fc = a.strike.c + (a.to.c - a.strike.c) * ks;
+          }
+        }
+        const x = this.cx(fc);
+        const y = this.cy(fr);
         let lift = a.jump ? Math.sin(Math.PI * k) : 0.2 * Math.sin(Math.PI * k);
         let sxz = 1 + lift * 0.18;
         let syy = 1;
@@ -481,16 +642,19 @@ export class Board2DView implements IBoardView {
           sxz = 1 + 0.1 * sq;
           syy = 1 - 0.14 * sq;
         }
-        moverDraw = () => this.drawPiece(p, x, y, sxz, syy, 1, lift, now);
+        const pop = 1 + 0.14 * bump(a.impactAt - 90, a.impactAt + 170, t);
+        moverXY = { x, y: y - lift * cell * 0.1 };
+        if (t < a.moveDur && (a.jump || a.chain || a.charge)) this.pushTrail(moverXY.x, moverXY.y, now);
+        moverDraw = () => this.drawPiece(p, x, y, sxz * pop, syy * pop, 1, lift, now);
         continue;
       }
       if (a && a.captured && p.id === a.captured.id) {
-        if (t < a.captureStart) {
-          this.drawPiece(p, this.cx(p.pos.c), this.cy(p.pos.r), 1, 1, 1, 0, now);
+        const x = this.cx(p.pos.c);
+        const y = this.cy(p.pos.r);
+        if (t < a.impactAt) {
+          this.drawPiece(p, x, y, 1, 1, 1, 0, now);
         } else {
-          const k = clamp01((t - a.captureStart) / ANIM.capture);
-          const s = 1 - easeOutCubic(k);
-          if (s > 0.01) this.drawPiece(p, this.cx(p.pos.c), this.cy(p.pos.r), s, s, 1 - k, 0, now);
+          this.drawVictim(p, x, y, t - a.impactAt, t, a, now);
         }
         continue;
       }
@@ -498,10 +662,89 @@ export class Board2DView implements IBoardView {
       const bob = sel ? 0.5 + 0.1 * Math.sin(now / 240) : 0;
       this.drawPiece(p, this.cx(p.pos.c), this.cy(p.pos.r), sel ? 1.05 : 1, sel ? 1.05 : 1, 1, bob, now);
     }
+    // Capture targets sit on top of the threatened tokens.
+    const cp = pulse01(now, 700);
+    for (const p of h.captures ?? []) {
+      ctx.save();
+      ctx.shadowColor = BOARD_COLORS.capture;
+      ctx.shadowBlur = cell * (0.2 + 0.2 * cp);
+      ctx.strokeStyle = hexAlpha(BOARD_COLORS.capture, 0.95);
+      ctx.lineWidth = cell * 0.075;
+      ctx.beginPath();
+      ctx.arc(this.cx(p.c), this.cy(p.r), cell * (0.47 + 0.03 * cp), 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+    this.drawTrail(now);
     if (moverDraw) moverDraw();
     this.drawStormGhosts(now);
 
-    this.drawFx(now);
+    this.drawFx(now, a ? moverXY : null);
+  }
+
+  /** Victim of a strike: white hit flash + shake, then it swells, burns away and shatters. */
+  private drawVictim(p: Piece, x: number, y: number, tk: number, t: number, a: Anim2D, now: number): void {
+    const ctx = this.ctx;
+    const cell = this.layout.cell;
+    const l = Math.hypot(this.capDir.x, this.capDir.y) || 1;
+    const kb = 0.26 * cell * easeOutCubic(clamp01(tk / (HIT_MS + DEATH_MS)));
+    const shake = tk < HIT_MS ? Math.sin(tk * 0.11) * cell * 0.05 * (1 - tk / HIT_MS) : 0;
+    const vx = x + (this.capDir.x / l) * kb - (this.capDir.y / l) * shake;
+    const vy = y + (this.capDir.y / l) * kb + (this.capDir.x / l) * shake;
+    const ck = clamp01((t - a.deathStart) / DEATH_MS);
+    const s = 1 + 0.15 * easeOutCubic(ck);
+    if (ck < 1) this.drawPiece(p, vx, vy, s, s, 1 - ck * ck, 0, now, Math.max(0, 1 - tk / 160) * 0.85);
+    if (ck > 0) {
+      // Shards flying out in the attacker's FX colour.
+      const fx = CHARACTER_FX[a.character];
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = hexAlpha(fx.primary, 0.9 * (1 - ck));
+      for (let i = 0; i < 9; i++) {
+        const ang = i * 0.7 + i * i * 0.13;
+        const d = cell * (0.15 + 0.5 * easeOutCubic(ck)) * (0.7 + 0.3 * ((i * 5) % 3));
+        const px = vx + Math.cos(ang) * d;
+        const py = vy + Math.sin(ang) * d;
+        const r = cell * 0.07 * (1 - ck * 0.6);
+        ctx.beginPath();
+        ctx.moveTo(px + Math.cos(ang) * r * 1.6, py + Math.sin(ang) * r * 1.6);
+        ctx.lineTo(px + Math.cos(ang + 2.2) * r, py + Math.sin(ang + 2.2) * r);
+        ctx.lineTo(px + Math.cos(ang - 2.2) * r, py + Math.sin(ang - 2.2) * r);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+
+  private pushTrail(x: number, y: number, now: number): void {
+    const last = this.trail[this.trail.length - 1];
+    if (last && Math.hypot(last.x - x, last.y - y) < 1) return;
+    this.trail.push({ x, y, t: now });
+    if (this.trail.length > 24) this.trail.shift();
+  }
+
+  /** Fading ribbon behind a leaping / charging / chaining mover. */
+  private drawTrail(now: number): void {
+    const tr = this.trail;
+    while (tr.length > 0 && now - tr[0].t > 280) tr.shift();
+    if (tr.length < 2) return;
+    const ctx = this.ctx;
+    const cell = this.layout.cell;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineCap = 'round';
+    for (let i = 1; i < tr.length; i++) {
+      const k = 1 - (now - tr[i].t) / 280;
+      if (k <= 0) continue;
+      ctx.strokeStyle = hexAlpha(this.trailColor, 0.55 * k);
+      ctx.lineWidth = cell * 0.3 * k * (i / tr.length);
+      ctx.beginPath();
+      ctx.moveTo(tr[i - 1].x, tr[i - 1].y);
+      ctx.lineTo(tr[i].x, tr[i].y);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   /** Storm field over the consumed columns, crackling boundary line, warning frame on the next column. */
@@ -650,8 +893,8 @@ export class Board2DView implements IBoardView {
     }
   }
 
-  /** Landing pulse ring + capture flash / shockwave / particle burst. */
-  private drawFx(now: number): void {
+  /** Landing ring, sad's glint and the character's strike FX (+ the insaner soul stream). */
+  private drawFx(now: number, moverXY: { x: number; y: number } | null): void {
     const ctx = this.ctx;
     const cell = this.layout.cell;
     if (this.tLand >= 0) {
@@ -660,7 +903,7 @@ export class Board2DView implements IBoardView {
       else if (k >= 0) {
         ctx.save();
         ctx.globalAlpha = (1 - k) * (1 - k);
-        ctx.strokeStyle = TEAM_COLORS[this.landOwner].glow;
+        ctx.strokeStyle = this.landColor;
         ctx.lineWidth = cell * 0.07;
         ctx.beginPath();
         ctx.arc(this.cx(this.landAt.c), this.cy(this.landAt.r), cell * (0.4 + 0.45 * easeOutCubic(k)), 0, Math.PI * 2);
@@ -668,297 +911,296 @@ export class Board2DView implements IBoardView {
         ctx.restore();
       }
     }
-    if (this.tCap >= 0) {
-      const el = now - this.tCap;
-      const x = this.cx(this.capAt.c);
-      const y = this.cy(this.capAt.r);
-      const col = TEAM_COLORS[this.capOwner].glow;
-      if (el / (ANIM.capture + 90) >= 1) {
-        this.tCap = -1;
-        return;
+    if (this.tGlint >= 0) {
+      const k = (now - this.tGlint) / 320;
+      if (k >= 1) this.tGlint = -1;
+      else if (k >= 0) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 1 - k * k;
+        drawGlint(ctx, this.glintAt.x, this.glintAt.y, cell * 0.65 * Math.sin(Math.PI * Math.min(1, k * 1.25)), k * 1.2, this.glintColor);
+        ctx.restore();
       }
-      const kf = el / ANIM.flash;
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      if (kf >= 0 && kf < 1) {
-        const rr = cell * (0.4 + 0.9 * easeOutCubic(kf));
-        const g = ctx.createRadialGradient(x, y, 0, x, y, rr);
-        g.addColorStop(0, `rgba(255,255,255,${1 - kf})`);
-        g.addColorStop(0.5, hexAlpha(col, 0.6 * (1 - kf)));
-        g.addColorStop(1, hexAlpha(col, 0));
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.arc(x, y, rr, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      const ks = clamp01(el / (ANIM.capture + 90));
-      ctx.strokeStyle = hexAlpha(col, 0.9 * (1 - ks));
-      ctx.lineWidth = cell * 0.07 * (1 - ks * 0.5);
-      ctx.beginPath();
-      ctx.arc(x, y, cell * (0.3 + 0.8 * easeOutCubic(ks)), 0, Math.PI * 2);
-      ctx.stroke();
-      const e = easeOutCubic(ks);
-      ctx.fillStyle = hexAlpha(col, 1 - ks);
-      for (const b of this.capBurst) {
-        const d = e * cell * 0.7 * b.v;
-        ctx.beginPath();
-        ctx.arc(x + Math.cos(b.a) * d, y + Math.sin(b.a) * d, cell * 0.065 * (1 - ks * 0.6), 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.restore();
     }
+    if (this.tCap < 0) return;
+    const el = now - this.tCap;
+    if (el >= FX_MS + 300) {
+      this.tCap = -1;
+      this.soulTo = null;
+      return;
+    }
+    const x = this.cx(this.capAt.c);
+    const y = this.cy(this.capAt.r);
+    const fx = CHARACTER_FX[this.capKind];
+    const k = clamp01(el / FX_MS);
+    const e = easeOutCubic(k);
+    const fade = 1 - k;
+    const dir = this.capDir;
+    ctx.save();
+    if (this.capKind === 'marki' && k < 1) {
+      // Dust clouds (normal blending, behind the glow).
+      for (const b of this.capBurst) {
+        const d = cell * (0.25 + 0.7 * e) * b.v;
+        ctx.fillStyle = `rgba(201,185,160,${0.32 * fade})`;
+        ctx.beginPath();
+        ctx.arc(x + Math.cos(b.a) * d, y + Math.sin(b.a) * d * 0.8, cell * (0.12 + 0.18 * e), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.globalCompositeOperation = 'lighter';
+    // Impact flash.
+    const kf = el / ANIM.flash;
+    if (kf < 1) {
+      const rr = cell * (0.45 + 1.0 * easeOutCubic(kf));
+      const g = ctx.createRadialGradient(x, y, 0, x, y, rr);
+      g.addColorStop(0, `rgba(255,255,255,${1 - kf})`);
+      g.addColorStop(0.45, hexAlpha(this.capKind === 'walk' ? fx.secondary : fx.primary, 0.7 * (1 - kf)));
+      g.addColorStop(1, hexAlpha(fx.primary, 0));
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(x, y, rr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (k < 1) {
+      switch (this.capKind) {
+        case 'sad': {
+          // Light beam rising up the screen + a sweeping crescent slash + a holy sigil ring.
+          const bw = cell * 0.55 * (1.1 - 0.5 * k);
+          const bh = cell * 2.2 * Math.min(1, k * 4);
+          const g = ctx.createLinearGradient(0, y, 0, y - bh);
+          g.addColorStop(0, hexAlpha(fx.secondary, 0.75 * fade));
+          g.addColorStop(1, hexAlpha(fx.primary, 0));
+          ctx.fillStyle = g;
+          ctx.fillRect(x - bw / 2, y - bh, bw, bh);
+          const sk = clamp01(el / 300);
+          if (sk < 1) {
+            const flip = dir.x < 0 ? -1 : 1;
+            const a0 = -2.4;
+            const head = a0 + 3.4 * easeOutCubic(sk);
+            ctx.strokeStyle = hexAlpha(fx.primary, 0.95 * (1 - sk));
+            ctx.shadowColor = fx.primary;
+            ctx.shadowBlur = cell * 0.3;
+            ctx.lineCap = 'round';
+            for (let i = 0; i < 3; i++) {
+              ctx.lineWidth = cell * (0.16 - i * 0.05);
+              ctx.strokeStyle = i === 2 ? hexAlpha('#FFFFFF', 1 - sk) : hexAlpha(fx.primary, 0.9 * (1 - sk));
+              ctx.beginPath();
+              ctx.ellipse(x, y, cell * 0.62, cell * 0.62, 0, flip > 0 ? Math.max(a0, head - 1.8) : Math.PI - head, flip > 0 ? head : Math.PI - Math.max(a0, head - 1.8), flip < 0);
+              ctx.stroke();
+            }
+            ctx.shadowBlur = 0;
+          }
+          ctx.strokeStyle = hexAlpha(fx.primary, 0.8 * fade);
+          ctx.lineWidth = cell * 0.05;
+          ctx.beginPath();
+          ctx.arc(x, y, cell * (0.3 + 0.6 * e), 0, Math.PI * 2);
+          ctx.stroke();
+          break;
+        }
+        case 'marki': {
+          // Molten ground cracks radiating out.
+          ctx.strokeStyle = hexAlpha(fx.primary, Math.min(1, 1.4 * fade));
+          ctx.lineWidth = Math.max(1, cell * 0.05);
+          ctx.lineJoin = 'round';
+          for (const b of this.capBurst) {
+            const len = cell * (0.4 + 0.9 * b.v) * Math.min(1, e * 1.7);
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            for (let s = 1; s <= 4; s++) {
+              const d = (len * s) / 4;
+              const j = Math.sin(b.a * 13 + s * 2.1) * cell * 0.08;
+              ctx.lineTo(x + Math.cos(b.a) * d - Math.sin(b.a) * j, y + Math.sin(b.a) * d + Math.cos(b.a) * j);
+            }
+            ctx.stroke();
+          }
+          break;
+        }
+        case 'walk': {
+          // Shield-shaped shock ring pointing along the strike + an echo.
+          const ang = Math.atan2(dir.y, dir.x) + Math.PI / 2;
+          for (const [sc, al] of [
+            [0.25 + 0.95 * e, 1],
+            [0.15 + 0.6 * e, 0.55],
+          ] as const) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(ang);
+            ctx.scale(cell * sc, cell * sc);
+            shieldPath(ctx);
+            ctx.restore();
+            ctx.strokeStyle = hexAlpha(fx.primary, al * fade);
+            ctx.shadowColor = fx.secondary;
+            ctx.shadowBlur = cell * 0.25;
+            ctx.lineWidth = cell * 0.07;
+            ctx.stroke();
+          }
+          ctx.shadowBlur = 0;
+          break;
+        }
+        case 'insaner': {
+          // Violet / crimson flame ring.
+          const R = cell * (0.25 + 0.6 * e);
+          for (let layer = 0; layer < 2; layer++) {
+            ctx.beginPath();
+            for (let i = 0; i <= 36; i++) {
+              const a = (i / 36) * Math.PI * 2;
+              const fl = Math.abs(Math.sin(a * 5 + el * 0.02 + layer * 1.7)) * cell * 0.22 * fade;
+              const rr = R + fl;
+              if (i === 0) ctx.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+              else ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+            }
+            ctx.closePath();
+            ctx.strokeStyle = hexAlpha(layer === 0 ? fx.primary : fx.secondary, 0.85 * fade);
+            ctx.lineWidth = cell * (0.08 - layer * 0.03);
+            ctx.stroke();
+          }
+          break;
+        }
+      }
+      // Shock ring + debris.
+      ctx.strokeStyle = hexAlpha(fx.primary, 0.85 * fade);
+      ctx.lineWidth = cell * 0.06 * (1 - k * 0.5);
+      ctx.beginPath();
+      ctx.arc(x, y, cell * (0.3 + 0.85 * e), 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = hexAlpha(fx.primary, fade);
+      for (const b of this.capBurst) {
+        const d = e * cell * 0.75 * b.v;
+        ctx.beginPath();
+        ctx.arc(x + Math.cos(b.a) * d, y + Math.sin(b.a) * d, cell * 0.06 * (1 - k * 0.6), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    // Soul stream: wisps flowing from the victim into the imp.
+    if (this.soulTo) {
+      let tx = moverXY?.x ?? NaN;
+      let ty = moverXY?.y ?? NaN;
+      if (!moverXY) {
+        const m = this.pieces.find((p) => p.id === this.soulTo);
+        if (m) {
+          tx = this.cx(m.pos.c);
+          ty = this.cy(m.pos.r);
+        }
+      }
+      if (Number.isFinite(tx)) {
+        const mx = (x + tx) / 2;
+        const my = (y + ty) / 2 - cell * 0.9;
+        for (let i = 0; i < 18; i++) {
+          const s = (el / 1000 - i * 0.02) / 0.5;
+          if (s <= 0 || s >= 1) continue;
+          const w = Math.sin(s * Math.PI) * cell * 0.2 * Math.sin(i * 2.3 + s * 9);
+          const px = (1 - s) * (1 - s) * x + 2 * (1 - s) * s * mx + s * s * tx + w;
+          const py = (1 - s) * (1 - s) * y + 2 * (1 - s) * s * my + s * s * ty;
+          const a = Math.pow(Math.sin(s * Math.PI), 0.6);
+          const g = ctx.createRadialGradient(px, py, 0, px, py, cell * 0.12);
+          g.addColorStop(0, `rgba(255,230,255,${a})`);
+          g.addColorStop(0.4, hexAlpha('#B65CFF', 0.8 * a));
+          g.addColorStop(1, hexAlpha('#B65CFF', 0));
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(px, py, cell * 0.12, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+    ctx.restore();
   }
 
-  /** Top-down game token: contact shadow, rarity glow ring, dark puck, rimmed glyph, gold pips. */
-  private drawPiece(p: Piece, x: number, y: number, sx: number, sy: number, alpha: number, lift: number, _now: number): void {
+  /**
+   * Top-down token: contact shadow, rarity ring on the ground, then the pre-rendered illustrated
+   * coin (face art, team rim, star pips). `flash` whitens it (hit).
+   */
+  private drawPiece(p: Piece, x: number, y: number, sx: number, sy: number, alpha: number, lift: number, now: number, flash = 0): void {
     const ctx = this.ctx;
-    const base = this.layout.cell;
-    const u = base * sx;
-    const team = TEAM_COLORS[p.owner];
-    const rarity = CHARACTER_RARITY[p.character];
+    const cell = this.layout.cell;
+    const u = cell * sx;
     ctx.save();
     ctx.globalAlpha = alpha;
-
     // Contact shadow (stays on the ground while the piece lifts).
     ctx.fillStyle = `rgba(0,0,0,${0.45 * alpha})`;
     ctx.beginPath();
-    ctx.ellipse(x + u * 0.04, y + u * (0.07 + lift * 0.1), u * 0.42 * (1 - lift * 0.08), u * 0.38 * (1 - lift * 0.08), 0, 0, Math.PI * 2);
+    ctx.ellipse(x + u * 0.04, y + u * (0.07 + lift * 0.1), u * 0.43 * (1 - lift * 0.08), u * 0.4 * (1 - lift * 0.08), 0, 0, Math.PI * 2);
     ctx.fill();
-
-    const yb = y - lift * base * 0.1;
-    const rx = u * 0.42;
-    const ry = base * sy * 0.42;
-    // Dark puck.
-    ctx.fillStyle = BOARD_COLORS.pieceBase;
-    ctx.beginPath();
-    ctx.ellipse(x, yb, rx, ry, 0, 0, Math.PI * 2);
-    ctx.fill();
-    // Rarity ring (glows).
-    ctx.save();
-    ctx.shadowColor = RARITY_COLORS[rarity];
-    ctx.shadowBlur = base * (0.1 + 0.2 * RARITY_GLOW[rarity]);
-    ctx.strokeStyle = RARITY_COLORS[rarity];
-    ctx.lineWidth = u * 0.07;
-    ctx.beginPath();
-    ctx.ellipse(x, yb, rx * 0.97, ry * 0.97, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-
-    this.drawGlyph(p.character, p.owner, p.level, x, yb - 0.1 * u, u * 1.12);
-
-    // Level pips (gold) at the bottom of the puck.
-    ctx.fillStyle = BOARD_COLORS.pip;
-    const n = p.level;
-    for (let i = 0; i < n; i++) {
-      const px = x + (i - (n - 1) / 2) * u * 0.13;
+    this.drawRarityRing(p.character, x, y, cell * RING_R * Math.min(sx, 1.15), now);
+    const yb = y - lift * cell * 0.1;
+    const d = cell * TOKEN_R * 2;
+    ctx.drawImage(this.tokenSprite(p.character, p.level, p.owner), x - (d * sx) / 2, yb - (d * sy) / 2, d * sx, d * sy);
+    if (flash > 0) {
+      ctx.globalAlpha = alpha * flash;
+      ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.arc(px, yb + (p.owner === 0 ? 0.3 : -0.3) * u, u * 0.05, 0, Math.PI * 2);
+      ctx.ellipse(x, yb, (d * sx) / 2, (d * sy) / 2, 0, 0, Math.PI * 2);
       ctx.fill();
     }
-    void team;
     ctx.restore();
   }
 
-  /** Simple icons matching the 3D concepts: paladin (plume + sword), bull (horns), shield-bearer. */
-  private drawGlyph(ch: CharacterId, owner: PlayerId, level: number, x: number, y: number, u: number): void {
+  /** Rarity ring: white / orange / purple glow, legendary = rotating rainbow. */
+  private drawRarityRing(ch: CharacterId, x: number, y: number, rr: number, now: number): void {
     const ctx = this.ctx;
-    const team = TEAM_COLORS[owner];
-    const steel = '#C9D0DD';
-    const steelDark = '#7B8599';
-    const gold = '#F3C34F';
-    ctx.lineJoin = 'round';
-    ctx.lineWidth = Math.max(1, u * 0.03);
-    ctx.strokeStyle = 'rgba(10,14,28,0.75)';
+    const cell = this.layout.cell;
+    const look = RARITY_RING[CHARACTER_RARITY[ch]];
+    const lw = cell * 0.065;
     ctx.save();
-    if (level === 3) {
-      ctx.shadowColor = team.glow;
-      ctx.shadowBlur = u * 0.22;
-    }
-    switch (ch) {
-      case 'sad': {
-        // Sword (left), helmet with plume, shoulders.
-        ctx.fillStyle = level === 3 ? '#BFEFFF' : steel;
-        const bl = u * (0.5 + 0.06 * level);
-        roundRect(ctx, x - u * 0.34, y - bl * 0.75, u * 0.07, bl, u * 0.02);
-        ctx.fill();
-        ctx.stroke();
-        ctx.fillStyle = level >= 2 ? gold : steelDark;
-        ctx.fillRect(x - u * 0.4, y + bl * 0.15, u * 0.19, u * 0.04);
-        ctx.fillStyle = steel;
-        roundRect(ctx, x - u * 0.2, y + u * 0.02, u * 0.4, u * 0.24, u * 0.07); // shoulders
-        ctx.fill();
-        ctx.stroke();
+    // Dark keyline so a white ring still reads on light tiles.
+    ctx.strokeStyle = 'rgba(4,6,14,0.55)';
+    ctx.lineWidth = Math.max(1, cell * 0.022);
+    ctx.beginPath();
+    ctx.arc(x, y, rr - lw * 0.75, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.lineWidth = lw;
+    if (look.rainbow) {
+      const rot = this.reducedMotion ? 0 : (now / 1000) * 1.4;
+      ctx.shadowColor = `hsl(${Math.round((rot * 57.3) % 360)},100%,70%)`;
+      ctx.shadowBlur = cell * 0.3;
+      const cg = (ctx as CanvasRenderingContext2D & { createConicGradient?: (a: number, x: number, y: number) => CanvasGradient }).createConicGradient;
+      if (cg) {
+        const g = cg.call(ctx, rot, x, y);
+        for (let i = 0; i <= 6; i++) g.addColorStop(i / 6, `hsl(${i * 60},100%,72%)`);
+        ctx.strokeStyle = g;
         ctx.beginPath();
-        ctx.arc(x, y - u * 0.08, u * 0.17, 0, Math.PI * 2); // helmet
-        ctx.fill();
+        ctx.arc(x, y, rr, 0, Math.PI * 2);
         ctx.stroke();
-        ctx.fillStyle = steelDark;
-        ctx.fillRect(x - u * 0.12, y - u * 0.1, u * 0.24, u * 0.04); // visor
-        ctx.fillStyle = team.main; // plume
-        ctx.beginPath();
-        ctx.moveTo(x - u * 0.06, y - u * 0.23);
-        ctx.quadraticCurveTo(x - u * 0.02, y - u * (0.42 + 0.05 * level), x + u * 0.1, y - u * 0.33);
-        ctx.quadraticCurveTo(x + u * 0.05, y - u * 0.3, x + u * 0.07, y - u * 0.2);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        ctx.fillStyle = team.dark;
-        ctx.fillRect(x - u * 0.06, y + u * 0.2, u * 0.12, u * 0.14); // tabard
-        break;
-      }
-      case 'marki': {
-        // Bull head: wide curved horns, team scarf, nose ring from Lv2.
-        const hl = u * (0.2 + 0.05 * level);
-        ctx.fillStyle = '#F4ECD6';
-        for (const sd of [-1, 1]) {
+      } else {
+        for (let i = 0; i < 12; i++) {
+          ctx.strokeStyle = `hsl(${i * 30},100%,72%)`;
           ctx.beginPath();
-          ctx.moveTo(x + sd * u * 0.1, y - u * 0.05);
-          ctx.quadraticCurveTo(x + sd * u * 0.42, y - u * 0.02, x + sd * u * 0.36, y - hl - u * 0.1);
-          ctx.quadraticCurveTo(x + sd * u * 0.27, y - u * 0.1, x + sd * u * 0.1, y - u * 0.18);
-          ctx.closePath();
-          ctx.fill();
+          ctx.arc(x, y, rr, rot + (i / 12) * Math.PI * 2, rot + ((i + 1.08) / 12) * Math.PI * 2);
           ctx.stroke();
         }
-        ctx.fillStyle = '#8E5B3B';
-        ctx.beginPath();
-        ctx.ellipse(x, y + u * 0.02, u * 0.2, u * 0.2, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        ctx.fillStyle = '#DDB38F';
-        ctx.beginPath();
-        ctx.ellipse(x, y + u * 0.14, u * 0.12, u * 0.08, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = level === 3 ? team.glow : '#252A36';
-        ctx.fillRect(x - u * 0.12, y - u * 0.04, u * 0.06, u * 0.045);
-        ctx.fillRect(x + u * 0.06, y - u * 0.04, u * 0.06, u * 0.045);
-        ctx.fillStyle = team.main; // scarf
-        ctx.fillRect(x - u * 0.2, y + u * 0.22, u * 0.4, u * 0.07);
-        if (level >= 2) {
-          ctx.strokeStyle = gold;
-          ctx.lineWidth = u * 0.025;
-          ctx.beginPath();
-          ctx.arc(x, y + u * 0.2, u * 0.04, 0, Math.PI * 2);
-          ctx.stroke();
-        }
-        break;
       }
-      case 'insaner': {
-        // Imp: round crimson head, horns, glowing eyes, wide grin, pointed tail, trident.
-        ctx.fillStyle = '#3A2430';
-        ctx.fillRect(x + u * 0.26, y - u * 0.42, u * 0.03, u * 0.78); // trident shaft
-        ctx.fillStyle = level === 3 ? '#FF3DF0' : '#5C5664';
-        for (const dx of [-0.05, 0, 0.05]) {
-          ctx.beginPath();
-          ctx.moveTo(x + u * (0.275 + dx), y - u * (0.56 + (dx === 0 ? 0.04 : 0)));
-          ctx.lineTo(x + u * (0.3 + dx), y - u * 0.42);
-          ctx.lineTo(x + u * (0.25 + dx), y - u * 0.42);
-          ctx.closePath();
-          ctx.fill();
-        }
-        ctx.strokeStyle = level === 3 ? '#FF3DF0' : '#8E1E3A'; // tail
-        ctx.lineWidth = u * 0.035;
-        ctx.beginPath();
-        ctx.moveTo(x - u * 0.1, y + u * 0.2);
-        ctx.quadraticCurveTo(x - u * 0.38, y + u * 0.3, x - u * 0.34, y - u * 0.02);
-        ctx.stroke();
-        ctx.fillStyle = level === 3 ? '#FF3DF0' : '#9A4BFF';
-        ctx.beginPath();
-        ctx.moveTo(x - u * 0.34, y - u * 0.12);
-        ctx.lineTo(x - u * 0.29, y - u * 0.0);
-        ctx.lineTo(x - u * 0.39, y - u * 0.0);
-        ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(10,14,28,0.75)';
-        ctx.fillStyle = level === 3 ? '#4A0C2E' : level === 2 ? '#7A1238' : '#8E1E3A';
-        const hornN = level === 3 ? 5 : 2;
-        for (let i = 0; i < hornN; i++) {
-          const sgn = hornN === 2 ? (i === 0 ? -1 : 1) : (i - 2) / 2;
-          const hx = x + sgn * u * (hornN === 2 ? 0.14 : 0.16);
-          const hl = u * (level === 1 ? 0.12 : level === 2 ? 0.2 : 0.26 - Math.abs(sgn) * 0.08);
-          ctx.fillStyle = '#1A1020';
-          ctx.beginPath();
-          ctx.moveTo(hx - u * 0.04, y - u * 0.14);
-          ctx.lineTo(hx + sgn * u * 0.08, y - u * 0.14 - hl);
-          ctx.lineTo(hx + u * 0.04, y - u * 0.14);
-          ctx.closePath();
-          ctx.fill();
-          ctx.stroke();
-        }
-        ctx.fillStyle = level === 3 ? '#4A0C2E' : level === 2 ? '#7A1238' : '#8E1E3A';
-        ctx.beginPath();
-        ctx.arc(x, y - u * 0.02, u * 0.2, 0, Math.PI * 2); // head
-        ctx.fill();
-        ctx.stroke();
-        if (level === 2) {
-          ctx.fillStyle = '#E6D9BE';
-          ctx.beginPath();
-          ctx.ellipse(x, y - u * 0.17, u * 0.12, u * 0.06, 0, Math.PI, 0);
-          ctx.fill();
-        }
-        ctx.fillStyle = '#9CFF3A';
-        for (const sgn of [-1, 1]) {
-          ctx.beginPath();
-          ctx.ellipse(x + sgn * u * 0.08, y - u * 0.05, u * 0.045, u * 0.025, sgn * 0.5, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.strokeStyle = '#F6EEDC';
-        ctx.lineWidth = u * 0.03;
-        ctx.beginPath();
-        ctx.arc(x, y + u * 0.0, u * 0.13, 0.25, Math.PI - 0.25); // grin
-        ctx.stroke();
-        ctx.strokeStyle = 'rgba(10,14,28,0.75)';
-        ctx.lineWidth = Math.max(1, u * 0.03);
-        ctx.fillStyle = team.main; // collar / scarf
-        ctx.fillRect(x - u * 0.12, y + u * 0.18, u * 0.24, u * 0.07);
-        if (level >= 2) {
-          ctx.fillStyle = '#C85CFF';
-          ctx.fillRect(x - u * 0.2, y + u * 0.26, u * 0.4, u * 0.04);
-        }
-        break;
-      }
-      case 'walk': {
-        // Tower shield with team chevron, helmet peeking above, spear on the side.
-        ctx.strokeStyle = 'rgba(10,14,28,0.75)';
-        ctx.fillStyle = '#8F6A44';
-        ctx.fillRect(x + u * 0.27, y - u * 0.46, u * 0.03, u * 0.8); // spear
-        ctx.fillStyle = steel;
-        ctx.beginPath();
-        ctx.moveTo(x + u * 0.285, y - u * (0.58 + 0.03 * level));
-        ctx.lineTo(x + u * 0.33, y - u * 0.44);
-        ctx.lineTo(x + u * 0.24, y - u * 0.44);
-        ctx.closePath();
-        ctx.fill();
-        ctx.fillStyle = steel; // helmet
-        ctx.beginPath();
-        ctx.arc(x, y - u * 0.18, u * 0.14, Math.PI, 0);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        ctx.fillStyle = team.main; // crest
-        if (level >= 2) ctx.fillRect(x - u * 0.03, y - u * 0.4, u * 0.06, u * 0.1);
-        ctx.fillStyle = level === 1 ? '#8F6A44' : level === 2 ? '#B6BFD0' : '#7C89A6';
-        ctx.strokeStyle = level === 3 ? gold : 'rgba(10,14,28,0.75)';
-        ctx.lineWidth = u * (level === 3 ? 0.05 : 0.03);
-        ctx.beginPath();
-        ctx.moveTo(x - u * 0.24, y - u * 0.12);
-        ctx.lineTo(x + u * 0.24, y - u * 0.12);
-        ctx.lineTo(x + u * 0.24, y + u * 0.14);
-        ctx.quadraticCurveTo(x + u * 0.2, y + u * 0.3, x, y + u * 0.36);
-        ctx.quadraticCurveTo(x - u * 0.2, y + u * 0.3, x - u * 0.24, y + u * 0.14);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        ctx.strokeStyle = team.main;
-        ctx.lineWidth = u * 0.06;
-        ctx.beginPath();
-        ctx.moveTo(x - u * 0.13, y + u * 0.02);
-        ctx.lineTo(x, y + u * 0.12);
-        ctx.lineTo(x + u * 0.13, y + u * 0.02);
-        ctx.stroke();
-        break;
-      }
+      // Rotating shimmer.
+      ctx.shadowBlur = 0;
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+      ctx.beginPath();
+      ctx.arc(x, y, rr, -rot * 1.3, -rot * 1.3 + 0.5);
+      ctx.stroke();
+    } else {
+      ctx.shadowColor = look.glow;
+      ctx.shadowBlur = cell * (0.06 + 0.28 * look.glowAmt);
+      ctx.strokeStyle = look.core;
+      ctx.beginPath();
+      ctx.arc(x, y, rr, 0, Math.PI * 2);
+      ctx.stroke();
     }
     ctx.restore();
+  }
+
+  /** Illustrated coin for a look, pre-rendered at the current cell size (cached). */
+  private tokenSprite(ch: CharacterId, level: Level, owner: PlayerId): HTMLCanvasElement {
+    const S = Math.max(8, Math.round(this.layout.cell * TOKEN_R * 2 * this.dpr));
+    const img = faceImage(ch, level);
+    const key = `${ch}:${level}:${owner}:${S}:${img ? 1 : 0}`;
+    let c = this.sprites.get(key);
+    if (c) return c;
+    c = document.createElement('canvas');
+    c.width = S;
+    c.height = S;
+    const g = c.getContext('2d');
+    if (g) paintToken(g, S, img, level, owner);
+    this.sprites.set(key, c);
+    return c;
   }
 
   // ---------------------------------------------------------------- input
@@ -994,6 +1236,125 @@ export class Board2DView implements IBoardView {
   };
 }
 
+/** Paint an illustrated coin of size S: team rim, dark bevel, face art (or placeholder), stars. */
+function paintToken(g: CanvasRenderingContext2D, S: number, img: HTMLImageElement | null, level: Level, owner: PlayerId): void {
+  const team = TEAM_COLORS[owner];
+  const c = S / 2;
+  const R = S / 2;
+  // Team rim, lit from the top-left.
+  const rim = g.createLinearGradient(0, 0, S, S);
+  rim.addColorStop(0, team.light);
+  rim.addColorStop(0.45, team.main);
+  rim.addColorStop(1, team.dark);
+  g.fillStyle = rim;
+  g.beginPath();
+  g.arc(c, c, R * 0.985, 0, Math.PI * 2);
+  g.fill();
+  g.strokeStyle = 'rgba(255,255,255,0.45)';
+  g.lineWidth = R * 0.05;
+  g.beginPath();
+  g.arc(c, c, R * 0.9, Math.PI * 1.05, Math.PI * 1.55);
+  g.stroke();
+  g.fillStyle = '#05070F';
+  g.beginPath();
+  g.arc(c, c, R * 0.815, 0, Math.PI * 2);
+  g.fill();
+  // Face (clipped circle).
+  g.save();
+  g.beginPath();
+  g.arc(c, c, R * 0.775, 0, Math.PI * 2);
+  g.clip();
+  if (img) {
+    const w = img.naturalWidth;
+    const h = img.naturalHeight;
+    const sw = Math.min(w, h) * 0.86;
+    g.drawImage(img, (w - sw) / 2, (h - sw) / 2 - h * 0.02, sw, sw, c - R * 0.775, c - R * 0.775, R * 1.55, R * 1.55);
+  } else {
+    const pg = g.createRadialGradient(c, c * 0.8, 0, c, c, R * 0.8);
+    pg.addColorStop(0, team.dark);
+    pg.addColorStop(1, '#070A15');
+    g.fillStyle = pg;
+    g.fillRect(0, 0, S, S);
+  }
+  const vg = g.createRadialGradient(c, c, R * 0.45, c, c, R * 0.78);
+  vg.addColorStop(0, 'rgba(0,0,0,0)');
+  vg.addColorStop(1, 'rgba(0,0,0,0.42)');
+  g.fillStyle = vg;
+  g.fillRect(0, 0, S, S);
+  g.restore();
+  // Level stars on the lower rim.
+  for (let i = 0; i < level; i++) {
+    const a = Math.PI / 2 - (i - (level - 1) / 2) * 0.43;
+    const sx = c + Math.cos(a) * R * 0.8;
+    const sy = c + Math.sin(a) * R * 0.8;
+    starPath(g, sx, sy, R * 0.15, R * 0.068);
+    g.fillStyle = '#1A1200';
+    g.lineWidth = R * 0.06;
+    g.strokeStyle = '#1A1200';
+    g.stroke();
+    const sg = g.createLinearGradient(sx, sy - R * 0.15, sx, sy + R * 0.15);
+    sg.addColorStop(0, '#FFF6D2');
+    sg.addColorStop(0.55, BOARD_COLORS.pip);
+    sg.addColorStop(1, '#E09A1C');
+    g.fillStyle = sg;
+    g.fill();
+  }
+}
+
+function starPath(g: CanvasRenderingContext2D, x: number, y: number, ro: number, ri: number): void {
+  g.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + (i * Math.PI) / 5;
+    const r = i % 2 === 0 ? ro : ri;
+    if (i === 0) g.moveTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
+    else g.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
+  }
+  g.closePath();
+}
+
+/** Heater-shield outline in unit space (point toward -y before rotation). */
+function shieldPath(g: CanvasRenderingContext2D): void {
+  g.beginPath();
+  g.moveTo(-0.55, 0.5);
+  g.lineTo(0.55, 0.5);
+  g.lineTo(0.55, 0.05);
+  g.quadraticCurveTo(0.5, -0.45, 0, -0.7);
+  g.quadraticCurveTo(-0.5, -0.45, -0.55, 0.05);
+  g.closePath();
+}
+
+/** 4-point star glint. */
+function drawGlint(g: CanvasRenderingContext2D, x: number, y: number, size: number, rot: number, color: string): void {
+  if (size <= 0) return;
+  const gr = g.createRadialGradient(x, y, 0, x, y, size);
+  gr.addColorStop(0, 'rgba(255,255,255,0.95)');
+  gr.addColorStop(0.3, hexAlpha(color, 0.6));
+  gr.addColorStop(1, hexAlpha(color, 0));
+  g.fillStyle = gr;
+  g.beginPath();
+  g.arc(x, y, size, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = '#ffffff';
+  for (const off of [0, Math.PI / 2]) {
+    const a = rot + off;
+    const ca = Math.cos(a);
+    const sa = Math.sin(a);
+    const w = size * 0.07;
+    g.beginPath();
+    g.moveTo(x + ca * size, y + sa * size);
+    g.lineTo(x - sa * w, y + ca * w);
+    g.lineTo(x - ca * size, y - sa * size);
+    g.lineTo(x + sa * w, y - ca * w);
+    g.closePath();
+    g.fill();
+  }
+}
+
+/** 0..1..0 bump over [a, b]. */
+function bump(a: number, b: number, x: number): number {
+  return x <= a || x >= b ? 0 : Math.sin((Math.PI * (x - a)) / (b - a));
+}
+
 function clonePieces(pieces: Piece[]): Piece[] {
   return pieces.map((p) => ({ ...p, pos: { ...p.pos } }));
 }
@@ -1011,5 +1372,5 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
 
 function hexAlpha(hex: string, alpha: number): string {
   const n = parseInt(hex.replace('#', ''), 16);
-  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${Math.max(0, Math.min(1, alpha))})`;
 }

@@ -36,7 +36,7 @@ export function validateFormation(f: Formation): { ok: boolean; errors: string[]
       errors.push(`${name}이(가) 중복 배치되었습니다. 캐릭터마다 1개씩만 배치할 수 있습니다.`);
     }
     seenChars.add(slot.character);
-    if (!isLevel(slot.level)) errors.push(`${name}의 레벨이 올바르지 않습니다. (1~3)`);
+    if (!isLevel(slot.level)) errors.push(`${name}의 성급이 올바르지 않습니다. (1~3성)`);
     const inZone =
       Number.isInteger(slot.row) &&
       Number.isInteger(slot.col) &&

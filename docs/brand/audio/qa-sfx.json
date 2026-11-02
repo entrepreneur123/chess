@@ -1,0 +1,182 @@
+{
+ "death": {
+  "file": "sfx/death.m4a",
+  "dur": 1.067,
+  "lufs": -17.13,
+  "peak_db": -1.23,
+  "centroid": 4011,
+  "lead_ms": 0,
+  "trail_ms": 34,
+  "bytes": 9854
+ },
+ "insaner-capture": {
+  "file": "sfx/insaner-capture.m4a",
+  "dur": 0.896,
+  "lufs": -16.5,
+  "peak_db": -1.97,
+  "centroid": 3732,
+  "lead_ms": 2,
+  "trail_ms": 40,
+  "bytes": 8505
+ },
+ "insaner-chain": {
+  "file": "sfx/insaner-chain.m4a",
+  "dur": 1.088,
+  "lufs": -17.06,
+  "peak_db": -4.59,
+  "centroid": 2807,
+  "lead_ms": 1,
+  "trail_ms": 42,
+  "bytes": 9939
+ },
+ "insaner-move": {
+  "file": "sfx/insaner-move.m4a",
+  "dur": 0.533,
+  "lufs": -16.7,
+  "peak_db": -3.14,
+  "centroid": 4410,
+  "lead_ms": 6,
+  "trail_ms": 26,
+  "bytes": 5462
+ },
+ "insaner-select": {
+  "file": "sfx/insaner-select.m4a",
+  "dur": 0.533,
+  "lufs": -15.61,
+  "peak_db": -3.34,
+  "centroid": 4145,
+  "lead_ms": 0,
+  "trail_ms": 43,
+  "bytes": 5352
+ },
+ "insaner-skill": {
+  "file": "sfx/insaner-skill.m4a",
+  "dur": 1.003,
+  "lufs": -16.53,
+  "peak_db": -1.98,
+  "centroid": 2620,
+  "lead_ms": 8,
+  "trail_ms": 44,
+  "bytes": 9313
+ },
+ "marki-capture": {
+  "file": "sfx/marki-capture.m4a",
+  "dur": 1.088,
+  "lufs": -16.75,
+  "peak_db": -0.36,
+  "centroid": 2181,
+  "lead_ms": 8,
+  "trail_ms": 41,
+  "bytes": 10025
+ },
+ "marki-move": {
+  "file": "sfx/marki-move.m4a",
+  "dur": 0.725,
+  "lufs": -17.03,
+  "peak_db": -2.06,
+  "centroid": 632,
+  "lead_ms": 0,
+  "trail_ms": 38,
+  "bytes": 6929
+ },
+ "marki-select": {
+  "file": "sfx/marki-select.m4a",
+  "dur": 0.597,
+  "lufs": -17.24,
+  "peak_db": -1.92,
+  "centroid": 1673,
+  "lead_ms": 0,
+  "trail_ms": 30,
+  "bytes": 5948
+ },
+ "marki-skill": {
+  "file": "sfx/marki-skill.m4a",
+  "dur": 1.707,
+  "lufs": -16.95,
+  "peak_db": -4.31,
+  "centroid": 874,
+  "lead_ms": 0,
+  "trail_ms": 40,
+  "bytes": 15136
+ },
+ "sad-capture": {
+  "file": "sfx/sad-capture.m4a",
+  "dur": 1.259,
+  "lufs": -17.07,
+  "peak_db": -2.16,
+  "centroid": 2981,
+  "lead_ms": 6,
+  "trail_ms": 37,
+  "bytes": 11498
+ },
+ "sad-move": {
+  "file": "sfx/sad-move.m4a",
+  "dur": 0.491,
+  "lufs": -17.55,
+  "peak_db": -1.8,
+  "centroid": 1755,
+  "lead_ms": 0,
+  "trail_ms": 35,
+  "bytes": 5085
+ },
+ "sad-select": {
+  "file": "sfx/sad-select.m4a",
+  "dur": 0.832,
+  "lufs": -17.12,
+  "peak_db": -1.31,
+  "centroid": 4090,
+  "lead_ms": 2,
+  "trail_ms": 34,
+  "bytes": 7956
+ },
+ "sad-skill": {
+  "file": "sfx/sad-skill.m4a",
+  "dur": 1.792,
+  "lufs": -16.98,
+  "peak_db": -2.73,
+  "centroid": 2826,
+  "lead_ms": 8,
+  "trail_ms": 21,
+  "bytes": 15722
+ },
+ "walk-capture": {
+  "file": "sfx/walk-capture.m4a",
+  "dur": 0.619,
+  "lufs": -16.06,
+  "peak_db": -1.77,
+  "centroid": 1050,
+  "lead_ms": 2,
+  "trail_ms": 40,
+  "bytes": 6136
+ },
+ "walk-move": {
+  "file": "sfx/walk-move.m4a",
+  "dur": 0.405,
+  "lufs": -17.73,
+  "peak_db": -1.93,
+  "centroid": 1667,
+  "lead_ms": 0,
+  "trail_ms": 33,
+  "bytes": 4392
+ },
+ "walk-select": {
+  "file": "sfx/walk-select.m4a",
+  "dur": 0.405,
+  "lufs": -17.7,
+  "peak_db": -1.88,
+  "centroid": 1069,
+  "lead_ms": 0,
+  "trail_ms": 45,
+  "bytes": 4238
+ },
+ "walk-skill": {
+  "file": "sfx/walk-skill.m4a",
+  "dur": 0.981,
+  "lufs": -17.09,
+  "peak_db": -2.02,
+  "centroid": 987,
+  "lead_ms": 1,
+  "trail_ms": 43,
+  "bytes": 8972
+ }
+}

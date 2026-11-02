@@ -1,4 +1,3 @@
-import { NO_CAPTURE_PLY_LIMIT } from '../engine/types';
 import type { GameState, Move } from '../engine/types';
 import {
   N_SQUARES,
@@ -157,6 +156,12 @@ function adjudicateScore(b: FastBoard, side: number, ply: number): number {
   return 0;
 }
 
+/** Both sides' last pieces were swallowed by the same storm: decided by the material lost. */
+function wipeScore(b: FastBoard, side: number, ply: number): number {
+  const d = side === 0 ? b.wipe : -b.wipe;
+  return d > 0 ? ADJ_WIN - ply : d < 0 ? -ADJ_WIN + ply : 0;
+}
+
 // ---------------------------------------------------------------- search
 
 class TimeUp extends Error {}
@@ -209,13 +214,12 @@ function orderMoves(ctx: SearchCtx, moves: Int32Array, scores: Int32Array, n: nu
   }
 }
 
-function qsearch(ctx: SearchCtx, alpha: number, beta: number, ply: number, psc: number, qd: number): number {
+function qsearch(ctx: SearchCtx, alpha: number, beta: number, ply: number, qd: number): number {
   checkTime(ctx);
   const b = ctx.b;
   const side = b.turn;
-  if (b.alive[side] === 0) return b.alive[1 - side] === 0 ? 0 : -WIN + ply;
+  if (b.alive[side] === 0) return b.alive[1 - side] === 0 ? wipeScore(b, side, ply) : -WIN + ply;
   if (b.alive[1 - side] === 0) return WIN - ply;
-  if (psc >= NO_CAPTURE_PLY_LIMIT) return adjudicateScore(b, side, ply);
   const stand = evaluate(b, side);
   if (stand >= beta) return stand;
   if (stand > alpha) alpha = stand;
@@ -233,7 +237,7 @@ function qsearch(ctx: SearchCtx, alpha: number, beta: number, ply: number, psc: 
     let v: number;
     try {
       // A chain move keeps the same side on move: no negation, same window.
-      v = b.turn === side ? qsearch(ctx, alpha, beta, ply + 1, 0, qd - 1) : -qsearch(ctx, -beta, -alpha, ply + 1, 0, qd - 1);
+      v = b.turn === side ? qsearch(ctx, alpha, beta, ply + 1, qd - 1) : -qsearch(ctx, -beta, -alpha, ply + 1, qd - 1);
     } finally {
       fastUnmake(b, mv, undo);
     }
@@ -243,14 +247,13 @@ function qsearch(ctx: SearchCtx, alpha: number, beta: number, ply: number, psc: 
   return alpha;
 }
 
-function negamax(ctx: SearchCtx, depth: number, alpha: number, beta: number, ply: number, psc: number): number {
+function negamax(ctx: SearchCtx, depth: number, alpha: number, beta: number, ply: number): number {
   checkTime(ctx);
   const b = ctx.b;
   const side = b.turn;
-  if (b.alive[side] === 0) return b.alive[1 - side] === 0 ? 0 : -WIN + ply;
+  if (b.alive[side] === 0) return b.alive[1 - side] === 0 ? wipeScore(b, side, ply) : -WIN + ply;
   if (b.alive[1 - side] === 0) return WIN - ply;
-  if (psc >= NO_CAPTURE_PLY_LIMIT) return adjudicateScore(b, side, ply);
-  if (depth <= 0 || ply >= MAX_PLY) return qsearch(ctx, alpha, beta, ply, psc, 6);
+  if (depth <= 0 || ply >= MAX_PLY) return qsearch(ctx, alpha, beta, ply, 6);
   const moves = ctx.moveBufs[ply];
   const scores = ctx.scoreBufs[ply];
   const n = fastGenMoves(b, side, moves, 0);
@@ -259,7 +262,7 @@ function negamax(ctx: SearchCtx, depth: number, alpha: number, beta: number, ply
     if (b.bonus < 0 && !fastHasMoves(b, 1 - side)) return adjudicateScore(b, side, ply);
     fastPass(b);
     try {
-      return -negamax(ctx, depth - 1, -beta, -alpha, ply + 1, psc + 1);
+      return -negamax(ctx, depth - 1, -beta, -alpha, ply + 1);
     } finally {
       fastUnpass(b);
     }
@@ -272,8 +275,7 @@ function negamax(ctx: SearchCtx, depth: number, alpha: number, beta: number, ply
     const undo = fastMake(b, mv);
     let v: number;
     try {
-      const npsc = isCap ? 0 : psc + 1;
-      v = b.turn === side ? negamax(ctx, depth - 1, alpha, beta, ply + 1, npsc) : -negamax(ctx, depth - 1, -beta, -alpha, ply + 1, npsc);
+      v = b.turn === side ? negamax(ctx, depth - 1, alpha, beta, ply + 1) : -negamax(ctx, depth - 1, -beta, -alpha, ply + 1);
     } finally {
       fastUnmake(b, mv, undo);
     }
@@ -299,7 +301,6 @@ interface RootResult {
  */
 function searchRoot(
   b: FastBoard,
-  psc: number,
   maxDepth: number,
   deadline: number,
   rng: () => number,
@@ -330,12 +331,10 @@ function searchRoot(
     try {
       for (let k = 0; k < moves.length; k++) {
         const mv = moves[k];
-        const isCap = b.occ[mv & 255] >= 0;
         const undo = fastMake(b, mv);
         let v: number;
         try {
-          const npsc = isCap ? 0 : psc + 1;
-          v = b.turn === side ? negamax(ctx, depth - 1, alpha - bonus[k], INF, 1, npsc) : -negamax(ctx, depth - 1, -INF, -(alpha - bonus[k]), 1, npsc);
+          v = b.turn === side ? negamax(ctx, depth - 1, alpha - bonus[k], INF, 1) : -negamax(ctx, depth - 1, -INF, -(alpha - bonus[k]), 1);
         } finally {
           fastUnmake(b, mv, undo);
         }
@@ -424,9 +423,9 @@ export function chooseMove(state: GameState, difficulty: Difficulty, opts: Choos
   if (difficulty === 'easy') {
     mv = chooseEasy(b, rng);
   } else if (difficulty === 'normal') {
-    mv = searchRoot(b, state.pliesSinceCapture, 2 + (rng() < 0.5 ? 1 : 0), start + budget, rng, 25).move;
+    mv = searchRoot(b, 2 + (rng() < 0.5 ? 1 : 0), start + budget, rng, 25).move;
   } else {
-    mv = searchRoot(b, state.pliesSinceCapture, MAX_PLY - 4, start + budget, rng, 4).move;
+    mv = searchRoot(b, MAX_PLY - 4, start + budget, rng, 4).move;
   }
   const move = fastMoveToMove(b, mv);
   // Safety net: always return something the engine accepts.

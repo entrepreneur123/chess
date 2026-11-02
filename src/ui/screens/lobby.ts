@@ -222,7 +222,7 @@ export function lobbyScreen(router: Router): Screen {
       plateHost,
       h('span', { class: `hero__plate-name rarity-${CHARACTERS[featured].rarity}` }, CHARACTERS[featured].nameKo),
       rarityChip(CHARACTERS[featured].rarity),
-      h('span', { class: 'lv-pill' }, `Lv.${p.characters[featured].level}`),
+      h('span', { class: 'lv-pill' }, `${p.characters[featured].level}성`),
     );
 
     replaceChildren(

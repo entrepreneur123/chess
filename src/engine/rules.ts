@@ -1,4 +1,4 @@
-import { MAX_CONSECUTIVE_TIMEOUTS, NO_CAPTURE_PLY_LIMIT, STORM_INTERVAL_PLIES, TURN_TIME_1_MS, TURN_TIME_2_MS, TURN_TIME_MS } from './types';
+import { MAX_CONSECUTIVE_TIMEOUTS, STORM_INTERVAL_PLIES, SUDDEN_DEATH_PLY, TURN_TIME_1_MS, TURN_TIME_2_MS, TURN_TIME_MS } from './types';
 import type { AbsorbedAbility, Formation, GameState, HistoryEntry, Move, PassReason, Piece, PlayerId, Pos } from './types';
 import { CHAR_CODE, absorbMaskOf, effectiveValue } from './characters';
 import { N_SQUARES, atTurnRow, formationToAbsolute, forwardDir, genTargets, inStorm, isOnBoard, posOf, sqOf } from './board';
@@ -180,14 +180,19 @@ function switchTurn(state: GameState, entry: HistoryEntry, pliesSinceCapture: nu
         return false;
       });
       next = { ...next, storm, stormIn: STORM_INTERVAL_PLIES, pieces, history: [...next.history, { kind: 'storm', storm, killed }] };
+      // The storm swallowed the last pieces of BOTH sides at once: decided by what was lost.
+      if (pieces.length === 0 && killed.length > 0) {
+        const gone = state.pieces.filter((p) => killed.includes(p.id));
+        return end(next, adjudicate({ ...next, pieces: gone }), 'storm');
+      }
     }
   }
   return next;
 }
 
 /**
- * Post-ply bookkeeping: elimination (by capture or storm), storm activation, ply-limit
- * adjudication, chain moves that cannot be played, and automatic passes when the side to move has
+ * Post-ply bookkeeping: elimination (by capture or storm), storm activation (one piece left or
+ * sudden death), chain moves that cannot be played, and automatic passes when the side to move has
  * no legal moves (stalemate if neither side can move).
  * `state` must already be a fresh object owned by the caller.
  */
@@ -200,8 +205,7 @@ function settle(state: GameState): GameState {
       const last = state.history[state.history.length - 1];
       return end(state, n0 > 0 ? 0 : n1 > 0 ? 1 : null, last?.kind === 'storm' ? 'storm' : 'elimination');
     }
-    if (state.stormIn === null && (n0 <= 1 || n1 <= 1)) state = { ...state, stormIn: STORM_INTERVAL_PLIES };
-    if (state.pliesSinceCapture >= NO_CAPTURE_PLY_LIMIT) return end(state, adjudicate(state), 'moveLimit');
+    if (state.stormIn === null && (n0 <= 1 || n1 <= 1 || state.ply >= SUDDEN_DEATH_PLY)) state = { ...state, stormIn: STORM_INTERVAL_PLIES };
     if (state.bonusPieceId !== null) {
       if (hasAnyMove(state.pieces, state.turn, state.storm, state.bonusPieceId)) return state;
       // The chaining piece is boxed in: the chain move lapses.
@@ -212,6 +216,18 @@ function settle(state: GameState): GameState {
     if (!hasAnyMove(state.pieces, other(state.turn), state.storm)) return end(state, adjudicate(state), 'stalemate');
     state = switchTurn(state, { kind: 'pass', player: state.turn, reason: 'noMoves' }, state.pliesSinceCapture + 1);
   }
+}
+
+/** Plies left before sudden death starts the storm; null once the storm is active (or the game ended). */
+export function suddenDeathIn(state: Pick<GameState, 'ply' | 'stormIn' | 'status'>): number | null {
+  if (state.status !== 'playing' || state.stormIn !== null) return null;
+  return Math.max(0, SUDDEN_DEATH_PLY - state.ply);
+}
+
+/** The match clock (MATCH_TIME_MS) ran out: the game is decided by remaining material. */
+export function applyTimeUp(state: GameState): GameState {
+  if (state.status !== 'playing') return state;
+  return end({ ...state, bonusPieceId: null }, adjudicate(state), 'timeUp');
 }
 
 /** Union of absorbed abilities (deduplicated, never including the holder's own pattern). */

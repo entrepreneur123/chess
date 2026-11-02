@@ -62,18 +62,21 @@
   --gem-700: #0b6a8f;
 
   /* ---- Rarity: base, deep (frame shadow side) and glow ------------------ */
-  --rar-common: #aebbd2;
-  --rar-common-deep: #4f5d78;
-  --rar-common-glow: rgba(174, 187, 210, 0.28);
-  --rar-rare: #48a9ff;
-  --rar-rare-deep: #1452aa;
-  --rar-rare-glow: rgba(72, 169, 255, 0.5);
+  /* Rarity: common = white, rare = orange, epic = purple, legendary = aurora / rainbow. */
+  --rar-common: #eef2fa;
+  --rar-common-deep: #6b778f;
+  --rar-common-glow: rgba(238, 242, 250, 0.32);
+  --rar-rare: #ff9a3c;
+  --rar-rare-deep: #a24d0c;
+  --rar-rare-glow: rgba(255, 154, 60, 0.55);
   --rar-epic: #c070ff;
   --rar-epic-deep: #5a1fa0;
   --rar-epic-glow: rgba(192, 112, 255, 0.55);
-  --rar-legendary: #ffbe3b;
-  --rar-legendary-deep: #a2520a;
-  --rar-legendary-glow: rgba(255, 190, 59, 0.6);
+  --rar-legendary: #7df2d0;
+  --rar-legendary-deep: #6b2bd6;
+  --rar-legendary-glow: rgba(125, 242, 208, 0.55);
+  /* Rotating rainbow used for legendary rings (conic, spun with `rar-spin`). */
+  --rar-rainbow: conic-gradient(from var(--rar-angle, 0deg), #ff5f6d, #ffc371, #f9f871, #5ef2a0, #4fd1ff, #7d6bff, #e66bff, #ff5f6d);
 
   /* ---- Type -------------------------------------------------------------- */
   --font-body: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, 'Apple SD Gothic Neo', 'Noto Sans KR',
@@ -228,18 +231,30 @@
   color-scheme: dark;
 }
 
+/* Animatable angle for the legendary rainbow ring (static rainbow where @property is unsupported). */
+@property --rar-angle {
+  syntax: '<angle>';
+  inherits: true;
+  initial-value: 0deg;
+}
+@keyframes rar-spin {
+  to {
+    --rar-angle: 360deg;
+  }
+}
+
 /* Rarity contexts: any element with .rarity-* exposes --rar / --rar-deep / --rar-glow. */
 .rarity-common {
   --rar: var(--rar-common);
   --rar-deep: var(--rar-common-deep);
   --rar-glow: var(--rar-common-glow);
-  --rar-soft: rgba(174, 187, 210, 0.32);
+  --rar-soft: rgba(238, 242, 250, 0.26);
 }
 .rarity-rare {
   --rar: var(--rar-rare);
   --rar-deep: var(--rar-rare-deep);
   --rar-glow: var(--rar-rare-glow);
-  --rar-soft: rgba(72, 169, 255, 0.32);
+  --rar-soft: rgba(255, 154, 60, 0.32);
 }
 .rarity-epic {
   --rar: var(--rar-epic);
@@ -251,7 +266,7 @@
   --rar: var(--rar-legendary);
   --rar-deep: var(--rar-legendary-deep);
   --rar-glow: var(--rar-legendary-glow);
-  --rar-soft: rgba(255, 190, 59, 0.32);
+  --rar-soft: rgba(125, 242, 208, 0.3);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -245,7 +245,7 @@ describe('storm', () => {
     expect(s.winner).toBe(0);
   });
 
-  it('is a draw when the storm takes the last pieces of both sides at once', () => {
+  it('is decided by material when the storm takes the last pieces of both sides at once', () => {
     let s = makeState([
       [0, 'sad', 1, 5, 11],
       [1, 'sad', 1, 8, 0],
@@ -255,7 +255,8 @@ describe('storm', () => {
     s = applyMove(s, mv(s, 'p0-sad', 6, 11));
     expect(s.status).toBe('ended');
     expect(s.endReason).toBe('storm');
-    expect(s.winner).toBeNull();
+    expect(s.pieces).toHaveLength(0);
+    expect(s.winner).toBe(1); // Red lost 3 + 3 to Blue's 3
   });
 
   it('ticks on timeouts and auto-passes too', () => {
@@ -279,6 +280,7 @@ describe('fast board mirrors the engine with the new rules', () => {
     let checked = 0;
     let chains = 0;
     let storms = 0;
+    let suddenDeath = 0;
     for (let game = 0; game < 40; game++) {
       const squad0 = rng() < 0.5 ? (['insaner', 'sad', 'walk'] as const) : (['insaner', 'marki', 'walk'] as const);
       const squad1 = rng() < 0.5 ? (['insaner', 'sad', 'marki'] as const) : (['sad', 'marki', 'walk'] as const);
@@ -297,15 +299,16 @@ describe('fast board mirrors the engine with the new rules', () => {
         const engKeys = legal.map((m) => `${m.pieceId}:${m.to.r},${m.to.c}`).sort();
         expect(fastKeys).toEqual(engKeys);
         // make/unmake must be exact
-        const snap = JSON.stringify([Array.from(b.sq), Array.from(b.occ), Array.from(b.absorb), Array.from(b.dir), b.turn, b.bonus, b.storm, b.stormIn, Array.from(b.alive), Array.from(b.material)]);
+        const snap = JSON.stringify([Array.from(b.sq), Array.from(b.occ), Array.from(b.absorb), Array.from(b.dir), b.turn, b.bonus, b.storm, b.stormIn, b.ply, b.wipe, Array.from(b.alive), Array.from(b.material)]);
         for (let k = 0; k < n; k++) {
           const undo = fastMake(b, buf[k]);
           fastUnmake(b, buf[k], undo);
         }
-        expect(JSON.stringify([Array.from(b.sq), Array.from(b.occ), Array.from(b.absorb), Array.from(b.dir), b.turn, b.bonus, b.storm, b.stormIn, Array.from(b.alive), Array.from(b.material)])).toBe(snap);
+        expect(JSON.stringify([Array.from(b.sq), Array.from(b.occ), Array.from(b.absorb), Array.from(b.dir), b.turn, b.bonus, b.storm, b.stormIn, b.ply, b.wipe, Array.from(b.alive), Array.from(b.material)])).toBe(snap);
         expect(b.histTop).toBe(0);
         if (g.bonusPieceId) chains++;
         if (g.storm > 0) storms++;
+        if (g.stormIn !== null && g.pieces.filter((p) => p.owner === 0).length > 1 && g.pieces.filter((p) => p.owner === 1).length > 1) suddenDeath++;
         checked++;
         // Fast make of the chosen move must agree with the engine on turn / storm / alive counts.
         const pick = legal[Math.floor(rng() * legal.length)];
@@ -319,6 +322,7 @@ describe('fast board mirrors the engine with the new rules', () => {
           expect(b.turn).toBe(next.turn);
           expect(b.storm).toBe(next.storm);
           expect(b.stormIn).toBe(next.stormIn ?? -1);
+          expect(b.ply).toBe(next.ply);
           expect(b.alive[0] + b.alive[1]).toBe(next.pieces.length);
           expect(b.bonus >= 0 ? b.ids[b.bonus] : null).toBe(next.bonusPieceId);
         }
@@ -327,6 +331,7 @@ describe('fast board mirrors the engine with the new rules', () => {
     }
     expect(checked).toBeGreaterThan(500);
     expect(chains).toBeGreaterThan(0);
+    expect(suddenDeath).toBeGreaterThan(0);
     expect(storms).toBeGreaterThan(0);
   });
 

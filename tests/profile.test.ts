@@ -108,6 +108,7 @@ describe('board view setting', () => {
     const base = createDefaultProfile();
     expect(sanitizeProfile({ ...base, settings: { ...base.settings, view: 'top' } }).settings.view).toBe('top');
     expect(sanitizeProfile({ ...base, settings: { sound: false, haptics: true, view: 'iso' } }).settings.view).toBe('tilt');
-    expect(sanitizeProfile({ ...base, settings: { sound: false, haptics: true } }).settings).toEqual({ sound: false, haptics: true, view: 'tilt' });
+    expect(sanitizeProfile({ ...base, settings: { sound: false, haptics: true } }).settings).toEqual({ sound: false, voice: true, haptics: true, view: 'tilt' });
+    expect(sanitizeProfile({ ...base, settings: { ...base.settings, voice: false } }).settings.voice).toBe(false);
   });
 });

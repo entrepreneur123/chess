@@ -101,6 +101,28 @@ export function installAudio(): void {
   );
 }
 
+/** True when the player has sound enabled (read live from the profile). */
+export function isSoundOn(): boolean {
+  return soundOn();
+}
+
+/**
+ * The shared AudioContext, if one has been created by a user gesture (never creates one).
+ * Other audio modules (character voices) decode and play through it.
+ */
+export function getAudioContext(): AudioContext | null {
+  return ctx;
+}
+
+/**
+ * The shared output bus (master gain -> compressor -> destination) when the context is running,
+ * so character voice/SFX share the same loudness control and limiter as the synthesized sounds.
+ */
+export function audioOut(): { ctx: AudioContext; out: AudioNode } | null {
+  if (!ctx || !master || ctx.state !== 'running') return null;
+  return { ctx, out: master };
+}
+
 /** Called when the user turns sound on from settings (a gesture): create the context now. */
 export function primeAudio(): void {
   if (soundOn()) ensureContext();

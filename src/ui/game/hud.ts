@@ -1,9 +1,8 @@
-/** DOM pieces of the in-game HUD (player bars, timer ring, turn pill, piece info card). */
-import { CHARACTERS, type EndReason, type FormationSlot, type GameState, type Piece, type PlayerId } from '../../engine';
+/** DOM pieces of the in-game HUD (player bars, timer ring, turn pill, end-reason copy). */
+import { CHARACTERS, type EndReason, type FormationSlot, type GameState, type PlayerId } from '../../engine';
 import { PACING } from '../../meta/economy';
-import { movementDiagram, pieceToken, rarityChip, unitArt } from '../components/piece';
+import { pieceToken } from '../components/piece';
 import { h } from '../dom';
-import { icon } from '../icons';
 import type { ControllerSnapshot } from './GameController';
 
 const RING_R = 18;
@@ -35,7 +34,7 @@ export class TimerRing {
     this.arc.setAttribute('class', 'ring__arc');
     this.arc.style.strokeDasharray = String(RING_C);
     svg.append(track, this.arc);
-    this.label = h('span', { class: 'ring__label' }, '60');
+    this.label = h('span', { class: 'ring__label' }, '');
     this.el = h('div', { class: `ring owner-${owner}`, role: 'timer', 'aria-label': '남은 시간' }, svg, this.label);
   }
 
@@ -87,68 +86,22 @@ export function turnPillContent(snap: ControllerSnapshot): { text: string; cls: 
   return chain ? { text: '연쇄 이동!', cls: 'is-me is-bonus' } : { text: '내 차례', cls: 'is-me' };
 }
 
-export function pieceInfoCard(piece: Piece, snap: ControllerSnapshot, onClose: () => void): HTMLElement {
-  const def = CHARACTERS[piece.character];
-  const sel = snap.selection;
-  const n = sel?.moves.length ?? 0;
-  const caps = sel?.moves.filter((m) => m.captureId).length ?? 0;
-  const mine = piece.owner === 0;
-  const status = sel?.actionable
-    ? n === 0
-      ? '지금은 움직일 수 있는 칸이 없어요'
-      : `이동 가능 ${n}칸${caps ? ` · 잡기 ${caps}` : ''} — 하이라이트된 칸을 탭하세요`
-    : mine
-      ? '이동 범위 미리보기 · 내 차례에 움직일 수 있어요'
-      : `상대 말 이동 범위${caps ? ` · 내 말 ${caps}개가 위협받는 중` : ''}`;
-  return h(
-    'div',
-    { class: `info-card owner-${piece.owner}`, role: 'region', 'aria-label': `${def.nameKo} 정보`, 'data-piece': piece.id },
-    h(
-      'div',
-      { class: 'info-card__row' },
-      unitArt(piece.character, piece.level, { size: 52, owner: piece.owner }),
-      h(
-        'div',
-        { class: 'info-card__main' },
-        h(
-          'div',
-          { class: 'info-card__head' },
-          h('span', { class: 'info-card__name' }, def.nameKo),
-          rarityChip(def.rarity),
-          h('span', { class: 'lv-text' }, `Lv.${piece.level}`),
-          h('span', { class: `chip chip--side side-${piece.owner}` }, mine ? '내 말' : '상대 말'),
-        ),
-        h('div', { class: 'info-card__desc' }, def.descKo[piece.level - 1]),
-        piece.absorbed?.length
-          ? h(
-              'div',
-              { class: 'info-card__absorbed', 'aria-label': '흡수한 능력' },
-              icon('magic', 14),
-              piece.absorbed.map((a) => h('span', { class: `chip chip--absorb rarity-${CHARACTERS[a.character].rarity}` }, `${CHARACTERS[a.character].nameKo} Lv.${a.level}`)),
-            )
-          : def.passiveKo
-            ? h('div', { class: 'info-card__passive' }, icon('magic', 14), def.passiveKo)
-            : null,
-      ),
-      h('div', { class: 'info-card__diagram' }, movementDiagram(piece.character, piece.level, { cell: 7, owner: piece.owner })),
-      h('button', { class: 'icon-btn icon-btn--sm', type: 'button', 'aria-label': '닫기', onclick: onClose }, icon('close', 20)),
-    ),
-    h('div', { class: `info-card__status${sel?.actionable ? ' is-actionable' : ''}` }, status),
-  );
-}
-
-export function endReasonText(reason: EndReason | null, outcome: 'win' | 'loss' | 'draw'): string {
+/** `bothWiped`: the storm swallowed the last pieces of both sides at once (decided by material). */
+export function endReasonText(reason: EndReason | null, outcome: 'win' | 'loss' | 'draw', bothWiped = false): string {
+  if (reason === 'storm' && bothWiped) {
+    return `양쪽의 마지막 말이 동시에 자기장에 휩쓸려 사라진 전력으로 판정했습니다.${outcome === 'draw' ? ' 전력이 같습니다.' : ''}`;
+  }
   switch (reason) {
     case 'elimination':
       return outcome === 'win' ? '상대의 말을 모두 잡았습니다.' : '내 말이 모두 잡혔습니다.';
     case 'storm':
-      return outcome === 'win' ? '상대의 마지막 말이 자기장에 휩쓸렸습니다.' : outcome === 'loss' ? '내 마지막 말이 자기장에 휩쓸렸습니다.' : '양쪽의 마지막 말이 동시에 자기장에 휩쓸렸습니다.';
+      return outcome === 'win' ? '상대의 마지막 말이 자기장에 휩쓸렸습니다.' : '내 마지막 말이 자기장에 휩쓸렸습니다.';
     case 'timeoutForfeit':
       return outcome === 'win' ? '상대가 3회 연속 시간을 초과해 기권 처리되었습니다.' : '3회 연속 시간을 초과해 기권 처리되었습니다.';
     case 'resign':
       return outcome === 'win' ? '상대가 기권했습니다.' : '기권했습니다.';
-    case 'moveLimit':
-      return `60수 동안 잡기가 없어 남은 전력으로 판정했습니다.${outcome === 'draw' ? ' 전력이 같습니다.' : ''}`;
+    case 'timeUp':
+      return `대전 시간 10분이 끝나 남은 전력으로 판정했습니다.${outcome === 'draw' ? ' 전력이 같습니다.' : ''}`;
     case 'stalemate':
       return `양쪽 모두 움직일 수 없어 남은 전력으로 판정했습니다.${outcome === 'draw' ? ' 전력이 같습니다.' : ''}`;
     default:

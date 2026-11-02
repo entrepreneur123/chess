@@ -8,6 +8,11 @@ export interface BoardHighlights {
   lastMove?: { from: Pos; to: Pos } | null; // previous move (either player)
   /** Optional rows to tint as a "zone" (e.g. home zone), inclusive range. */
   zoneRows?: [number, number] | null;
+  /**
+   * Whose reach is shown: 'own' (default) = white/cyan move markers for the player's piece,
+   * 'enemy' = RED move markers and selection ring for a tapped enemy piece's reach preview.
+   */
+  tone?: 'own' | 'enemy';
 }
 
 /** Camera view of the board: tilted 3D arena (default) or straight top-down. */
@@ -40,4 +45,9 @@ export interface IBoardView {
    * a move's capture) dissolve with a storm effect instead of popping out.
    */
   setStorm?(storm: number, nextIn: number | null): void;
+  /**
+   * Optional: called at the exact moment a capturing strike lands during `animateMove` (the UI
+   * syncs the impact sound, haptic and illustration cut-in to it). Only one listener.
+   */
+  onImpact?(cb: (move: Move) => void): void;
 }

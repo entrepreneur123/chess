@@ -1,22 +1,27 @@
 import { BotClient } from '../../ai/botClient';
 import { haptic, sfx } from '../../audio/sfx';
-import { CHARACTERS, createGame, getPieceById, materialScore, type GameState, type Move, type Piece, type Pos } from '../../engine';
+import { CHARACTERS, createGame, getPieceById, materialScore, suddenDeathIn, type GameState, type Move, type Piece, type Pos } from '../../engine';
 import { createBoardView, type IBoardView } from '../../render';
 import { MIN_MOVES_FOR_REWARD, PACING } from '../../meta/economy';
 import { DIFFICULTY_LABEL } from '../../meta/opponent';
 import { applyMatchResult, getProfile, updateProfile, type MatchOutcome } from '../../meta/profile';
 import { randInt, defaultRng } from '../../meta/rng';
 import { confetti, countUp } from '../components/celebrate';
-import { unitArt } from '../components/piece';
+import { starsOf, unitArt } from '../components/piece';
 import { confirmDialog, showDialog } from '../components/dialog';
 import { clearToasts, toast } from '../components/toast';
 import { Disposables, h, replaceChildren } from '../dom';
 import { icon } from '../icons';
 import type { Router, Screen } from '../router';
 import { BOT, GameController, HUMAN, type ControllerSnapshot, type Phase } from '../game/GameController';
-import { endReasonText, pieceInfoCard, rosterChips, setText, TimerRing, turnPillContent } from '../game/hud';
+import { endReasonText, rosterChips, setText, TimerRing, turnPillContent } from '../game/hud';
+import { createFieldPanel } from '../game/fieldPanel';
+import { CUTIN_MS, cutInEl, preloadCutIns } from '../game/cutin';
 import type { GameParams } from './gameParams';
 import '../game/hud.css';
+
+/** Show the sudden-death countdown this many plies before it starts. */
+const SUDDEN_DEATH_WARN_PLIES = 10;
 
 export function gameScreen(router: Router, params: GameParams): Screen {
   const bag = new Disposables();
@@ -35,7 +40,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     h('span', { class: 'turn-pill__dot', 'aria-hidden': 'true' }),
     pillText,
   );
-  const counter = h('div', { class: 'ply-counter', 'aria-label': '잡기 없는 수' });
+  // Match clock (10 min cap): the game is decided by material when it runs out.
+  const counter = h('div', { class: 'ply-counter', role: 'timer', 'aria-label': '남은 대전 시간' });
   // Storm status: hidden until a side is down to one piece.
   const stormText = h('span', { class: 'storm-chip__text' });
   const stormChip = h('div', { class: 'storm-chip', role: 'status', 'aria-live': 'polite', hidden: true }, h('span', { class: 'storm-chip__icon', 'aria-hidden': 'true' }, icon('bolt', 14)), stormText);
@@ -51,7 +57,37 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   // First-match coach mark.
   const coachText = h('span', { class: 'coach__text' });
   const coach = h('div', { class: 'coach', role: 'status', 'aria-live': 'polite', hidden: true }, h('span', { class: 'coach__icon' }, icon('touch', 20)), coachText);
-  const infoHost = h('div', { class: 'info-host' });
+  // Tapping a piece only previews its reach on the board; this chip names it without covering
+  // anything (pointer-events: none). Full details live in the ≡ "현재 진형" drawer.
+  const selArt = h('span', { class: 'sel-chip__art' });
+  const selName = h('span', { class: 'sel-chip__name' });
+  const selStars = h('span', { class: 'sel-chip__stars' });
+  const selHint = h('span', { class: 'sel-chip__hint' });
+  const selChip = h('div', { class: 'sel-chip', hidden: true, 'aria-hidden': 'true' }, selArt, selName, selStars, selHint);
+  const infoHost = h('div', { class: 'info-host' }, selChip);
+  const field = createFieldPanel({
+    formations: [params.playerFormation, params.botFormation],
+    names: ['나', params.opponentName],
+    onClose: () => menuBtn.setAttribute('aria-expanded', 'false'),
+  });
+  const menuBtn = h(
+    'button',
+    {
+      class: 'icon-btn icon-btn--outlined menu-btn',
+      type: 'button',
+      'aria-label': '현재 진형 보기',
+      'aria-expanded': 'false',
+      'data-action': 'field',
+      onclick: () => {
+        if (!ctrl) return;
+        field.open(ctrl.state);
+        menuBtn.setAttribute('aria-expanded', 'true');
+        sfx('page');
+        haptic('light');
+      },
+    },
+    icon('menu', 22),
+  );
   const boardHost = h('div', { class: 'board-host', 'aria-label': '게임 보드' });
   // Feedback layer: turn banners, hit flashes and floating combat text (pure CSS animations).
   const fx = h('div', { class: 'fx-layer', 'aria-hidden': 'true' });
@@ -82,6 +118,11 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     void boardWrap.offsetWidth;
     boardWrap.classList.add('is-shake');
   };
+  const showSuddenDeath = () => {
+    spawnFx(h('div', { class: 'turn-banner turn-banner--storm' }, '서든데스!', h('span', { class: 'turn-banner__sub' }, '자기장이 좁혀옵니다')), 1400);
+    sfx('levelup');
+    haptic('warn');
+  };
   const showCaptureFx = (byMe: boolean) => {
     spawnFx(h('div', { class: `hit-flash${byMe ? ' hit-flash--gain' : ''}` }), 560);
     spawnFx(h('div', { class: `float-text${byMe ? '' : ' float-text--hurt'}` }, byMe ? '격파!' : '피격!'), 1150);
@@ -104,6 +145,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     ),
     topRoster,
     topRing.el,
+    menuBtn,
   );
   // Camera toggle: 3D arena <-> top-down (persisted in settings).
   const viewIcon = h('span', { class: 'view-toggle__icon', 'aria-hidden': 'true' });
@@ -160,6 +202,9 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   let prevSel: string | null = null;
   let lastTickSec = -1;
   let stormKey = '';
+  let selChipKey = '';
+  let stormStarted = initial.stormIn !== null;
+  let lastClockSec = -1;
   const passToastShown = [false, false];
   let coachOn = !getProfile().onboarding.firstMoveDone;
   let coachMsg = '';
@@ -197,17 +242,29 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     bag.timeout(() => toast('좋아요! 상대 말 3개를 모두 잡으면 승리해요', { tone: 'success', duration: 2600 }), 450);
   };
 
-  /** Sound + haptics for one move, split into lift-off (now) and landing (when `animate` resolves). */
+  /**
+   * Sound + haptics for one move, split into lift-off (now), the strike landing (capturing moves:
+   * the board's onImpact, or the end of the animation on boards without it) and the landing.
+   */
+  let mover: Piece | null = null;
+  let impactDone: Move | null = null;
   const moveFeedbackStart = (move: Move, before: GameState) => {
-    const piece = getPieceById(before, move.pieceId);
-    sfx(piece?.character === 'walk' ? 'jump' : 'move');
+    mover = getPieceById(before, move.pieceId) ?? null;
+    impactDone = null;
+    sfx(mover?.character === 'walk' ? 'jump' : 'move');
+  };
+  const impact = (move: Move) => {
+    if (impactDone === move || !move.captureId) return;
+    impactDone = move;
+    const byMe = move.pieceId.startsWith(`p${HUMAN}-`);
+    sfx('capture');
+    haptic('capture');
+    showCaptureFx(byMe);
+    if (mover && mover.id === move.pieceId) spawnFx(cutInEl({ character: mover.character, level: mover.level, owner: mover.owner, kind: 'capture' }), CUTIN_MS);
   };
   const moveFeedbackEnd = (move: Move) => {
-    if (move.captureId) {
-      sfx('capture');
-      haptic('capture');
-      showCaptureFx(move.pieceId.startsWith(`p${HUMAN}-`));
-    } else sfx('land');
+    if (move.captureId) impact(move);
+    else sfx('land');
   };
   let lastTurnShown: number | null = null;
   const askResign = async () => {
@@ -239,6 +296,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
           moves: sel ? sel.moves.filter((m) => !m.captureId).map((m) => m.to) : [],
           captures: sel ? sel.moves.filter((m) => m.captureId).map((m) => m.to) : [],
           lastMove: snap.lastMove,
+          // A tapped enemy shows its reach in red; own pieces keep the white markers.
+          tone: selPiece && selPiece.owner === BOT ? 'enemy' : 'own',
         });
       }
       board.setInteractive(snap.phase !== 'animating' && snap.phase !== 'ended' && !snap.paused);
@@ -248,11 +307,21 @@ export function gameScreen(router: Router, params: GameParams): Screen {
         (board as unknown as { setStorm?: (storm: number, nextIn: number | null) => void }).setStorm?.(s.storm, s.stormIn);
       }
     }
-    // Storm chip + chain-move bar
-    stormChip.hidden = s.stormIn === null || snap.phase === 'ended';
+    // Storm chip (also counts down to sudden death) + chain-move bar
+    const sd = suddenDeathIn(s);
+    const sdSoon = sd !== null && sd <= SUDDEN_DEATH_WARN_PLIES;
+    stormChip.hidden = snap.phase === 'ended' || (s.stormIn === null && !sdSoon);
     if (s.stormIn !== null) {
       setText(stormText, s.storm > 0 ? `자기장 · 좌우 ${s.storm}줄 소멸 · ${s.stormIn}턴 후 축소` : `자기장 활성 · ${s.stormIn}턴 후 축소`);
       stormChip.classList.toggle('is-soon', s.stormIn <= 2);
+    } else if (sdSoon) {
+      setText(stormText, `서든데스까지 ${sd}수 · 이후 자기장이 좁혀와요`);
+      stormChip.classList.toggle('is-soon', sd <= 2);
+    }
+    if (s.stormIn !== null && !stormStarted) {
+      stormStarted = true;
+      // Started by the clock (both sides still have several pieces) rather than by a lone survivor.
+      if (s.pieces.filter((p) => p.owner === HUMAN).length > 1 && s.pieces.filter((p) => p.owner === BOT).length > 1 && snap.phase !== 'ended') showSuddenDeath();
     }
     bonusBar.hidden = !(snap.phase === 'humanTurn' && !snap.paused && s.bonusPieceId !== null);
     // HUD
@@ -286,8 +355,6 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     }
     prevPhase = snap.phase;
     updateCoach(snap);
-    setText(counter, `잡기 없이 ${s.pliesSinceCapture}/60`);
-    counter.classList.toggle('is-warn', s.pliesSinceCapture >= 50);
     const activeTurn = snap.phase === 'ended' ? null : s.turn;
     topBar.classList.toggle('is-turn', activeTurn === BOT);
     bottomBar.classList.toggle('is-turn', activeTurn === HUMAN);
@@ -305,13 +372,31 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     }
 
     const selPiece = snap.selection ? getPieceById(s, snap.selection.pieceId) : undefined;
-    const current = infoHost.firstElementChild as HTMLElement | null;
-    if (selPiece && snap.phase !== 'animating') {
-      replaceChildren(infoHost, pieceInfoCard(selPiece, snap, () => ctrl?.clearSelection()));
-      if (!current) infoHost.firstElementChild?.classList.add('is-entering');
-    } else if (current) {
-      replaceChildren(infoHost);
-    }
+    const showSel = !!selPiece && snap.phase !== 'animating' && snap.phase !== 'ended';
+    selChip.hidden = !showSel;
+    if (selPiece && showSel) {
+      const k = `${selPiece.id}|${selPiece.level}|${snap.selection?.moves.length}|${snap.selection?.actionable}`;
+      if (k !== selChipKey) {
+        selChipKey = k;
+        const sel = snap.selection!;
+        const caps = sel.moves.filter((m) => m.captureId).length;
+        selChip.className = `sel-chip owner-${selPiece.owner}`;
+        replaceChildren(selArt, unitArt(selPiece.character, selPiece.level, { size: 24, owner: selPiece.owner }));
+        setText(selName, CHARACTERS[selPiece.character].nameKo);
+        setText(selStars, starsOf(selPiece.level));
+        setText(
+          selHint,
+          selPiece.owner === BOT
+            ? `상대 · 이동 ${sel.moves.length}칸${caps ? ` · 내 말 ${caps}개 위협` : ''}`
+            : sel.actionable
+              ? sel.moves.length
+                ? `이동 ${sel.moves.length}칸${caps ? ` · 잡기 ${caps}` : ''}`
+                : '지금 움직일 수 없어요'
+              : `이동 범위 ${sel.moves.length}칸`,
+        );
+      }
+    } else selChipKey = '';
+    field.update(s);
   };
 
   const outcomeOf = (s: GameState): MatchOutcome => (s.winner === null ? 'draw' : s.winner === HUMAN ? 'win' : 'loss');
@@ -331,11 +416,12 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       return res.profile;
     });
     setCoach('');
+    field.close();
     await bag.sleep(s.endReason === 'resign' ? 150 : 650);
     if (bag.isDisposed) return;
     clearToasts(); // nothing may sit on top of (or compete with) the result
     const title = outcome === 'win' ? '승리!' : outcome === 'loss' ? '패배' : '무승부';
-    const adjudicated = s.endReason === 'moveLimit' || s.endReason === 'stalemate';
+    const adjudicated = s.endReason === 'timeUp' || s.endReason === 'stalemate' || (s.endReason === 'storm' && s.pieces.length === 0);
     const noReward = reward === 0 && outcome !== 'win' && humanMoves < MIN_MOVES_FOR_REWARD;
     const plus = h('span', { class: 'result__plus' }, '+0');
     const total = h('span', { class: 'result__total-value' }, coinsBefore.toLocaleString('ko-KR'));
@@ -351,9 +437,9 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       'div',
       { class: 'result__body' },
       hero,
-      h('p', { class: 'result__reason', 'data-reason': s.endReason ?? '' }, endReasonText(s.endReason, outcome)),
+      h('p', { class: 'result__reason', 'data-reason': s.endReason ?? '' }, endReasonText(s.endReason, outcome, s.endReason === 'storm' && s.pieces.length === 0)),
       outcome === 'loss' && !noReward ? h('p', { class: 'result__cheer' }, '아쉬워요! 진형을 바꿔 다시 도전해 보세요.') : null,
-      adjudicated ? h('p', { class: 'result__score' }, `전력  나 ${materialScore(s, HUMAN)} : ${materialScore(s, BOT)} 상대`) : null,
+      adjudicated && s.pieces.length > 0 ? h('p', { class: 'result__score' }, `전력  나 ${materialScore(s, HUMAN)} : ${materialScore(s, BOT)} 상대`) : null,
       h(
         'div',
         { class: `result__reward${reward > 0 ? ' has-reward' : ''}`, 'data-reward': reward },
@@ -435,6 +521,10 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       board?.setPieces(initial.pieces);
       syncedPieces = initial.pieces;
       board?.onCellClick((pos: Pos) => c.tapCell(pos));
+      board?.onImpact?.((move) => {
+        if (!bag.isDisposed) impact(move);
+      });
+      preloadCutIns([...params.playerFormation, ...params.botFormation]);
 
       bag.add(
         c.on((e) => {
@@ -472,6 +562,15 @@ export function gameScreen(router: Router, params: GameParams): Screen {
 
       bag.frameLoop(() => {
         const snap = c.state;
+        // Match clock: mm:ss, red in the last minute.
+        const mrem = c.matchRemainingMs();
+        const msec = Math.ceil(mrem / 1000);
+        if (msec !== lastClockSec) {
+          lastClockSec = msec;
+          setText(counter, `${Math.floor(msec / 60)}:${String(msec % 60).padStart(2, '0')}`);
+          counter.classList.toggle('is-warn', msec <= 60 && c.phase !== 'ended');
+          counter.setAttribute('aria-label', `남은 대전 시간 ${Math.floor(msec / 60)}분 ${msec % 60}초`);
+        }
         const active = c.phase === 'humanTurn' || c.phase === 'botThinking';
         const rem = c.turnRemainingMs();
         topRing.update(active && snap.turn === BOT, rem, c.turnTimeMs, c.paused);
@@ -509,6 +608,9 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       if (!ctrl || ctrl.phase === 'ended') router.home();
       else void askResign();
     },
-    dispose: () => bag.dispose(),
+    dispose: () => {
+      field.close();
+      bag.dispose();
+    },
   };
 }

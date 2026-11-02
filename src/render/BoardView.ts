@@ -12,6 +12,19 @@
  * captures throw spark streaks + a shockwave and dissolve the victim; new units pop in with a
  * flash. Until the models load (or if they fail) pieces show silhouettes.
  *
+ * Captures (animateMove with captureId): the attacker runs / leaps to strike range, plays its attack
+ * clip facing the victim and, at the clip's impact frame, onImpact fires and the character's strike
+ * FX play (strikeFx.ts: sad holy slash + light pillar, marki molten crack shockwave + dust + heavier
+ * shake, walk shield-shaped shock ring + blue-white flash, insaner violet flame burst + a soul stream
+ * into the imp); the victim plays 'hit', then 'death' while it dissolves, and the attacker steps in.
+ * Skill moves: sad glints on move start, marki charges (>= 2 squares) with speed streaks, walk
+ * leaves an arc trail and a landing ring, an insaner chain move dashes with a violet trail.
+ *
+ * Rarity rings (tokens.ts): a flat ring around every unit, one shared material per rarity (common
+ * white, rare orange, epic purple, legendary rainbow sweeping at a light ~30 fps only while one is on
+ * screen). Top-down view: units cross-fade into illustrated tokens (face art, team rim, star pips).
+ * Enemy reach previews (BoardHighlights.tone 'enemy') draw red dots and a red selection ring.
+ *
  * Storm (setStorm): consumed outer columns get the storm.ts energy field (one additive draw), their
  * tiles are dimmed, and pieces that vanish from the piece list while the storm is active (not a
  * move's capture) dissolve with a magenta storm edge instead of popping out.
@@ -32,7 +45,9 @@ import { loadUnitAssets, unitAssetsIfLoaded } from './units/assets';
 import { LOOKS, MOVE_CLIP } from './units/config';
 import type { UnitLibrary } from './units/library';
 import { DustPool, SparkPool } from './boardFx';
-import { ANIM, BOARD_COLORS, CHARACTER_RARITY, RARITY_COLORS, RARITY_GLOW, TEAM_COLORS } from './palette';
+import { ANIM, BOARD_COLORS, CHARACTER_FX, CHARACTER_RARITY, RARITY_COLORS, RARITY_GLOW, TEAM_COLORS } from './palette';
+import { GROUND_MODE, StrikeFx } from './strikeFx';
+import { RingMaterials, TokenKit } from './tokens';
 import { STORM_COLORS, StormFx } from './storm';
 import {
   clamp01,
@@ -44,6 +59,7 @@ import {
   makeRng,
   mixRgb,
   posKey,
+  prefersReducedMotion,
   pulse01,
   sameLook,
   shakeOffset,
@@ -80,15 +96,27 @@ const TOP_ELEVATION_DEG = 89;
 const MAX_PIXEL_RATIO = 2;
 const IDLE_FRAME_MS = 32; // idle pulse (selection / targets) is capped at ~30 fps
 const IDLE_ANIM_FRAME_MS = 41; // unit idle loops alone run at ~24 fps
-/** Attack clip length on the board (ms) and the victim's death clip length (ms). */
+/** Attack clip length on the board (ms). */
 const ATTACK_MS = 440;
-const DEATH_MS = 280;
-/** Upper bound for a capture move (ms) so turns stay snappy. */
-const MOVE_BUDGET_MS = 560;
+/**
+ * Capture timeline (ms, relative to the strike's impact frame): the victim recoils ('hit') for
+ * HIT_MS, then dies + dissolves over DEATH_MS; the attacker steps from strike range into the square
+ * at STEP_AT for STEP_MS. A whole capture stays <= ~1.2 s (walk's leap + slam is the longest).
+ */
+const HIT_MS = 140;
+const DEATH_MS = 360;
+const STEP_AT = 230;
+const STEP_MS = 200;
+/** Distance (tile units) between attacker and victim when the strike lands. */
+const STRIKE_RANGE = 0.62;
+/** Window (ms) in which an insaner moving again after its capture counts as a chain move. */
+const CHAIN_WINDOW_MS = 8000;
 /** Facing turn time (s) when a piece's forward direction changes / after a move. */
 const TURN_S = 0.25;
 /** Height of the puck top above the tile (models stand on it). */
 const PUCK_TOP = 0.14;
+/** Token (top-down coin) height above the tile top: just above the puck's level pips. */
+const TOKEN_Y = PUCK_TOP + 0.075;
 /** Rows between the zone edge lines (world z of the line between home zone and no-man's land). */
 const ZONE_LINE_Z: Record<PlayerId, number> = {
   0: HALF - (ZONE_DEPTH - 0.5),
@@ -121,34 +149,64 @@ interface PieceVisual {
   body: THREE.Object3D | null;
   /** Invisible tap target sized to the unit (the only thing the picker raycasts). */
   proxy: THREE.Mesh;
+  /** Holds the 3D body; scaled away as the camera blends into the top-down view. */
+  figure: THREE.Group;
+  /** Rarity ring on the ground (shared material per rarity). */
+  ring: THREE.Mesh;
+  /** Top-down illustrated token and its own material (fade / flash / dissolve uniforms). */
+  token: THREE.Mesh;
+  tokenMat: THREE.ShaderMaterial;
 }
 
 /** Yaw (radians, model faces +z at 0) for a piece's forward direction (+1 = toward row 11 = -z). */
 const forwardYaw = (p: Piece): number => ((p.dir ?? (p.owner === 0 ? 1 : -1)) === 1 ? Math.PI : 0);
 
 interface RunningAnim {
+  move: Move;
   start: number;
   duration: number;
+  /** Approach (run / leap) duration. */
   moveDur: number;
   mover: PieceVisual;
   from: THREE.Vector3;
   to: THREE.Vector3;
+  /** End of the approach: `to` for plain moves, strike range in front of the victim for captures. */
+  strikeAt: THREE.Vector3;
+  /** Unit strike / travel direction (xz). */
+  dirX: number;
+  dirZ: number;
   jump: boolean;
   jumpHeight: number;
   landed: boolean;
+  /** True when the move captures (even if the victim's visual was missing). */
+  capture: boolean;
   captured: PieceVisual | null;
-  capturedOwner: PlayerId;
   capturedAt: THREE.Vector3;
-  captureStart: number;
-  capFired: boolean;
-  deathMs: number;
   attackStart: number;
   attackFired: boolean;
+  impactAt: number;
+  impactFired: boolean;
+  deathStart: number;
+  deathFired: boolean;
+  stepStart: number;
+  stepFired: boolean;
+  /** Skill flavour: marki charge (>= 2 squares), walk leap trail, insaner chain dash. */
+  charge: boolean;
+  chain: boolean;
+  trail: boolean;
   /** Next footstep dust time (ms since start). */
   nextDust: number;
   piecesAfter: Piece[];
   resolve: () => void;
 }
+
+const smoothstep = (a: number, b: number, x: number): number => {
+  const t = clamp01((x - a) / (b - a));
+  return t * t * (3 - 2 * t);
+};
+/** 0..1..0 bump over [a, b]. */
+const bump = (a: number, b: number, x: number): number => (x <= a || x >= b ? 0 : Math.sin((Math.PI * (x - a)) / (b - a)));
+const noRaycast = (): void => undefined;
 
 const easeOutBack = (t: number): number => {
   const c1 = 1.70158;
@@ -285,7 +343,8 @@ class PieceKit {
   private decalMat(r: Rarity): THREE.ShaderMaterial {
     let mat = this.decal.get(r);
     if (!mat) {
-      mat = makeGroundDecalMaterial(this.blobTex, this.glowTex, RARITY_COLORS[r], 0.12 + 0.5 * RARITY_GLOW[r]);
+      // The rarity ring carries the rarity now: keep only a soft floor glow under it.
+      mat = makeGroundDecalMaterial(this.blobTex, this.glowTex, RARITY_COLORS[r], 0.05 + 0.32 * RARITY_GLOW[r]);
       this.materials.push(mat);
       this.decal.set(r, mat);
     }
@@ -293,11 +352,11 @@ class PieceKit {
   }
 
   /**
-   * Base puck + glowing team disc + rarity ring + level pips merged into one vertex-coloured
-   * geometry. The team disc keeps blue/red readable from straight above (top-down view).
+   * Base puck + glowing team rim + team disc + level pips merged into one vertex-coloured geometry.
+   * The team rim / disc keep blue vs red readable inside the rarity ring from any camera angle.
    */
-  private puck(r: Rarity, level: Level, owner: PlayerId): THREE.BufferGeometry {
-    const key = `${r}:${level}:${owner}`;
+  private puck(level: Level, owner: PlayerId): THREE.BufferGeometry {
+    const key = `${level}:${owner}`;
     let geo = this.pucks.get(key);
     if (geo) return geo;
     const profile = [
@@ -312,9 +371,9 @@ class PieceKit {
     const parts: { geo: THREE.BufferGeometry; color: string; emit: number; rim: number }[] = [
       { geo: new THREE.LatheGeometry(profile, 32), color: BOARD_COLORS.pieceBase, emit: 0.12, rim: 0.9 },
       {
-        geo: new THREE.TorusGeometry(0.41, 0.058, 8, 48).rotateX(Math.PI / 2).translate(0, 0.07, 0),
-        color: RARITY_COLORS[r],
-        emit: 0.5 + 1.0 * RARITY_GLOW[r],
+        geo: new THREE.TorusGeometry(0.405, 0.05, 8, 48).rotateX(Math.PI / 2).translate(0, 0.07, 0),
+        color: TEAM_COLORS[owner].glow,
+        emit: 0.75,
         rim: 0,
       },
       {
@@ -399,7 +458,7 @@ class PieceKit {
     root.add(inner);
 
     // Puck + rarity ring + level pips: one draw (+ one shadow draw).
-    const puck = new THREE.Mesh(this.puck(rar, p.level, p.owner), this.puckMat);
+    const puck = new THREE.Mesh(this.puck(p.level, p.owner), this.puckMat);
     puck.castShadow = false; // the decal already carries the contact shadow
     puck.receiveShadow = false;
     puck.raycast = () => undefined;
@@ -484,6 +543,26 @@ export class BoardView implements IBoardView {
   private readonly pointScale = { value: 600 };
   private readonly dust: DustPool;
   private readonly sparks: SparkPool;
+  /** Character strike / skill FX, rarity ring materials, top-down token kit. */
+  private readonly strike: StrikeFx;
+  private readonly rings = new RingMaterials();
+  private readonly tokens: TokenKit;
+  private readonly reducedMotion = prefersReducedMotion();
+  private impactCb: ((move: Move) => void) | null = null;
+  /** True while dispose() settles a running animation (no impact callback then). */
+  private disposing = false;
+  /** Legendary units on the board (their rainbow ring keeps a light frame tick alive). */
+  private legendaryCount = 0;
+  /** Last insaner capture (an immediate second move of the same piece is its chain move). */
+  private lastCapture: { id: string; t: number } | null = null;
+  /** Unit the soul stream flows into (followed while the stream lives). */
+  private soulTarget: PieceVisual | null = null;
+  /** Camera shake strength multiplier and length (ms) of the current shake. */
+  private shakeAmp = 1;
+  private shakeMs: number = ANIM.shake;
+  /** View blend last applied to the visuals (model scale / token opacity). */
+  private lastBlend = -1;
+  private readonly camDir = new THREE.Vector3();
   /** Spawn-in (match start / level change): start time and the visuals popping in. */
   private tSpawn = -1;
   private readonly spawning: PieceVisual[] = [];
@@ -557,6 +636,7 @@ export class BoardView implements IBoardView {
     if (getComputedStyle(container).position === 'static') container.style.position = 'relative';
     container.appendChild(canvas);
 
+    this.tokens = new TokenKit(this.renderer.capabilities.getMaxAnisotropy(), () => this.requestRender());
     const glowTex = makeGlowTexture();
     this.ownTextures.push(glowTex);
     try {
@@ -596,8 +676,9 @@ export class BoardView implements IBoardView {
     this.burst = fx.burst;
     this.burstMat = fx.burstMat;
     this.dust = new DustPool(160, this.pointScale);
-    this.sparks = new SparkPool(40);
-    this.fxLayer.add(this.dust.points, this.sparks.mesh);
+    this.sparks = new SparkPool(72);
+    this.strike = new StrikeFx(this.pointScale);
+    this.fxLayer.add(this.dust.points, this.sparks.mesh, this.strike.group);
 
     this.scene.add(this.pieceLayer, this.fxLayer);
     this.applyHighlights();
@@ -931,88 +1012,144 @@ export class BoardView implements IBoardView {
     if (!mover) {
       this.syncPieces(piecesAfter);
       this.requestRender();
+      if (move.captureId) this.emitImpact(move);
       return Promise.resolve();
     }
+    const now = performance.now();
+    const ch = mover.piece.character;
+    const chain = ch === 'insaner' && this.lastCapture?.id === move.pieceId && now - this.lastCapture.t < CHAIN_WINDOW_MS;
+    this.lastCapture = null;
 
     // Detach the captured piece from tracking: it lives only for the effect.
     let captured: PieceVisual | null = null;
-    let capturedOwner: PlayerId = mover.piece.owner === 0 ? 1 : 0;
     const capturedAt = new THREE.Vector3(cellX(move.to.c), 0, cellZ(move.to.r));
     if (move.captureId) {
       const cv = this.visuals.get(move.captureId);
       if (cv) {
         this.visuals.delete(move.captureId);
         captured = cv;
-        capturedOwner = cv.piece.owner;
         capturedAt.copy(cv.root.position);
         cv.root.traverse((o) => {
           o.castShadow = false;
         });
       }
     }
+    const capture = !!move.captureId;
 
-    const jump = mover.piece.character === 'walk';
+    const jump = ch === 'walk';
     const moveDur = jump ? ANIM.jump : slideDuration(move);
-    const captureStart = captured ? moveDur * (jump ? 0.85 : 0.8) : moveDur;
-    // Keep every move (capture included) inside ~560 ms: the death clip absorbs the difference.
-    const deathMs = Math.max(200, Math.min(DEATH_MS, MOVE_BUDGET_MS - captureStart));
-    const duration = Math.max(moveDur + (jump ? ANIM.land : 40), captured ? captureStart + deathMs : 0);
     const from = mover.root.position.clone();
     from.y = 0;
     const to = new THREE.Vector3(cellX(move.to.c), 0, cellZ(move.to.r));
+    let dirX = to.x - from.x;
+    let dirZ = to.z - from.z;
+    const len = Math.hypot(dirX, dirZ);
+    if (len > 1e-6) {
+      dirX /= len;
+      dirZ /= len;
+    } else {
+      dirX = 0;
+      dirZ = mover.piece.owner === 0 ? -1 : 1;
+    }
+    // Captures stop at strike range in front of the victim, strike, then step in.
+    const strikeAt = to.clone();
+    if (capture && len > 1e-6) strikeAt.lerpVectors(from, to, Math.max(0, (len - STRIKE_RANGE) / len));
+    const approach = from.distanceTo(strikeAt);
     const dist = Math.hypot(move.to.r - move.from.r, move.to.c - move.from.c);
 
-    // Unit animation: face the travel direction, run / jump, strike so the impact frame lands on
-    // the capture, the victim turns to the attacker and plays its death.
+    // Strike timeline: the attack clip starts so its impact frame lands just after the approach.
     const actor = mover.actor;
-    let attackStart = Infinity;
+    const lead = LOOKS[ch].impact * ATTACK_MS;
+    const attackStart = capture ? (jump ? moveDur + 50 : Math.max(0, moveDur - 70)) : Infinity;
+    const impactAt = capture ? attackStart + (actor?.has('attack') ? lead : 160) : Infinity;
+    const deathStart = impactAt + HIT_MS;
+    const stepStart = impactAt + STEP_AT;
+    const duration = capture
+      ? Math.max(stepStart + STEP_MS, deathStart + DEATH_MS) + 20
+      : moveDur + (jump ? ANIM.land : 40);
+
     if (actor) {
-      const dx = to.x - from.x;
-      const dz = to.z - from.z;
-      if (dx * dx + dz * dz > 1e-6) actor.face(Math.atan2(dx, dz), 0.12);
-      const clip = MOVE_CLIP[mover.piece.character];
+      if (len > 1e-6) actor.face(Math.atan2(dirX, dirZ), 0.12);
+      const clip = MOVE_CLIP[ch];
       if (clip === 'jump' && actor.has('jump')) {
         actor.play('jump', { once: true, fade: 0.06, timeScale: actor.clipDuration('jump') / ((moveDur + ANIM.land) / 1000) });
-      } else {
+      } else if (approach > 0.05) {
         actor.play('run', { fade: 0.08, timeScale: 1.55 });
       }
-      if (captured && actor.has('attack')) {
-        const lead = LOOKS[mover.piece.character].impact * ATTACK_MS;
-        attackStart = Math.max(0, captureStart - lead);
-      }
     }
-    if (captured?.actor) {
-      const dx = from.x - capturedAt.x;
-      const dz = from.z - capturedAt.z;
-      if (dx * dx + dz * dz > 1e-6) captured.actor.face(Math.atan2(dx, dz), 0.15);
+    if (captured?.actor && len > 1e-6) captured.actor.face(Math.atan2(-dirX, -dirZ), 0.15);
+
+    // Skill flavour on move start.
+    const fx = CHARACTER_FX[ch];
+    const charge = ch === 'marki' && dist >= 2;
+    const trail = jump || chain;
+    const p0 = mover.root.position;
+    if (ch === 'sad') {
+      this.strike.glint(p0.x - dirZ * 0.18, 1.05, p0.z + dirX * 0.18, 0.9, fx.primary, 300, now);
+      for (let i = 0; i < 4; i++) {
+        const a = i * 1.7 + now * 0.001;
+        this.sparks.streak(p0.x + Math.cos(a) * 0.2, 0.35, p0.z + Math.sin(a) * 0.2, 0, 1.6 + i * 0.25, 0, 0.32, fx.secondary, 0.2);
+      }
+    } else if (charge) {
+      this.dust.ring(p0.x, TILE_TOP + 0.04, p0.z, 10, 1.4, 0.5, 0.6, DUST, 0.4);
+    } else if (chain) {
+      this.strike.ground(1, GROUND_MODE.flame, p0.x, TILE_TOP + 0.012, p0.z, 0.75, fx.primary, fx.secondary, 520, now);
+      this.strike.glint(p0.x, 0.9, p0.z, 1.0, '#FF4FE8', 280, now);
+    }
+    if (trail) {
+      this.camera.getWorldDirection(this.camDir);
+      this.strike.trailStart(jump ? fx.primary : '#D04BFF', jump ? fx.core : '#FFD6FA', jump ? 0.34 : 0.42, jump ? 300 : 260, dirX, dirZ, this.camDir);
     }
 
     return new Promise<void>((resolve) => {
       this.anim = {
-        start: performance.now(),
+        move,
+        start: now,
         duration,
         moveDur,
         mover,
         from,
         to,
+        strikeAt,
+        dirX,
+        dirZ,
         jump,
         // The jump clip already lifts the body: a lower arc keeps the unit on screen.
         jumpHeight: (0.7 + Math.min(dist, 6) * 0.12) * (actor?.has('jump') ? 0.6 : 1),
         landed: false,
+        capture,
         captured,
-        capturedOwner,
         capturedAt,
-        captureStart,
-        capFired: false,
-        deathMs,
         attackStart,
         attackFired: false,
+        impactAt,
+        impactFired: false,
+        deathStart,
+        deathFired: false,
+        stepStart,
+        stepFired: false,
+        charge,
+        chain,
+        trail,
         nextDust: 0,
         piecesAfter,
         resolve,
       };
       this.requestRender();
     });
+  }
+
+  /** Register the strike-impact listener (called once per capturing move, at the impact frame). */
+  onImpact(cb: (move: Move) => void): void {
+    this.impactCb = cb;
+  }
+
+  private emitImpact(move: Move): void {
+    try {
+      this.impactCb?.(move);
+    } catch (err) {
+      console.error('[render] onImpact listener failed:', err);
+    }
   }
 
   setHighlights(h: BoardHighlights): void {
@@ -1097,10 +1234,12 @@ export class BoardView implements IBoardView {
     const to = mode === 'top' ? 1 : 0;
     if (to === this.viewTo && (this.tView >= 0 || this.viewT === to)) return;
     this.viewTo = to;
+    if (to === 1) for (const v of this.visuals.values()) this.tokens.load(v.piece.character, v.piece.level);
     if (!animate || !this.idleAnim) {
       this.viewT = to;
       this.tView = -1;
       this.refitCamera();
+      this.applyViewBlend();
       this.requestRender();
       return;
     }
@@ -1132,6 +1271,7 @@ export class BoardView implements IBoardView {
       this.tView = -1;
     }
     this.refitCamera();
+    this.applyViewBlend();
     return this.tView >= 0;
   }
 
@@ -1148,8 +1288,10 @@ export class BoardView implements IBoardView {
 
   dispose(): void {
     if (this.disposed) return;
+    this.disposing = true;
     this.finishAnimation(false);
     this.disposed = true;
+    this.impactCb = null;
     if (this.rafId) cancelAnimationFrame(this.rafId);
     this.rafId = 0;
     this.resizeObserver?.disconnect();
@@ -1162,10 +1304,14 @@ export class BoardView implements IBoardView {
     canvas.removeEventListener('webglcontextlost', this.onContextLost);
     canvas.removeEventListener('webglcontextrestored', this.onContextRestored);
     document.removeEventListener('visibilitychange', this.onVisibility);
-    for (const v of this.visuals.values()) v.actor?.dispose();
+    for (const v of this.visuals.values()) this.removeVisual(v);
     this.visuals.clear();
-    for (const v of this.fading) v.actor?.dispose();
+    for (const v of this.fading) this.removeVisual(v);
     this.fading.length = 0;
+    this.strike.dispose();
+    this.rings.dispose();
+    this.tokens.dispose();
+    this.soulTarget = null;
     this.pieceLayer.clear();
     this.stormFx.dispose();
     this.units?.dispose();
@@ -1217,6 +1363,12 @@ export class BoardView implements IBoardView {
       v.piece = { ...p, pos: { ...p.pos } };
       v.inner.scale.set(1, 1, 1);
       v.root.position.set(cellX(p.pos.c), 0, cellZ(p.pos.r));
+      v.root.scale.set(1, 1, 1);
+      v.ring.scale.set(1, 1, 1);
+      v.token.position.set(0, TOKEN_Y, 0);
+      v.token.scale.set(1, 1, 1);
+      v.tokenMat.uniforms.uFlash.value = 0;
+      v.tokenMat.uniforms.uDissolve.value = 0;
       if (fresh && this.idleAnim) this.startSpawn(v);
     }
     for (const [id, v] of this.visuals) {
@@ -1226,7 +1378,33 @@ export class BoardView implements IBoardView {
         else this.removeVisual(v);
       }
     }
+    let legend = 0;
+    for (const v of this.visuals.values()) if (CHARACTER_RARITY[v.piece.character] === 'legendary') legend++;
+    this.legendaryCount = legend;
     this.applyLift();
+  }
+
+  /**
+   * Cross-fade between the 3D units (tilt) and the illustrated tokens (top-down) for the current
+   * camera blend: units shrink into their puck while the coins fade in (both visible mid-way).
+   */
+  private applyViewBlend(force = false): void {
+    const t = this.viewT;
+    if (!force && t === this.lastBlend) return;
+    this.lastBlend = t;
+    for (const v of this.visuals.values()) this.blendVisual(v);
+    for (const v of this.fading) this.blendVisual(v);
+    if (this.anim?.captured) this.blendVisual(this.anim.captured);
+  }
+
+  private blendVisual(v: PieceVisual): void {
+    const t = this.viewT;
+    const modelK = 1 - smoothstep(0.12, 0.7, t);
+    const tokenK = smoothstep(0.3, 0.85, t);
+    v.figure.visible = modelK > 0.002;
+    v.figure.scale.set(Math.max(0.002, modelK), Math.max(0.002, modelK * modelK), Math.max(0.002, modelK));
+    v.token.visible = tokenK > 0.002;
+    v.tokenMat.uniforms.uOpacity.value = tokenK;
   }
 
   /** The storm takes a piece: death clip + magenta dissolve, sparks and a purple dust ring. */
@@ -1244,6 +1422,7 @@ export class BoardView implements IBoardView {
     v.inner.scale.set(1, 1, 1);
     act.play('death', { once: true, hold: true, fade: 0.05, timeScale: act.clipDuration('death') / (STORM_MS / 1000) });
     act.setDying(this.units.dyingMaterial(v.piece, 'storm'));
+    (v.tokenMat.uniforms.uEdge.value as THREE.Color).set(STORM_COLORS.edge);
     const p = v.root.position;
     this.sparks.burst(p.x, 0.8, p.z, 18, 3.2, STORM_COLORS.edge, (now + v.piece.pos.c * 13) % 97);
     this.dust.ring(p.x, TILE_TOP + 0.05, p.z, 10, 1.6, 0.5, 0.7, STORM_DUST, 0.2);
@@ -1261,14 +1440,30 @@ export class BoardView implements IBoardView {
     const proxy = new THREE.Mesh(this.kit.proxyGeo, this.kit.proxyMat);
     proxy.userData.pieceId = p.id;
     b.inner.add(proxy);
-    const v: PieceVisual = { piece: p, root: b.root, inner: b.inner, actor: null, body: null, proxy };
+    // Rarity ring on the ground (not lifted with the unit).
+    const ring = new THREE.Mesh(this.rings.geometry, this.rings.get(CHARACTER_RARITY[p.character]));
+    ring.position.y = TILE_TOP + 0.007;
+    ring.renderOrder = 2;
+    ring.raycast = noRaycast;
+    b.root.add(ring);
+    const figure = new THREE.Group();
+    b.inner.add(figure);
+    const tokenMat = this.tokens.material(p.character, p.level, p.owner);
+    const token = new THREE.Mesh(this.tokens.geometry, tokenMat);
+    token.position.y = TOKEN_Y;
+    token.renderOrder = 4;
+    token.raycast = noRaycast;
+    b.inner.add(token);
+    if (this.viewTo === 1 || this.viewT > 0) this.tokens.load(p.character, p.level);
+    const v: PieceVisual = { piece: p, root: b.root, inner: b.inner, actor: null, body: null, proxy, figure, ring, token, tokenMat };
     this.attachBody(v, p);
+    this.blendVisual(v);
     return v;
   }
 
   /** (Re)create the unit body of a visual: animated glTF actor, or a silhouette fallback. */
   private attachBody(v: PieceVisual, p: Piece): void {
-    if (v.body) v.inner.remove(v.body);
+    if (v.body) v.figure.remove(v.body);
     v.actor?.dispose();
     v.actor = null;
     let height = 0.95;
@@ -1290,7 +1485,7 @@ export class BoardView implements IBoardView {
     const body = v.body;
     if (body) {
       body.position.y = PUCK_TOP - 0.01;
-      v.inner.add(body);
+      v.figure.add(body);
     }
     v.proxy.scale.set(0.42, PUCK_TOP + height, 0.42);
   }
@@ -1309,6 +1504,8 @@ export class BoardView implements IBoardView {
     this.pieceLayer.remove(v.root);
     v.actor?.dispose(); // geometry/materials are shared templates -> freed by the library
     v.actor = null;
+    v.tokenMat.dispose(); // per-piece uniforms (the face texture is shared, freed by the token kit)
+    if (this.soulTarget === v) this.soulTarget = null;
   }
 
   /** Raise the selected piece slightly so the selection reads at a glance. */
@@ -1343,6 +1540,11 @@ export class BoardView implements IBoardView {
     this.placeInstances(this.captureRings, this.placedCaps, 1);
     this.placeInstances(this.captureGlow, this.placedCaps, 1);
 
+    // Own reach = white/cyan markers; an enemy's reach preview = red dots + red selection ring.
+    const enemy = this.hi.enemy;
+    (this.moveDots.material as THREE.MeshBasicMaterial).color.set(enemy ? BOARD_COLORS.enemyMoveDot : BOARD_COLORS.moveDot);
+    (this.selectRing.material as THREE.MeshBasicMaterial).color.set(enemy ? BOARD_COLORS.enemySelected : BOARD_COLORS.selected);
+    (this.selectGlow.material as THREE.MeshBasicMaterial).color.set(enemy ? BOARD_COLORS.enemySelected : BOARD_COLORS.selected);
     const sel = this.highlights.selected;
     this.selectRing.visible = !!sel;
     this.selectGlow.visible = !!sel;
@@ -1508,10 +1710,11 @@ export class BoardView implements IBoardView {
     const animating = this.tickAnimation(now);
     const viewMoving = this.tickView(now);
     const fxActive = this.updateFx(now) || viewMoving;
+    // Hidden units (top-down view) only advance while they still have a one-shot to finish.
     let unitsBusy = false;
     let haveActors = false;
     for (const v of this.visuals.values()) {
-      if (!v.actor) continue;
+      if (!v.actor || !v.figure.visible) continue;
       haveActors = true;
       if (v.actor.busy) unitsBusy = true;
     }
@@ -1519,8 +1722,10 @@ export class BoardView implements IBoardView {
     const busy = animating || fxActive || unitsBusy;
     const idleLoop = this.idleAnim && haveActors && !document.hidden;
     const stormLoop = this.stormFx.active && !document.hidden;
-    if (!busy && (this.pulsing || idleLoop || stormLoop)) {
-      const cap = this.pulsing ? IDLE_FRAME_MS : IDLE_ANIM_FRAME_MS;
+    // Legendary rainbow ring: a light ~30 fps tick only while one is on the board.
+    const ringLoop = this.idleAnim && this.legendaryCount > 0 && !document.hidden;
+    if (!busy && (this.pulsing || idleLoop || stormLoop || ringLoop)) {
+      const cap = this.pulsing ? IDLE_FRAME_MS : idleLoop ? IDLE_ANIM_FRAME_MS : IDLE_FRAME_MS;
       if (now - this.lastFrame < cap) {
         this.requestRender(); // idle pulse / idle loops are throttled; skip drawing this tick
         return;
@@ -1529,18 +1734,22 @@ export class BoardView implements IBoardView {
     // Unit animation clock (clamped so a long pause never makes the mixers jump).
     const dt = this.lastTick > 0 ? Math.min(0.1, Math.max(0, (now - this.lastTick) / 1000)) : 0;
     this.lastTick = now;
-    if (haveActors || capturedActor || this.fading.length > 0) {
+    if (this.visuals.size > 0 || capturedActor || this.fading.length > 0) {
       const step = busy || this.idleAnim ? dt : 0;
-      for (const v of this.visuals.values()) v.actor?.update(step);
+      for (const v of this.visuals.values()) {
+        const act = v.actor;
+        if (act && (v.figure.visible || act.busy)) act.update(step);
+      }
       capturedActor?.update(dt);
       for (const v of this.fading) v.actor?.update(dt);
       this.units?.update(now / 1000);
     }
+    if (this.idleAnim) this.rings.time.value = now / 1000;
     if (stormLoop) this.stormFx.update(now / 1000);
     this.lastFrame = now;
     this.updatePulse(now);
     this.renderer.render(this.scene, this.camera);
-    if (busy || this.pulsing || idleLoop || stormLoop) this.requestRender();
+    if (busy || this.pulsing || idleLoop || stormLoop || ringLoop) this.requestRender();
     else this.lastTick = 0;
   };
 
@@ -1567,7 +1776,17 @@ export class BoardView implements IBoardView {
     const inner = a.mover.inner;
     const k = clamp01(t / a.moveDur);
     const e = easeInOutCubic(k);
-    root.position.lerpVectors(a.from, a.to, e);
+    if (!a.capture || t < a.stepStart) {
+      root.position.lerpVectors(a.from, a.strikeAt, e);
+      if (a.capture) {
+        // Lunge into the blow around the impact frame.
+        const l = 0.14 * bump(a.impactAt - 110, a.impactAt + 150, t);
+        root.position.x += a.dirX * l;
+        root.position.z += a.dirZ * l;
+      }
+    } else {
+      root.position.lerpVectors(a.strikeAt, a.to, easeInOutCubic(clamp01((t - a.stepStart) / STEP_MS)));
+    }
     if (a.jump) {
       let sy = 1 + 0.14 * Math.sin(Math.PI * k); // stretch mid-air
       let sxz = 1 - 0.07 * Math.sin(Math.PI * k);
@@ -1591,45 +1810,126 @@ export class BoardView implements IBoardView {
     } else {
       inner.position.y = TILE_TOP + 0.045 * Math.sin(Math.PI * k);
     }
+    if (a.trail && t <= a.moveDur + 16) this.strike.trailPush(root.position.x, inner.position.y + (a.jump ? 0.62 : 0.55), root.position.z, now);
     if (t < a.moveDur && t >= a.nextDust) this.footstep(a, t);
     if (!a.landed && t >= a.moveDur) {
       a.landed = true;
-      this.startLandFx(a.to, TEAM_COLORS[a.mover.piece.owner].glow, now);
-      const big = a.jump || a.mover.piece.character === 'marki';
-      this.dust.ring(a.to.x, TILE_TOP + 0.04, a.to.z, a.jump ? 12 : 6, a.jump ? 1.8 : 1.0, big ? 0.55 : 0.38, 0.6, DUST, k);
-      if (a.mover.actor && !a.captured && !a.jump) a.mover.actor.idle(0.12);
+      const fx = CHARACTER_FX[a.mover.piece.character];
+      this.startLandFx(a.strikeAt, a.jump ? fx.primary : TEAM_COLORS[a.mover.piece.owner].glow, now);
+      const big = a.jump || a.charge;
+      this.dust.ring(a.strikeAt.x, TILE_TOP + 0.04, a.strikeAt.z, a.jump ? 12 : big ? 10 : 6, a.jump ? 1.8 : big ? 1.5 : 1.0, big ? 0.55 : 0.38, 0.6, DUST, k);
+      if (a.trail) this.strike.trailEnd();
+      if (a.jump) this.strike.ground(1, GROUND_MODE.ring, a.strikeAt.x, TILE_TOP + 0.012, a.strikeAt.z, 0.95, fx.secondary, fx.core, 380, now);
+      if (a.mover.actor && !a.capture && !a.jump) a.mover.actor.idle(0.12);
     }
-    if (!a.attackFired && t >= a.attackStart && a.mover.actor) {
+    if (!a.attackFired && t >= a.attackStart) {
       a.attackFired = true;
       const act = a.mover.actor;
-      act.play('attack', { once: true, fade: 0.06, timeScale: act.clipDuration('attack') / (ATTACK_MS / 1000) });
+      if (act?.has('attack')) act.play('attack', { once: true, fade: 0.06, timeScale: act.clipDuration('attack') / (ATTACK_MS / 1000) });
     }
-    if (a.captured && t >= a.captureStart) {
-      const cv = a.captured;
-      if (!a.capFired) {
-        a.capFired = true;
-        this.startCaptureFx(a.capturedAt, a.capturedOwner, now);
-        const mp = a.mover.piece;
-        const hit = LOOKS[mp.character].levels[mp.level].glow;
-        this.sparks.burst(a.capturedAt.x, 0.85, a.capturedAt.z, 22 + mp.level * 6, 3.6 + mp.level * 0.5, hit, now % 97);
-        this.dust.ring(a.capturedAt.x, TILE_TOP + 0.05, a.capturedAt.z, 10, 2.1, 0.5, 0.65, DUST, 0.3);
+    if (a.capture && !a.impactFired && t >= a.impactAt) this.impactFx(a, now);
+    if (a.capture && !a.stepFired && t >= a.stepStart) {
+      a.stepFired = true;
+      const act = a.mover.actor;
+      if (act && a.strikeAt.distanceToSquared(a.to) > 0.0025) act.play('run', { fade: 0.1, timeScale: 1.2 });
+      if (a.mover.piece.character === 'insaner') {
+        // Lingering absorption aura where the imp ends up.
+        const fx = CHARACTER_FX.insaner;
+        this.strike.ground(1, GROUND_MODE.flame, a.to.x, TILE_TOP + 0.012, a.to.z, 0.72, fx.primary, fx.secondary, 900, now);
+      }
+    }
+    // Strike pop of the attacker's token (top-down view).
+    const pop = 1 + 0.14 * bump(a.impactAt - 90, a.impactAt + 170, t);
+    a.mover.token.scale.set(pop, 1, pop);
+
+    const cv = a.captured;
+    if (cv && a.impactFired) {
+      const tk = t - a.impactAt;
+      if (!a.deathFired && t >= a.deathStart) {
+        a.deathFired = true;
         const act = cv.actor;
         if (act) {
-          act.play('death', { once: true, hold: true, fade: 0.05, timeScale: act.clipDuration('death') / (a.deathMs / 1000) });
+          act.play('death', { once: true, hold: true, fade: 0.06, timeScale: act.clipDuration('death') / ((DEATH_MS + 60) / 1000) });
           if (this.units) act.setDying(this.units.dyingMaterial(cv.piece));
         }
       }
-      // Knock-back (death clip) while the body dissolves from a hot edge; silhouettes shrink.
-      const ck = clamp01((t - a.captureStart) / a.deathMs);
+      // Knock-back along the strike, then the body dissolves from a hot edge; silhouettes shrink.
+      const kb = 0.26 * easeOutCubic(clamp01(tk / (HIT_MS + DEATH_MS)));
+      const ck = clamp01((t - a.deathStart) / DEATH_MS);
+      cv.root.position.set(a.capturedAt.x + a.dirX * kb, 0.08 * easeOutCubic(ck), a.capturedAt.z + a.dirZ * kb);
       if (cv.actor && this.units) {
-        this.units.setDissolve(clamp01((ck - 0.12) / 0.88));
-      } else {
-        const sk = clamp01((ck - 0.45) / 0.55);
-        cv.root.scale.setScalar(Math.max(0.001, 1 - easeOutCubic(sk)));
+        this.units.setDissolve(clamp01((ck - 0.08) / 0.92));
+      } else if (!cv.actor) {
+        const sk = clamp01((ck - 0.3) / 0.7);
+        cv.inner.scale.setScalar(Math.max(0.001, 1 - easeOutCubic(sk)));
       }
-      cv.root.position.y = 0.08 * easeOutCubic(ck);
+      // Token: white hit flash + shake, then a burning dissolve that swells slightly (shatter).
+      const u = cv.tokenMat.uniforms;
+      u.uFlash.value = Math.max(0, 1 - tk / 160) * 0.85;
+      const shake = tk < HIT_MS ? Math.sin(tk * 0.11) * 0.045 * (1 - tk / HIT_MS) : 0;
+      cv.token.position.set(-a.dirZ * shake, TOKEN_Y, a.dirX * shake);
+      u.uDissolve.value = ck;
+      const sw = 1 + 0.14 * easeOutCubic(ck);
+      cv.token.scale.set(sw, 1, sw);
+      const rs = Math.max(0.001, 1 - easeOutCubic(ck));
+      cv.ring.scale.set(rs, 1, rs);
     }
     return true;
+  }
+
+  /** The strike lands: character FX, victim recoil, onImpact. */
+  private impactFx(a: RunningAnim, now: number): void {
+    a.impactFired = true;
+    const mp = a.mover.piece;
+    const ch = mp.character;
+    const fx = CHARACTER_FX[ch];
+    const at = a.capturedAt;
+    const gy = TILE_TOP + 0.012;
+    const seed = now % 97;
+    let shake = 1;
+    let shakeMs: number = ANIM.shake;
+    let flash = 0.45;
+    switch (ch) {
+      case 'sad':
+        this.strike.slash(at.x - a.dirX * 0.15, 0.8, at.z - a.dirZ * 0.15, 1.75, fx.primary, fx.core, a.dirX < 0, now);
+        this.strike.pillar(at.x, TILE_TOP, at.z, fx.primary, fx.secondary, fx.core, false, 600, now);
+        this.strike.ground(0, GROUND_MODE.sigil, at.x, gy, at.z, 1.05, fx.primary, fx.secondary, 600, now);
+        this.sparks.burst(at.x, 0.85, at.z, 20 + mp.level * 4, 3.8, fx.primary, seed);
+        break;
+      case 'marki':
+        this.strike.ground(0, GROUND_MODE.crack, at.x, gy, at.z, 1.6, fx.primary, '#9A7350', 780, now);
+        this.dust.ring(at.x, TILE_TOP + 0.05, at.z, 18, 2.9, 0.78, 0.85, DUST, 0.2);
+        this.dust.ring(at.x, TILE_TOP + 0.12, at.z, 8, 1.1, 0.6, 1.0, DUST, 1.1);
+        for (let i = 0; i < 10; i++) {
+          const ang = i * 0.63 + seed;
+          this.sparks.streak(at.x, 0.2, at.z, Math.cos(ang) * 1.7, 2.2 + (i % 3) * 0.7, Math.sin(ang) * 1.7, 0.5, '#FF8A2A', 0.6);
+        }
+        this.sparks.burst(at.x, 0.6, at.z, 16, 3.2, fx.primary, seed);
+        shake = this.reducedMotion ? 0.5 : 2.6;
+        shakeMs = 260;
+        flash = 0.6;
+        break;
+      case 'walk':
+        this.strike.ground(0, GROUND_MODE.shield, at.x, gy, at.z, 1.25, fx.primary, fx.core, 540, now, Math.atan2(-a.dirX, -a.dirZ));
+        this.sparks.burst(at.x, 0.75, at.z, 20 + mp.level * 4, 3.5, fx.secondary, seed);
+        shake = this.reducedMotion ? 0.6 : 1.5;
+        flash = 0.15;
+        break;
+      case 'insaner':
+        this.strike.pillar(at.x, TILE_TOP, at.z, fx.primary, fx.secondary, fx.core, true, 640, now);
+        this.strike.ground(0, GROUND_MODE.flame, at.x, gy, at.z, 1.1, fx.primary, fx.secondary, 660, now);
+        this.sparks.burst(at.x, 0.8, at.z, 14, 3.4, fx.primary, seed);
+        this.sparks.burst(at.x, 0.6, at.z, 10, 2.6, fx.secondary, (seed + 31) % 97);
+        this.strike.soul(at.x, 0.75, at.z, '#B65CFF', '#FFE6FF', now);
+        this.soulTarget = a.mover;
+        this.strike.setSoulTarget(a.mover.root.position.x, 0.75, a.mover.root.position.z);
+        this.lastCapture = { id: mp.id, t: now };
+        break;
+    }
+    this.startCaptureFx(at, fx.primary, flash, now, shake, shakeMs);
+    const act = a.captured?.actor;
+    if (act?.has('hit')) act.play('hit', { once: true, hold: true, fade: 0.04, timeScale: Math.min(2.5, act.clipDuration('hit') / 0.45) });
+    this.emitImpact(a.move);
   }
 
   private startLandFx(at: THREE.Vector3, hex: string, now: number): void {
@@ -1662,6 +1962,17 @@ export class BoardView implements IBoardView {
     if (bull) {
       this.dust.emit(p.x - dx * back - lx, y, p.z - dz * back - lz, -dx * 0.5 - lx, 0.45, -dz * 0.5 - lz, 0.55, 0.6, DUST);
       if (a.mover.piece.level === 3) this.dust.emit(p.x - dx * back, y + 0.1, p.z - dz * back, -dx * 0.3, 0.9, -dz * 0.3, 0.2, 0.55, EMBER);
+      if (a.charge) {
+        // Charge: speed streaks streaming past the bull's flanks + a thicker dust wake.
+        const n = (t / 50) | 0;
+        for (let i = 0; i < 2; i++) {
+          const side2 = i === 0 ? 1 : -1;
+          const off = 0.3 + 0.12 * ((n + i) % 3);
+          const h = 0.35 + 0.28 * ((n * 7 + i * 3) % 4);
+          this.sparks.streak(p.x - dz * side2 * off - dx * 0.2, h, p.z + dx * side2 * off - dz * 0.2, dx * 4.5, 0, dz * 4.5, 0.16, '#FFE2B0', 0);
+        }
+        this.dust.emit(p.x - dx * 0.5, y + 0.05, p.z - dz * 0.5, -dx * 0.9, 0.5, -dz * 0.9, 0.75, 0.7, DUST);
+      }
     }
   }
 
@@ -1676,17 +1987,19 @@ export class BoardView implements IBoardView {
     this.spawning.push(v);
   }
 
-  private startCaptureFx(at: THREE.Vector3, owner: PlayerId, now: number): void {
+  /** Generic strike flash + shock ring + debris burst in `col`, plus a camera shake. */
+  private startCaptureFx(at: THREE.Vector3, col: string, flashTint: number, now: number, shakeAmp = 1, shakeMs: number = ANIM.shake): void {
     this.tCap = now;
     this.tShake = now;
-    const col = TEAM_COLORS[owner].glow;
+    this.shakeAmp = shakeAmp;
+    this.shakeMs = shakeMs;
     this.shockMat.color.set('#ffffff').lerp(this.tmpC.set(col), 0.8);
     this.shockRing.position.set(at.x, OVERLAY_Y + 0.003, at.z);
     this.shockRing.visible = true;
-    this.flashMat.color.set('#ffffff').lerp(this.tmpC.set(col), 0.35);
+    this.flashMat.color.set('#ffffff').lerp(this.tmpC.set(col), flashTint);
     this.flash.position.set(at.x, 0.55, at.z);
     this.flash.visible = true;
-    this.burstMat.color.set(TEAM_COLORS[owner].glow).lerp(this.tmpC.set('#ffffff'), 0.25);
+    this.burstMat.color.set(col).lerp(this.tmpC.set('#ffffff'), 0.25);
     this.burstOrigin.set(at.x, 0.4, at.z);
     this.burst.visible = true;
   }
@@ -1698,6 +2011,12 @@ export class BoardView implements IBoardView {
     this.lastFx = now;
     if (this.dust.update(dt)) active = true;
     if (this.sparks.update(dt)) active = true;
+    if (this.soulTarget) {
+      const p = this.soulTarget.root.position;
+      this.strike.setSoulTarget(p.x, 0.75, p.z);
+    }
+    if (this.strike.update(now, this.camera)) active = true;
+    else this.soulTarget = null;
 
     if (this.tSpawn >= 0) {
       const el = now - this.tSpawn;
@@ -1730,7 +2049,10 @@ export class BoardView implements IBoardView {
         active = true;
         const kk = Math.max(0, k);
         this.units?.setDissolve(clamp01((kk - 0.1) / 0.9), 'storm');
-        for (const v of this.fading) v.root.position.y = 0.16 * easeOutCubic(kk);
+        for (const v of this.fading) {
+          v.root.position.y = 0.16 * easeOutCubic(kk);
+          v.tokenMat.uniforms.uDissolve.value = clamp01((kk - 0.1) / 0.9);
+        }
       }
     }
 
@@ -1777,7 +2099,7 @@ export class BoardView implements IBoardView {
     }
 
     if (this.tShake >= 0) {
-      const k = (now - this.tShake) / ANIM.shake;
+      const k = (now - this.tShake) / this.shakeMs;
       if (k >= 1) {
         this.tShake = -1;
         if (this.shaking) {
@@ -1787,8 +2109,8 @@ export class BoardView implements IBoardView {
       } else {
         active = true;
         const kk = Math.max(0, k);
-        const ox = shakeOffset(kk, 0) * this.pxWorld;
-        const oy = shakeOffset(kk, 1) * this.pxWorld;
+        const ox = shakeOffset(kk, 0) * this.pxWorld * this.shakeAmp;
+        const oy = shakeOffset(kk, 1) * this.pxWorld * this.shakeAmp;
         this.camera.position
           .copy(this.camBase)
           .addScaledVector(this.camRight, ox)
@@ -1844,7 +2166,14 @@ export class BoardView implements IBoardView {
     if (!a) return;
     this.anim = null;
     a.mover.inner.scale.set(1, 1, 1);
+    a.mover.token.scale.set(1, 1, 1);
+    if (a.trail) this.strike.trailEnd();
     if (a.captured) this.removeVisual(a.captured);
+    // onImpact fires exactly once per capturing move, even if the animation is cut short.
+    if (a.capture && !a.impactFired) {
+      a.impactFired = true;
+      if (!this.disposing) this.emitImpact(a.move);
+    }
     if (a.mover.actor) {
       if (!natural) a.mover.actor.face(a.mover.actor.facing, 0);
       a.mover.actor.idle(natural ? 0.2 : 0);
@@ -1867,6 +2196,8 @@ export class BoardView implements IBoardView {
     this.comet.visible = false;
     this.dust.clear();
     this.sparks.clear();
+    this.strike.clear();
+    this.soulTarget = null;
     this.units?.setDissolve(0);
     if (this.tSpawn >= 0) {
       for (const v of this.spawning) v.inner.scale.set(1, 1, 1);
@@ -1942,7 +2273,8 @@ export class BoardView implements IBoardView {
     }
     if (planePos) {
       const k = posKey(planePos);
-      if (this.hi.moves.has(k) || this.hi.captures.has(k)) return planePos;
+      // Top-down: tokens lie flat on their squares, so the square under the finger is exact.
+      if (this.viewT > 0.5 || this.hi.moves.has(k) || this.hi.captures.has(k)) return planePos;
     }
 
     // Then the unit actually drawn under the finger (front-most along the ray): a tall unit in
