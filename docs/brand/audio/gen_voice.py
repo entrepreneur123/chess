@@ -60,7 +60,8 @@ def main() -> None:
             key = f"{char}:{line['id']}"
             if only and key not in only:
                 continue
-            instruct = f"{c['voice']} {line['style']}"
+            instruct = f"{c['voice']} {line.get('style', '')}"
+            say = line.get("say", line["text"])  # spoken text (e.g. '!' -> '.' for a firm, unshouted read)
             # All takes of a line are sampled in one batch (decoding is memory-bound on CPU, so a
             # batch of N costs little more than one take). File names carry the batch seed + index.
             seed = a.seed_base
@@ -75,14 +76,14 @@ def main() -> None:
                     clone_prompt = m.create_voice_clone_prompt(
                         ref_audio=os.path.join(here, clone["ref"]), ref_text=clone["text"])
                 wavs, sr = m.generate_voice_clone(
-                    text=[line["text"]] * a.seeds,
+                    text=[say] * a.seeds,
                     language=["Korean"] * a.seeds,
                     voice_clone_prompt=clone_prompt * a.seeds,
                     max_new_tokens=120,
                 )
             else:
                 wavs, sr = get("design").generate_voice_design(
-                    text=[line["text"]] * a.seeds,
+                    text=[say] * a.seeds,
                     language=["Korean"] * a.seeds,
                     instruct=[instruct] * a.seeds,
                     max_new_tokens=120,

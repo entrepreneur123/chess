@@ -2,7 +2,8 @@
 
 Usage:  python3 write_audition.py   (paths are resolved from this file)
 Reads lines.json (script, character notes) and qa-voice.json (measurements of the shipped files).
-The page has no external requests: inline CSS/JS, clips referenced relative to /audio/.
+The page has no external requests: inline CSS, a same-origin audition.js (the site CSP blocks
+inline scripts), clips referenced relative to /audio/.
 """
 import html
 import json
@@ -71,9 +72,10 @@ def main() -> None:
                        f'<div><div class="txt">{html.escape(line["text"])}</div><div class="meta">{meta}</div></div>'
                        f'<audio controls preload="none" src="vo/{name}.m4a"></audio></div>')
         out.append("</section>")
-    out += ["</main>", f"<script>{JS}</script>", "</body></html>", ""]
+    out += ["</main>", '<script src="audition.js"></script>', "</body></html>", ""]
     path = os.path.join(PUB, "audition.html")
     open(path, "w", encoding="utf-8").write("\n".join(out))
+    open(os.path.join(os.path.dirname(path), "audition.js"), "w", encoding="utf-8").write(JS.strip() + "\n")
     print("wrote", path)
 
 

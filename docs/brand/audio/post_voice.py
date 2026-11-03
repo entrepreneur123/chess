@@ -10,19 +10,23 @@ Usage:
 Per take:
   1. Decode to 24 kHz mono. Trim leading silence (15 ms pre-roll, 8 ms raised-cosine fade-in). The
      end of speech is found at -45 dB below the loudest 10 ms frame; everything after it is kept.
-  2. Adaptive de-harsh: a split-band de-esser (4.5 kHz up, compressed only where it dominates the
-     full band) and a broad 3.5 kHz cut whose depth depends on how bright the take measures
-     (2-8 kHz vs 0.1-2 kHz energy) against the character's target. No bit-crushing anywhere.
-  3. Character FX (fx_* below). Pitch is never shifted on the main voice. Extra layers (marki's
-     sub-octave growl, insaner's octave-down demon double) are resynthesised with the WORLD vocoder.
+     Internal pauses > 0.4 s are tightened to 0.3 s; a smooth downward expander removes TTS breath /
+     hiss below -38 dB (relative) in pauses and tails.
+  2. Adaptive de-harsh: a split-band de-esser (4.5 kHz up, per-character threshold, compressed only
+     where it dominates the full band) and a broad 3.5 kHz cut whose depth depends on how bright the
+     take measures (2-8 kHz vs 0.1-2 kHz energy) against the character's target; the cut is applied
+     again after the FX. No bit-crushing anywhere.
+  3. Character FX (fx_* below). Pitch is never shifted on the main voice (insaner only gets +10 %
+     formants). Extra layers (marki's sub-octave growl, insaner's octave-down demon double) are
+     resynthesised with the WORLD vocoder.
   4. Reverb tails are rendered in full and the clip ends only where its level has fallen 55 dB
      below the peak, then gets a >= 150 ms cosine fade, so no tail is ever cut.
-  5. Loudness -16 LUFS (BS.1770) with a 4x-oversampled true-peak limiter; after AAC encoding the
-     decoded file is re-checked and re-encoded quieter until it is <= -1 dBTP.
+  5. Loudness -16 LUFS (BS.1770) with a smooth 4x-oversampled true-peak limiter at -2 dBTP; after
+     AAC encoding the decoded file is re-checked (<= -1 dBTP, within 0.2 LU of -16).
   6. Every raw take is transcribed first; the best few per line (CER, closeness to the character's
-     median pitch - shouted takes sit far above it - and length) are fully processed and judged on
-     what actually ships (decoded .m4a): Whisper CER, pitch deviation, length, and for characters
-     marked "gender": "female" a gate on the classifier's P(female) when --gender is given.
+     pitch target - shouted takes sit far above it - and length) are fully processed and judged on
+     what actually ships (decoded .m4a): Whisper CER, pitch deviation, length, warble, and for
+     characters marked "gender": "female" a gate on the classifier's P(female) when --gender is given.
 """
 import argparse
 import json
@@ -36,11 +40,11 @@ from scipy import signal
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # sibling modules (python -I drops it)
 import voice_qa as vq  # noqa: E402
-from process_voice import Asr, biquad, cer, compress, encode_m4a, expected_dur, lufs  # noqa: E402
+from process_voice import Asr, biquad, cer, compress, encode_m4a, expected_dur, lufs, pitch_formant  # noqa: E402
 
 SR = vq.SR
 TARGET_LUFS = -16.0
-TP_LIMIT = -1.5   # limiter ceiling before encoding (dBTP); the decoded file must be <= -1.0 dBTP
+TP_LIMIT = -2.0   # limiter ceiling before encoding (dBTP); AAC overshoots ~0.5-1 dB, decoded must be <= -1.0
 TP_MAX = -1.0
 rng = np.random.default_rng(11)
 
@@ -196,7 +200,10 @@ def fx_marki(x):
 def fx_insaner(x):
     """Evil imp: the small voice plus a strong octave-down demon double with a growl texture,
     a touch of ring modulation and flanging, and a dark tail."""
-    y = biquad(x, "hp", 120)
+    # A smaller creature: formants of the main voice +10 % (pitch unchanged; ffmpeg rubberband with
+    # preserved formants after a 1.1x resample - measured: no added warble or jitter on this voice).
+    y = pad(pitch_formant(x, 1.0, 1.1, 1.0, "rb"), len(x))
+    y = biquad(y, "hp", 120)
     n = len(y)
     t = np.arange(n) / SR
     low = world_layer(y, 0.5, 0.78)
@@ -205,14 +212,14 @@ def fx_insaner(x):
     low = biquad(np.tanh(2.2 * low / pk) * pk, "lp", 2200)
     low = np.concatenate([np.zeros(int(0.012 * SR)), low])[:n]  # 12 ms behind: a second throat
     ring = y * np.sin(2 * math.pi * 92 * t)                   # metallic edge
-    mix = y + 0.75 * low * rms(y) / rms(low) + 0.14 * ring
+    mix = y + 0.75 * low * rms(y) / rms(low) + 0.10 * ring
     # Flanger: 0.6-2.6 ms delay swept at 0.35 Hz, with feedback.
     d = (1.6 + 1.0 * np.sin(2 * math.pi * 0.35 * t)) / 1000 * SR
     fl = np.zeros(n)
     idx = np.arange(n) - d
     for _ in range(2):  # two passes of interpolated delay ~ feedback 0.4
         fl = np.interp(idx, np.arange(n), mix + 0.4 * fl, left=0.0)
-    y = mix + 0.35 * fl
+    y = mix + 0.25 * fl
     y = biquad(y, "lowshelf", 220, 2.0)
     y = biquad(y, "lp", 8500)
     y = compress(y, -22, 3.0, attack=0.005, release=0.1)
@@ -229,13 +236,16 @@ def fx_brutile(x):
     y = 0.9 * y + 0.18 * np.interp(np.arange(n) - d, np.arange(n), y, left=0.0)
     y = biquad(y, "lowshelf", 220, 1.0)
     y = compress(y, -22, 2.5, attack=0.006, release=0.12)
-    return hall(y, 1.5, 0.15, predelay=0.03, lp=4000)
+    return hall(y, 1.2, 0.12, predelay=0.03, lp=4000)
 
 
 FX = {"sad": fx_sad, "marki": fx_marki, "walk": fx_walk, "insaner": fx_insaner, "brutile": fx_brutile}
 # Brightness target (voice_qa harsh_db) for the adaptive presence cut; ElevenLabs takes measure
 # about -6..-1 dB raw. Humans sit warmer, the witch keeps a little more rasp.
-HARSH_TARGET = {"sad": -9.0, "marki": -11.0, "walk": -9.0, "insaner": -8.0, "brutile": -7.0}
+HARSH_TARGET = {"sad": -9.0, "marki": -11.0, "walk": -10.0, "insaner": -8.0, "brutile": -7.0}
+# De-esser threshold (share of the full-band envelope the >4.5 kHz band may carry before it is turned
+# down). walk's hard affricates ([ch] in 끝이다, [ss] in 쓰러뜨렸다) need a firmer hand.
+DEESS_THR = {"sad": 0.35, "marki": 0.35, "walk": 0.2, "insaner": 0.35, "brutile": 0.3}
 
 
 # ------------------------------------------------------------------------------------------------
@@ -275,14 +285,26 @@ def normalise(x: np.ndarray) -> np.ndarray:
 
 
 def encode_tp(y: np.ndarray, path: str):
-    """Encode, then re-encode quieter until the decoded file's true peak is <= TP_MAX."""
-    for _ in range(5):
+    """Encode and judge the decoded file: re-encode quieter while its true peak is above TP_MAX, and
+    nudge the gain while its loudness is off target by > 0.2 LU (AAC padding shifts the gated
+    loudness of sub-second clips by up to ~0.6 LU), never past the true-peak headroom."""
+    for _ in range(6):
         encode_m4a(y, path, "64k", SR)
         z = vq.load(path)
-        over = vq.true_peak_db(z) - TP_MAX
-        if over <= 0:
+        tp = vq.true_peak_db(z)
+        if tp > TP_MAX:
+            y = y * 10 ** (-(tp - TP_MAX + 0.2) / 20)
+            continue
+        err = TARGET_LUFS - lufs(z)
+        if abs(err) <= 0.2:
             break
-        y = y * 10 ** (-(over + 0.2) / 20)
+        step = min(err, TP_MAX - 0.15 - tp)
+        if abs(step) < 0.05:
+            break
+        y = y * 10 ** (step / 20)
+    else:  # gain changed on the last round: the file on disk must match y
+        encode_m4a(y, path, "64k", SR)
+        z = vq.load(path)
     return y, z
 
 
@@ -322,14 +344,35 @@ def shorten_pauses(x: np.ndarray, max_gap: float = 0.4, keep: float = 0.3, rel_d
     return y
 
 
+def expand(x: np.ndarray, thr_db: float = -38.0, ratio: float = 2.5, max_gr: float = 18.0,
+           attack: float = 0.004, release: float = 0.12) -> np.ndarray:
+    """Downward expander on the dry voice: below thr_db (relative to the loudest 10 ms) the level
+    falls ratio times faster, up to max_gr dB. Removes TTS breath / hiss in pauses and after the last
+    word; anything louder (speech, intended breathy laughs) is untouched. Smooth gain, no gating clicks."""
+    env = envelope(x, 10.0)
+    ref = env.max()
+    lvl = 20 * np.log10(env / ref + 1e-12)
+    gr = np.clip((thr_db - lvl) * (ratio - 1), 0, max_gr)
+    target = 10 ** (-gr / 20)
+    a_a, a_r = math.exp(-1 / (attack * SR)), math.exp(-1 / (release * SR))
+    out = np.empty_like(target)
+    prev = 1.0
+    for i, v in enumerate(target):  # gain falls slowly (release) and recovers fast (attack)
+        coef = a_a if v > prev else a_r
+        prev = coef * prev + (1 - coef) * v
+        out[i] = prev
+    return x * out
+
+
 def render(x: np.ndarray, char: str) -> np.ndarray:
     x = trim_lead(x)
     end = speech_end(x)
     x = x[: min(len(x), end + int(0.35 * SR))]  # keep the natural decay after the last word
     x = shorten_pauses(x)
     end = speech_end(x)
+    x = expand(x)
     x = x / (np.abs(x).max() + 1e-9) * 0.7
-    x = deess(x)
+    x = deess(x, thr=DEESS_THR[char], max_gr=12.0)
     x = deharsh(x, HARSH_TARGET[char])
     y = FX[char](x)
     y = deharsh(y, HARSH_TARGET[char])  # saturation / layers can re-add brightness
@@ -393,8 +436,9 @@ def main() -> None:
             else:
                 print(f"WARNING: no takes for {char}:{line['id']}", flush=True)
         good = [k["f0"] for v in cands.values() for k in v if k["cer"] <= 0.2 and k["f0"] > 0]
-        med = float(np.median(good)) if good else 0.0
-        print(f"{char}: median F0 of intelligible raw takes {med:.0f} Hz", flush=True)
+        med = float(c.get("f0_target") or (np.median(good) if good else 0.0))
+        print(f"{char}: pitch reference {med:.0f} Hz (median of intelligible raw takes "
+              f"{np.median(good) if good else 0:.0f} Hz)", flush=True)
 
         def dev(k):  # shouted / off-character takes sit far from the character's median pitch
             return abs(math.log2(k["f0"] / med)) if (med and k["f0"]) else 0.0
@@ -406,7 +450,7 @@ def main() -> None:
             ref = line.get("asr", line["text"])
             natural = expected_dur(line["text"])  # ~0.2 s + 0.15 s per syllable
             ranked = sorted(cands[line["id"]],
-                            key=lambda k: k["cer"] + 0.3 * dev(k) + 0.3 * max(0.0, k["dur"] - 2.4))
+                            key=lambda k: k["cer"] + 0.5 * dev(k) + 0.3 * max(0.0, k["dur"] - 2.4))
             best = None
             for k in ranked[: a.shortlist]:
                 y = render(vq.load(os.path.join(rawdir, k["file"])), char)
@@ -416,14 +460,17 @@ def main() -> None:
                 hyp = asr(z)
                 d = len(z) / SR
                 # Punchy barks: penalise speech much slower than natural (the reverb tail is excluded).
-                score = (cer(ref, hyp) + 0.3 * dev(k) + 0.15 * max(0.0, d - 2.6)
-                         + 0.1 * max(0.0, k["dur"] / natural - 1.2))
+                art = vq.artifacts(z, vq.f0_track(z))
+                # Fast pitch wobble (warble) is the most audible TTS/vocoder artefact; above ~0.12 st
+                # it costs about as much as one wrong syllable in a 7-syllable line.
+                score = (cer(ref, hyp) + 0.5 * dev(k) + 0.15 * max(0.0, d - 2.6)
+                         + 0.1 * max(0.0, k["dur"] / natural - 1.2) + 1.5 * max(0.0, art["warble"] - 0.12))
                 fp = None
                 if gender is not None and want_female:
                     fp = gender(z)
                     score += 2.0 * max(0.0, 0.6 - fp)
                 print(f"  {char}:{line['id']} {k['file']} -> {hyp!r} cer={cer(ref, hyp):.2f} dur={d:.2f} "
-                      f"f0={k['f0']:.0f} fem={fp} ({score:.3f})", flush=True)
+                      f"f0={k['f0']:.0f} warble={art['warble']} fem={fp} ({score:.3f})", flush=True)
                 if best is None or score < best[0]:
                     best = (score, k, y, hyp)
             _, k, y, hyp = best

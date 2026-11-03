@@ -78,16 +78,55 @@ and transcript in `lines.json` (`voice`, `clone`).
 
 ## Character treatment (`post_voice.py`)
 
-No line is pitch-shifted; the register comes from the reference voice. Every take is de-essed
-(split band above 4.5 kHz, only where it dominates) and gets an adaptive broad 3.5 kHz cut that
-brings its 2-8 kHz/0.1-2 kHz energy ratio toward the character's target, before and after FX.
-Internal pauses longer than 0.4 s are tightened to 0.3 s. Reverb tails are rendered in full, the
-clip ends 55 dB below its peak with a >= 150 ms cosine fade, then -16 LUFS with a smooth
-look-ahead true-peak limiter (decoded files <= -1 dBTP).
+No line is pitch-shifted; the register comes from the reference voice and from what the TTS is
+asked to say (`say`: exclamation marks make Qwen shout male voices up to 200-400 Hz, so sad's and
+walk's exclaimed lines are spoken with a period; the caption keeps the '!'). Per take:
 
-TREATMENT_TABLE
+1. leading silence trimmed (15 ms pre-roll, 8 ms fade-in); internal pauses > 0.4 s tightened to 0.3 s;
+2. a smooth downward expander removes TTS breath / hiss below -38 dB (relative) in pauses and tails;
+3. a split-band de-esser (above 4.5 kHz, per-character threshold, max 12 dB) and an adaptive broad
+   3.5 kHz cut that brings the 2-8 kHz / 0.1-2 kHz energy ratio toward the character's target,
+   before and after the FX;
+4. the character FX below; reverb tails rendered in full, the clip ends only after it has decayed
+   55 dB below its peak, with a >= 150 ms cosine fade;
+5. -16 LUFS with a smooth look-ahead true-peak limiter (-2 dBTP), AAC encode, and the *decoded*
+   file is re-checked: <= -1 dBTP and within 0.2 LU of -16 (AAC padding shifts short clips).
+
+| Character | Art-derived target | Voice source (reference) | Post-processing (`fx_*`) |
+| --- | --- | --- | --- |
+| sad (paladin) | young-adult knight, stoic: warm, clear, confident baritone, never shouted | clone of a calm-heroic VoiceDesign take (163 Hz); exclaimed lines are *spoken* with '.' (`say`) and takes near 160 Hz are preferred (`f0_target`) | HP 70 Hz, +1.5 dB warmth at 180 Hz, gentle 2:1 compression, 1.3 s hall at 12 % wet |
+| marki (minotaur) | massive armoured bull: thick, guttural bass, still intelligible | clone of a deep VoiceDesign take (~86 Hz) | sub-octave WORLD double (envelope x0.85, 32 Hz flutter, saturated, LP 1.4 kHz) at 42 % under the voice, light saturation, +2.5 dB low shelf, -2.5 dB above 5 kHz, LP 8 kHz, 0.8 s dark room |
+| walk (shield soldier) | scrappy shield fighter: brave like sad but rougher, lower, steadier | clone of a gravelly "veteran" VoiceDesign take (100 Hz) - the "young soldier" prompt only produced shouted 150-330 Hz takes | HP 80 Hz, +1 dB body at 300 Hz, 20 % soft-clip grit, 3:1 compression, 0.6 s small room |
+| insaner (imp) | small purple imp with a manic grin: evil creature, real demonic modulation | clone of a sly male creature VoiceDesign take (153 Hz) - no longer the 500-700 Hz "baby" voice | main voice formants +10 % (smaller creature, pitch unchanged), octave-down WORLD demon double (envelope x0.78, 47 Hz growl flutter, saturated, 12 ms late) at 75 %, 10 % ring modulation at 92 Hz, light flanger, dark 1.5 s tail (LP 2.5 kHz) |
+| brutile (witch) | green-skinned fanged witch: unmistakably female, aged, raspy, sneering, cackling | clone of an elderly-witch VoiceDesign take (167 Hz, raspy); takes gated on P(female) | never pitch-shifted (that is what made her male before), subtle slow 9 ms chorus, +1 dB low shelf, 2.5:1 compression, 1.2 s dark hall at 12 % wet |
 
 Take selection (`post_voice.py`): every raw take is transcribed; the best `--shortlist` (3) per line
-by CER, distance from the character's median pitch (rejects shouted takes) and length are fully
-processed, encoded, decoded and judged again on Whisper CER, pitch distance, length and - for
-`"gender": "female"` - a wav2vec2 gender classifier (QA model, never shipped).
+by CER, distance from the character's pitch target (`f0_target`, else the median of its
+intelligible takes; rejects shouted takes) and length are fully processed, encoded, decoded and
+judged again on Whisper CER, pitch distance, length, warble (fast pitch-contour wobble above
+0.12 st is penalised) and - for `"gender": "female"` - a wav2vec2 gender classifier (QA model,
+never shipped).
+
+## QA metrics (`voice_qa.py`, recorded per clip in `qa-voice.json`)
+
+`dur`, `lufs`, `tp_db` (true peak), `f0` (+ p10/p90), `f1..f3` (LPC formants), `centroid`,
+`harsh_db` (2-8 kHz vs 0.1-2 kHz energy), `sib_db` (5-10 kHz peaks), `tail_db` (last 100 ms vs
+loudest 50 ms: <= -40 means a natural decay, near 0 a cut), `end_db`, `lead_ms`/`trail_ms`, and
+artefact proxies: `hf_flat` (3-8 kHz spectral flatness), `hiss_db` (4-11 kHz noise floor in the
+quietest frames), `jitter`, `warble`, `shimmer`, `hnr_db`; `female_p` from the QA gender model;
+`cer` of the decoded file against the line (`asr` field shows the transcript).
+
+## Results of the 2026-11-03 recast (medians per character, decoded .m4a; before -> after)
+
+| Character | F0 Hz | harsh dB | sib dB | tail dB | hiss dB | warble st | CER | P(female) w2v / ECAPA |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| sad | 187 -> 171 | -7.7 -> -13.2 | -9.3 -> -15.1 | -35.6 -> -60.2 | -39.9 -> -58.0 | 0.085 -> 0.085 | 0 -> 0 | male both times |
+| marki | 92 -> 90 | -11.1 -> -11.1 | -11.7 -> -13.7 | -39.4 -> -60.1 | -41.7 -> -41.5 | 0.124 -> 0.078 | 0 -> 0 | male both times |
+| walk | 136 -> 96 | -6.4 -> -13.9 | -5.7 -> -13.3 | -30.8 -> -58.9 | -36.7 -> -47.5 | 0.091 -> 0.071 | 0 -> 0 | male both times |
+| insaner | 561 -> 83 (demon layer) | -4.3 -> -12.9 | -7.0 -> -11.4 | -36.1 -> -60.1 | -33.9 -> -62.6 | 0.040 -> 0.087 | 0 -> 0.143 | 0.64 / 0.96 -> 0.001 / 0.004 |
+| brutile | 254 -> 172 | -7.6 -> -14.1 | -4.3 -> -12.6 | -34.5 -> -60.0 | -42.2 -> -48.6 | 0.079 -> 0.072 | 0 -> 0 | 0.17 / 0.006 -> 0.995 / 0.987 |
+
+All 52 clips: -15.99..-16.74 LUFS, true peak <= -1.07 dBTP, tail <= -48.7 dB; every brutile clip is classified female
+by both QA models (min 0.96 / 0.93). `public/audio/vo` grew from 637 KB to 847 KB (longer, natural
+reverb tails). Insaner's CER (0.14 median) comes from Whisper writing the homophones 내/네 and from
+the non-lexical "키힉"; insaner's lower HNR / higher warble is the intended growl and ring-mod texture.

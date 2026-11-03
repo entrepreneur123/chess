@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GRID CLASH Voice Audition</title>
+<style>
+:root{color-scheme:dark;--bg:#0f1117;--card:#181b24;--line:#272b38;--text:#e8eaf0;--mute:#9aa1b2;--acc:#8fb3ff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);
+font:15px/1.5 system-ui,-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif}
+main{max-width:980px;margin:0 auto;padding:24px 16px 64px}h1{font-size:22px;margin:0 0 4px}
+.sub{color:var(--mute);margin:0 0 20px;font-size:13px}nav{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
+nav a{color:var(--acc);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:13px}
+section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:20px}
+h2{margin:0;font-size:18px}.role{color:var(--mute);font-size:13px;margin:2px 0 8px}
+.note{font-size:13px;color:var(--mute);margin:0 0 12px}
+.row{display:grid;grid-template-columns:72px 1fr 260px;gap:12px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+.ev{font-size:12px;color:var(--acc)}.txt{font-size:16px}.meta{font-size:11px;color:var(--mute)}
+audio{width:100%;height:36px}
+button{background:#232838;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font:inherit;font-size:13px;cursor:pointer}
+@media (max-width:640px){.row{grid-template-columns:1fr}.ev{order:-1}}
+</style></head><body><main>
+<h1>GRID CLASH 보이스 오디션</h1>
+<p class="sub">캐릭터별 전체 대사. 각 줄 오른쪽 값: 길이 · 라우드니스(LUFS) · 중앙 피치(F0) · 음성인식 오류율(CER).</p>
+<nav><a href="#sad">사드</a><a href="#marki">마르키</a><a href="#walk">월크</a><a href="#insaner">인세이너</a><a href="#brutile">브루타일</a></nav>
+<section id="sad"><h2>사드 <span class="meta">sad</span></h2>
+<div class="role">Paladin</div>
+<p class="note">Young-adult paladin in gold armour and winged helm, stoic and focused: a warm, clear, confident baritone, heroic but natural, never shouted or shrill.</p>
+<button data-play="sad">전체 연속 재생</button>
+<div class="row"><div class="ev">선택<br><span class="meta">select · select-1</span></div><div><div class="txt">명을 받들겠습니다.</div><div class="meta">1.71s · -16.2 LUFS · F0 172 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/sad-select-1.m4a"></audio></div>
+<div class="row"><div class="ev">선택<br><span class="meta">select · select-2</span></div><div><div class="txt">성검과 함께.</div><div class="meta">1.41s · -16.1 LUFS · F0 171 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/sad-select-2.m4a"></audio></div>
+<div class="row"><div class="ev">이동<br><span class="meta">move · move-1</span></div><div><div class="txt">전진한다!</div><div class="meta">1.32s · -16.2 LUFS · F0 174 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/sad-move-1.m4a"></audio></div>
+<div class="row"><div class="ev">이동<br><span class="meta">move · move-2</span></div><div><div class="txt">나를 따르라!</div><div class="meta">1.45s · -16.1 LUFS · F0 153 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/sad-move-2.m4a"></audio></div>
+<div class="row"><div class="ev">잡기<br><span class="meta">capture · capture-1</span></div><div><div class="txt">정의의 심판을!</div><div class="meta">1.62s · -16.1 LUFS · F0 171 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/sad-capture-1.m4a"></audio></div>
+<div class="row"><div class="ev">잡기<br><span class="meta">capture · capture-2</span></div><div><div class="txt">성검을 받아라!</div><div class="meta">1.41s · -16.2 LUFS · F0 154 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/sad-capture-2.m4a"></audio></div>
+<div class="row"><div class="ev">잡기<br><span class="meta">capture · capture-3</span></div><div><div class="txt">물러서라!</div><div class="meta">1.28s · -16.1 LUFS · F0 162 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/sad-capture-3.m4a"></audio></div>
+<div class="row"><div class="ev">스킬<br><span class="meta">skill · skill-1</span></div><div><div class="txt">성스러운 빛이여!</div><div class="meta">1.71s · -16.2 LUFS · F0 175 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/sad-skill-1.m4a"></audio></div>
+<div class="row"><div class="ev">사망<br><span class="meta">death · death-1</span></div><div><div class="txt">크윽… 여기까지인가…</div><div class="meta">2.05s · -16.2 LUFS · F0 169 Hz · CER 0.12</div></div><audio controls preload="none" src="vo/sad-death-1.m4a"></audio></div>
+<div class="row"><div class="ev">승리<br><span class="meta">victory · victory-1</span></div><div><div class="txt">빛의 승리다!</div><div class="meta">1.45s · -16.2 LUFS · F0 172 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/sad-victory-1.m4a"></audio></div>
+</section>
+<section id="marki"><h2>마르키 <span class="meta">marki</span></h2>
+<div class="role">Minotaur</div>
+<p class="note">A massive armoured bull with lava-cracked hide, snorting steam: a thick, deep, guttural bass with a growl underneath, still intelligible.</p>
+<button data-play="marki">전체 연속 재생</button>
+<div class="row"><div class="ev">선택<br><span class="meta">select · select-1</span></div><div><div class="txt">누구냐.</div><div class="meta">1.58s · -16.1 LUFS · F0 82 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/marki-select-1.m4a"></audio></div>
+<div class="row"><div class="ev">선택<br><span class="meta">select · select-2</span></div><div><div class="txt">피 냄새가 난다.</div><div class="meta">2.05s · -16.0 LUFS · F0 82 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/marki-select-2.m4a"></audio></div>
+<div class="row"><div class="ev">이동<br><span class="meta">move · move-1</span></div><div><div class="txt">비켜라!</div><div class="meta">1.15s · -16.2 LUFS · F0 96 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/marki-move-1.m4a"></audio></div>
+<div class="row"><div class="ev">이동<br><span class="meta">move · move-2</span></div><div><div class="txt">길을 비켜!</div><div class="meta">1.58s · -16.1 LUFS · F0 92 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/marki-move-2.m4a"></audio></div>
+<div class="row"><div class="ev">잡기<br><span class="meta">capture · capture-1</span></div><div><div class="txt">박살이다!</div><div class="meta">1.54s · -16.0 LUFS · F0 87 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/marki-capture-1.m4a"></audio></div>
+<div class="row"><div class="ev">잡기<br><span class="meta">capture · capture-2</span></div><div><div class="txt">날려버린다!</div><div class="meta">1.62s · -16.2 LUFS · F0 93 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/marki-capture-2.m4a"></audio></div>
+<div class="row"><div class="ev">잡기<br><span class="meta">capture · capture-3</span></div><div><div class="txt">부숴버린다!</div><div class="meta">1.45s · -16.2 LUFS · F0 81 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/marki-capture-3.m4a"></audio></div>
+<div class="row"><div class="ev">스킬<br><span class="meta">skill · skill-1</span></div><div><div class="txt">돌격이다!</div><div class="meta">1.41s · -16.1 LUFS · F0 84 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/marki-skill-1.m4a"></audio></div>
+<div class="row"><div class="ev">사망<br><span class="meta">death · death-1</span></div><div><div class="txt">크르륵… 이럴 수가…</div><div class="meta">2.30s · -16.2 LUFS · F0 93 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/marki-death-1.m4a"></audio></div>
+<div class="row"><div class="ev">승리<br><span class="meta">victory · victory-1</span></div><div><div class="txt">약하다! 약해!</div><div class="meta">2.22s · -16.0 LUFS · F0 92 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/marki-victory-1.m4a"></audio></div>
+</section>
+<section id="walk"><h2>월크 <span class="meta">walk</span></h2>
+<div class="role">Shield soldier</div>
+<p class="note">A scrappy shield fighter in leather and chainmail (rune armour at lv3), shouting as he charges: a brave man like sad but rougher, darker and lower, steady and terse.</p>
+<button data-play="walk">전체 연속 재생</button>
+<div class="row"><div class="ev">선택<br><span class="meta">select · select-1</span></div><div><div class="txt">준비 완료.</div><div class="meta">1.32s · -16.0 LUFS · F0 85 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/walk-select-1.m4a"></audio></div>
+<div class="row"><div class="ev">선택<br><span class="meta">select · select-2</span></div><div><div class="txt">명령을.</div><div class="meta">0.94s · -16.1 LUFS · F0 96 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/walk-select-2.m4a"></audio></div>
+<div class="row"><div class="ev">이동<br><span class="meta">move · move-1</span></div><div><div class="txt">간다.</div><div class="meta">0.72s · -16.1 LUFS · F0 90 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/walk-move-1.m4a"></audio></div>
+<div class="row"><div class="ev">이동<br><span class="meta">move · move-2</span></div><div><div class="txt">이동한다.</div><div class="meta">1.11s · -16.1 LUFS · F0 92 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/walk-move-2.m4a"></audio></div>
+<div class="row"><div class="ev">잡기<br><span class="meta">capture · capture-1</span></div><div><div class="txt">방패로 막고, 친다!</div><div class="meta">2.30s · -16.1 LUFS · F0 98 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/walk-capture-1.m4a"></audio></div>
+<div class="row"><div class="ev">잡기<br><span class="meta">capture · capture-2</span></div><div><div class="txt">끝이다!</div><div class="meta">0.85s · -16.7 LUFS · F0 112 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/walk-capture-2.m4a"></audio></div>
+<div class="row"><div class="ev">잡기<br><span class="meta">capture · capture-3</span></div><div><div class="txt">쓰러뜨렸다!</div><div class="meta">1.15s · -16.0 LUFS · F0 95 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/walk-capture-3.m4a"></audio></div>
+<div class="row"><div class="ev">스킬<br><span class="meta">skill · skill-1</span></div><div><div class="txt">도약한다!</div><div class="meta">1.20s · -16.1 LUFS · F0 98 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/walk-skill-1.m4a"></audio></div>
+<div class="row"><div class="ev">사망<br><span class="meta">death · death-1</span></div><div><div class="txt">방어선이… 무너졌다…</div><div class="meta">2.26s · -16.1 LUFS · F0 97 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/walk-death-1.m4a"></audio></div>
+<div class="row"><div class="ev">승리<br><span class="meta">victory · victory-1</span></div><div><div class="txt">임무 완수.</div><div class="meta">1.24s · -16.0 LUFS · F0 96 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/walk-victory-1.m4a"></audio></div>
+</section>
+<section id="insaner"><h2>인세이너 <span class="meta">insaner</span></h2>
+<div class="role">Imp</div>
+<p class="note">A small purple imp with horns, tail and a manic fanged grin: a sly, wicked creature voice (not a child) under real demonic modulation.</p>
+<button data-play="insaner">전체 연속 재생</button>
+<div class="row"><div class="ev">선택<br><span class="meta">select · select-1</span></div><div><div class="txt">키힉… 나를 불렀나?</div><div class="meta">2.73s · -16.2 LUFS · F0 82 Hz · CER 0.14</div></div><audio controls preload="none" src="vo/insaner-select-1.m4a"></audio></div>
+<div class="row"><div class="ev">선택<br><span class="meta">select · select-2</span></div><div><div class="txt">이번엔 누굴 괴롭힐까?</div><div class="meta">2.77s · -16.1 LUFS · F0 81 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/insaner-select-2.m4a"></audio></div>
+<div class="row"><div class="ev">이동<br><span class="meta">move · move-1</span></div><div><div class="txt">어디 숨었니~?</div><div class="meta">1.83s · -16.1 LUFS · F0 82 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/insaner-move-1.m4a"></audio></div>
+<div class="row"><div class="ev">이동<br><span class="meta">move · move-2</span></div><div><div class="txt">그림자 속으로~</div><div class="meta">1.79s · -16.1 LUFS · F0 85 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/insaner-move-2.m4a"></audio></div>
+<div class="row"><div class="ev">잡기<br><span class="meta">capture · capture-1</span></div><div><div class="txt">네 영혼, 맛있겠다!</div><div class="meta">2.99s · -16.1 LUFS · F0 84 Hz · CER 0.14</div></div><audio controls preload="none" src="vo/insaner-capture-1.m4a"></audio></div>
+<div class="row"><div class="ev">잡기<br><span class="meta">capture · capture-2</span></div><div><div class="txt">키히히히! 잡았다!</div><div class="meta">2.69s · -16.1 LUFS · F0 90 Hz · CER 0.14</div></div><audio controls preload="none" src="vo/insaner-capture-2.m4a"></audio></div>
+<div class="row"><div class="ev">잡기<br><span class="meta">capture · capture-3</span></div><div><div class="txt">장난 좀 쳐볼까?</div><div class="meta">2.39s · -16.1 LUFS · F0 83 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/insaner-capture-3.m4a"></audio></div>
+<div class="row"><div class="ev">스킬<br><span class="meta">skill · skill-1</span></div><div><div class="txt">네 힘, 이제 내 거야!</div><div class="meta">2.90s · -16.2 LUFS · F0 85 Hz · CER 0.14</div></div><audio controls preload="none" src="vo/insaner-skill-1.m4a"></audio></div>
+<div class="row"><div class="ev">연속<br><span class="meta">chain · chain-1</span></div><div><div class="txt">한 번 더~!</div><div class="meta">1.62s · -16.0 LUFS · F0 76 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/insaner-chain-1.m4a"></audio></div>
+<div class="row"><div class="ev">사망<br><span class="meta">death · death-1</span></div><div><div class="txt">크윽… 두고 보자…</div><div class="meta">2.48s · -16.2 LUFS · F0 113 Hz · CER 0.17</div></div><audio controls preload="none" src="vo/insaner-death-1.m4a"></audio></div>
+<div class="row"><div class="ev">승리<br><span class="meta">victory · victory-1</span></div><div><div class="txt">전부 내 장난감이야! 키히히!</div><div class="meta">3.41s · -16.1 LUFS · F0 82 Hz · CER 0.18</div></div><audio controls preload="none" src="vo/insaner-victory-1.m4a"></audio></div>
+</section>
+<section id="brutile"><h2>브루타일 <span class="meta">brutile</span></h2>
+<div class="role">Witch</div>
+<p class="note">A green-skinned, fanged, sneering witch in a horned crown hat: an unmistakably female, aged, raspy, cackling villainess voice with energy.</p>
+<button data-play="brutile">전체 연속 재생</button>
+<div class="row"><div class="ev">선택<br><span class="meta">select · select-1</span></div><div><div class="txt">이 늙은이를 불렀느냐?</div><div class="meta">2.43s · -16.0 LUFS · F0 172 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/brutile-select-1.m4a"></audio></div>
+<div class="row"><div class="ev">선택<br><span class="meta">select · select-2</span></div><div><div class="txt">흐흐흐… 저주가 필요하냐?</div><div class="meta">2.05s · -16.1 LUFS · F0 173 Hz · CER 0.30</div></div><audio controls preload="none" src="vo/brutile-select-2.m4a"></audio></div>
+<div class="row"><div class="ev">이동<br><span class="meta">move · move-1</span></div><div><div class="txt">어디, 한번 걸어볼까…</div><div class="meta">2.82s · -16.1 LUFS · F0 161 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/brutile-move-1.m4a"></audio></div>
+<div class="row"><div class="ev">이동<br><span class="meta">move · move-2</span></div><div><div class="txt">흐흥… 가볼까?</div><div class="meta">2.56s · -16.2 LUFS · F0 182 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/brutile-move-2.m4a"></audio></div>
+<div class="row"><div class="ev">잡기<br><span class="meta">capture · capture-1</span></div><div><div class="txt">썩어 문드러져라!</div><div class="meta">2.09s · -16.1 LUFS · F0 166 Hz · CER 0.29</div></div><audio controls preload="none" src="vo/brutile-capture-1.m4a"></audio></div>
+<div class="row"><div class="ev">잡기<br><span class="meta">capture · capture-2</span></div><div><div class="txt">내 저주를 받아라!</div><div class="meta">1.88s · -16.1 LUFS · F0 177 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/brutile-capture-2.m4a"></audio></div>
+<div class="row"><div class="ev">잡기<br><span class="meta">capture · capture-3</span></div><div><div class="txt">이히히히! 끝이다!</div><div class="meta">2.90s · -16.1 LUFS · F0 158 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/brutile-capture-3.m4a"></audio></div>
+<div class="row"><div class="ev">스킬<br><span class="meta">skill · skill-1</span></div><div><div class="txt">이 땅은 죽었다!</div><div class="meta">2.13s · -16.1 LUFS · F0 181 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/brutile-skill-1.m4a"></audio></div>
+<div class="row"><div class="ev">스킬<br><span class="meta">skill · skill-2</span></div><div><div class="txt">불모지여, 피어나라!</div><div class="meta">2.65s · -16.1 LUFS · F0 149 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/brutile-skill-2.m4a"></audio></div>
+<div class="row"><div class="ev">사망<br><span class="meta">death · death-1</span></div><div><div class="txt">이… 이럴 리가…</div><div class="meta">2.00s · -16.1 LUFS · F0 164 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/brutile-death-1.m4a"></audio></div>
+<div class="row"><div class="ev">승리<br><span class="meta">victory · victory-1</span></div><div><div class="txt">모두 썩어라! 이히히히!</div><div class="meta">3.07s · -16.0 LUFS · F0 181 Hz · CER 0.00</div></div><audio controls preload="none" src="vo/brutile-victory-1.m4a"></audio></div>
+</section>
+</main>
+<script src="audition.js"></script>
+</body></html>

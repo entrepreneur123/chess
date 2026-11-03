@@ -1,5 +1,5 @@
 {
-  "_note": "Voice script for GRID CLASH. Every character is voiced by Qwen3-TTS Base voice cloning of a reference clip in refs/ that is itself a Qwen3-TTS VoiceDesign take (a designed voice, no real person). 'voice' + 'clone.style' document the VoiceDesign prompt that made the reference; 'concept' is the target derived from the character art (public/chars/*-lv*.jpg); 'gender': 'female' makes post_voice.py gate takes on a gender classifier (QA only). 'asr' (optional) is the reference text for the character-error-rate check when the spoken text has non-lexical sounds.",
+  "_note": "Voice script for GRID CLASH. Every character is voiced by Qwen3-TTS Base voice cloning of a reference clip in refs/ that is itself a Qwen3-TTS VoiceDesign take (a designed voice, no real person). 'voice' + 'clone.style' document the VoiceDesign prompt that made the reference; 'concept' is the target derived from the character art (public/chars/*-lv*.jpg); 'gender': 'female' makes post_voice.py gate takes on a gender classifier (QA only). 'asr' (optional) is the reference text for the character-error-rate check when the spoken text has non-lexical sounds. 'say' (optional) is what the TTS speaks when it differs from the caption 'text' (exclamation marks make Qwen shout male voices an octave up); 'f0_target' (optional) is the pitch post_voice.py prefers when choosing takes.",
   "characters": {
     "sad": {
       "concept": "Young-adult paladin in gold armour and winged helm, stoic and focused: a warm, clear, confident baritone, heroic but natural, never shouted or shrill.",
@@ -10,6 +10,7 @@
         "style": "Confident, warm and heroic, steady.",
         "_from": "VoiceDesign take (seed 11, take 2) of the prompt in 'voice' + 'style', trimmed; chosen for CER 0, F0 163 Hz, the warmest spectrum and the lowest warble of 12 takes"
       },
+      "f0_target": 160,
       "lines": [
         {
           "id": "select-1",
@@ -27,37 +28,43 @@
           "id": "move-1",
           "event": "move",
           "text": "전진한다!",
-          "style": "Commanding and firm, resonant chest voice, lower register, brief, not yelling."
+          "style": "Commanding and firm, resonant chest voice, lower register, brief, not yelling.",
+          "say": "전진한다."
         },
         {
           "id": "move-2",
           "event": "move",
           "text": "나를 따르라!",
-          "style": "Leading his troops, firm and brief."
+          "style": "Leading his troops, firm and brief.",
+          "say": "나를 따르라."
         },
         {
           "id": "capture-1",
           "event": "capture",
           "text": "정의의 심판을!",
-          "style": "A determined battle cry, forceful but controlled, not screaming."
+          "style": "A determined battle cry, forceful but controlled, not screaming.",
+          "say": "정의의 심판을."
         },
         {
           "id": "capture-2",
           "event": "capture",
           "text": "성검을 받아라!",
-          "style": "A powerful commanding strike call, resonant chest voice, lower register, not yelling."
+          "style": "A powerful commanding strike call, resonant chest voice, lower register, not yelling.",
+          "say": "성검을 받아라."
         },
         {
           "id": "capture-3",
           "event": "capture",
           "text": "물러서라!",
-          "style": "A stern, commanding shout while striking."
+          "style": "A stern, commanding shout while striking.",
+          "say": "물러서라."
         },
         {
           "id": "skill-1",
           "event": "skill",
           "text": "성스러운 빛이여!",
-          "style": "Invoking holy power, solemn, resonant and low, steady."
+          "style": "Invoking holy power, solemn, resonant and low, steady.",
+          "say": "성스러운 빛이여."
         },
         {
           "id": "death-1",
@@ -69,7 +76,8 @@
           "id": "victory-1",
           "event": "victory",
           "text": "빛의 승리다!",
-          "style": "Proud and triumphant, resonant chest voice, lower register, not yelling."
+          "style": "Proud and triumphant, resonant chest voice, lower register, not yelling.",
+          "say": "빛의 승리다."
         }
       ]
     },
@@ -182,25 +190,29 @@
           "id": "capture-1",
           "event": "capture",
           "text": "방패로 막고, 친다!",
-          "style": "Focused and forceful, striking with a shield."
+          "style": "Focused and forceful, striking with a shield.",
+          "say": "방패로 막고, 친다."
         },
         {
           "id": "capture-2",
           "event": "capture",
           "text": "끝이다!",
-          "style": "A short, firm, controlled exclamation in a low register, not yelling."
+          "style": "A short, firm, controlled exclamation in a low register, not yelling.",
+          "say": "끝이다."
         },
         {
           "id": "capture-3",
           "event": "capture",
           "text": "쓰러뜨렸다!",
-          "style": "A short, firm, controlled exclamation in a low register, not yelling."
+          "style": "A short, firm, controlled exclamation in a low register, not yelling.",
+          "say": "쓰러뜨렸다."
         },
         {
           "id": "skill-1",
           "event": "skill",
           "text": "도약한다!",
-          "style": "A short, firm effort grunt-word while leaping, low register, not yelling."
+          "style": "A short, firm effort grunt-word while leaping, low register, not yelling.",
+          "say": "도약한다."
         },
         {
           "id": "death-1",
