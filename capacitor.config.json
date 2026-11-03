@@ -2,5 +2,5 @@
   "appId": "com.gridclash.app",
   "appName": "GRID CLASH",
   "webDir": "dist",
-  "android": { "backgroundColor": "#F8F9FA" }
+  "android": { "backgroundColor": "#0D1322" }
 }

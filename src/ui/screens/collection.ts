@@ -92,7 +92,7 @@ export function collectionScreen(router: Router): Screen {
       h('p', { class: 'unit-card__trait' }, icon('info', 14), ROLE[id].trait),
       def.passiveKo ? h('p', { class: 'unit-card__passive' }, icon('magic', 14), h('span', null, h('b', null, '패시브 · 흡수'), ' ', def.passiveKo)) : null,
       def.skill
-        ? h('p', { class: 'unit-card__passive unit-card__skill' }, icon('magic', 14), h('span', null, h('b', null, `스킬 · ${def.skill.nameKo}`), ' ', def.skill.descKo[grade - 1], ' · 7턴째부터 한 판에 1번, 자기장이 좁혀오면 금지'))
+        ? h('p', { class: 'unit-card__passive unit-card__skill' }, icon('magic', 14), h('span', null, h('b', null, `스킬 · ${def.skill.nameKo}`), ' ', def.skill.descKo[grade - 1], ' · 4턴째부터 한 판에 1번, 자기장이 좁혀오면 금지'))
         : null,
       h('div', { class: 'unit-card__stats' }, statBar('이동 범위', reachCount(id, grade), reachMax)),
       // Grade picker: every grade is available; the chosen one is what gets fielded.
@@ -143,17 +143,46 @@ export function collectionScreen(router: Router): Screen {
     );
   };
 
+  // Grade each rendered card was built with, so a profile change only rebuilds the cards that changed.
+  const shown = new Map<CharacterId, Level>();
+
   const render = () => {
     replaceChildren(
       list,
       h('p', { class: 'hint hint--pad' }, icon('info', 16), '모든 캐릭터를 1성 · 2성 · 3성 중 원하는 성급으로 출전시킬 수 있어요. 다이어그램의 위쪽이 앞(적 방향)입니다.'),
       CHARACTER_IDS.map(card),
     );
+    for (const id of CHARACTER_IDS) shown.set(id, getProfile().grades[id]);
     justPicked = null;
     // Entrance animation only on first paint (later re-renders must not replay it).
     if (!list.classList.contains('is-settled')) bag.timeout(() => list.classList.add('is-settled'), 900);
   };
+
+  /**
+   * Swap only the changed card(s) in place. Rebuilding the whole list emptied the scroller for a
+   * moment, which clamped its scroll position to the top on every grade pick, and dropped focus.
+   */
+  const update = () => {
+    const grades = getProfile().grades;
+    const top = list.scrollTop;
+    for (const id of CHARACTER_IDS) {
+      if (shown.get(id) === grades[id]) continue;
+      const old = list.querySelector<HTMLElement>(`[data-character="${id}"]`);
+      if (!old) {
+        render();
+        return;
+      }
+      const hadFocus = old.contains(document.activeElement);
+      const next = card(id);
+      old.replaceWith(next);
+      shown.set(id, grades[id]);
+      if (hadFocus) next.querySelector<HTMLElement>('.grade-pick__btn.is-active')?.focus({ preventScroll: true });
+    }
+    list.scrollTop = top;
+    justPicked = null;
+  };
+
   render();
-  bag.add(subscribeProfile(render));
+  bag.add(subscribeProfile(update));
   return { el, dispose: () => bag.dispose() };
 }
