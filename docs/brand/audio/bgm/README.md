@@ -40,7 +40,7 @@ All six tracks share:
   (sampled-brass honk), a +3.5 dB shelf above 4 kHz, a -3 dB shelf below 90 Hz, a 32 Hz
   high-pass, a gentle 1.8:1 glue compressor, normalisation to -20 LUFS, and a 4x-oversampled
   look-ahead limiter with a -1.6 dBFS ceiling. In practice the limiter never reduces gain: the
-  final masters' true peaks are -4.6 to -7.6 dBTP.
+  final masters' true peaks are -4.5 to -7.6 dBTP.
 - **Percussion core**: the FluidR3 taiko patch plus a synthesised sub "boom" under strong hits, a
   synthesised reverse-noise swell into section downbeats, and a quiet periodic noise bed
   (mist, embers, fog, wind, fire or air).

@@ -371,7 +371,9 @@ function install(): void {
         // sfx.ts suspends the shared context when hidden; do it here too in case it is not installed.
         if (o) void o.ctx.suspend().catch(() => {});
       } else if (desired && allowed()) {
-        if (o?.ctx.state === 'suspended') void o.ctx.resume().catch(() => {});
+        // sfx.ts resumes on visible too; this covers the case where it is not installed.
+        const c = getAudioContext();
+        if (c && c.state === 'suspended') void c.resume().catch(() => {});
         setTimeout(retry, 0);
       }
     } catch {
