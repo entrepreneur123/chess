@@ -343,3 +343,61 @@ button.fgrid__cell:active {
     animation: none;
   }
 }
+
+/* ---- Drag and drop (ui/screens/formation.ts) ---------------------------------------
+   Drags start on a unit only: its board cell or its roster coin. Those surfaces alone opt out
+   of touch scrolling; a swipe anywhere else still scrolls the editor. */
+button.fgrid__cell.has-piece,
+.tray-card__token {
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.tray-card {
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* The unit being dragged: faded in place while its ghost follows the finger. */
+.fgrid__cell.is-drag-source .token,
+.tray-card__token.is-drag-source {
+  opacity: 0.32;
+  filter: grayscale(0.5);
+  transform: none;
+  transition: opacity var(--dur-1) var(--ease-out);
+}
+/* Legal square under the finger: a bright ice-cyan frame (gold when it swaps with a unit). */
+.fgrid__cell.is-drop-hover {
+  z-index: 2;
+  box-shadow:
+    inset 0 0 0 2px #9bebff,
+    inset 0 0 10px 2px rgba(155, 235, 255, 0.55),
+    0 0 12px 2px rgba(155, 235, 255, 0.6);
+  background:
+    radial-gradient(circle, rgba(155, 235, 255, 0.35), rgba(26, 79, 184, 0.45)),
+    #1b2336;
+}
+.fgrid__cell.is-drop-hover.is-drop-swap {
+  box-shadow:
+    inset 0 0 0 2px var(--gold),
+    inset 0 0 10px 2px rgba(242, 193, 78, 0.5),
+    0 0 12px 2px rgba(242, 193, 78, 0.6);
+  background: radial-gradient(circle, rgba(242, 193, 78, 0.4), rgba(110, 69, 16, 0.6));
+}
+.fgrid__cell.is-drop-hover.is-target::after {
+  transform: scale(1.4);
+}
+/* The unit just dropped: a short landing pop. */
+.fgrid__cell.is-dropped .token {
+  animation: fgrid-drop 300ms var(--ease-spring) both;
+}
+@keyframes fgrid-drop {
+  from {
+    transform: scale(1.3);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fgrid__cell.is-dropped .token {
+    animation: none;
+  }
+}

@@ -1,8 +1,29 @@
-import { BOARD_SIZE, ZONE_DEPTH, type CharacterId, type Formation } from '../../engine';
+import { BOARD_SIZE, PIECES_PER_SIDE, ZONE_DEPTH, type CharacterId, type Formation, type Level } from '../../engine';
 import { h } from '../dom';
 import { pieceToken } from './piece';
 
 export const ROW_LABELS = ['후열', '중열', '전열']; // index = local row (0 = back rank)
+
+export type PlaceResult =
+  | { ok: true; formation: Formation }
+  /** `same`: the character already stands there. `full`: a benched character needs a fielded one to replace. */
+  | { ok: false; reason: 'same' | 'full' };
+
+/**
+ * Put `character` on local square (row, col) of the home zone. A fielded character moves there
+ * (swapping with whoever stands there); a benched one replaces the occupant, and cannot enter an
+ * empty square while the squad is full. Shared by the tap and the drag flows of the editor.
+ */
+export function placeInFormation(work: Formation, character: CharacterId, level: Level, row: number, col: number): PlaceResult {
+  const occupant = work.find((s) => s.row === row && s.col === col);
+  if (occupant?.character === character) return { ok: false, reason: 'same' };
+  const mover = work.find((s) => s.character === character);
+  if (!mover && !occupant && work.length >= PIECES_PER_SIDE) return { ok: false, reason: 'full' };
+  const next = work.filter((s) => s.character !== character && s !== occupant);
+  if (occupant && mover) next.push({ ...occupant, row: mover.row, col: mover.col }); // swap
+  next.push({ character, level, row, col });
+  return { ok: true, formation: next };
+}
 
 export interface FormationGridOptions {
   mini?: boolean;

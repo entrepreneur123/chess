@@ -29,6 +29,7 @@ import { PACING } from '../../meta/economy';
 import { DIFFICULTY_LABEL } from '../../meta/opponent';
 import { applyMatchResult, getProfile, updateProfile, type MatchOutcome } from '../../meta/profile';
 import { randInt, defaultRng } from '../../meta/rng';
+import { installBoardDrag, type BoardDrag } from '../components/boardDrag';
 import { confetti } from '../components/celebrate';
 import { starsOf, unitArt } from '../components/piece';
 import { confirmDialog, showDialog } from '../components/dialog';
@@ -196,6 +197,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   let board: IBoardView | null = null;
   let bot: BotClient | null = null;
   let ctrl: GameController | null = null;
+  /** Drag-to-move on the board (plays moves through ctrl.tapCell, like taps). */
+  let boardDrag: BoardDrag | null = null;
   let syncedPieces: Piece[] | null = null;
   let resultShown = false;
   let pillCls = '';
@@ -233,7 +236,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     }
     const sel = snap.selection;
     if (snap.state.bonusPieceId !== null) setCoach('한 번 더! 빛나는 칸을 탭하거나 건너뛰세요');
-    else if (sel?.actionable && sel.moves.length > 0) setCoach('빛나는 칸을 탭해 이동하세요');
+    else if (sel?.actionable && sel.moves.length > 0) setCoach('빛나는 칸을 탭하거나 말을 끌어다 놓아 이동하세요');
     else if (sel?.actionable) setCoach('이 말은 지금 못 움직여요. 다른 말을 탭해 보세요');
     else if (sel) setCoach('상대 말이에요. 아래쪽 파란 말을 탭해 보세요');
     else setCoach('내 말(파랑)을 탭해 이동 가능한 칸을 보세요');
@@ -436,6 +439,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
 
   const renderSnapshot = (snap: ControllerSnapshot) => {
     const s = snap.state;
+    // A drag in progress ends (flies back) when the turn ends, the game pauses, the bot acts, etc.
+    boardDrag?.sync(snap);
     if (board) {
       if (snap.phase !== 'animating' && syncedPieces !== s.pieces) {
         board.setPieces(s.pieces);
@@ -695,6 +700,14 @@ export function gameScreen(router: Router, params: GameParams): Screen {
         if (targeting) onTargetTap(pos);
         else c.tapCell(pos);
       });
+      const dragRef = (boardDrag = installBoardDrag({
+        host: boardHost,
+        board: () => board,
+        controller: () => ctrl,
+        blocked: () => targeting !== null,
+        warn: (message) => toast(message, { tone: 'warn', duration: 2600 }),
+      }));
+      bag.add(() => dragRef.dispose());
       board?.onImpact?.((move) => {
         if (!bag.isDisposed) impact(move);
       });

@@ -1173,3 +1173,54 @@ body.in-game .toast.is-in {
 .btn--play:focus-visible {
   outline-color: var(--ink);
 }
+
+/* ==========================================================================
+   Drag ghost (board drag-to-move, formation editor): the lifted unit coin that
+   follows the pointer. Positioned by transform only (see ui/components/drag.ts).
+   ========================================================================== */
+.drag-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 950;
+  pointer-events: none;
+  will-change: transform;
+  contain: layout style;
+}
+.drag-ghost__inner {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  filter: drop-shadow(0 10px 10px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 10px rgba(127, 227, 255, 0.35));
+  transform: scale(1.04);
+  transition:
+    transform 140ms var(--ease-spring, ease-out),
+    filter 140ms ease-out;
+  animation: drag-ghost-in 160ms var(--ease-spring, ease-out) both;
+}
+.drag-ghost.is-over .drag-ghost__inner {
+  transform: scale(1.12);
+  filter: drop-shadow(0 12px 12px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 14px rgba(155, 235, 255, 0.75));
+}
+.drag-ghost.is-settling .drag-ghost__inner {
+  transform: scale(1);
+  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.5));
+}
+.drag-ghost .unit-art {
+  width: 100%;
+  height: 100%;
+}
+@keyframes drag-ghost-in {
+  from {
+    transform: scale(0.72);
+    opacity: 0.4;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .drag-ghost__inner {
+    animation: none;
+    transition: none;
+  }
+}

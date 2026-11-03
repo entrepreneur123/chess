@@ -1,6 +1,7 @@
 import { BOARD_SIZE, PIECES_PER_SIDE, ZONE_DEPTH } from './types';
 import type { CharacterId, Formation, FormationSlot, Level } from './types';
 import { CHARACTERS, STARTER_IDS } from './characters';
+import { josa } from './josa';
 
 function isLevel(x: unknown): x is Level {
   return x === 1 || x === 2 || x === 3;
@@ -41,7 +42,7 @@ export function validateFormation(f: Formation): { ok: boolean; errors: string[]
     if (!def) {
       errors.push(`알 수 없는 캐릭터입니다: ${String(slot.character)}`);
     } else if (seenChars.has(slot.character)) {
-      errors.push(`${name}이(가) 중복 배치되었습니다. 캐릭터마다 1개씩만 배치할 수 있습니다.`);
+      errors.push(`${josa(name, '이/가')} 중복 배치되었습니다. 캐릭터마다 1개씩만 배치할 수 있습니다.`);
     }
     seenChars.add(slot.character);
     if (!isLevel(slot.level)) errors.push(`${name}의 성급이 올바르지 않습니다. (1~3성)`);
@@ -53,7 +54,7 @@ export function validateFormation(f: Formation): { ok: boolean; errors: string[]
       slot.col >= 0 &&
       slot.col < BOARD_SIZE;
     if (!inZone) {
-      errors.push(`${name}이(가) 배치 구역(자기 진영 ${ZONE_DEPTH}줄) 밖에 있습니다.`);
+      errors.push(`${josa(name, '이/가')} 배치 구역(자기 진영 ${ZONE_DEPTH}줄) 밖에 있습니다.`);
     } else {
       const key = `${slot.row},${slot.col}`;
       if (seenSquares.has(key)) errors.push(`같은 칸에 기물이 두 개 이상 배치되었습니다. (${slot.row}행 ${slot.col}열)`);

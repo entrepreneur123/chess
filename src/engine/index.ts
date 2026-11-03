@@ -32,3 +32,4 @@ export {
 export type { FastBoard } from './fast';
 export type { SkillBlock } from './rules';
 export { fastFromState, fastGenMoves, fastHasMoves, fastMake, fastUnmake, fastPass, fastUnpass, fastMoveToMove, fastSkillToAction } from './fast';
+export { josa, type JosaPair } from './josa';

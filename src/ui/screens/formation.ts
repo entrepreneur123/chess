@@ -3,16 +3,19 @@ import {
   CHARACTER_IDS,
   PIECES_PER_SIDE,
   defaultFormation,
+  josa,
   randomFormation,
   squadOf,
   validateFormation,
   type CharacterId,
   type Formation,
 } from '../../engine';
+import { haptic, sfx } from '../../audio/sfx';
 import { getProfile, levelsOf, syncFormationLevels, updateProfile } from '../../meta/profile';
 import { appBar } from '../components/appbar';
 import { confirmDialog } from '../components/dialog';
-import { formationGrid, ROW_LABELS } from '../components/formationGrid';
+import { DragGhost, trackPointerDrag, type DragTracker } from '../components/drag';
+import { formationGrid, placeInFormation, ROW_LABELS } from '../components/formationGrid';
 import { movementDiagram, rarityChip, unitArt } from '../components/piece';
 import { toast } from '../components/toast';
 import { h, replaceChildren } from '../dom';
@@ -56,6 +59,9 @@ export function formationScreen(router: Router): Screen {
     router.home();
   };
 
+  const FULL_MSG = `말은 ${PIECES_PER_SIDE}개까지 배치할 수 있어요. 배치된 말을 탭하면 교체됩니다`;
+
+  /** Tap flow: pick up the occupant, or put the held character down (move / swap / replace). */
   const placeAt = (row: number, col: number) => {
     const occupant = work.find((s) => s.row === row && s.col === col);
     if (!selected) {
@@ -64,24 +70,173 @@ export function formationScreen(router: Router): Screen {
       render();
       return;
     }
-    if (occupant?.character === selected) {
-      selected = null;
-      render();
+    const res = placeInFormation(work, selected, levels[selected], row, col);
+    if (!res.ok) {
+      // Tapping the held piece again puts it back; a benched one needs a fielded one to replace.
+      if (res.reason === 'same') {
+        selected = null;
+        render();
+      } else toast(FULL_MSG, { tone: 'warn' });
       return;
     }
-    const mover = work.find((s) => s.character === selected);
-    // A benched character can only enter the field by replacing a fielded one (3 per squad).
-    if (!mover && !occupant && work.length >= PIECES_PER_SIDE) {
-      toast(`말은 ${PIECES_PER_SIDE}개까지 배치할 수 있어요. 배치된 말을 탭하면 교체됩니다`, { tone: 'warn' });
-      return;
-    }
-    const next = work.filter((s) => s.character !== selected && s !== occupant);
-    if (occupant && mover) next.push({ ...occupant, row: mover.row, col: mover.col }); // swap
-    next.push({ character: selected, level: levels[selected], row, col });
-    work = next;
+    work = res.formation;
     selected = null;
     render();
   };
+
+  // ---------- drag and drop: a unit from its cell or from the roster onto a cell of the zone
+  let tracker: DragTracker | null = null;
+  let drag: {
+    character: CharacterId;
+    fromCell: boolean;
+    /** Selection before the drag (restored when the drag is cancelled). */
+    prevSelected: CharacterId | null;
+    ghost: DragGhost;
+    x: number;
+    y: number;
+    hover: HTMLElement | null;
+    raf: number;
+    scroller: HTMLElement | null;
+  } | null = null;
+  /** Roster ghosts still flying back / settling (removed on leave). */
+  const ghosts = new Set<DragGhost>();
+
+  const cellEl = (row: number, col: number) => gridHost.querySelector<HTMLElement>(`.fgrid__cell[data-row="${row}"][data-col="${col}"]`);
+  const trayTokenEl = (id: CharacterId) => trayHost.querySelector<HTMLElement>(`.tray-card[data-character="${id}"] .tray-card__token`);
+  /** Where a character is shown: its cell when fielded, else its roster card token. */
+  const homeEl = (id: CharacterId, preferCell: boolean) => {
+    const slot = work.find((s) => s.character === id);
+    return (preferCell && slot ? cellEl(slot.row, slot.col) : null) ?? trayTokenEl(id) ?? (slot ? cellEl(slot.row, slot.col) : null);
+  };
+  const markSource = (id: CharacterId) => {
+    const slot = work.find((s) => s.character === id);
+    if (slot) cellEl(slot.row, slot.col)?.classList.add('is-drag-source');
+    trayTokenEl(id)?.classList.add('is-drag-source');
+  };
+  const dropCellAt = (x: number, y: number): HTMLElement | null => {
+    const hit = document.elementFromPoint(x, y);
+    const cell = hit?.closest<HTMLElement>('.fgrid__cell');
+    return cell && gridHost.contains(cell) ? cell : null;
+  };
+  const cellPos = (cell: HTMLElement) => ({ row: Number(cell.dataset.row), col: Number(cell.dataset.col) });
+  const canDropOn = (id: CharacterId, cell: HTMLElement) => {
+    const { row, col } = cellPos(cell);
+    return placeInFormation(work, id, levels[id], row, col).ok;
+  };
+  const setHover = (cell: HTMLElement | null) => {
+    const d = drag;
+    if (!d || cell === d.hover) return;
+    d.hover?.classList.remove('is-drop-hover', 'is-drop-swap');
+    d.hover = cell && canDropOn(d.character, cell) ? cell : null;
+    if (d.hover) d.hover.classList.add('is-drop-hover', ...(d.hover.classList.contains('has-piece') ? ['is-drop-swap'] : []));
+    d.ghost.setOver(!!d.hover);
+  };
+  /** Per frame while dragging: auto-scroll near the scroll area's edges, then re-hit-test. */
+  const dragFrame = () => {
+    const d = drag;
+    if (!d) return;
+    d.raf = 0;
+    const sc = d.scroller;
+    if (sc) {
+      const r = sc.getBoundingClientRect();
+      const edge = 56;
+      const v = d.y < r.top + edge ? -Math.ceil((r.top + edge - d.y) / 5) : d.y > r.bottom - edge ? Math.ceil((d.y - (r.bottom - edge)) / 5) : 0;
+      if (v !== 0) {
+        const before = sc.scrollTop;
+        sc.scrollTop = before + v;
+        if (sc.scrollTop !== before) d.raf = requestAnimationFrame(dragFrame);
+      }
+    }
+    setHover(dropCellAt(d.x, d.y));
+    d.ghost.follow(d.x, d.y);
+  };
+  const flyHome = (g: DragGhost, target: HTMLElement | null, fade: boolean) => {
+    ghosts.add(g);
+    const r = target?.getBoundingClientRect();
+    if (!r || r.width === 0) {
+      g.remove();
+      ghosts.delete(g);
+      return;
+    }
+    void g.settle(r.left + r.width / 2, r.top + r.height / 2, Math.min(r.width, r.height) * 0.8, { ms: fade ? 150 : 210, fade }).then(() => ghosts.delete(g));
+  };
+  const endDrag = (dropped: { x: number; y: number } | null) => {
+    const d = drag;
+    drag = null;
+    tracker = null;
+    if (!d) return;
+    if (d.raf) cancelAnimationFrame(d.raf);
+    const cell = dropped ? dropCellAt(dropped.x, dropped.y) : null;
+    const res = cell ? placeInFormation(work, d.character, levels[d.character], cellPos(cell).row, cellPos(cell).col) : null;
+    if (res?.ok) {
+      work = res.formation;
+      selected = null;
+      render();
+      const { row, col } = cellPos(cell!);
+      const landed = cellEl(row, col);
+      landed?.classList.add('is-dropped');
+      flyHome(d.ghost, landed, true);
+      sfx('land');
+      haptic('light');
+      return;
+    }
+    if (res && !res.ok && res.reason === 'full') toast(FULL_MSG, { tone: 'warn' });
+    else if (dropped && !(res && res.reason === 'same')) sfx('tap');
+    selected = d.prevSelected;
+    render();
+    flyHome(d.ghost, homeEl(d.character, d.fromCell), false);
+  };
+  const onPointerDown = (ev: PointerEvent) => {
+    if (tracker || !ev.isPrimary || (ev.pointerType === 'mouse' && ev.button !== 0)) return;
+    const t = ev.target as Element | null;
+    let character: CharacterId | null = null;
+    let fromCell = false;
+    const cell = t?.closest<HTMLElement>('.fgrid__cell.has-piece');
+    if (cell && gridHost.contains(cell)) {
+      const { row, col } = cellPos(cell);
+      character = work.find((s) => s.row === row && s.col === col)?.character ?? null;
+      fromCell = true;
+    } else {
+      // Roster: touch drags start on the unit coin only (the rest of the card scrolls the page);
+      // a mouse can grab the whole card.
+      const card = t?.closest<HTMLElement>('.tray-card');
+      if (card && trayHost.contains(card) && (ev.pointerType === 'mouse' || t?.closest('.tray-card__token'))) {
+        character = (card.dataset.character as CharacterId | undefined) ?? null;
+      }
+    }
+    if (!character || !CHARACTERS[character]) return;
+    const id = character;
+    tracker = trackPointerDrag(ev, el, {
+      start: (x, y) => {
+        const touch = ev.pointerType !== 'mouse';
+        const size = touch ? 60 : 52;
+        const ghost = new DragGhost(unitArt(id, levels[id], { size, owner: 0 }), { size, lift: touch ? 50 : 0, cls: touch ? 'drag-ghost--touch' : '' });
+        drag = { character: id, fromCell, prevSelected: selected, ghost, x, y, hover: null, raf: 0, scroller: el.querySelector<HTMLElement>('.scroll-body') };
+        // Picking a unit up is the same as tapping it: it is held and the free squares light up.
+        selected = id;
+        render();
+        markSource(id);
+        ghost.follow(x, y);
+        sfx('select');
+        haptic('light');
+        return true;
+      },
+      move: (x, y) => {
+        const d = drag;
+        if (!d) return;
+        d.x = x;
+        d.y = y;
+        if (!d.raf) dragFrame();
+      },
+      drop: (x, y) => endDrag({ x, y }),
+      cancel: () => endDrag(null),
+    });
+  };
+  // Pre-drag presses that end as taps just drop the tracker reference.
+  const onPointerEnd = (ev: PointerEvent) => {
+    if (tracker && !tracker.dragging && ev.isPrimary) tracker = null;
+  };
+  el.addEventListener('pointerdown', onPointerDown);
 
   const save = () => {
     const v = validateFormation(work);
@@ -142,11 +297,13 @@ export function formationScreen(router: Router): Screen {
             'p',
             { class: `hint${selected ? ' is-holding' : ''}` },
             icon(selected ? 'touch' : 'info', 16),
-            selected
+            drag
+              ? `${josa(CHARACTERS[drag.character].nameKo, '을/를')} 놓을 칸에서 손을 떼세요. 다른 말 위에 놓으면 자리를 바꿉니다.`
+              : selected
               ? work.some((s) => s.character === selected)
-                ? `${CHARACTERS[selected].nameKo}을(를) 놓을 칸을 탭하세요. 다른 말 위에 놓으면 자리를 바꿉니다.`
-                : `${CHARACTERS[selected].nameKo}을(를) 투입할 말을 탭하세요. 그 말과 교체됩니다.`
-              : `캐릭터를 선택한 뒤 칸을 탭해 배치하세요. 분대는 ${PIECES_PER_SIDE}명 · 배치된 말을 탭하면 집어 듭니다.`,
+                ? `${josa(CHARACTERS[selected].nameKo, '을/를')} 놓을 칸을 탭하세요. 다른 말 위에 놓으면 자리를 바꿉니다.`
+                : `${josa(CHARACTERS[selected].nameKo, '을/를')} 투입할 말을 탭하세요. 그 말과 교체됩니다.`
+              : `말을 끌어다 칸에 놓거나, 탭해서 집은 뒤 칸을 탭해 배치하세요. 분대는 ${PIECES_PER_SIDE}명입니다.`,
           )
         : h('ul', { class: 'errors' }, v.errors.map((e) => h('li', null, e))),
     );
@@ -208,5 +365,20 @@ export function formationScreen(router: Router): Screen {
   );
   render();
 
-  return { el, onBack: () => void leave() };
+  return {
+    el,
+    onBack: () => void leave(),
+    mount() {
+      window.addEventListener('pointerup', onPointerEnd);
+      window.addEventListener('pointercancel', onPointerEnd);
+    },
+    dispose() {
+      tracker?.cancel();
+      el.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('pointerup', onPointerEnd);
+      window.removeEventListener('pointercancel', onPointerEnd);
+      for (const g of ghosts) g.remove();
+      ghosts.clear();
+    },
+  };
 }

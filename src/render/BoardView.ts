@@ -58,7 +58,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { BOARD_SIZE, ZONE_DEPTH } from '../engine/types';
 import type { Level, Move, Piece, PlayerId, Pos, Rarity } from '../engine/types';
-import type { BoardHighlights, BoardViewMode, BoardViewOptions, IBoardView, SkillPreview } from './types';
+import type { BoardHighlights, BoardViewMode, BoardViewOptions, IBoardView, ScreenRect, SkillPreview } from './types';
 import type { UnitActor } from './units/actor';
 import { loadUnitAssets, unitAssetsIfLoaded } from './units/assets';
 import { LOOKS, MOVE_CLIP } from './units/config';
@@ -113,6 +113,8 @@ const SLAB_SIZE = BOARD_SIZE + SLAB_MARGIN * 2;
 const OVERLAY_Y = TILE_TOP + 0.005;
 const SELECT_LIFT = 0.12;
 const TAP_SLOP_PX = 14;
+/** Token opacity of a piece while it is being dragged (its DOM ghost follows the finger). */
+const DRAG_SOURCE_OPACITY = 0.3;
 /** Camera blend between the tilted arena view and the top-down view. */
 const VIEW_TRANSITION_MS = 520;
 const TILT_FOV = 34;
@@ -659,6 +661,8 @@ export class BoardView implements IBoardView {
   private disposed = false;
   private resizeObserver: ResizeObserver | null = null;
   private down: { id: number; x: number; y: number } | null = null;
+  /** Piece being dragged by the UI (drawn faded on its square), see setDragging. */
+  private draggingId: string | null = null;
 
   /**
    * Camera view: 0 = tilted 3D arena view, 1 = top-down. Animated between the two by
@@ -1350,6 +1354,44 @@ export class BoardView implements IBoardView {
     this.renderer.domElement.style.cursor = enabled ? 'pointer' : 'default';
   }
 
+  pickCell(clientX: number, clientY: number): Pos | null {
+    if (this.disposed) return null;
+    return this.pick(clientX, clientY);
+  }
+
+  cellRect(pos: Pos): ScreenRect | null {
+    if (this.disposed) return null;
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
+    this.camera.updateMatrixWorld();
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    // Project the tile's four corners on the tile-top plane (exact square in the top-down view).
+    for (let i = 0; i < 4; i++) {
+      const v = this.tmpV.set(cellX(pos.c) + (i & 1 ? 0.5 : -0.5), TILE_TOP, cellZ(pos.r) + (i & 2 ? 0.5 : -0.5)).project(this.camera);
+      const sx = rect.left + ((v.x + 1) / 2) * rect.width;
+      const sy = rect.top + ((1 - v.y) / 2) * rect.height;
+      x0 = Math.min(x0, sx);
+      y0 = Math.min(y0, sy);
+      x1 = Math.max(x1, sx);
+      y1 = Math.max(y1, sy);
+    }
+    return { left: x0, top: y0, width: x1 - x0, height: y1 - y0 };
+  }
+
+  setDragging(pieceId: string | null): void {
+    if (this.disposed || pieceId === this.draggingId) return;
+    const prev = this.draggingId;
+    this.draggingId = pieceId;
+    for (const id of [prev, pieceId]) {
+      const v = id ? this.visuals.get(id) : undefined;
+      if (v) this.blendVisual(v);
+    }
+    this.requestRender();
+  }
+
   /**
    * Optional extra (not part of IBoardView): the side to move changed. Brightens that side's
    * home-zone edge line and plays a short light sweep along it.
@@ -1719,7 +1761,7 @@ export class BoardView implements IBoardView {
     v.figure.visible = modelK > 0.002;
     v.figure.scale.set(Math.max(0.002, modelK), Math.max(0.002, modelK * modelK), Math.max(0.002, modelK));
     v.token.visible = tokenK > 0.002;
-    v.tokenMat.uniforms.uOpacity.value = tokenK;
+    v.tokenMat.uniforms.uOpacity.value = v.piece.id === this.draggingId ? tokenK * DRAG_SOURCE_OPACITY : tokenK;
   }
 
   /** The storm takes a piece: death clip + magenta dissolve, sparks and a purple dust ring. */

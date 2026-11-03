@@ -2,7 +2,7 @@ import type { BoardViewOptions, IBoardView } from './types';
 import { BoardView } from './BoardView';
 import { Board2DView } from './Board2DView';
 
-export type { BoardHighlights, BoardViewMode, BoardViewOptions, IBoardView, SkillPreview } from './types';
+export type { BoardHighlights, BoardViewMode, BoardViewOptions, IBoardView, ScreenRect, SkillPreview } from './types';
 export { BoardView } from './BoardView';
 export { Board2DView } from './Board2DView';
 export * from './palette';

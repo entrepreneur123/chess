@@ -1052,3 +1052,45 @@
     display: none;
   }
 }
+
+/* ---- Drag-to-move: frame on the legal square under the finger (ui/components/boardDrag.ts) ---- */
+.drag-target {
+  --dt: #9bebff;
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 940;
+  pointer-events: none;
+  border-radius: 6px;
+  box-shadow:
+    inset 0 0 0 2px var(--dt),
+    inset 0 0 12px 2px color-mix(in srgb, var(--dt) 55%, transparent),
+    0 0 14px 2px color-mix(in srgb, var(--dt) 60%, transparent);
+  background: color-mix(in srgb, var(--dt) 18%, transparent);
+  will-change: transform;
+  animation: drag-target-pulse 900ms ease-in-out infinite alternate;
+}
+.drag-target[hidden] {
+  display: none;
+}
+.drag-target--capture {
+  --dt: #ff4655;
+}
+.drag-target--deadly {
+  --dt: var(--toxic, #7cff5a);
+  background: repeating-linear-gradient(-45deg, rgba(124, 255, 90, 0.22) 0 4px, rgba(10, 20, 8, 0.25) 4px 8px);
+}
+@keyframes drag-target-pulse {
+  to {
+    background-color: color-mix(in srgb, var(--dt) 30%, transparent);
+    box-shadow:
+      inset 0 0 0 2.5px var(--dt),
+      inset 0 0 14px 3px color-mix(in srgb, var(--dt) 65%, transparent),
+      0 0 20px 4px color-mix(in srgb, var(--dt) 70%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .drag-target {
+    animation: none;
+  }
+}

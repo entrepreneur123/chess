@@ -34,6 +34,14 @@ export interface SkillPreview {
   valid: boolean;
 }
 
+/** A rectangle in viewport (client) CSS pixels. */
+export interface ScreenRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
 /** Camera view of the board: tilted 3D arena (default) or straight top-down. */
 export type BoardViewMode = 'tilt' | 'top';
 
@@ -88,4 +96,16 @@ export interface IBoardView {
    * also on dispose). The UI calls setWaste with the new full list afterwards.
    */
   animateSkill?(caster: string, squares: number[]): Promise<void>;
+  /**
+   * Optional (drag-to-move): the board square under a viewport point (client px), using the same
+   * mapping as taps; null when the point is off the board.
+   */
+  pickCell?(clientX: number, clientY: number): Pos | null;
+  /** Optional (drag-to-move): viewport rectangle (client px) of a board square, for DOM overlays. */
+  cellRect?(pos: Pos): ScreenRect | null;
+  /**
+   * Optional (drag-to-move): the piece being dragged (a DOM ghost follows the finger) is drawn
+   * faded on its square until this is called with null.
+   */
+  setDragging?(pieceId: string | null): void;
 }

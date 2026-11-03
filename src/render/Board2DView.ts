@@ -24,7 +24,7 @@
  */
 import { BOARD_SIZE, ZONE_DEPTH } from '../engine/types';
 import type { CharacterId, Level, Move, Piece, PlayerId, Pos } from '../engine/types';
-import type { BoardHighlights, IBoardView, SkillPreview } from './types';
+import type { BoardHighlights, IBoardView, ScreenRect, SkillPreview } from './types';
 import { ANIM, BOARD_COLORS, CHARACTER_FX, CHARACTER_RARITY, RARITY_RING, TEAM_COLORS, WASTE_COLORS } from './palette';
 import { STORM_COLORS } from './storm';
 import { wasteMask } from './waste';
@@ -61,6 +61,8 @@ import {
 } from './arena';
 
 const TAP_SLOP_PX = 14;
+/** Opacity of a piece while it is being dragged (its DOM ghost follows the finger). */
+const DRAG_SOURCE_ALPHA = 0.3;
 const MAX_PIXEL_RATIO = 2;
 const IDLE_FRAME_MS = 32;
 /** Storm removal: dissolve length (ms). */
@@ -178,6 +180,8 @@ export class Board2DView implements IBoardView {
   private disposing = false;
   private resizeObserver: ResizeObserver | null = null;
   private down: { id: number; x: number; y: number } | null = null;
+  /** Piece being dragged by the UI (drawn faded on its square), see setDragging. */
+  private draggingId: string | null = null;
   /** Static board layer (frame, base slate tiles, field overlay) at device pixels, rebuilt on resize. */
   private boardLayer: HTMLCanvasElement | null = null;
   private turn: PlayerId = 0;
@@ -506,6 +510,33 @@ export class Board2DView implements IBoardView {
     this.interactive = enabled;
     if (!enabled) this.down = null;
     this.canvas.style.cursor = enabled ? 'pointer' : 'default';
+  }
+
+  pickCell(clientX: number, clientY: number): Pos | null {
+    if (this.disposed) return null;
+    const rect = this.canvas.getBoundingClientRect();
+    const { x0, y0, cell, pad } = this.layout;
+    const x = clientX - rect.left - x0;
+    const y = clientY - rect.top - y0;
+    const size = cell * BOARD_SIZE;
+    const tol = pad * 0.8;
+    if (x < -tol || y < -tol || x > size + tol || y > size + tol) return null;
+    const c = Math.min(BOARD_SIZE - 1, Math.max(0, Math.floor(x / cell)));
+    const r = Math.min(BOARD_SIZE - 1, Math.max(0, BOARD_SIZE - 1 - Math.floor(y / cell)));
+    return { r, c };
+  }
+
+  cellRect(pos: Pos): ScreenRect | null {
+    if (this.disposed) return null;
+    const rect = this.canvas.getBoundingClientRect();
+    const { x0, y0, cell } = this.layout;
+    return { left: rect.left + x0 + pos.c * cell, top: rect.top + y0 + (BOARD_SIZE - 1 - pos.r) * cell, width: cell, height: cell };
+  }
+
+  setDragging(pieceId: string | null): void {
+    if (this.disposed || pieceId === this.draggingId) return;
+    this.draggingId = pieceId;
+    this.requestRender();
   }
 
   /** Optional extra (not part of IBoardView): the side to move changed; sweeps its zone line. */
@@ -878,7 +909,7 @@ export class Board2DView implements IBoardView {
         sc *= 1 + 0.2 * bump(0, 420, tk) + 0.08 * bump(sk.boltAt, sk.boltAt + 260, tk);
         flash = 0.4 * Math.max(0, 1 - tk / 260);
       }
-      this.drawPiece(p, this.cx(p.pos.c), this.cy(p.pos.r), sc, sc, 1, bob, now, flash);
+      this.drawPiece(p, this.cx(p.pos.c), this.cy(p.pos.r), sc, sc, p.id === this.draggingId ? DRAG_SOURCE_ALPHA : 1, bob, now, flash);
     }
     // Capture targets sit on top of the threatened tokens.
     const cp = pulse01(now, 700);
@@ -1859,16 +1890,8 @@ export class Board2DView implements IBoardView {
     this.down = null;
     if (!d || d.id !== ev.pointerId || !this.interactive || !this.cellCb) return;
     if (Math.hypot(ev.clientX - d.x, ev.clientY - d.y) > TAP_SLOP_PX) return;
-    const rect = this.canvas.getBoundingClientRect();
-    const { x0, y0, cell, pad } = this.layout;
-    const x = ev.clientX - rect.left - x0;
-    const y = ev.clientY - rect.top - y0;
-    const size = cell * BOARD_SIZE;
-    const tol = pad * 0.8;
-    if (x < -tol || y < -tol || x > size + tol || y > size + tol) return;
-    const c = Math.min(BOARD_SIZE - 1, Math.max(0, Math.floor(x / cell)));
-    const r = Math.min(BOARD_SIZE - 1, Math.max(0, BOARD_SIZE - 1 - Math.floor(y / cell)));
-    this.cellCb({ r, c });
+    const pos = this.pickCell(ev.clientX, ev.clientY);
+    if (pos) this.cellCb(pos);
   };
 
   private readonly onPointerCancel = (): void => {
