@@ -156,6 +156,7 @@ class Song:
     hall_rt: float = 3.0
     hall_mix: float = 1.0
     master_tilt_db: float = 0.0
+    master_eq: list[tuple[float, float, float]] = field(default_factory=list)  # (Hz, dB, Q) peaking
     seed: int = 1
 
     def part(self, *a, **k) -> Part:
@@ -628,6 +629,8 @@ def render_song(song: Song, fluid: Fluid, verbose: bool = True) -> tuple[np.ndar
     mix = shelf(mix, 4000, 3.5 + song.master_tilt_db, True)
     mix = shelf(mix, 90, -3.0, False)
     mix = butter(mix, 'highpass', 32, 2)
+    for f0, g, q in song.master_eq:
+        mix = peaking(mix, f0, g, q)
     # Pre-normalise, glue, limit.
     mix /= np.abs(mix).max() + 1e-9
     mix *= 10 ** (-6 / 20)

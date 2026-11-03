@@ -352,7 +352,7 @@ def emberforge() -> Song:
 
 
 def blightmire() -> Song:
-    s = Song('blightmire', 90, 24, 'F# Phrygian', hall_rt=3.0, seed=33)
+    s = Song('blightmire', 90, 24, 'F# Phrygian', hall_rt=3.0, seed=33, master_eq=[(260, -3.0, 0.9)])
     A = ['F#m', 'F#m', 'G', 'F#m', 'D', 'E', 'G', 'G']
     Bp = ['F#m', 'F#m', 'D', 'C#', 'F#m', 'Bm', 'D', 'C#']
     C = ['Bm', 'G', 'F#m', 'F#m', 'D', 'E', 'G', 'G']
@@ -398,7 +398,7 @@ def blightmire() -> Song:
     motif(shaku, 13, p('F#4'), [(b, (s_ - 1 if s_ == 2 else s_), d) for b, s_, d in MOTIF_B], vel=80, rng_seed=7)
 
     hand = s.part('hand_drums', 0, drum=True, gain_db=-6, room=0.45, hall=0.2, hp=60, lp=5500, width=1.3)
-    shaker = s.part('shaker', 0, drum=True, gain_db=-17, room=0.3, hall=0.2, hp=2000, lp=9000, pan=0.4)
+    shaker = s.part('shaker', 0, drum=True, gain_db=-21, room=0.3, hall=0.2, hp=2000, lp=9000, pan=0.4)
     tk = s.part('taiko', 116, gain_db=-7, room=0.3, hall=0.3, hp=35, lp=4500)
     boom = s.synth('boom', sub_boom, gain_db=-13, hall=0.05, lp=170)
     conga = [(0, 64, 96), (0.75, 62, 54), (1, 63, 72), (1.5, 64, 70), (2.25, 62, 50), (2.5, 63, 78), (3, 64, 84), (3.5, 61, 66), (3.75, 60, 52)]

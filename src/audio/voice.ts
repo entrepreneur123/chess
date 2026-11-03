@@ -78,6 +78,26 @@ const lastVoiceAt = new Map<CharAudioEvent, number>();
 const lastVariant = new Map<string, number>();
 const lastSfxAt = new Map<string, number>();
 let current: Playing | null = null;
+let activityListener: ((speaking: boolean) => void) | null = null;
+let speaking = false;
+
+/**
+ * Register one listener told when a voice line starts (true) and when no line is playing any more
+ * (false); background music uses it to duck under speech. Pass null to remove. Never throws.
+ */
+export function setVoiceActivityListener(fn: ((speaking: boolean) => void) | null): void {
+  activityListener = fn;
+}
+
+function setSpeaking(on: boolean): void {
+  if (speaking === on) return;
+  speaking = on;
+  try {
+    activityListener?.(on);
+  } catch {
+    /* a listener must never break voice playback */
+  }
+}
 
 function nowMs(): number {
   return typeof performance !== 'undefined' ? performance.now() : Date.now();
@@ -236,11 +256,18 @@ export function playVoice(character: CharacterId, event: CharAudioEvent, opts: V
       if (current && current.priority > priority && out.ctx.currentTime < current.endsAt - 0.08) return;
       stopCurrent(out.ctx.currentTime);
       const p = playBuffer(buf, gain, rate);
-      if (!p) return;
+      if (!p) {
+        setSpeaking(false);
+        return;
+      }
       const playing: Playing = { ...p, priority, endsAt: out.ctx.currentTime + buf.duration / rate };
       current = playing;
+      setSpeaking(true);
       p.src.addEventListener('ended', () => {
-        if (current === playing) current = null;
+        if (current === playing) {
+          current = null;
+          setSpeaking(false);
+        }
       });
     };
     const buf = ready.get(rel);
@@ -316,6 +343,7 @@ export function stopVoice(): void {
     const c = getAudioContext();
     if (c) stopCurrent(c.currentTime);
     current = null;
+    setSpeaking(false);
   } catch {
     /* ignore */
   }
