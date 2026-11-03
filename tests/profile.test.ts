@@ -1,104 +1,104 @@
 import { describe, expect, it } from 'vitest';
-import { BOX, MATCH_REWARD } from '../src/meta/economy';
+import { CHARACTER_IDS, validateFormation } from '../src/engine';
 import {
+  DEFAULT_GRADE,
+  PROFILE_VERSION,
   applyMatchResult,
   createDefaultProfile,
-  freeBoxRemainingMs,
-  levelUp,
+  levelsOf,
   loadProfile,
-  openBox,
   sanitizeProfile,
+  setGrade,
   type KeyValueStorage,
 } from '../src/meta/profile';
 
 const mem = (text: string | null): KeyValueStorage => ({ getItem: () => text, setItem: () => {} });
 
-describe('match rewards', () => {
-  it('pays normal rewards for a played-out game', () => {
-    const p = createDefaultProfile();
-    expect(applyMatchResult(p, 'win', 'hard', 12).reward).toBe(MATCH_REWARD.win.hard);
-    expect(applyMatchResult(p, 'loss', 'easy', 12).reward).toBe(MATCH_REWARD.loss);
-    expect(applyMatchResult(p, 'draw', 'easy', 30).reward).toBe(MATCH_REWARD.draw);
-  });
-
-  it('does not pay for an instant resign / AFK forfeit (reward farming)', () => {
+describe('match results', () => {
+  it('only records the outcome (there is no economy)', () => {
     let p = createDefaultProfile();
-    const start = p.coins;
-    for (let i = 0; i < 10; i++) p = applyMatchResult(p, 'loss', 'normal', 0).profile;
-    expect(p.coins).toBe(start);
-    expect(p.stats.losses).toBe(10); // still recorded
+    p = applyMatchResult(p, 'win');
+    p = applyMatchResult(p, 'loss');
+    p = applyMatchResult(p, 'draw');
+    p = applyMatchResult(p, 'win');
+    expect(p.stats).toEqual({ wins: 2, losses: 1, draws: 1 });
+    expect(Object.keys(p).sort()).toEqual(['difficulty', 'formation', 'formationSaved', 'grades', 'onboarding', 'settings', 'stats', 'version']);
   });
 });
 
-describe('profile sanitizing', () => {
+describe('star grades', () => {
+  it('every character is available at every grade; the formation follows the chosen grade', () => {
+    let p = createDefaultProfile();
+    for (const id of CHARACTER_IDS) expect(p.grades[id]).toBe(DEFAULT_GRADE);
+    p = setGrade(p, 'sad', 3);
+    expect(p.grades.sad).toBe(3);
+    expect(p.formation.find((s) => s.character === 'sad')?.level).toBe(3);
+    p = setGrade(p, 'sad', 1);
+    expect(p.formation.find((s) => s.character === 'sad')?.level).toBe(1);
+    expect(setGrade(p, 'sad', 1)).toBe(p);
+    // A legendary can be fielded right away, at any grade.
+    p = setGrade(p, 'brutile', 2);
+    expect(levelsOf(p).brutile).toBe(2);
+  });
+
+  it('a saved formation with any characters (incl. legendaries) survives sanitizing', () => {
+    const p = createDefaultProfile();
+    const raw = {
+      ...p,
+      grades: { ...p.grades, insaner: 3, brutile: 2 },
+      formation: [
+        { character: 'insaner', level: 1, row: 2, col: 3 },
+        { character: 'brutile', level: 1, row: 1, col: 6 },
+        { character: 'walk', level: 1, row: 0, col: 9 },
+      ],
+      formationSaved: true,
+    };
+    const s = sanitizeProfile(raw);
+    expect(validateFormation(s.formation).ok).toBe(true);
+    expect(s.formationSaved).toBe(true);
+    // Slot levels always mirror the chosen grades.
+    expect(s.formation.map((x) => x.level)).toEqual([3, 2, 1]);
+  });
+});
+
+describe('profile sanitizing and migration', () => {
   it('survives garbage', () => {
-    for (const t of ['', 'null', '[]', '{', '{"coins":-5}', '{"coins":"9999"}', '{"characters":{"sad":{"level":7,"cards":-3}}}']) {
+    for (const t of ['', 'null', '[]', '{', '{"grades":{"sad":7}}', '{"grades":"x"}', '{"stats":{"wins":-3}}']) {
       const p = loadProfile(mem(t));
-      expect(p.coins).toBeGreaterThanOrEqual(0);
-      expect([1, 2, 3]).toContain(p.characters.sad.level);
-      expect(p.characters.sad.cards).toBeGreaterThanOrEqual(0);
+      expect([1, 2, 3]).toContain(p.grades.sad);
+      expect(p.stats.wins).toBeGreaterThanOrEqual(0);
+      expect(validateFormation(p.formation).ok).toBe(true);
     }
   });
 
-  it('a free-box timestamp from the future (clock moved back) locks out for at most one cooldown', () => {
-    const now = Date.UTC(2026, 0, 1);
-    const p = sanitizeProfile({ ...createDefaultProfile(), lastFreeBoxAt: now + 365 * 24 * 3600 * 1000 }, now);
-    expect(freeBoxRemainingMs(p, now)).toBeLessThanOrEqual(BOX.freeCooldownMs);
-    expect(freeBoxRemainingMs(p, now + BOX.freeCooldownMs)).toBe(0);
-  });
-
-  it('never levels past 3 or spends below zero', () => {
-    let p = { ...createDefaultProfile(), gems: 100_000 };
-    p = { ...p, characters: { ...p.characters, sad: { level: 1, cards: 1000 } } };
-    for (let i = 0; i < 10; i++) p = levelUp(p, 'sad');
-    expect(p.characters.sad.level).toBe(3);
-    expect(p.formation.find((s) => s.character === 'sad')?.level).toBe(3);
-    const poor = { ...createDefaultProfile(), coins: 0, gems: 0, characters: { ...p.characters, marki: { level: 1 as const, cards: 99 } } };
-    expect(levelUp(poor, 'marki')).toBe(poor);
-    expect(openBox(poor, 'basic').ok).toBe(false);
-  });
-
-  it('the free box cannot be claimed twice in a row', () => {
-    const now = Date.UTC(2026, 0, 1);
-    const a = openBox(createDefaultProfile(), 'free', Math.random, now);
-    expect(a.ok).toBe(true);
-    if (!a.ok) return;
-    expect(openBox(a.profile, 'free', Math.random, now + 1000).ok).toBe(false);
-  });
-});
-
-describe('profile store', () => {
-  it('persists a clamped future free-box timestamp so later launches are not locked again', () => {
-    let saved: string | null = JSON.stringify({ ...createDefaultProfile(), lastFreeBoxAt: Date.now() + 365 * 24 * 3600 * 1000 });
+  it('migrates a v2 save: reached levels become grades, the economy fields are dropped', () => {
+    const v2 = {
+      version: 2,
+      coins: 1234,
+      gems: 99,
+      lastFreeBoxAt: 1,
+      dev: true,
+      characters: { sad: { level: 3, cards: 4 }, marki: { level: 2, cards: 0 }, walk: { level: 1, cards: 9 }, insaner: { level: 1, cards: 0 } },
+      formation: [
+        { character: 'sad', level: 3, row: 2, col: 7 },
+        { character: 'marki', level: 2, row: 2, col: 4 },
+        { character: 'walk', level: 1, row: 1, col: 5 },
+      ],
+      formationSaved: true,
+      stats: { wins: 5, losses: 2, draws: 1 },
+      difficulty: 'hard',
+    };
+    let saved: string | null = JSON.stringify(v2);
     const storage: KeyValueStorage = { getItem: () => saved, setItem: (_k, v) => void (saved = v) };
-    const first = loadProfile(storage);
-    expect(first.lastFreeBoxAt).toBeLessThanOrEqual(Date.now());
-    expect(JSON.parse(saved!).lastFreeBoxAt).toBe(first.lastFreeBoxAt);
-  });
-});
-
-describe('developer account', () => {
-  it('unlocks with the dev query, maxes every character, never spends, and can be turned off', async () => {
-    const { applyDevQuery, canLevelUp, levelUp, openBox, applyMatchResult, createDefaultProfile } = await import('../src/meta/profile');
-    const { DEV_CODE, DEV_CURRENCY } = await import('../src/meta/economy');
-    const base = createDefaultProfile();
-    expect(applyDevQuery(base, '?dev=wrong')).toBe(base);
-    const dev = applyDevQuery(base, `?dev=${DEV_CODE}`);
-    expect(dev.dev).toBe(true);
-    expect(dev.coins).toBe(DEV_CURRENCY);
-    expect(Object.values(dev.characters).every((c) => c.level === 3)).toBe(true);
-    expect(dev.formation.every((s) => s.level === 3)).toBe(true);
-    expect(canLevelUp(dev, 'sad')).toEqual({ ok: false, reason: 'max' });
-    expect(levelUp(dev, 'sad')).toBe(dev);
-    const box = openBox(dev, 'basic');
-    expect(box.ok && box.profile.coins).toBe(DEV_CURRENCY);
-    const free1 = openBox(dev, 'free');
-    expect(free1.ok && openBox(free1.profile, 'free').ok).toBe(true);
-    expect(applyMatchResult(dev, 'win', 'hard').profile.gems).toBe(DEV_CURRENCY);
-    const off = applyDevQuery(dev, '?dev=off');
-    expect(off.dev).toBe(false);
-    expect(off.coins).toBe(base.coins);
-    expect(off.characters.sad.level).toBe(1);
+    const p = loadProfile(storage);
+    expect(p.version).toBe(PROFILE_VERSION);
+    expect(p.grades).toMatchObject({ sad: 3, marki: 2, walk: 1, insaner: 1, brutile: 1 });
+    expect(p.stats.wins).toBe(5);
+    expect(p.difficulty).toBe('hard');
+    expect(p.formationSaved).toBe(true);
+    const stored = JSON.parse(saved!);
+    for (const k of ['coins', 'gems', 'lastFreeBoxAt', 'dev', 'characters']) expect(stored).not.toHaveProperty(k);
+    expect(stored.version).toBe(PROFILE_VERSION);
   });
 });
 

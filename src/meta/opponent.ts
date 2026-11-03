@@ -37,7 +37,7 @@ export function botLevels(
 
 /**
  * The bot mirrors the player's squad (same three characters), except that on normal/hard it may
- * bring a legendary (Insaner or Brutile) when the player has none: a preview of what boxes unlock.
+ * bring a legendary (Insaner or Brutile) when the player fields none.
  */
 export function botSquad(difficulty: Difficulty, playerSquad: readonly CharacterId[], rng: Rng = defaultRng): CharacterId[] {
   const squad = normalizeSquad(playerSquad.length ? playerSquad : STARTER_IDS);

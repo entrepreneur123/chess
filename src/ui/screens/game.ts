@@ -22,11 +22,11 @@ import {
   type SkillBlock,
 } from '../../engine';
 import { createBoardView, type IBoardView } from '../../render';
-import { MIN_MOVES_FOR_REWARD, PACING } from '../../meta/economy';
+import { PACING } from '../../meta/economy';
 import { DIFFICULTY_LABEL } from '../../meta/opponent';
 import { applyMatchResult, getProfile, updateProfile, type MatchOutcome } from '../../meta/profile';
 import { randInt, defaultRng } from '../../meta/rng';
-import { confetti, countUp } from '../components/celebrate';
+import { confetti } from '../components/celebrate';
 import { starsOf, unitArt } from '../components/piece';
 import { confirmDialog, showDialog } from '../components/dialog';
 import { clearToasts, toast } from '../components/toast';
@@ -560,16 +560,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     if (resultShown) return;
     resultShown = true;
     const outcome = outcomeOf(s);
-    const humanMoves = s.history.filter((e) => e.kind === 'move' && e.player === HUMAN).length;
-    const coinsBefore = getProfile().coins;
-    let reward = 0;
-    let gemReward = 0;
-    updateProfile((p) => {
-      const res = applyMatchResult(p, outcome, params.difficulty, humanMoves);
-      reward = res.reward;
-      gemReward = res.gemReward;
-      return res.profile;
-    });
+    const after = updateProfile((p) => applyMatchResult(p, outcome));
     setCoach('');
     field.close();
     await bag.sleep(s.endReason === 'resign' ? 150 : 650);
@@ -577,9 +568,6 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     clearToasts(); // nothing may sit on top of (or compete with) the result
     const title = outcome === 'win' ? '승리!' : outcome === 'loss' ? '패배' : '무승부';
     const adjudicated = s.endReason === 'timeUp' || s.endReason === 'stalemate' || (s.endReason === 'storm' && s.pieces.length === 0);
-    const noReward = reward === 0 && outcome !== 'win' && humanMoves < MIN_MOVES_FOR_REWARD;
-    const plus = h('span', { class: 'result__plus' }, '+0');
-    const total = h('span', { class: 'result__total-value' }, coinsBefore.toLocaleString('ko-KR'));
     // Hero strip: the player's surviving units celebrate (win) or the opponent's units stand (loss).
     const heroOwner = outcome === 'loss' ? BOT : HUMAN;
     const heroPieces = s.pieces.filter((pc) => pc.owner === heroOwner);
@@ -593,19 +581,9 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       { class: 'result__body' },
       hero,
       h('p', { class: 'result__reason', 'data-reason': s.endReason ?? '' }, endReasonText(s.endReason, outcome, s.endReason === 'storm' && s.pieces.length === 0)),
-      outcome === 'loss' && !noReward ? h('p', { class: 'result__cheer' }, '아쉬워요! 진형을 바꿔 다시 도전해 보세요.') : null,
+      outcome === 'loss' ? h('p', { class: 'result__cheer' }, '아쉬워요! 진형이나 성급을 바꿔 다시 도전해 보세요.') : null,
       adjudicated && s.pieces.length > 0 ? h('p', { class: 'result__score' }, `전력  나 ${materialScore(s, HUMAN)} : ${materialScore(s, BOT)} 상대`) : null,
-      h(
-        'div',
-        { class: `result__reward${reward > 0 ? ' has-reward' : ''}`, 'data-reward': reward },
-        h('span', null, '보상'),
-        icon('coin', 22),
-        plus,
-        gemReward > 0 ? h('span', { class: 'result__gem' }, icon('gem', 20), `+${gemReward}`) : null,
-      ),
-      noReward
-        ? h('p', { class: 'result__note', 'data-note': 'min-moves' }, icon('info', 16), `${MIN_MOVES_FOR_REWARD}수 이상 둬야 보상을 받아요`)
-        : h('p', { class: 'result__total' }, '보유 코인 ', total),
+      h('p', { class: 'result__total', 'data-record': '' }, icon('trophy', 16), `통산 ${after.stats.wins}승 ${after.stats.losses}패 ${after.stats.draws}무`),
     );
     const dialog = showDialog<'again' | 'lobby'>({
       title,
@@ -630,12 +608,6 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       haptic('win');
       bag.add(confetti());
     } else sfx(outcome === 'loss' ? 'lose' : 'draw');
-    if (reward > 0) {
-      bag.timeout(() => {
-        bag.add(countUp(plus, 0, reward, { prefix: '+', durationMs: 900, onStep: () => sfx('coin') }));
-        bag.add(countUp(total, coinsBefore, coinsBefore + reward, { durationMs: 900 }));
-      }, 380);
-    }
     const choice = await dialog;
     if (bag.isDisposed) return;
     if (choice === 'again') router.navigate('matchmaking', { difficulty: params.difficulty });

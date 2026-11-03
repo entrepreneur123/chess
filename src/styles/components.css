@@ -124,8 +124,7 @@
 /* Shine sweep for primary CTAs (decorative). */
 .btn--primary::before,
 .btn--filled::before,
-.btn--play::before,
-.btn--upgrade::before {
+.btn--play::before {
   content: '';
   position: absolute;
   inset: 0 auto 0 -60%;
@@ -136,8 +135,7 @@
   opacity: 0;
   pointer-events: none;
 }
-.btn--play::before,
-.btn--upgrade:not([aria-disabled='true'])::before {
+.btn--play::before {
   animation: btn-shine 3.6s 1.2s var(--ease-in-out) infinite;
 }
 @keyframes btn-shine {
@@ -186,7 +184,6 @@
   filter: drop-shadow(0 1px 0 rgba(255, 240, 190, 0.6));
 }
 
-.btn--upgrade,
 .btn--success {
   --b-top: #52eaa0;
   --b-bot: var(--green-500);
@@ -248,27 +245,6 @@
 .btn--text[disabled] {
   background: transparent;
   color: var(--text-off);
-}
-
-/* Cost pill inside a button (e.g. "Lv.2 강화  💎300") */
-.btn__cost {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: var(--s-1);
-  padding: 3px 10px 3px 6px;
-  border-radius: var(--r-full);
-  background: rgba(0, 0, 0, 0.22);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
-  color: #fff;
-  font-family: var(--font-num);
-  font-size: 15px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.4);
-}
-.btn__cost.is-short {
-  color: var(--red-200);
 }
 
 /* ---- Icon buttons --------------------------------------------------------- */
@@ -444,17 +420,7 @@
   box-shadow: inset 0 0 0 1px rgba(255, 195, 40, 0.4);
   color: var(--gold-200);
 }
-.chip--dev {
-  height: 20px;
-  padding: 0 7px;
-  background: linear-gradient(180deg, #ff6bd6, #b0249a);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 2px 0 #5c0c50;
-  color: #fff;
-  font-family: var(--font-num);
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-}
+
 /* Rarity chip: gem-cut label in the rarity colour. */
 .chip--rarity {
   height: 20px;
@@ -548,84 +514,8 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* ---- Currency ----------------------------------------------------------- */
-.coin-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 12px 0 3px;
-  border-radius: var(--r-full);
-  background: linear-gradient(180deg, rgba(2, 5, 12, 0.7), rgba(10, 16, 30, 0.75));
-  box-shadow:
-    inset 0 1px 3px rgba(0, 0, 0, 0.6),
-    inset 0 0 0 1px var(--line-1),
-    0 1px 0 rgba(255, 255, 255, 0.06);
-  color: #fff;
-  font-family: var(--font-num);
-  font-size: 15px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0;
-  line-height: 1;
-}
-.coin-chip .icon {
-  width: 24px;
-  height: 24px;
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.5));
-}
-.coin-chip.is-infinite .coin-chip__value {
-  font-size: 19px;
-  font-style: italic;
-  color: var(--gold-200);
-}
 .coin-chip--gem.is-infinite .coin-chip__value {
   color: var(--gem-300);
-}
-.wallet {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-  min-width: 0;
-}
-.wallet--bar .coin-chip {
-  height: 28px;
-  font-size: 14px;
-}
-.wallet--bar .coin-chip .icon {
-  width: 22px;
-  height: 22px;
-}
-.wallet__btn {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--touch);
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  transition: transform var(--dur-press) var(--ease-out);
-}
-.wallet__btn:active {
-  transform: scale(0.94);
-}
-.wallet__btn .coin-chip {
-  padding-right: 20px;
-}
-.wallet__plus {
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  margin-left: -13px;
-  border-radius: 6px;
-  background: linear-gradient(180deg, #5cf0a8, var(--green-500));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.55),
-    0 2px 0 var(--green-700),
-    0 0 0 2px var(--ink-900);
-  color: #033;
 }
 
 /* ==========================================================================
@@ -1141,45 +1031,6 @@
   background: rgba(255, 255, 255, 0.05);
   box-shadow: inset 0 0 0 1px var(--line-2);
   color: var(--text-1);
-}
-
-/* Cost confirmation body */
-.confirm-cost {
-  display: grid;
-  gap: var(--s-2);
-  text-align: left;
-}
-.confirm-cost__row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 44px;
-  padding: 0 var(--s-3);
-  border-radius: var(--r-s);
-  background: var(--surface-well);
-  box-shadow: inset 0 0 0 1px var(--line-1);
-  color: var(--text-2);
-}
-.confirm-cost__row b {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: #fff;
-  font-family: var(--font-num);
-  font-size: 18px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-.confirm-cost__row b .icon {
-  width: 20px;
-  height: 20px;
-}
-.confirm-cost__note {
-  color: var(--text-2);
-  font-size: var(--fs-label);
-}
-.confirm-cost__note b {
-  color: var(--gold-200);
 }
 
 /* Bottom sheet */

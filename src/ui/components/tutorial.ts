@@ -7,7 +7,6 @@ import { CHARACTERS, CHARACTER_IDS, STARTER_IDS, TURN_TIME_MS, type CharacterId 
 import { getProfile, updateProfile } from '../../meta/profile';
 import { h, prefersReducedMotion, type Child } from '../dom';
 import { icon } from '../icons';
-import { chestArt } from './chest';
 import { formationGrid } from './formationGrid';
 import { overlayRoot, pushOverlay, registerForceClose } from './overlay';
 import { CONCEPT, movementDiagram, pieceToken, rarityChip, unitArt } from './piece';
@@ -121,9 +120,9 @@ function growArt(): Child {
   return h(
     'div',
     { class: 'tut-art tut-art--grow' },
-    h('div', { class: 'tut-grow__box' }, chestArt('basic'), h('span', { class: 'tut-grow__cap' }, '상자')),
-    h('span', { class: 'tut-grow__arrow' }, icon('chevron', 22)),
     h('div', { class: 'tut-grow__lv' }, movementDiagram('sad', 1, { cell: 7 }), h('span', { class: 'tut-grow__cap' }, '1성')),
+    h('span', { class: 'tut-grow__arrow' }, icon('chevron', 22)),
+    h('div', { class: 'tut-grow__lv' }, movementDiagram('sad', 2, { cell: 7 }), h('span', { class: 'tut-grow__cap' }, '2성')),
     h('span', { class: 'tut-grow__arrow' }, icon('chevron', 22)),
     h('div', { class: 'tut-grow__lv' }, movementDiagram('sad', 3, { cell: 7 }), h('span', { class: 'tut-grow__cap tut-grow__cap--hi' }, '3성')),
   );
@@ -135,7 +134,7 @@ const SLIDES: Slide[] = [
   { key: 'tap', art: tapArt, title: '탭하고, 한 번 더 탭!', body: '내 말을 탭하면 갈 수 있는 칸이 빛나요. 빛나는 칸을 탭하면 이동해요.' },
   { key: 'zone', art: zoneArt, title: '진형은 아래 3줄에서', body: '대전 전에 내 구역(3×12) 안에 말을 자유롭게 배치해 작전을 짜세요.' },
   { key: 'timer', art: timerArt, title: '한 턴 45초, 한 판 최대 10분', body: '말이 줄면 40초 → 20초. 한쪽이 1개만 남거나 40수가 지나면(서든데스) 6턴마다 좌우 바깥 줄이 자기장으로 변해 닿은 말은 소멸해요. 3번 연속 시간 초과는 기권패!' },
-  { key: 'grow', art: growArt, title: '상자 열고 승급', body: '보상 코인으로 상자를 열어 카드를 모으세요. 성급이 오르면 이동 범위가 넓어져요.' },
+  { key: 'grow', art: growArt, title: '성급은 내 마음대로', body: '모든 캐릭터를 1성 · 2성 · 3성 중 원하는 성급으로 출전시킬 수 있어요. 캐릭터 화면에서 골라 보세요.' },
 ];
 
 let open = false;

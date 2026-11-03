@@ -1,47 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { BOX, BOT_LEGENDARY_CHANCE } from '../src/meta/economy';
+import { BOT_LEGENDARY_CHANCE } from '../src/meta/economy';
 import { botSquad, createOpponent } from '../src/meta/opponent';
-import { createDefaultProfile, isOwned, openBox, sanitizeProfile, setDevMode, squadOfProfile } from '../src/meta/profile';
+import { createDefaultProfile, sanitizeProfile, squadOfProfile } from '../src/meta/profile';
 import { defaultFormation, validateFormation } from '../src/engine';
 import { rngFrom } from './helpers';
 
-describe('legendary ownership', () => {
-  it('starters are owned, the legendary is locked until its first card', () => {
+describe('squads', () => {
+  it('the default squad is the three starters; legendaries can be fielded at once (no unlocking)', () => {
     const p = createDefaultProfile();
-    expect(isOwned(p, 'sad')).toBe(true);
-    expect(isOwned(p, 'insaner')).toBe(false);
     expect(squadOfProfile(p)).toEqual(['sad', 'marki', 'walk']);
-    const q = { ...p, characters: { ...p.characters, insaner: { level: 1 as const, cards: 1 } } };
-    expect(isOwned(q, 'insaner')).toBe(true);
-    expect(isOwned(setDevMode(p, true), 'insaner')).toBe(true);
-  });
-
-  it('boxes can drop legendary cards (rare) and that unlocks the character', () => {
-    expect(BOX.rarityWeights.legendary).toBeGreaterThan(0);
-    const rng = rngFrom(4);
-    let p = createDefaultProfile();
-    p = { ...p, coins: 1_000_000 };
-    let got = 0;
-    for (let i = 0; i < 400 && got === 0; i++) {
-      const r = openBox(p, 'basic', rng, 0);
-      if (!r.ok) break;
-      p = r.profile;
-      if (r.drop.character === 'insaner') got++;
-    }
-    expect(got).toBeGreaterThan(0);
-    expect(isOwned(p, 'insaner')).toBe(true);
-  });
-
-  it('a saved formation that fields an unowned character is reset to the default', () => {
-    const p = createDefaultProfile();
-    const raw = { ...p, formation: defaultFormation(undefined, ['insaner', 'sad', 'marki']) };
+    const raw = { ...p, formation: defaultFormation(undefined, ['insaner', 'brutile', 'marki']), formationSaved: true };
     expect(validateFormation(raw.formation).ok).toBe(true);
-    const s = sanitizeProfile(raw);
-    expect(squadOfProfile(s)).toEqual(['sad', 'marki', 'walk']);
-    expect(s.formationSaved).toBe(false);
-    // Once owned, the same formation survives.
-    const owned = { ...raw, characters: { ...p.characters, insaner: { level: 1, cards: 2 } }, formationSaved: true };
-    expect(squadOfProfile(sanitizeProfile(owned))).toEqual(['insaner', 'sad', 'marki']);
+    expect(squadOfProfile(sanitizeProfile(raw))).toEqual(['insaner', 'brutile', 'marki']);
   });
 });
 

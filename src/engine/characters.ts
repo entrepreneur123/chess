@@ -2,7 +2,7 @@ import type { AbsorbedAbility, CharacterDef, CharacterId, Level } from './types'
 
 /** Every character, in roster order. */
 export const CHARACTER_IDS: CharacterId[] = ['sad', 'marki', 'walk', 'insaner', 'brutile'];
-/** Characters every account owns from the start (the legendary is unlocked from boxes). */
+/** The default squad of a new profile (every character is available to everyone). */
 export const STARTER_IDS: CharacterId[] = ['sad', 'marki', 'walk'];
 
 export const CHARACTERS: Record<CharacterId, CharacterDef> = {

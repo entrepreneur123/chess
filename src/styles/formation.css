@@ -342,28 +342,4 @@ button.fgrid__cell:active {
 .tray-card.is-benched .tray-card__token {
   opacity: 0.75;
 }
-.tray-card.is-locked {
-  cursor: default;
-}
-.tray-card.is-locked .tray-card__token,
-.tray-card.is-locked .tray-card__main,
-.tray-card.is-locked .tray-card__diagram {
-  opacity: 0.45;
-  filter: grayscale(0.7);
-}
-.tray-card__lock {
-  position: absolute;
-  top: var(--s-2);
-  right: var(--s-2);
-  z-index: 2;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 9px;
-  border-radius: var(--r-full);
-  background: rgba(3, 7, 16, 0.75);
-  box-shadow: inset 0 0 0 1px var(--line-2);
-  color: var(--text-2);
-  font-size: var(--fs-micro);
-  font-weight: var(--fw-semibold);
-}
+

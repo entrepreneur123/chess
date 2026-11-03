@@ -1,5 +1,5 @@
 /**
- * Shared overlay stack (dialogs, sheets, box opening). The router asks it to close the
+ * Shared overlay stack (dialogs, sheets, drawers). The router asks it to close the
  * top-most overlay on hardware back before navigating.
  */
 

@@ -1,16 +1,13 @@
 /**
- * Character collection: rarity-framed unit cards, level-by-level abilities, and gem level-ups
- * with a before/after comparison and a confirm step (no accidental spending).
+ * Character screen: rarity-framed unit cards with every star grade's abilities. Every character
+ * and grade is available; the player picks which grade (1성 / 2성 / 3성) to field for each one.
  */
 import { haptic, sfx } from '../../audio/sfx';
 import { CHARACTERS, CHARACTER_IDS, type CharacterId, type Level } from '../../engine';
-import { MAX_LEVEL } from '../../meta/economy';
-import { canLevelUp, getProfile, isOwned, levelUp, levelUpCost, subscribeProfile, updateProfile } from '../../meta/profile';
+import { getProfile, setGrade, subscribeProfile, updateProfile } from '../../meta/profile';
 import { appBar } from '../components/appbar';
-import { confirmDialog } from '../components/dialog';
-import { coinChip, gemChip, movementDiagram, rarityChip, unitArt } from '../components/piece';
-import { toast } from '../components/toast';
-import { Disposables, h, prefersReducedMotion, replaceChildren } from '../dom';
+import { movementDiagram, rarityChip, starsOf, unitArt } from '../components/piece';
+import { Disposables, h, replaceChildren } from '../dom';
 import { icon } from '../icons';
 import type { Router, Screen } from '../router';
 
@@ -29,7 +26,7 @@ export const ROLE: Record<CharacterId, { role: string; trait: string }> = {
   marki: { role: '돌격형 공격수', trait: '앞으로만 일직선 돌진 · 사거리 최장' },
   walk: { role: '기습형 점퍼', trait: '사이의 말을 뛰어넘는 점프 · 넓은 앞줄 커버' },
   insaner: { role: '흡수형 광전사', trait: '적을 잡으면 그 말의 이동 능력을 흡수 · 3성은 잡은 뒤 한 번 더 이동' },
-  brutile: { role: '저주형 마녀', trait: '스킬 불모지: 빈 칸을 죽음의 땅으로 · 닿는 말은 소멸 (7턴째부터 1회)' },
+  brutile: { role: '저주형 마녀', trait: '한 칸씩 걷는 느린 마녀 · 성급이 오를수록 사방으로' },
 };
 
 /** Numeric "reach" per level for the stat bar (max squares reachable on an open board). */
@@ -39,149 +36,93 @@ function reachCount(id: CharacterId, lv: Level): number {
 }
 
 /** The unit's illustration at a level (the board is top-down only for now, so no 3D renders). */
-function unitPreview(id: CharacterId, lv: Level) {
-  return unitArt(id, lv, { size: 84, cls: 'compare__model' });
+function unitPreview(id: CharacterId, lv: Level, size = 84) {
+  return unitArt(id, lv, { size, cls: 'grade-pick__art' });
 }
 
 export function collectionScreen(router: Router): Screen {
   const bag = new Disposables();
-  const wallet = h('div', { class: 'wallet wallet--bar' });
   const list = h('div', { class: 'scroll-body collection__body' });
-  const el = h('div', { class: 'collection' }, appBar('캐릭터 도감', { onBack: () => router.home(), trailing: wallet }), list);
-  let justLeveled: CharacterId | null = null;
+  const el = h('div', { class: 'collection' }, appBar('캐릭터', { onBack: () => router.home() }), list);
+  let justPicked: CharacterId | null = null;
 
-  const doLevelUp = async (id: CharacterId) => {
-    const p = getProfile();
-    const check = canLevelUp(p, id);
-    if (!check.ok) {
-      toast(
-        check.reason === 'cards' ? '카드가 부족해요. 상점에서 상자를 열어보세요' : check.reason === 'gems' ? '보석이 부족해요. 상점에서 보석을 충전하세요' : '최대 성급입니다',
-        { tone: 'warn' },
-      );
-      return;
-    }
-    const cost = levelUpCost(p.characters[id].level)!;
-    const next = (p.characters[id].level + 1) as Level;
-    const ok = await confirmDialog({
-      title: `${CHARACTERS[id].nameKo} ${next}성으로 강화할까요?`,
-      body: h(
-        'div',
-        { class: 'confirm-cost' },
-        h('div', { class: 'confirm-cost__row' }, h('span', null, '소모 보석'), h('b', { class: 'confirm-cost__gem' }, icon('gem', 16), `${cost.gems}`)),
-        h('div', { class: 'confirm-cost__row' }, h('span', null, '소모 카드'), h('b', null, `${cost.cards}장`)),
-        h('p', { class: 'confirm-cost__note' }, '강화 후 이동 범위: ', h('b', null, CHARACTERS[id].descKo[next - 1])),
-      ),
-      confirmLabel: '강화하기',
-    });
-    if (!ok) return;
-    if (!canLevelUp(getProfile(), id).ok) return; // state changed meanwhile
-    justLeveled = id;
-    const after = updateProfile((q) => levelUp(q, id));
-    sfx('levelup');
-    haptic('win');
-    toast(`${CHARACTERS[id].nameKo} ${after.characters[id].level}성 달성! 이동 범위가 넓어졌어요`, { tone: 'success', duration: 2600 });
+  const pickGrade = (id: CharacterId, grade: Level) => {
+    if (getProfile().grades[id] === grade) return;
+    justPicked = id;
+    updateProfile((q) => setGrade(q, id, grade));
+    sfx(grade === 3 ? 'levelup' : 'select');
+    haptic('light');
   };
 
-  const statBar = (label: string, value: number, max: number, nextValue?: number) =>
+  const statBar = (label: string, value: number, max: number) =>
     h(
       'div',
       { class: 'stat' },
       h('span', { class: 'stat__label' }, label),
-      h(
-        'span',
-        { class: 'stat__bar', role: 'img', 'aria-label': `${label} ${value}${nextValue ? ` → ${nextValue}` : ''}` },
-        nextValue ? h('i', { class: 'stat__next', style: `width:${(nextValue / max) * 100}%` }) : null,
-        h('i', { class: 'stat__fill', style: `width:${(value / max) * 100}%` }),
-      ),
-      h('span', { class: 'stat__value' }, String(value), nextValue ? h('span', { class: 'stat__delta' }, `▲${nextValue - value}`) : null),
+      h('span', { class: 'stat__bar', role: 'img', 'aria-label': `${label} ${value}` }, h('i', { class: 'stat__fill', style: `width:${(value / max) * 100}%` })),
+      h('span', { class: 'stat__value' }, String(value)),
     );
 
   const card = (id: CharacterId) => {
     const p = getProfile();
     const def = CHARACTERS[id];
-    const prog = p.characters[id];
-    const cost = levelUpCost(prog.level);
-    const check = canLevelUp(p, id);
-    const next = cost ? ((prog.level + 1) as Level) : null;
-    const pct = cost ? Math.min(100, (prog.cards / cost.cards) * 100) : 100;
+    const grade = p.grades[id];
     const levels: Level[] = [1, 2, 3];
-    const leveled = justLeveled === id;
-    const owned = isOwned(p, id);
+    const picked = justPicked === id;
     const reachMax = reachCount(id, 3) > 12 ? 24 : 12;
     return h(
       'article',
-      { class: `unit-card rarity-${def.rarity} tier-${prog.level}${leveled ? ' is-leveled' : ''}${owned ? '' : ' is-locked'}`, 'data-character': id, 'data-level': prog.level, 'data-owned': owned ? 'true' : 'false' },
+      { class: `unit-card rarity-${def.rarity} tier-${grade}${picked ? ' is-picked' : ''}`, 'data-character': id, 'data-level': grade },
       h(
         'header',
         { class: 'unit-card__banner' },
-        h('img', { class: 'unit-card__art', src: `./chars/${id}-lv${prog.level}.jpg`, alt: '', loading: 'lazy', decoding: 'async', draggable: 'false' }),
+        h('img', { class: 'unit-card__art', src: `./chars/${id}-lv${grade}.jpg`, alt: '', loading: 'lazy', decoding: 'async', draggable: 'false' }),
         h('div', { class: 'unit-card__shine', 'aria-hidden': 'true' }),
         h(
           'div',
           { class: 'unit-card__title' },
-          h('div', { class: 'unit-card__role' }, h('b', null, TIER_TITLE[id][prog.level - 1]), ' · ', ROLE[id].role),
+          h('div', { class: 'unit-card__role' }, h('b', null, TIER_TITLE[id][grade - 1]), ' · ', ROLE[id].role),
           h('div', { class: 'unit-card__name' }, def.nameKo, h('span', { class: 'unit-card__en' }, def.nameEn)),
-          h('div', { class: 'unit-card__chips' }, rarityChip(def.rarity), h('span', { class: 'lv-pill lv-pill--big', 'data-level': prog.level }, `${prog.level}성`)),
+          h('div', { class: 'unit-card__chips' }, rarityChip(def.rarity), h('span', { class: 'lv-pill lv-pill--big', 'data-level': grade }, `${grade}성`)),
         ),
-        h('div', { class: 'unit-card__stars', 'aria-hidden': 'true' }, levels.map((lv) => icon('star', 16, lv <= prog.level ? 'is-on' : ''))),
-        prog.level === 3 && owned ? h('div', { class: 'unit-card__aura', 'aria-hidden': 'true' }) : null,
-        owned ? null : h('div', { class: 'unit-card__lock' }, icon('lock', 22), h('b', null, '미해금'), h('span', null, '상자에서 전설 카드를 뽑으면 해금')),
-        h('div', { class: 'unit-card__tier', 'aria-hidden': 'true' }, levels.map((lv) => h('i', { class: lv <= prog.level ? 'is-on' : '' }))),
-        leveled ? h('div', { class: 'unit-card__burst', 'aria-hidden': 'true' }, h('span', { class: 'unit-card__burst-text' }, '승급!')) : null,
+        h('div', { class: 'unit-card__stars', 'aria-hidden': 'true' }, levels.map((lv) => icon('star', 16, lv <= grade ? 'is-on' : ''))),
+        grade === 3 ? h('div', { class: 'unit-card__aura', 'aria-hidden': 'true' }) : null,
+        h('div', { class: 'unit-card__tier', 'aria-hidden': 'true' }, levels.map((lv) => h('i', { class: lv <= grade ? 'is-on' : '' }))),
       ),
       h('p', { class: 'unit-card__trait' }, icon('info', 14), ROLE[id].trait),
-      def.passiveKo ? h('p', { class: 'unit-card__passive' }, icon('magic', 14), h('b', null, '패시브 · 흡수'), ' ', def.passiveKo) : null,
-      def.skill ? h('p', { class: 'unit-card__passive unit-card__skill' }, icon('magic', 14), h('b', null, `스킬 · ${def.skill.nameKo}`), ' ', def.skill.descKo[prog.level - 1], ' · 7턴째부터 1회, 자기장이 좁혀오면 금지') : null,
+      def.passiveKo ? h('p', { class: 'unit-card__passive' }, icon('magic', 14), h('span', null, h('b', null, '패시브 · 흡수'), ' ', def.passiveKo)) : null,
+      def.skill
+        ? h('p', { class: 'unit-card__passive unit-card__skill' }, icon('magic', 14), h('span', null, h('b', null, `스킬 · ${def.skill.nameKo}`), ' ', def.skill.descKo[grade - 1], ' · 7턴째부터 한 판에 1번, 자기장이 좁혀오면 금지'))
+        : null,
+      h('div', { class: 'unit-card__stats' }, statBar('이동 범위', reachCount(id, grade), reachMax)),
+      // Grade picker: every grade is available; the chosen one is what gets fielded.
       h(
         'div',
-        { class: 'unit-card__stats' },
-        statBar('이동 범위', reachCount(id, prog.level), reachMax, next ? reachCount(id, next) : undefined),
+        { class: 'grade-pick', role: 'radiogroup', 'aria-label': `${def.nameKo} 출전 성급` },
+        h('div', { class: 'grade-pick__label' }, '출전 성급 선택'),
         h(
           'div',
-          { class: 'unit-card__compare' },
-          h('div', { class: 'compare__col' }, h('span', { class: 'compare__cap' }, `${prog.level}성 현재`), unitPreview(id, prog.level), movementDiagram(id, prog.level, { cell: 8 }), h('span', { class: 'compare__desc' }, def.descKo[prog.level - 1])),
-          next
-            ? [
-                h('span', { class: 'compare__arrow' }, icon('chevron', 22)),
-                h('div', { class: 'compare__col compare__col--next' }, h('span', { class: 'compare__cap' }, `${next}성 강화 후`), unitPreview(id, next), movementDiagram(id, next, { cell: 8 }), h('span', { class: 'compare__desc' }, def.descKo[next - 1])),
-              ]
-            : h('div', { class: 'compare__col compare__col--max' }, icon('trophy', 28), h('span', { class: 'compare__cap' }, '최대 성급')),
-        ),
-      ),
-      h(
-        'div',
-        { class: 'upgrade' },
-        h(
-          'div',
-          { class: 'upgrade__cards' },
-          h('span', { class: 'upgrade__card-icon', 'aria-hidden': 'true' }, icon('card', 22)),
-          h('div', { class: 'progress-block__label' }, h('span', null, cost ? '강화 카드' : '보유 카드'), h('span', { class: 'progress-block__value' }, cost ? `${prog.cards} / ${cost.cards}` : String(prog.cards))),
-          h(
-            'div',
-            { class: 'progress', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(Math.round(pct)) },
-            h('span', { class: `progress__bar${cost && prog.cards >= cost.cards ? ' is-full' : ''}`, style: `width:${pct}%` }),
-          ),
-        ),
-        !owned
-          ? h('div', { class: 'max-note max-note--locked' }, icon('lock', 18), '상자에서 획득하면 강화할 수 있어요')
-          : prog.level < MAX_LEVEL && cost
-          ? h(
+          { class: 'grade-pick__row' },
+          levels.map((lv) =>
+            h(
               'button',
               {
-                class: `btn ${check.ok ? 'btn--upgrade' : 'btn--tonal'} btn--block`,
+                class: `grade-pick__btn${lv === grade ? ' is-active' : ''}`,
                 type: 'button',
-                'data-action': 'level-up',
-                'aria-disabled': check.ok ? 'false' : 'true',
-                onclick: () => void doLevelUp(id),
+                role: 'radio',
+                'aria-checked': String(lv === grade),
+                'data-action': 'pick-grade',
+                'data-grade': lv,
+                onclick: () => pickGrade(id, lv),
               },
-              icon('up', 20),
-              `${prog.level + 1}성 강화`,
-              h('span', { class: `btn__cost${p.gems < cost.gems ? ' is-short' : ''}` }, icon('gem', 16), String(cost.gems)),
-            )
-          : h('div', { class: 'max-note' }, icon('check', 18), '최대 성급 달성'),
-        owned && !check.ok && check.reason !== 'max'
-          ? h('p', { class: 'upgrade__hint' }, check.reason === 'cards' ? `카드 ${cost!.cards - prog.cards}장 더 필요 · 상자에서 획득` : `보석 ${cost!.gems - p.gems}개 부족 · 상점에서 충전`)
-          : null,
+              unitPreview(id, lv, 46),
+              h('span', { class: 'grade-pick__stars', 'aria-hidden': 'true' }, starsOf(lv)),
+              h('span', { class: 'grade-pick__name' }, `${lv}성`),
+              movementDiagram(id, lv, { cell: 6 }),
+            ),
+          ),
+        ),
+        h('p', { class: 'grade-pick__desc' }, def.descKo[grade - 1]),
       ),
       h(
         'table',
@@ -191,8 +132,8 @@ export function collectionScreen(router: Router): Screen {
           levels.map((lv) =>
             h(
               'tr',
-              { class: `${lv === prog.level ? 'is-current' : ''}${lv < prog.level ? ' is-past' : ''}${lv > prog.level ? ' is-locked' : ''}` },
-              h('th', { scope: 'row' }, lv > prog.level ? icon('lock', 12) : null, `${lv}성`),
+              { class: lv === grade ? 'is-current' : '' },
+              h('th', { scope: 'row' }, `${lv}성`),
               h('td', { class: 'ability-table__desc' }, def.descKo[lv - 1]),
               h('td', { class: 'ability-table__diagram' }, movementDiagram(id, lv, { cell: 6 })),
             ),
@@ -203,18 +144,12 @@ export function collectionScreen(router: Router): Screen {
   };
 
   const render = () => {
-    const p = getProfile();
-    replaceChildren(wallet, coinChip(p.coins), gemChip(p.gems));
     replaceChildren(
       list,
-      h('p', { class: 'hint hint--pad' }, icon('info', 16), '상자에서 카드를 모으고 보석으로 강화하세요. 다이어그램의 위쪽이 앞(적 방향)입니다.'),
+      h('p', { class: 'hint hint--pad' }, icon('info', 16), '모든 캐릭터를 1성 · 2성 · 3성 중 원하는 성급으로 출전시킬 수 있어요. 다이어그램의 위쪽이 앞(적 방향)입니다.'),
       CHARACTER_IDS.map(card),
     );
-    if (justLeveled && !prefersReducedMotion()) {
-      const target = list.querySelector<HTMLElement>(`[data-character="${justLeveled}"]`);
-      target?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    }
-    justLeveled = null;
+    justPicked = null;
     // Entrance animation only on first paint (later re-renders must not replay it).
     if (!list.classList.contains('is-settled')) bag.timeout(() => list.classList.add('is-settled'), 900);
   };

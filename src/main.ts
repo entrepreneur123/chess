@@ -6,7 +6,6 @@ import './styles/base.css';
 import './styles/components.css';
 import './styles/lobby.css';
 import './styles/collection.css';
-import './styles/shop.css';
 import './styles/formation.css';
 import './styles/matchmaking.css';
 import './styles/overlays.css';
@@ -20,7 +19,6 @@ import { formationScreen } from './ui/screens/formation';
 import { gameScreen } from './ui/screens/game';
 import { lobbyScreen } from './ui/screens/lobby';
 import { matchmakingScreen } from './ui/screens/matchmaking';
-import { shopScreen } from './ui/screens/shop';
 
 document.title = APP_NAME;
 
@@ -37,7 +35,6 @@ const router = new Router(outlet)
   .register('lobby', lobbyScreen)
   .register('formation', formationScreen)
   .register('collection', collectionScreen)
-  .register('shop', shopScreen)
   .register('matchmaking', matchmakingScreen)
   .register('game', gameScreen);
 

@@ -109,12 +109,16 @@
   padding: calc(var(--s-1) + var(--sat)) calc(var(--s-3) + var(--sar)) var(--s-3) calc(var(--s-3) + var(--sal));
   background: linear-gradient(180deg, rgba(4, 7, 14, 0.85), rgba(4, 7, 14, 0.45) 60%, transparent);
 }
-.lobby__top .wallet {
+.lobby__record {
   flex: 1;
-  gap: var(--s-3);
-}
-.lobby__dev:empty {
-  display: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--gold-200);
+  font-size: var(--fs-label);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
 }
 
 /* ---- Scrolling body ------------------------------------------------------------- */
@@ -367,24 +371,7 @@
   gap: var(--s-2);
   padding: 0 var(--s-1);
 }
-.play-panel__reward {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-  color: var(--text-2);
-  font-size: var(--fs-caption);
-  font-weight: var(--fw-semibold);
-}
-.play-panel__reward-val {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  color: #fff;
-  font-family: var(--font-num);
-  font-size: 14px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
+
 .play-panel .btn--play {
   margin-top: var(--s-1);
 }
@@ -594,7 +581,7 @@
   bottom: 0;
   z-index: var(--z-dock);
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: var(--s-1);
   padding: var(--s-2) calc(var(--s-3) + var(--sar)) calc(var(--s-2) + var(--sab)) calc(var(--s-3) + var(--sal));
   background: linear-gradient(180deg, rgba(14, 22, 40, 0.94), rgba(5, 9, 18, 0.98));
@@ -638,11 +625,7 @@
   --tone-b: #1f5fd0;
   --tone-edge: #0f3478;
 }
-.menu-tile--gold {
-  --tone-a: #ffd556;
-  --tone-b: #f09a06;
-  --tone-edge: #8a4a03;
-}
+
 .menu-tile__icon {
   display: grid;
   place-items: center;
@@ -661,12 +644,7 @@
 .menu-tile__icon .icon {
   filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45));
 }
-.menu-tile--gold .menu-tile__icon {
-  color: #4a2600;
-}
-.menu-tile--gold .menu-tile__icon .icon {
-  filter: drop-shadow(0 1px 0 rgba(255, 240, 200, 0.6));
-}
+
 .menu-tile__label {
   font-size: var(--fs-caption);
   font-weight: var(--fw-bold);

@@ -22,7 +22,6 @@ export interface ScreenParams {
   lobby: undefined;
   formation: undefined;
   collection: undefined;
-  shop: undefined;
   matchmaking: { difficulty: import('../ai/bot').Difficulty };
   game: import('./screens/gameParams').GameParams;
 }

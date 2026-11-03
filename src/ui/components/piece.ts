@@ -8,9 +8,7 @@ import {
   type PlayerId,
   type Rarity,
 } from '../../engine';
-import { getProfile } from '../../meta/profile';
 import { h } from '../dom';
-import { icon } from '../icons';
 
 export const RARITY_LABEL: Record<Rarity, string> = { common: '일반', rare: '희귀', epic: '영웅', legendary: '전설' };
 
@@ -81,28 +79,6 @@ export function unitArt(
     h('img', { src, alt: '', loading: 'lazy', decoding: 'async', draggable: 'false' }),
     h('span', { class: 'unit-art__lv', 'aria-hidden': 'true' }, starsOf(level)),
   );
-}
-
-/**
- * Currency pill. The developer account has unlimited currency: the value renders as "∞" while the
- * accessible label keeps the real number.
- */
-function currencyChip(kind: 'coin' | 'gem', amount: number, label: string): HTMLElement {
-  const infinite = getProfile().dev;
-  return h(
-    'span',
-    { class: `coin-chip${kind === 'gem' ? ' coin-chip--gem' : ''}${infinite ? ' is-infinite' : ''}`, 'aria-label': `${label} ${amount}` },
-    icon(kind, 18),
-    h('span', { class: 'coin-chip__value', 'aria-hidden': 'true' }, infinite ? '∞' : amount.toLocaleString('ko-KR')),
-  );
-}
-
-export function gemChip(amount: number): HTMLElement {
-  return currencyChip('gem', amount, '보석');
-}
-
-export function coinChip(amount: number, opts: { label?: string } = {}): HTMLElement {
-  return currencyChip('coin', amount, opts.label ?? '코인');
 }
 
 // -----------------------------------------------------------------------------------------------

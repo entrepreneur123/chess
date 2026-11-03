@@ -7,13 +7,13 @@
  */
 import type { Difficulty } from '../../ai/bot';
 import { CHARACTERS, CHARACTER_IDS, type CharacterId, type Level, type Rarity } from '../../engine';
-import { APP_NAME, APP_TAGLINE, MATCH_GEM_REWARD, MATCH_REWARD } from '../../meta/economy';
+import { APP_NAME, APP_TAGLINE } from '../../meta/economy';
 import { DIFFICULTY_LABEL } from '../../meta/opponent';
-import { freeBoxRemainingMs, getProfile, isOwned, levelUpsAvailable, squadOfProfile, subscribeProfile, updateProfile } from '../../meta/profile';
+import { getProfile, squadOfProfile, subscribeProfile, updateProfile } from '../../meta/profile';
 import { formationGrid } from '../components/formationGrid';
 import { showSettings } from '../components/settingsSheet';
 import { isTutorialOpen, showTutorial } from '../components/tutorial';
-import { coinChip, gemChip, rarityChip, unitArt } from '../components/piece';
+import { rarityChip, unitArt } from '../components/piece';
 import { Disposables, h, replaceChildren } from '../dom';
 import { icon, type IconName } from '../icons';
 import type { Router, Screen } from '../router';
@@ -22,11 +22,9 @@ const DIFFS: Difficulty[] = ['easy', 'normal', 'hard'];
 const DIFF_SUB: Record<Difficulty, string> = { easy: '입문', normal: '표준', hard: '고수' };
 const RARITY_RANK: Record<Rarity, number> = { common: 0, rare: 1, epic: 2, legendary: 3 };
 
-/** Owned characters ordered for the key visual: [featured (highest rarity), left, right]. */
+/** The fielded squad ordered for the key visual: [featured (highest rarity), left, right]. */
 function heroOrder(): CharacterId[] {
-  const p = getProfile();
-  const owned = CHARACTER_IDS.filter((id) => isOwned(p, id));
-  return owned.sort((a, b) => RARITY_RANK[CHARACTERS[b].rarity] - RARITY_RANK[CHARACTERS[a].rarity]).slice(0, 3);
+  return [...squadOfProfile(getProfile())].sort((a, b) => RARITY_RANK[CHARACTERS[b].rarity] - RARITY_RANK[CHARACTERS[a].rarity]).slice(0, 3);
 }
 
 const artSrc = (id: CharacterId, lv: Level) => `./chars/${id}-lv${lv}.jpg`;
@@ -96,11 +94,9 @@ export function lobbyScreen(router: Router): Screen {
   const el = h('main', { class: 'lobby' });
 
   // ---- dynamic slots
-  const walletHost = h('div', { class: 'wallet' });
-  const devHost = h('div', { class: 'lobby__dev' });
+  const recordTop = h('div', { class: 'lobby__record' });
   const plateHost = h('div', { class: 'hero__plate' });
   const diffHost = h('div', { class: 'diff', role: 'radiogroup', 'aria-label': '난이도' });
-  const rewardHost = h('p', { class: 'play-panel__reward' });
   const recordHost = h('div', { class: 'record' });
   const squadHost = h('div', { class: 'squad__body' });
   const dockHost = h('nav', { class: 'dock menu-grid', 'aria-label': '메뉴' });
@@ -148,8 +144,7 @@ export function lobbyScreen(router: Router): Screen {
     h(
       'header',
       { class: 'lobby__top' },
-      walletHost,
-      devHost,
+      recordTop,
       h(
         'button',
         { class: 'icon-btn icon-btn--glass', type: 'button', 'aria-label': '설정', 'data-action': 'settings', onclick: () => showSettings() },
@@ -163,7 +158,7 @@ export function lobbyScreen(router: Router): Screen {
       h(
         'section',
         { class: 'play-panel enter', style: '--i:3' },
-        h('div', { class: 'play-panel__head' }, h('span', { class: 't-eyebrow' }, 'AI Duel · 1 vs 1'), rewardHost),
+        h('div', { class: 'play-panel__head' }, h('span', { class: 't-eyebrow' }, 'AI Duel · 1 vs 1')),
         diffHost,
         playBtn,
         h(
@@ -205,24 +200,16 @@ export function lobbyScreen(router: Router): Screen {
 
   const render = () => {
     const p = getProfile();
-    const levels = Object.fromEntries(CHARACTER_IDS.map((id) => [id, p.characters[id].level])) as Record<CharacterId, Level>;
+    const levels = Object.fromEntries(CHARACTER_IDS.map((id) => [id, p.grades[id]])) as Record<CharacterId, Level>;
     renderHero(levels);
-    const ups = levelUpsAvailable(p);
-    const freeReady = freeBoxRemainingMs(p) === 0;
     const [featured] = heroOrder();
-
-    replaceChildren(
-      walletHost,
-      h('button', { class: 'wallet__btn', type: 'button', 'aria-label': '상점에서 코인 얻기', onclick: () => router.navigate('shop') }, coinChip(p.coins), h('span', { class: 'wallet__plus' }, icon('plus', 16))),
-      h('button', { class: 'wallet__btn', type: 'button', 'aria-label': '상점에서 보석 얻기', onclick: () => router.navigate('shop') }, gemChip(p.gems), h('span', { class: 'wallet__plus' }, icon('plus', 16))),
-    );
-    replaceChildren(devHost, p.dev ? h('span', { class: 'chip chip--dev', title: '개발자 계정' }, 'DEV') : null);
+    replaceChildren(recordTop, icon('trophy', 18), h('span', null, `${p.stats.wins}승 ${p.stats.losses}패 ${p.stats.draws}무`));
 
     replaceChildren(
       plateHost,
       h('span', { class: `hero__plate-name rarity-${CHARACTERS[featured].rarity}` }, CHARACTERS[featured].nameKo),
       rarityChip(CHARACTERS[featured].rarity),
-      h('span', { class: 'lv-pill' }, `${p.characters[featured].level}성`),
+      h('span', { class: 'lv-pill' }, `${p.grades[featured]}성`),
     );
 
     replaceChildren(
@@ -248,13 +235,6 @@ export function lobbyScreen(router: Router): Screen {
     );
 
     replaceChildren(
-      rewardHost,
-      h('span', { class: 'play-panel__reward-label' }, '승리 보상'),
-      h('span', { class: 'play-panel__reward-val' }, icon('coin', 16), `+${MATCH_REWARD.win[p.difficulty]}`),
-      h('span', { class: 'play-panel__reward-val' }, icon('gem', 16), `+${MATCH_GEM_REWARD[p.difficulty]}`),
-    );
-
-    replaceChildren(
       recordHost,
       h('span', { class: 'record__item record__item--w' }, h('b', null, String(p.stats.wins)), '승'),
       h('span', { class: 'record__item record__item--l' }, h('b', null, String(p.stats.losses)), '패'),
@@ -276,7 +256,7 @@ export function lobbyScreen(router: Router): Screen {
           h(
             'div',
             { class: `squad__unit rarity-${CHARACTERS[id].rarity}` },
-            unitArt(id, p.characters[id].level, { kind: 'card', size: 96 }),
+            unitArt(id, p.grades[id], { kind: 'card', size: 96 }),
             h('span', { class: 'squad__name' }, CHARACTERS[id].nameKo),
             h('span', { class: 'squad__meta' }, rarityChip(CHARACTERS[id].rarity)),
           ),
@@ -290,7 +270,7 @@ export function lobbyScreen(router: Router): Screen {
       ),
     );
 
-    const tile = (name: IconName, label: string, tone: string, nav: 'collection' | 'formation' | 'shop', badge?: string, i = 0) =>
+    const tile = (name: IconName, label: string, tone: string, nav: 'collection' | 'formation', badge?: string, i = 0) =>
       h(
         'button',
         { class: `menu-tile menu-tile--${tone} pressable`, type: 'button', 'data-nav': nav, style: `--i:${i}`, onclick: () => router.navigate(nav) },
@@ -300,9 +280,8 @@ export function lobbyScreen(router: Router): Screen {
       );
     replaceChildren(
       dockHost,
-      tile('cards', '캐릭터', 'violet', 'collection', ups.length ? String(ups.length) : undefined, 0),
+      tile('cards', '캐릭터 · 성급', 'violet', 'collection', undefined, 0),
       tile('grid', '진형', 'blue', 'formation', undefined, 1),
-      tile('chest', '상점', 'gold', 'shop', freeReady ? '!' : undefined, 2),
     );
   };
 

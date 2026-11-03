@@ -18,9 +18,7 @@
     var(--sh-2);
   animation: enter-rise var(--dur-4) var(--ease-emph) both;
 }
-.is-settled .unit-card:not(.is-leveled) {
-  animation: none;
-}
+
 .unit-card:nth-child(3) {
   animation-delay: 80ms;
 }
@@ -236,12 +234,7 @@
 .compare__model.tier-3 {
   filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 10px rgba(255, 195, 40, 0.45));
 }
-.compare__col--next .compare__model {
-  transform: scale(1.06);
-}
-.unit-card.is-leveled .compare__model {
-  animation: model-pop var(--dur-4) var(--ease-pop) both;
-}
+
 @keyframes model-pop {
   0% {
     transform: scale(0.6);
@@ -252,86 +245,17 @@
     opacity: 1;
   }
 }
-.compare__col--next {
-  background: linear-gradient(180deg, rgba(63, 224, 143, 0.12), rgba(63, 224, 143, 0.03));
-  box-shadow: inset 0 0 0 1px rgba(63, 224, 143, 0.45);
-}
-.compare__col--max {
-  color: var(--gold-300);
-}
+
 .compare__cap {
   color: var(--text-2);
   font-size: var(--fs-caption);
   font-weight: var(--fw-bold);
 }
-.compare__col--next .compare__cap {
-  color: var(--green-300);
-}
+
 .compare__desc {
   color: var(--text-2);
   font-size: var(--fs-micro);
   line-height: 1.35;
-}
-.compare__arrow {
-  display: grid;
-  place-items: center;
-  color: var(--green-400);
-}
-
-/* Upgrade block */
-.upgrade {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-3);
-  margin-top: var(--s-4);
-  padding: var(--s-3);
-  border-radius: var(--r-l);
-  background: rgba(0, 0, 0, 0.25);
-  box-shadow: inset 0 0 0 1px var(--line-1);
-}
-.upgrade__cards {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  column-gap: var(--s-3);
-  align-items: center;
-}
-.upgrade__card-icon {
-  grid-row: span 2;
-  display: grid;
-  place-items: center;
-  width: 38px;
-  height: 46px;
-  border-radius: 7px;
-  background:
-    radial-gradient(70% 50% at 50% 20%, rgba(255, 255, 255, 0.35), transparent),
-    linear-gradient(180deg, var(--rar), var(--rar-deep));
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.35),
-    0 3px 0 rgba(0, 0, 0, 0.45),
-    0 0 12px -2px var(--rar-glow);
-  color: rgba(255, 255, 255, 0.92);
-  transform: rotate(-6deg);
-}
-.upgrade__hint {
-  margin-top: calc(var(--s-1) * -1);
-  color: var(--text-3);
-  font-size: var(--fs-caption);
-  text-align: center;
-}
-.upgrade .btn {
-  margin-bottom: 4px;
-}
-.max-note {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-height: var(--touch);
-  border-radius: var(--r-m);
-  background: rgba(255, 195, 40, 0.1);
-  box-shadow: inset 0 0 0 1px rgba(255, 195, 40, 0.45);
-  color: var(--gold-200);
-  font-weight: var(--fw-bold);
 }
 
 /* Ability table */
@@ -383,45 +307,14 @@
   color: var(--text-1);
   font-weight: var(--fw-semibold);
 }
-.ability-table tr.is-locked {
-  opacity: 0.6;
-}
 
-/* Level-up celebration */
-.unit-card.is-leveled {
-  animation: card-pop 600ms var(--ease-pop);
-}
 @keyframes card-pop {
   30% {
     transform: scale(1.03);
     box-shadow: 0 0 50px var(--rar-glow);
   }
 }
-.unit-card__burst {
-  position: absolute;
-  inset: 0;
-  z-index: 4;
-  display: grid;
-  place-items: center;
-  background: radial-gradient(circle, rgba(255, 213, 86, 0.55), transparent 65%);
-  animation: burst-fade 1.6s var(--ease-out) forwards;
-  pointer-events: none;
-}
-.unit-card__burst-text {
-  font-family: var(--font-num);
-  font-style: italic;
-  font-weight: 900;
-  font-size: 40px;
-  color: #fff8d6;
-  text-shadow:
-    2px 0 0 var(--gold-700),
-    -2px 0 0 var(--gold-700),
-    0 2px 0 var(--gold-700),
-    0 -2px 0 var(--gold-700),
-    0 4px 0 var(--gold-800),
-    0 0 24px rgba(255, 195, 40, 0.9);
-  animation: burst-text 1.6s var(--ease-pop) forwards;
-}
+
 @keyframes burst-fade {
   70% {
     opacity: 1;
@@ -452,9 +345,7 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .unit-card,
-  .unit-card__shine,
-  .unit-card__burst,
-  .unit-card__burst-text {
+.unit-card__shine {
     animation: none;
   }
 }
@@ -543,53 +434,6 @@
   }
 }
 
-/* ---- Locked (not yet unlocked) character ---------------------------------- */
-.unit-card.is-locked .unit-card__art {
-  filter: grayscale(0.85) brightness(0.55) contrast(1.05);
-}
-.unit-card.is-locked .unit-card__shine {
-  display: none;
-}
-.unit-card__lock {
-  position: absolute;
-  right: var(--s-3);
-  top: 40px;
-  z-index: 3;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-  padding: 8px 12px;
-  border-radius: var(--r-m);
-  background: rgba(3, 7, 16, 0.72);
-  box-shadow: inset 0 0 0 1px var(--line-2);
-  color: var(--text-1);
-  font-size: var(--fs-caption);
-  text-align: right;
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
-}
-.unit-card__lock b {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-family: var(--font-display);
-  font-weight: 400;
-  font-size: 15px;
-  letter-spacing: 0.02em;
-}
-.unit-card__lock span {
-  color: var(--text-2);
-}
-.unit-card.is-locked .unit-card__stats,
-.unit-card.is-locked .ability-table {
-  opacity: 0.6;
-}
-.max-note--locked {
-  background: rgba(160, 186, 255, 0.08);
-  box-shadow: inset 0 0 0 1px var(--line-2);
-  color: var(--text-2);
-}
 .unit-card__passive {
   display: flex;
   align-items: flex-start;
@@ -611,4 +455,89 @@
 }
 .unit-card__passive b {
   color: #f0d4ff;
+}
+
+/* ---- Grade picker (every grade is available; pick the one to field) ---------------------- */
+.grade-pick {
+  margin-top: var(--s-3);
+}
+.grade-pick__label {
+  margin-bottom: 8px;
+  color: var(--text-2);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.02em;
+}
+.grade-pick__row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.grade-pick__btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-height: 132px;
+  padding: 10px 6px;
+  border: 0;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.2));
+  box-shadow: inset 0 0 0 1px var(--line-1);
+  color: var(--text-1);
+  cursor: pointer;
+  transition:
+    transform var(--dur-1) var(--ease-out),
+    box-shadow var(--dur-2) var(--ease-out),
+    background var(--dur-2) var(--ease-out);
+}
+.grade-pick__btn:active {
+  transform: scale(0.97);
+}
+.grade-pick__btn.is-active {
+  background: linear-gradient(180deg, rgba(255, 213, 86, 0.22), rgba(255, 170, 30, 0.08));
+  box-shadow:
+    inset 0 0 0 2px var(--gold-300),
+    0 0 18px rgba(255, 195, 40, 0.35);
+}
+.grade-pick__stars {
+  color: var(--gold-300);
+  letter-spacing: -0.08em;
+  font-size: 13px;
+  line-height: 1;
+}
+.grade-pick__name {
+  font-weight: 900;
+  font-size: 15px;
+}
+.grade-pick__btn:not(.is-active) .grade-pick__name {
+  color: var(--text-2);
+}
+.grade-pick__btn .move-diagram {
+  margin-top: 2px;
+}
+.grade-pick__desc {
+  margin: 10px 2px 0;
+  color: var(--text-1);
+  font-size: var(--fs-label);
+  line-height: 1.4;
+}
+.unit-card.is-picked .unit-card__art {
+  animation: grade-flash 420ms var(--ease-out);
+}
+@keyframes grade-flash {
+  from {
+    filter: brightness(1.6) saturate(1.3);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .unit-card.is-picked .unit-card__art {
+    animation: none;
+  }
+}
+.grade-pick__art {
+  margin-bottom: 2px;
+}
+.grade-pick__art .unit-art__lv {
+  display: none;
 }

@@ -1,7 +1,6 @@
 /**
  * Inline icon set (24x24, filled, rounded joins). Material-derived glyphs plus a few game glyphs
  * drawn on the same grid, so every icon shares one visual weight. No network/font downloads.
- * Currency icons (`coin`, `gem`) are multi-tone game assets and ignore `currentColor`.
  */
 
 const PATHS = {
@@ -42,8 +41,6 @@ const PATHS = {
   // ---- v2 additions (same 24px filled grid as the Material set above)
   swords:
     'M3 3 5.79 3.88 14.7 12.79 12.79 14.7 3.88 5.79zM16.44 10.5l1.34 1.34-5.94 5.94-1.34-1.34zM15.41 13.92l3.39 3.4-1.48 1.48-3.4-3.39zM19.12 16.58l1.84 1.83-2.55 2.55-1.83-1.84zM20.12 5.79 11.21 14.7 9.3 12.79 18.21 3.88 21 3zM13.5 16.44l-1.34 1.34-5.94-5.94 1.34-1.34zM10.08 15.41l-3.4 3.39-1.48-1.48 3.39-3.4zM7.42 19.12 5.59 20.96 3.04 18.41 4.88 16.58z',
-  chest:
-    'M6 3h12a3 3 0 0 1 3 3v3.5H3V6a3 3 0 0 1 3-3zM3 11h7.5v2.5a1.5 1.5 0 0 0 1.5 1.5 1.5 1.5 0 0 0 1.5-1.5V11H21v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8zm8-2.5h2V13h-2z',
   shield: 'M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z',
   crown: 'M3 7.5l4.6 3.6L12 4.5l4.4 6.6L21 7.5 19.2 17H4.8L3 7.5zM5 18.5h14V21H5z',
   star: 'M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z',
@@ -57,27 +54,9 @@ const PATHS = {
     'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 3a7 7 0 1 1 0 14 7 7 0 0 1 0-14zm0 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm0 2.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3z',
 } as const;
 
-export type IconName = keyof typeof PATHS | 'coin' | 'gem';
+export type IconName = keyof typeof PATHS;
 
 const NS = 'http://www.w3.org/2000/svg';
-
-/** Multi-tone currency art (flat fills, no gradient ids: safe to repeat on one page). */
-const ART: Record<'coin' | 'gem', string> = {
-  coin:
-    '<circle cx="12" cy="12.6" r="10" fill="#9E5604"/>' +
-    '<circle cx="12" cy="11.6" r="10" fill="#F5A30A"/>' +
-    '<circle cx="12" cy="11.6" r="7.4" fill="#FFC328"/>' +
-    '<path d="M5.2 9.4A7.4 7.4 0 0 1 17.6 6.4 9 9 0 0 0 5.2 9.4z" fill="#FFE58C"/>' +
-    '<path d="M12 6.9l1.45 2.95 3.25.47-2.35 2.3.55 3.24L12 14.33l-2.9 1.53.55-3.24-2.35-2.3 3.25-.47z" fill="#9E5604" opacity=".35" transform="translate(0 .7)"/>' +
-    '<path d="M12 6.9l1.45 2.95 3.25.47-2.35 2.3.55 3.24L12 14.33l-2.9 1.53.55-3.24-2.35-2.3 3.25-.47z" fill="#FFF6D1"/>',
-  gem:
-    '<path d="M6.2 3.5h11.6L22 9.2 12 21.5 2 9.2z" fill="#0B6A8F"/>' +
-    '<path d="M6.2 3.5h11.6L22 9.2H2z" fill="#47DBFF"/>' +
-    '<path d="M8.6 9.2h6.8L12 21.5z" fill="#9CF3FF"/>' +
-    '<path d="M2 9.2h6.6L12 21.5z" fill="#18B5E6"/>' +
-    '<path d="M9.2 3.5h5.6l.6 5.7H8.6z" fill="#C9F8FF"/>' +
-    '<path d="M6.2 3.5h3L8.6 9.2H2z" fill="#86E9FF"/>',
-};
 
 export function icon(name: IconName, size = 24, cls = ''): SVGSVGElement {
   const svg = document.createElementNS(NS, 'svg');
@@ -87,13 +66,9 @@ export function icon(name: IconName, size = 24, cls = ''): SVGSVGElement {
   svg.setAttribute('aria-hidden', 'true');
   svg.setAttribute('focusable', 'false');
   svg.setAttribute('class', `icon icon--${name} ${cls}`.trim());
-  if (name === 'coin' || name === 'gem') {
-    svg.innerHTML = ART[name];
-  } else {
-    const p = document.createElementNS(NS, 'path');
-    p.setAttribute('d', PATHS[name]);
-    p.setAttribute('fill', 'currentColor');
-    svg.appendChild(p);
-  }
+  const p = document.createElementNS(NS, 'path');
+  p.setAttribute('d', PATHS[name]);
+  p.setAttribute('fill', 'currentColor');
+  svg.appendChild(p);
   return svg;
 }

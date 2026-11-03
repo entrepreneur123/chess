@@ -9,7 +9,7 @@ import {
   type CharacterId,
   type Formation,
 } from '../../engine';
-import { getProfile, isOwned, levelsOf, syncFormationLevels, updateProfile } from '../../meta/profile';
+import { getProfile, levelsOf, syncFormationLevels, updateProfile } from '../../meta/profile';
 import { appBar } from '../components/appbar';
 import { confirmDialog } from '../components/dialog';
 import { formationGrid, ROW_LABELS } from '../components/formationGrid';
@@ -105,27 +105,20 @@ export function formationScreen(router: Router): Screen {
         const def = CHARACTERS[id];
         const slot = work.find((s) => s.character === id);
         const lv = levels[id];
-        const owned = isOwned(profile, id);
         return h(
           'button',
           {
-            class: `tray-card pressable rarity-${def.rarity}${selected === id ? ' is-selected' : ''}${slot ? '' : ' is-benched'}${owned ? '' : ' is-locked'}`,
+            class: `tray-card pressable rarity-${def.rarity}${selected === id ? ' is-selected' : ''}${slot ? '' : ' is-benched'}`,
             type: 'button',
             role: 'option',
             'aria-selected': selected === id ? 'true' : 'false',
-            'aria-disabled': owned ? 'false' : 'true',
             'data-character': id,
             onclick: () => {
-              if (!owned) {
-                toast('상자에서 전설 카드를 뽑으면 해금됩니다', { tone: 'warn' });
-                return;
-              }
               selected = selected === id ? null : id;
               render();
             },
           },
           selected === id ? h('span', { class: 'tray-card__pick' }, '선택됨') : null,
-          owned ? null : h('span', { class: 'tray-card__lock' }, icon('lock', 14), '미해금'),
           h('div', { class: 'tray-card__token' }, unitArt(id, lv, { size: 56 })),
           h(
             'div',
@@ -135,7 +128,7 @@ export function formationScreen(router: Router): Screen {
             h(
               'div',
               { class: `tray-card__where${slot ? '' : ' is-off'}` },
-              slot ? `${ROW_LABELS[slot.row]} · ${slot.col + 1}번 칸` : owned ? '대기 중 · 배치된 말을 탭해 교체' : '상자에서 획득',
+              slot ? `${ROW_LABELS[slot.row]} · ${slot.col + 1}번 칸` : '대기 중 · 배치된 말을 탭해 교체',
             ),
           ),
           h('div', { class: 'tray-card__diagram' }, movementDiagram(id, lv, { cell: 7 })),

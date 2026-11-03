@@ -1,10 +1,8 @@
 /** Settings bottom sheet (sound / haptics / replay tutorial). Values persist in the profile. */
 import { haptic, primeAudio, sfx } from '../../audio/sfx';
-import { APP_NAME, DEV_CODE } from '../../meta/economy';
-import { getProfile, setDevMode, subscribeProfile, updateProfile, type Settings } from '../../meta/profile';
-import { h, replaceChildren } from '../dom';
-import { confirmDialog } from './dialog';
-import { toast } from './toast';
+import { APP_NAME } from '../../meta/economy';
+import { getProfile, updateProfile, type Settings } from '../../meta/profile';
+import { h } from '../dom';
 import { icon, type IconName } from '../icons';
 import { showBottomSheet } from './sheet';
 import { showTutorial } from './tutorial';
@@ -46,96 +44,9 @@ function switchRow(key: BoolSetting, label: string, sub: string, ic: IconName): 
 }
 
 
-/** Developer account row: shows the state; switch off (with confirm) or unlock with the code. */
-function devRow(): { el: HTMLElement; dispose: () => void } {
-  const host = h('div', { class: 'set-row set-row--dev' });
-  const render = () => {
-    const on = getProfile().dev;
-    const main = h(
-      'span',
-      { class: 'set-row__main' },
-      h('span', { class: 'set-row__title' }, '개발자 계정', on ? h('span', { class: 'chip chip--dev' }, 'DEV') : null),
-      h('span', { class: 'set-row__sub' }, on ? '무제한 재화 · 전 캐릭터 최대 성급' : '테스트용 코드를 입력하면 활성화돼요'),
-    );
-    if (on) {
-      replaceChildren(
-        host,
-        h('span', { class: 'set-row__icon' }, icon('bolt', 22)),
-        main,
-        h(
-          'button',
-          {
-            class: 'btn btn--tonal btn--sm set-row__action',
-            type: 'button',
-            'data-action': 'dev-off',
-            onclick: async () => {
-              const ok = await confirmDialog({
-                title: '일반 계정으로 전환할까요?',
-                body: '개발자 계정의 재화와 성급은 초기화되고 새 계정으로 시작합니다.',
-                confirmLabel: '전환',
-                danger: true,
-              });
-              if (ok) {
-                updateProfile((p) => setDevMode(p, false));
-                toast('일반 계정으로 전환했어요', { tone: 'success' });
-              }
-            },
-          },
-          '일반 계정으로 전환',
-        ),
-      );
-      return;
-    }
-    const input = h('input', {
-      class: 'field__input',
-      type: 'password',
-      inputmode: 'text',
-      autocomplete: 'off',
-      autocapitalize: 'off',
-      spellcheck: 'false',
-      placeholder: '코드 입력',
-      'aria-label': '개발자 코드',
-      'data-action': 'dev-code',
-    }) as HTMLInputElement;
-    const submit = () => {
-      if (input.value.trim() === DEV_CODE) {
-        updateProfile((p) => setDevMode(p, true));
-        toast('개발자 계정이 활성화됐어요', { tone: 'success' });
-      } else {
-        toast('코드가 올바르지 않아요', { tone: 'warn' });
-        input.select();
-      }
-    };
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') submit();
-    });
-    replaceChildren(
-      host,
-      h('span', { class: 'set-row__icon' }, icon('lock', 22)),
-      main,
-      h(
-        'div',
-        { class: 'field' },
-        input,
-        h('button', { class: 'btn btn--secondary btn--sm', type: 'button', 'data-action': 'dev-on', onclick: submit }, '활성화'),
-      ),
-    );
-  };
-  render();
-  let lastDev = getProfile().dev;
-  const unsub = subscribeProfile(() => {
-    if (getProfile().dev !== lastDev) {
-      lastDev = getProfile().dev;
-      render();
-    }
-  });
-  return { el: host, dispose: unsub };
-}
-
 export function showSettings(): void {
   if (openSheet) return;
   const canVibrate = typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
-  const dev = devRow();
   const content = h(
     'div',
     { class: 'settings' },
@@ -162,17 +73,15 @@ export function showSettings(): void {
           },
         },
         h('span', { class: 'set-row__icon' }, icon('help', 22)),
-        h('span', { class: 'set-row__main' }, h('span', { class: 'set-row__title' }, '게임 방법 다시 보기'), h('span', { class: 'set-row__sub' }, '규칙 · 캐릭터 · 성장 한눈에')),
+        h('span', { class: 'set-row__main' }, h('span', { class: 'set-row__title' }, '게임 방법 다시 보기'), h('span', { class: 'set-row__sub' }, '규칙 · 캐릭터 · 성급 한눈에')),
         icon('chevron', 20, 'set-row__chev'),
       ),
     ),
-    h('div', { class: 'set-group' }, dev.el),
     h('p', { class: 'settings__foot' }, APP_NAME),
   );
   const sheet = showBottomSheet(content, { label: '설정' });
   openSheet = sheet;
   void sheet.closed.then(() => {
-    dev.dispose();
     openSheet = null;
   });
 }

@@ -410,17 +410,13 @@
 .tut-art--grow {
   gap: var(--s-2);
 }
-.tut-grow__box,
 .tut-grow__lv {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
 }
-.tut-grow__box .chest {
-  transform: scale(0.62);
-  margin: -16px -18px -14px;
-}
+
 .tut-grow__arrow {
   color: var(--text-3);
 }
@@ -504,10 +500,7 @@
 .set-row__chev {
   color: var(--text-3);
 }
-.set-row--dev {
-  flex-wrap: wrap;
-}
-.set-row--dev .field,
+
 .set-row__action {
   flex: 1 0 100%;
   min-width: 0;
@@ -664,65 +657,21 @@
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
-.result__reward {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: var(--s-4);
-  padding: 8px 16px 8px 14px;
-  border-radius: var(--r-full);
-  background: rgba(0, 0, 0, 0.4);
-  box-shadow: inset 0 0 0 1px var(--line-2);
-  color: var(--text-2);
-  font-size: var(--fs-label);
-  font-weight: var(--fw-semibold);
-}
-.result__reward.has-reward {
-  background: linear-gradient(180deg, rgba(255, 195, 40, 0.2), rgba(255, 195, 40, 0.06));
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 195, 40, 0.55),
-    0 0 18px -4px rgba(255, 195, 40, 0.5);
-  color: var(--gold-100);
-  animation: reward-pop var(--dur-3) 360ms var(--ease-pop) both;
-}
+
 @keyframes reward-pop {
   from {
     transform: scale(0.8);
     opacity: 0;
   }
 }
-.result__plus,
-.result__gem {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  color: #fff;
-  font-family: var(--font-num);
-  font-size: 22px;
-  font-style: italic;
-  font-weight: 900;
-  font-variant-numeric: tabular-nums;
-}
-.result__gem {
-  margin-left: 6px;
-  font-size: 18px;
-}
+
 .result__cheer,
-.result__note,
 .result__total {
   margin-top: var(--s-2);
   color: var(--text-2);
   font-size: var(--fs-label);
 }
-.result__note {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border-radius: var(--r-s);
-  background: rgba(255, 195, 40, 0.12);
-  color: var(--gold-200);
-}
+
 .result__total-value {
   color: var(--text-1);
   font-family: var(--font-num);
@@ -741,12 +690,11 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .tut-goal__enemy,
-  .tut-finger,
-  .tut-timer__ring,
-  .result__icon--win,
-  .result__unit,
-  .result__hero--win .result__unit,
-  .result__reward.has-reward {
+.tut-finger,
+.tut-timer__ring,
+.result__icon--win,
+.result__unit,
+.result__hero--win .result__unit {
     animation: none;
   }
 }
@@ -779,4 +727,12 @@
   background: linear-gradient(180deg, var(--gold-300), var(--gold-500));
   color: var(--text-on-gold);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 2px 0 var(--gold-700);
+}
+.result__total[data-record] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--gold-200);
+  font-variant-numeric: tabular-nums;
 }
