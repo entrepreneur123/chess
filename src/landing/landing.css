@@ -650,22 +650,22 @@ p {
     radial-gradient(circle at 30% 50%, var(--blue) 11px, transparent 12px),
     radial-gradient(circle at 50% 70%, var(--blue) 11px, transparent 12px),
     radial-gradient(circle at 72% 50%, var(--blue) 11px, transparent 12px),
-    repeating-linear-gradient(90deg, #dde9fb 0 28px, #cfe0fb 28px 30px),
-    repeating-linear-gradient(0deg, transparent 0 28px, #cfe0fb 28px 30px);
+    repeating-linear-gradient(90deg, #1f2f55 0 28px, #2a3d6b 28px 30px),
+    repeating-linear-gradient(0deg, transparent 0 28px, #2a3d6b 28px 30px);
 }
 .step__art--battle {
   background-image:
     radial-gradient(circle at 35% 55%, var(--blue) 12px, transparent 13px),
     radial-gradient(circle at 62% 45%, var(--red) 12px, transparent 13px),
-    linear-gradient(90deg, transparent 44%, var(--amber) 44% 56%, transparent 56%),
-    repeating-linear-gradient(90deg, #f1f3f4 0 28px, #e8eaed 28px 30px);
+    linear-gradient(90deg, transparent 44%, rgba(242, 193, 78, 0.85) 44% 56%, transparent 56%),
+    repeating-linear-gradient(90deg, #222b40 0 28px, #1b2336 28px 30px);
 }
 .step__art--grow {
   background-image:
     radial-gradient(circle at 25% 50%, var(--amber) 14px, transparent 15px),
     radial-gradient(circle at 50% 50%, var(--blue) 9px, transparent 10px),
     radial-gradient(circle at 75% 50%, var(--blue) 15px, transparent 16px),
-    linear-gradient(90deg, #fff, var(--amber-container));
+    linear-gradient(90deg, #222b40, rgba(242, 193, 78, 0.22));
 }
 
 /* Features */
