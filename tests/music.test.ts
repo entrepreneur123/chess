@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   DUCK_GAIN,
+  MUSIC_LOOPS,
+  MUSIC_LOOP_RATE,
   MUSIC_TRACK_IDS,
   SEAM_BLEND_S,
   _gestureForTests,
@@ -301,5 +303,42 @@ describe('music module', () => {
     expect(o[len - x - 1]).toBe(src[start + len - x - 1]);
     // Unknown ids (no loop points) loop the whole decoded buffer.
     expect(buildLoopBuffer(ctx as unknown as BaseAudioContext, dec as unknown as AudioBuffer, 'custom')).toBe(dec);
+  });
+});
+
+// The project has no @types/node: load the few fs helpers through an untyped dynamic import.
+interface Fs {
+  existsSync(p: string): boolean;
+  readFileSync(p: string, enc: string): string;
+  statSync(p: string): { size: number };
+}
+const nodeFs = 'node:fs';
+const fsP: Promise<Fs> = import(/* @vite-ignore */ nodeFs);
+const root = decodeURIComponent(new URL('../', import.meta.url).pathname);
+
+describe('music assets', () => {
+  it('ships every track as a small m4a whose loop points match the generator output', async () => {
+    const { existsSync, readFileSync, statSync } = await fsP;
+    const loops = JSON.parse(readFileSync(`${root}docs/brand/audio/bgm/loops.json`, 'utf8')) as Record<
+      string,
+      { loopSamples: number; loopStart: number; sampleRate: number; bpm: number; bars: number }
+    >;
+    expect(Object.keys(loops).sort()).toEqual([...MUSIC_TRACK_IDS].sort());
+    for (const id of MUSIC_TRACK_IDS) {
+      const f = `${root}public/audio/bgm/${id}.m4a`;
+      expect(existsSync(f), f).toBe(true);
+      const size = statSync(f).size;
+      expect(size, id).toBeGreaterThan(100_000);
+      expect(size, id).toBeLessThanOrEqual(700_000);
+      const l = loops[id];
+      expect(l.sampleRate).toBe(MUSIC_LOOP_RATE);
+      expect(MUSIC_LOOPS[id].length, id).toBe(l.loopSamples);
+      expect(MUSIC_LOOPS[id].start, id).toBe(Math.round(l.loopStart * l.sampleRate));
+      // 60-90 s, a whole number of 4/4 bars at the track's tempo (within the 1024-sample grid).
+      const seconds = l.loopSamples / l.sampleRate;
+      expect(seconds, id).toBeGreaterThanOrEqual(60);
+      expect(seconds, id).toBeLessThanOrEqual(90);
+      expect(Math.abs(seconds - (l.bars * 4 * 60) / l.bpm), id).toBeLessThan(1024 / l.sampleRate);
+    }
   });
 });

@@ -22,7 +22,7 @@ import { audioOut, getAudioContext, primeAudio } from './sfx';
 import { setVoiceActivityListener } from './voice';
 
 /** Loop points in samples at 48 kHz (the files' rate), from docs/brand/audio/bgm/loops.json. */
-const LOOPS: Record<string, { start: number; length: number }> = {
+export const MUSIC_LOOPS: Readonly<Record<string, { start: number; length: number }>> = {
   moonrune: { start: 24576, length: 3291136 },
   emberforge: { start: 24576, length: 3686400 },
   blightmire: { start: 24576, length: 3072000 },
@@ -30,7 +30,9 @@ const LOOPS: Record<string, { start: number; length: number }> = {
   madcrown: { start: 24576, length: 3351552 },
   apex: { start: 24576, length: 3456000 },
 };
-const LOOP_RATE = 48000;
+export const MUSIC_LOOP_RATE = 48000;
+const LOOPS = MUSIC_LOOPS;
+const LOOP_RATE = MUSIC_LOOP_RATE;
 
 /** The arena tracks that ship with the game. */
 export const MUSIC_TRACK_IDS = Object.keys(LOOPS);

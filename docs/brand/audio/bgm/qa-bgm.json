@@ -16,17 +16,23 @@
       "step_ratio": 0.977,
       "hf_click_db": 8.2,
       "hf_click_ref_db": 0.9,
+      "hf_click_ref_start_db": 1.0,
       "rms_before_dbfs": -24.1,
       "rms_after_dbfs": -20.2,
-      "band_diff_db": 4.4
+      "band_diff_db": 4.4,
+      "seam_vs_master_db": -18.9,
+      "local_codec_residual_db": -18.1
     },
     "seam_residual_db": -19.3,
     "step_ratio": 0.281,
     "hf_click_db": 0.7,
     "hf_click_ref_db": 0.9,
+    "hf_click_ref_start_db": 1.0,
     "rms_before_dbfs": -24.1,
     "rms_after_dbfs": -20.2,
-    "band_diff_db": 4.4
+    "band_diff_db": 4.4,
+    "seam_vs_master_db": -19.1,
+    "local_codec_residual_db": -18.1
   },
   "emberforge": {
     "file_kib": 664.6,
@@ -45,17 +51,23 @@
       "step_ratio": 1.343,
       "hf_click_db": 3.2,
       "hf_click_ref_db": 3.2,
+      "hf_click_ref_start_db": 1.7,
       "rms_before_dbfs": -21.4,
       "rms_after_dbfs": -18.8,
-      "band_diff_db": 9.4
+      "band_diff_db": 9.4,
+      "seam_vs_master_db": -10.3,
+      "local_codec_residual_db": -9.8
     },
     "seam_residual_db": -13.6,
     "step_ratio": 0.357,
     "hf_click_db": 0.5,
     "hf_click_ref_db": 3.2,
+    "hf_click_ref_start_db": 1.7,
     "rms_before_dbfs": -21.8,
     "rms_after_dbfs": -18.8,
-    "band_diff_db": 9.4
+    "band_diff_db": 9.4,
+    "seam_vs_master_db": -10.5,
+    "local_codec_residual_db": -9.8
   },
   "blightmire": {
     "file_kib": 653.8,
@@ -74,17 +86,23 @@
       "step_ratio": 0.389,
       "hf_click_db": 11.5,
       "hf_click_ref_db": 8.0,
+      "hf_click_ref_start_db": 11.5,
       "rms_before_dbfs": -22.2,
       "rms_after_dbfs": -19.6,
-      "band_diff_db": 11.7
+      "band_diff_db": 11.7,
+      "seam_vs_master_db": -18.8,
+      "local_codec_residual_db": -18.4
     },
     "seam_residual_db": -22.1,
     "step_ratio": 0.059,
     "hf_click_db": 11.5,
     "hf_click_ref_db": 8.0,
+    "hf_click_ref_start_db": 11.5,
     "rms_before_dbfs": -22.3,
     "rms_after_dbfs": -19.6,
-    "band_diff_db": 11.7
+    "band_diff_db": 11.7,
+    "seam_vs_master_db": -18.9,
+    "local_codec_residual_db": -18.4
   },
   "frostkeep": {
     "file_kib": 658.0,
@@ -103,17 +121,23 @@
       "step_ratio": 1.215,
       "hf_click_db": 3.6,
       "hf_click_ref_db": 3.4,
+      "hf_click_ref_start_db": 3.0,
       "rms_before_dbfs": -26.0,
       "rms_after_dbfs": -19.2,
-      "band_diff_db": 6.9
+      "band_diff_db": 6.9,
+      "seam_vs_master_db": -11.3,
+      "local_codec_residual_db": -10.2
     },
     "seam_residual_db": -12.5,
     "step_ratio": 0.59,
     "hf_click_db": 1.5,
     "hf_click_ref_db": 3.4,
+    "hf_click_ref_start_db": 3.0,
     "rms_before_dbfs": -26.7,
     "rms_after_dbfs": -19.2,
-    "band_diff_db": 6.9
+    "band_diff_db": 6.9,
+    "seam_vs_master_db": -11.6,
+    "local_codec_residual_db": -10.2
   },
   "madcrown": {
     "file_kib": 656.3,
@@ -132,17 +156,23 @@
       "step_ratio": 1.007,
       "hf_click_db": 4.0,
       "hf_click_ref_db": 4.0,
+      "hf_click_ref_start_db": 3.5,
       "rms_before_dbfs": -21.4,
       "rms_after_dbfs": -19.1,
-      "band_diff_db": 7.6
+      "band_diff_db": 7.6,
+      "seam_vs_master_db": -9.8,
+      "local_codec_residual_db": -9.1
     },
     "seam_residual_db": -12.8,
     "step_ratio": 0.495,
     "hf_click_db": 2.1,
     "hf_click_ref_db": 4.0,
+    "hf_click_ref_start_db": 3.5,
     "rms_before_dbfs": -22.1,
     "rms_after_dbfs": -19.1,
-    "band_diff_db": 7.6
+    "band_diff_db": 7.6,
+    "seam_vs_master_db": -10.1,
+    "local_codec_residual_db": -9.1
   },
   "apex": {
     "file_kib": 658.6,
@@ -161,16 +191,22 @@
       "step_ratio": 2.076,
       "hf_click_db": 3.7,
       "hf_click_ref_db": 4.2,
+      "hf_click_ref_start_db": 4.5,
       "rms_before_dbfs": -24.1,
       "rms_after_dbfs": -22.0,
-      "band_diff_db": 7.6
+      "band_diff_db": 7.6,
+      "seam_vs_master_db": -11.1,
+      "local_codec_residual_db": -10.3
     },
     "seam_residual_db": -13.3,
     "step_ratio": 0.299,
     "hf_click_db": 3.2,
     "hf_click_ref_db": 4.2,
+    "hf_click_ref_start_db": 4.5,
     "rms_before_dbfs": -24.4,
     "rms_after_dbfs": -22.0,
-    "band_diff_db": 7.6
+    "band_diff_db": 7.6,
+    "seam_vs_master_db": -11.3,
+    "local_codec_residual_db": -10.3
   }
 }

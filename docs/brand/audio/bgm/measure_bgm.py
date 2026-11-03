@@ -19,8 +19,15 @@ repeats the checks for a plain loopStart/loopEnd jump without the blend.
     of 6 ms windows in the surrounding 500 ms (a click shows up as a positive spike).
     hf_click_ref_db is the same measure on the file's continuous audio across loopEnd: when the two
     match, the spike is the music (the bar-1 downbeat), not the jump.
-  - codec_residual_db: decoded loop region versus the pre-encode master (AAC coding noise). When
-    seam_residual_db is no worse than this, the seam adds nothing beyond ordinary coding noise.
+  - codec_residual_db: decoded loop region versus the pre-encode master (AAC coding noise).
+  - seam_vs_master_db: the 500 ms the player produces around the jump versus the master's own
+    continuous audio there (the ideal). local_codec_residual_db is the same comparison for the
+    file's continuous audio over that window (no jump). When the two match, the seam adds nothing
+    beyond the coding noise of that material. (seam_residual_db compares two independent codings, so it
+    sits about 3 dB above the codec noise by construction.)
+  - hf_click_ref_start_db: hf_click measured on the file's continuous audio across loopStart. The
+    played seam reproduces this exactly (the blend ends in that audio), so hf_click_db should match
+    it rather than hf_click_ref_db.
   - rms_before/after: RMS (dBFS) of the 50 ms before and after the jump.
   - band_diff_db: max |difference| of octave-band levels (63 Hz - 8 kHz) between the last and first
     500 ms of R (musical continuity of the tails, not an identity test).
@@ -87,13 +94,20 @@ def blended(dec: np.ndarray, a: int, b: int) -> np.ndarray:
     return R
 
 
-def seam(dec: np.ndarray, a: int, b: int, R: np.ndarray | None = None) -> dict:
+def seam(dec: np.ndarray, a: int, b: int, R: np.ndarray | None = None, master: np.ndarray | None = None) -> dict:
     if R is None:
         R = dec[:, a:b]
     N = int(0.25 * SR)
     looped = np.concatenate([R[:, -N:], R[:, :N]], axis=1)
     ref = dec[:, b - N: b + N]
     res = db(rms(looped - ref)) - db(rms(ref))
+    extra = {}
+    if master is not None:
+        # The ideal: the pre-encode master's own continuous audio across loopEnd.
+        ideal = master[:, b - N: b + N]
+        extra['seam_vs_master_db'] = round(db(rms(looped - ideal)) - db(rms(ideal)), 1)
+        # Same window, no jump: the decoder's own error on this material (swells code loosely).
+        extra['local_codec_residual_db'] = round(db(rms(ref - ideal)) - db(rms(ideal)), 1)
     steps = np.abs(np.diff(R, axis=1))
     p999 = float(np.percentile(steps, 99.9))
     jump = float(np.max(np.abs(R[:, 0] - R[:, -1])))
@@ -107,6 +121,8 @@ def seam(dec: np.ndarray, a: int, b: int, R: np.ndarray | None = None) -> dict:
 
     click = hf_spike(looped)
     click_ref = hf_spike(ref)
+    # The file's own continuous audio across loopStart (what a straight play-through sounds like).
+    click_ref_start = hf_spike(dec[:, a - N: a + N])
     w50 = int(0.05 * SR)
     lv_end = octave_levels(R[:, -SR // 2:])
     lv_start = octave_levels(R[:, : SR // 2])
@@ -115,9 +131,11 @@ def seam(dec: np.ndarray, a: int, b: int, R: np.ndarray | None = None) -> dict:
         'step_ratio': round(jump / max(p999, 1e-12), 3),
         'hf_click_db': round(click, 1),
         'hf_click_ref_db': round(click_ref, 1),
+        'hf_click_ref_start_db': round(click_ref_start, 1),
         'rms_before_dbfs': round(db(rms(R[:, -w50:])), 1),
         'rms_after_dbfs': round(db(rms(R[:, :w50])), 1),
         'band_diff_db': round(max(abs(x - y) for x, y in zip(lv_end, lv_start)), 1),
+        **extra,
     }
 
 
@@ -177,8 +195,9 @@ def main() -> None:
             d = dec[:, a + lag: b + lag] if lag >= 0 else dec[:, a:b]
             s_ = src[:, a:b] if lag >= 0 else src[:, a - lag: b - lag]
             res['codec_residual_db'] = round(db(rms(d - s_)) - db(rms(s_)), 1)
-        res['raw_jump'] = seam(dec, a, b)
-        res.update(seam(dec, a, b, blended(dec, a, b)))
+        master = src if os.path.exists(wav) and res.get('align_offset_samples') == 0 else None
+        res['raw_jump'] = seam(dec, a, b, master=master)
+        res.update(seam(dec, a, b, blended(dec, a, b), master=master))
         qa[tid] = res
         print(tid, json.dumps(res))
         if png_dir:
