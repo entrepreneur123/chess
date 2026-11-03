@@ -1,8 +1,9 @@
-"""Post-process the ElevenLabs voice takes: pick the best take per line, light character treatment,
-natural endings, -16 LUFS / -1 dBTP, AAC encode, objective QA.
+"""Post-process raw TTS takes (Qwen3-TTS wavs from gen_voice.py, or ElevenLabs mp3 downloads named
+<line-id>_t<k>.mp3): pick the best take per line, light character treatment, natural endings,
+-16 LUFS / -1 dBTP, AAC encode, objective QA. Replaces process_voice.py (kept for reference).
 
 Usage:
-  python -I post_voice.py --lines lines.json --raw <dir with <char>/<line-id>_t<k>.mp3> \
+  python -I post_voice.py --lines lines.json --raw <dir with <char>/<line-id>_*.{wav,mp3}> \
       --asr <faster-whisper dir> --out ../../../public/audio/vo --qa qa-voice.json \
       [--gender <wav2vec2 gender classifier dir>] [--only-char brutile] [--wav-out <dir>]
 
@@ -18,8 +19,10 @@ Per take:
      below the peak, then gets a >= 150 ms cosine fade, so no tail is ever cut.
   5. Loudness -16 LUFS (BS.1770) with a 4x-oversampled true-peak limiter; after AAC encoding the
      decoded file is re-checked and re-encoded quieter until it is <= -1 dBTP.
-  6. The takes of a line are judged on what actually ships (decoded .m4a): Whisper CER first, then
-     duration and brightness as tie-breakers.
+  6. Every raw take is transcribed first; the best few per line (CER, closeness to the character's
+     median pitch - shouted takes sit far above it - and length) are fully processed and judged on
+     what actually ships (decoded .m4a): Whisper CER, pitch deviation, length, and for characters
+     marked "gender": "female" a gate on the classifier's P(female) when --gender is given.
 """
 import argparse
 import json
@@ -291,6 +294,11 @@ def render(x: np.ndarray, char: str) -> np.ndarray:
 # Main
 # ------------------------------------------------------------------------------------------------
 
+def take_files(rawdir: str, line_id: str):
+    """ElevenLabs downloads are <id>_t<k>.mp3, gen_voice.py writes <id>_s<seed>-<k>.wav."""
+    return sorted(f for f in os.listdir(rawdir) if f.startswith(line_id + "_") and f.endswith((".wav", ".mp3")))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--lines", required=True)
@@ -298,9 +306,10 @@ def main() -> None:
     ap.add_argument("--asr", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--qa", required=True)
-    ap.add_argument("--gender", default="", help="optional wav2vec2 gender classifier dir (QA only)")
+    ap.add_argument("--gender", default="", help="optional wav2vec2 gender classifier dir (QA + female gate)")
     ap.add_argument("--only-char", default="")
     ap.add_argument("--only-line", default="", help="comma list of char:line-id")
+    ap.add_argument("--shortlist", type=int, default=3, help="takes per line that are fully processed")
     ap.add_argument("--wav-out", default="")
     ap.add_argument("--threads", type=int, default=3)
     a = ap.parse_args()
@@ -315,31 +324,59 @@ def main() -> None:
         if a.only_char and char != a.only_char:
             continue
         rawdir = os.path.join(a.raw, char)
+        src = c.get("source", {})
+        want_female = c.get("gender") == "female"
+        # Pass 1: ASR + pitch of every raw take (speech part only).
+        cands = {}
         for line in c["lines"]:
             if only and f"{char}:{line['id']}" not in only:
                 continue
             ref = line.get("asr", line["text"])
-            takes = sorted(f for f in os.listdir(rawdir) if f.startswith(line["id"] + "_t"))
-            if not takes:
+            lst = []
+            for f in take_files(rawdir, line["id"]):
+                x = trim_lead(vq.load(os.path.join(rawdir, f)))
+                x = x[: speech_end(x) + int(0.1 * SR)]
+                f0 = vq.f0_track(x)
+                v = f0[f0 > 0]
+                hyp = asr(x)
+                lst.append(dict(file=f, hyp=hyp, cer=cer(ref, hyp), dur=len(x) / SR,
+                                f0=float(np.median(v)) if len(v) > 20 else 0.0))
+            if lst:
+                cands[line["id"]] = lst
+            else:
                 print(f"WARNING: no takes for {char}:{line['id']}", flush=True)
+        good = [k["f0"] for v in cands.values() for k in v if k["cer"] <= 0.2 and k["f0"] > 0]
+        med = float(np.median(good)) if good else 0.0
+        print(f"{char}: median F0 of intelligible raw takes {med:.0f} Hz", flush=True)
+
+        def dev(k):  # shouted / off-character takes sit far from the character's median pitch
+            return abs(math.log2(k["f0"] / med)) if (med and k["f0"]) else 0.0
+
+        # Pass 2: fully process the best few takes of each line, judge what ships.
+        for line in c["lines"]:
+            if line["id"] not in cands:
                 continue
+            ref = line.get("asr", line["text"])
+            ranked = sorted(cands[line["id"]],
+                            key=lambda k: k["cer"] + 0.3 * dev(k) + 0.3 * max(0.0, k["dur"] - 2.4))
             best = None
-            for f in takes:
-                x = vq.load(os.path.join(rawdir, f))
-                raw_asr = asr(trim_lead(x))
-                y = render(x, char)
+            for k in ranked[: a.shortlist]:
+                y = render(vq.load(os.path.join(rawdir, k["file"])), char)
                 tmp = os.path.join(a.out, f".tmp-{char}-{line['id']}.m4a")
                 y, z = encode_tp(y, tmp)
                 os.remove(tmp)
                 hyp = asr(z)
-                harsh = vq.band_stats(z, SR)[0]
                 d = len(z) / SR
-                score = cer(ref, hyp) + 0.15 * max(0.0, d - 2.6) + 0.01 * max(0.0, harsh - HARSH_TARGET[char])
-                print(f"  {char}:{line['id']} {f} -> {hyp!r} cer={cer(ref, hyp):.2f} dur={d:.2f} ({score:.3f})",
-                      flush=True)
+                score = cer(ref, hyp) + 0.3 * dev(k) + 0.15 * max(0.0, d - 2.6)
+                fp = None
+                if gender is not None and want_female:
+                    fp = gender(z)
+                    score += 2.0 * max(0.0, 0.6 - fp)
+                print(f"  {char}:{line['id']} {k['file']} -> {hyp!r} cer={cer(ref, hyp):.2f} dur={d:.2f} "
+                      f"f0={k['f0']:.0f} fem={fp} ({score:.3f})", flush=True)
                 if best is None or score < best[0]:
-                    best = (score, f, y, raw_asr, hyp)
-            _, f, y, raw_asr, hyp = best
+                    best = (score, k, y, hyp)
+            _, k, y, hyp = best
             name = f"{char}-{line['id']}"
             if a.wav_out:
                 import soundfile as sf
@@ -348,9 +385,9 @@ def main() -> None:
             path = os.path.join(a.out, name + ".m4a")
             y, z = encode_tp(y, path)
             rec = dict(file=f"vo/{name}.m4a", character=char, event=line["event"], text=line["text"], ref=ref,
-                       source="elevenlabs", voice_id=c.get("elevenlabs", {}).get("voice_id", ""),
-                       model=c.get("elevenlabs", {}).get("model", ""), prompt=line.get("prompt", line["text"]),
-                       take=f, takes=len(takes), take_asr=raw_asr, asr=hyp, cer=round(cer(ref, hyp), 3),
+                       source=src.get("engine", ""), voice=src.get("voice", ""),
+                       take=k["file"], takes=len(cands[line["id"]]), take_asr=k["hyp"], take_cer=round(k["cer"], 3),
+                       take_f0=round(k["f0"], 1), asr=hyp, cer=round(cer(ref, hyp), 3),
                        **vq.measure(z, SR, gender), bytes=os.path.getsize(path))
             qa[name] = rec
             print(json.dumps(rec, ensure_ascii=False), flush=True)
