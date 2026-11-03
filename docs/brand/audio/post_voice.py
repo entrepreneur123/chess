@@ -34,8 +34,9 @@ import numpy as np
 import pyworld as pw
 from scipy import signal
 
-import voice_qa as vq
-from process_voice import Asr, biquad, cer, compress, encode_m4a, lufs
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # sibling modules (python -I drops it)
+import voice_qa as vq  # noqa: E402
+from process_voice import Asr, biquad, cer, compress, encode_m4a, expected_dur, lufs  # noqa: E402
 
 SR = vq.SR
 TARGET_LUFS = -16.0
@@ -357,6 +358,7 @@ def main() -> None:
             if line["id"] not in cands:
                 continue
             ref = line.get("asr", line["text"])
+            natural = expected_dur(line["text"])  # ~0.2 s + 0.15 s per syllable
             ranked = sorted(cands[line["id"]],
                             key=lambda k: k["cer"] + 0.3 * dev(k) + 0.3 * max(0.0, k["dur"] - 2.4))
             best = None
@@ -367,7 +369,9 @@ def main() -> None:
                 os.remove(tmp)
                 hyp = asr(z)
                 d = len(z) / SR
-                score = cer(ref, hyp) + 0.3 * dev(k) + 0.15 * max(0.0, d - 2.6)
+                # Punchy barks: penalise speech much slower than natural (the reverb tail is excluded).
+                score = (cer(ref, hyp) + 0.3 * dev(k) + 0.15 * max(0.0, d - 2.6)
+                         + 0.1 * max(0.0, k["dur"] / natural - 1.2))
                 fp = None
                 if gender is not None and want_female:
                     fp = gender(z)
