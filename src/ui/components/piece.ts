@@ -15,7 +15,7 @@ import { icon } from '../icons';
 export const RARITY_LABEL: Record<Rarity, string> = { common: '일반', rare: '희귀', epic: '영웅', legendary: '전설' };
 
 /** Character concept titles shown with the illustrations (UI copy only). */
-export const CONCEPT: Record<CharacterId, string> = { sad: '성기사', marki: '황소 전사', walk: '방패병', insaner: '꼬마 악마', brutile: '초록 불꽃의 마녀' };
+export const CONCEPT: Record<CharacterId, string> = { sad: '성기사', marki: '황소 전사', walk: '방패병', insaner: '꼬마 악마', brutile: '초록 마녀' };
 
 /** Star grade as filled stars, e.g. 2 -> "★★" (grades are called 1성 / 2성 / 3성). */
 export function starsOf(level: Level): string {

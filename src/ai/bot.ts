@@ -13,6 +13,7 @@ import {
   genTargets,
   getLegalMoves,
   isLegalSkill,
+  skillAnchors,
 } from '../engine';
 import type { FastBoard } from '../engine';
 import { SKILL_FLAG, fastCanSkill, fastSkillFits, fastSkillSize } from '../engine/fast';
@@ -488,7 +489,15 @@ function chooseEasy(b: FastBoard, rng: () => number): number {
 export function chooseAction(state: GameState, difficulty: Difficulty, opts: ChooseMoveOptions & { allowSkill?: boolean } = {}): BotAction | null {
   if (state.status !== 'playing') return null;
   const legal = getLegalMoves(state);
-  if (legal.length === 0) return null;
+  if (legal.length === 0) {
+    // No move at all, but the engine did not pass: the wasteland is the only thing left to play.
+    if (opts.allowSkill === false) return null;
+    const caster = state.pieces.find((p) => p.owner === state.turn && skillAnchors(state, p.id).length > 0);
+    if (!caster) return null;
+    const best = skillCandidates(fastFromState(state), 1);
+    const b0 = fastFromState(state);
+    return best.length ? fastSkillToAction(b0, best[0]) : { kind: 'skill', pieceId: caster.id, anchor: skillAnchors(state, caster.id)[0] };
+  }
   const rng = opts.rng ?? Math.random;
   const budget = Math.max(1, Math.min(opts.timeBudgetMs ?? DEFAULT_BUDGET[difficulty], HARD_CAP_MS));
   const start = now();

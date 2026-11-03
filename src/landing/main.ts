@@ -5,7 +5,7 @@
  */
 import './landing.css';
 
-type Char = 'sad' | 'marki' | 'walk' | 'insaner';
+type Char = 'sad' | 'marki' | 'walk' | 'insaner' | 'brutile';
 
 const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -15,14 +15,15 @@ const RANGE: Record<Char, [number, number, number]> = {
   marki: [3, 4, 6],
   walk: [2, 3, 4], // half width of the front row
   insaner: [2, 3, 3], // orthogonal reach; Lv3 adds diagonals
+  brutile: [1, 1, 1], // single steps: forward diagonals, + back (2성), all 8 (3성)
 };
 const DESC: Record<Char, [string, string, string]> = {
   sad: ['상하좌우 1칸', '상하좌우 최대 2칸', '상하좌우 최대 3칸'],
   marki: ['앞으로 최대 3칸', '앞으로 최대 4칸', '앞으로 최대 6칸'],
   walk: ['바로 앞줄 5칸으로 점프', '바로 앞줄 7칸으로 점프', '바로 앞줄 9칸으로 점프'],
   insaner: ['상하좌우 최대 2칸', '상하좌우 최대 3칸', '상하좌우·대각선 최대 3칸'],
+  brutile: ['앞쪽 좌우 대각선 1칸', '대각선 앞 2칸 + 뒤로 1칸', '주변 8칸 어디로든 1칸'],
 };
-const LABEL: Record<Char, string> = { sad: '사', marki: '마', walk: '월', insaner: '인' };
 
 /** Returns the squares (relative to the piece at 0,0; dr < 0 = forward/up) reachable at `level`. */
 function reach(ch: Char, level: number): Array<[number, number]> {
@@ -33,6 +34,10 @@ function reach(ch: Char, level: number): Array<[number, number]> {
     if (ch === 'insaner' && level === 3) {
       for (let k = 1; k <= n; k++) out.push([-k, -k], [-k, k], [k, -k], [k, k]);
     }
+  } else if (ch === 'brutile') {
+    out.push([-1, -1], [-1, 1]);
+    if (level >= 2) out.push([1, 0]);
+    if (level === 3) out.push([-1, 0], [0, -1], [0, 1], [1, -1], [1, 1]);
   } else if (ch === 'marki') {
     for (let k = 1; k <= n; k++) out.push([-k, 0]);
   } else {
@@ -47,8 +52,8 @@ function drawGrid(el: HTMLElement, ch: Char, level: number): void {
   const omni = ch === 'sad' || ch === 'insaner';
   const half = ch === 'marki' ? 0 : n;
   const cols = half * 2 + 1;
-  const rowsUp = ch === 'walk' ? 1 : n;
-  const rowsDown = omni ? n : 0;
+  const rowsUp = ch === 'walk' || ch === 'brutile' ? 1 : n;
+  const rowsDown = omni ? n : ch === 'brutile' && level >= 2 ? 1 : 0;
   const rows = rowsUp + rowsDown + 1;
   const cells = new Set(reach(ch, level).map(([r, c]) => `${r},${c}`));
   el.style.setProperty('--cols', String(cols));
@@ -153,7 +158,11 @@ function initShowcase(): void {
       tokens[who] = start[who].map(([r, c, ch]) => {
         const el = document.createElement('b');
         el.className = `sc-token sc-token--${who} sc-token--${ch}`;
-        el.textContent = LABEL[ch];
+        const img = document.createElement('img');
+        img.src = `../chars/${ch}-lv1-face.jpg`;
+        img.alt = '';
+        img.decoding = 'async';
+        el.appendChild(img);
         board.appendChild(el);
         const t = { el, r, c };
         place(t);

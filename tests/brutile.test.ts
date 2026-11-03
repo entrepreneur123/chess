@@ -180,6 +180,36 @@ describe('Brutile skill: 불모지', () => {
   });
 });
 
+describe('no auto-pass while the wasteland can still be cast', () => {
+  // Blue's 1-star Brutile at the far row edge is boxed in: both forward diagonals are off board / blocked.
+  const boxed = (extra: Partial<GameState> = {}) =>
+    makeState(
+      [
+        [0, 'brutile', 1, 11, 0],
+        [1, 'sad', 1, 10, 1],
+        [1, 'walk', 1, 5, 9],
+      ],
+      1,
+      { ply: 20, ...extra },
+    );
+  it('the side is not passed when it can cast, and is passed once it cannot', () => {
+    // Blue's Brutile at (11,0) faces up (dir +1): no row ahead, it has not turned around (dir set by moves only).
+    const s = boxed();
+    expect(getLegalMoves({ ...s, turn: 0 }, 'p0-brutile')).toHaveLength(0);
+    // Red plays a quiet move; Blue must get its turn (to cast) instead of an automatic pass.
+    const m = getLegalMoves(s).find((x) => x.pieceId === 'p1-walk')!;
+    const after = applyMove(s, m);
+    expect(after.turn).toBe(0);
+    expect(after.history[after.history.length - 1].kind).toBe('move');
+    const a = chooseAction(after, 'normal', { timeBudgetMs: 20, rng: rngFrom(1) });
+    expect(isSkillAction(a)).toBe(true);
+    // With the skill spent the same position passes automatically.
+    const spent = applyMove(boxed({ skillsUsed: [1, 0] }), m);
+    expect(spent.turn).toBe(1);
+    expect(spent.history.some((e) => e.kind === 'pass' && e.reason === 'noMoves')).toBe(true);
+  });
+});
+
 describe('fast board and bot with Brutile', () => {
   it('fast make/unmake mirrors the engine through wasteland deaths and skill casts', () => {
     const rng = rngFrom(99);

@@ -235,8 +235,9 @@ function settle(state: GameState): GameState {
       state = switchTurn(state, { kind: 'pass', player: state.turn, reason: 'bonusSkip' }, state.pliesSinceCapture + 1);
       continue;
     }
-    if (hasAnyMove(state.pieces, state.turn, state.storm, state.waste)) return state;
-    if (!hasAnyMove(state.pieces, other(state.turn), state.storm, state.waste)) return end(state, adjudicate(state), 'stalemate');
+    // A side that cannot move but can still lay its wasteland is not passed: casting is its turn.
+    if (hasAnyMove(state.pieces, state.turn, state.storm, state.waste) || sideCanCast(state, state.turn)) return state;
+    if (!hasAnyMove(state.pieces, other(state.turn), state.storm, state.waste) && !sideCanCast(state, other(state.turn))) return end(state, adjudicate(state), 'stalemate');
     state = switchTurn(state, { kind: 'pass', player: state.turn, reason: 'noMoves' }, state.pliesSinceCapture + 1);
   }
 }
@@ -341,11 +342,23 @@ export function skillUnlockIn(state: Pick<GameState, 'ply'>): number {
   return Math.max(0, Math.ceil((SKILL_UNLOCK_PLY - state.ply) / 2));
 }
 
+/** Could `player` lay a wasteland on its turn (ignoring whose turn it is now)? */
+function sideCanCast(state: GameState, player: PlayerId): boolean {
+  if (state.bonusPieceId !== null) return false;
+  const p = state.pieces.find((x) => x.owner === player && CHARACTERS[x.character].skill);
+  if (!p) return false;
+  return skillBlock({ ...state, turn: player }, p.id) === null && freeAnchors(state, p.level).length > 0;
+}
+
 /** Valid anchors for `pieceId`'s wasteland: the whole area on the board and free of pieces. */
 export function skillAnchors(state: GameState, pieceId: string): Pos[] {
   if (skillBlock(state, pieceId) !== null) return [];
   const p = state.pieces.find((x) => x.id === pieceId)!;
-  const k = WASTE_SIZE[p.level];
+  return freeAnchors(state, p.level);
+}
+
+function freeAnchors(state: GameState, level: number): Pos[] {
+  const k = WASTE_SIZE[level];
   const occupied = new Uint8Array(N_SQUARES);
   for (const q of state.pieces) occupied[sqOf(q.pos)] = 1;
   const out: Pos[] = [];

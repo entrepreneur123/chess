@@ -18,10 +18,12 @@
   --text-2: #aab6d6;
   --text-3: #7d8aad;
   --gold: #ffc247;
-  --r-common: #9aa0a6;
-  --r-rare: #4285f4;
+  /* Rarity: common white, rare orange, epic purple, legendary aurora (as in the game). */
+  --r-common: #eef2fa;
+  --r-rare: #ff9a3c;
   --r-epic: #a142f4;
-  --r-legendary: #f9ab00;
+  --r-legendary: #7df2d0;
+  --r-rainbow: conic-gradient(#ff5f6d, #ffc371, #f9f871, #5ef2a0, #4fd1ff, #7d6bff, #e66bff, #ff5f6d);
   --font: Roboto, 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, -apple-system, sans-serif;
   --ease: cubic-bezier(0.2, 0, 0, 1);
   --ease-emph: cubic-bezier(0.05, 0.7, 0.1, 1);
@@ -361,6 +363,15 @@ p {
 .sc-token--walk {
   box-shadow: 0 0 0 2px var(--r-epic), 0 2px 6px rgba(0, 0, 0, 0.25);
 }
+/* Tokens show the character's face illustration inside a team-coloured rim (no letters). */
+.sc-token img {
+  width: calc(100% - 4px);
+  height: calc(100% - 4px);
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: 50% 30%;
+  pointer-events: none;
+}
 .sc-token.is-jump {
   animation: jump 520ms var(--ease-emph);
 }
@@ -483,9 +494,12 @@ p {
 .rarity--epic {
   background: var(--r-epic);
 }
+.rarity--common {
+  color: #1d2433;
+}
 .rarity--legendary {
-  background: var(--r-legendary);
-  color: #3d2b00;
+  background: linear-gradient(90deg, #ff8a95, #ffd98a, #9ff5b8, #8fe0ff, #c4a3ff);
+  color: #1b1030;
 }
 .char-card,
 .step,
@@ -795,8 +809,9 @@ p {
   color: var(--gold);
 }
 .hero__cast {
-  display: flex;
-  gap: 18px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 64px));
+  gap: 12px;
   margin: 22px 0 0;
   padding: 0;
   list-style: none;
@@ -811,8 +826,8 @@ p {
   color: var(--text-2);
 }
 .cast {
-  width: 64px;
-  height: 64px;
+  width: min(64px, 15vw);
+  height: min(64px, 15vw);
   border-radius: 50%;
   object-fit: cover;
   box-shadow: 0 0 0 2px var(--r-common), 0 0 14px rgba(154, 165, 189, 0.4), 0 6px 14px rgba(0, 0, 0, 0.5);

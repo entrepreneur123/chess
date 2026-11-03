@@ -3,7 +3,7 @@
  * Re-playable from the lobby. Resolves when closed (completed or skipped).
  */
 import { sfx } from '../../audio/sfx';
-import { CHARACTERS, CHARACTER_IDS, TURN_TIME_MS, type CharacterId } from '../../engine';
+import { CHARACTERS, CHARACTER_IDS, STARTER_IDS, TURN_TIME_MS, type CharacterId } from '../../engine';
 import { getProfile, updateProfile } from '../../meta/profile';
 import { h, prefersReducedMotion, type Child } from '../dom';
 import { icon } from '../icons';
@@ -34,7 +34,8 @@ function goalArt(): Child {
     h(
       'div',
       { class: 'tut-goal__row' },
-      CHARACTER_IDS.map((id, i) =>
+      // An enemy squad is always three pieces.
+      STARTER_IDS.map((id, i) =>
         h('span', { class: 'tut-goal__enemy', style: `--i:${i}` }, unitArt(id, 1, { size: 56, owner: 1 }), h('span', { class: 'tut-goal__x' }, icon('close', 18))),
       ),
     ),
@@ -130,7 +131,7 @@ function growArt(): Child {
 
 const SLIDES: Slide[] = [
   { key: 'goal', art: goalArt, title: '상대 말 3개를 모두 잡으면 승리!', body: '12×12 보드 위 1:1 대결. 이동 경로에서 처음 만나는 상대 말을 잡을 수 있어요.' },
-  { key: 'chars', art: charactersArt, title: '네 캐릭터, 분대는 3명', body: '파란 칸이 갈 수 있는 곳이에요. 마르키·월크는 앞으로만 가다가 끝줄에 닿으면 뒤돌아요. 전설 인세이너는 잡은 적의 이동 능력을 흡수해요.' },
+  { key: 'chars', art: charactersArt, title: '다섯 캐릭터, 분대는 3명', body: '파란 칸이 갈 수 있는 곳이에요. 마르키·월크는 앞으로만 가다가 끝줄에 닿으면 뒤돌아요. 전설 인세이너는 잡은 적의 능력을 흡수하고, 전설 브루타일은 닿으면 소멸하는 불모지를 깔아요.' },
   { key: 'tap', art: tapArt, title: '탭하고, 한 번 더 탭!', body: '내 말을 탭하면 갈 수 있는 칸이 빛나요. 빛나는 칸을 탭하면 이동해요.' },
   { key: 'zone', art: zoneArt, title: '진형은 아래 3줄에서', body: '대전 전에 내 구역(3×12) 안에 말을 자유롭게 배치해 작전을 짜세요.' },
   { key: 'timer', art: timerArt, title: '한 턴 45초, 한 판 최대 10분', body: '말이 줄면 40초 → 20초. 한쪽이 1개만 남거나 40수가 지나면(서든데스) 6턴마다 좌우 바깥 줄이 자기장으로 변해 닿은 말은 소멸해요. 3번 연속 시간 초과는 기권패!' },
