@@ -1,4 +1,5 @@
-/* Landing page — standalone, Material 3-inspired, no external fonts. */
+/* Landing page — standalone, no external fonts. Surfaces follow the game's v5 "Dark Arena"
+   palette (docs/design/dark-arena.md): night backgrounds, obsidian panels, candle gold. */
 :root {
   --blue: #1a73e8;
   --blue-dark: #174ea6;
@@ -9,15 +10,15 @@
   --green-container: rgba(61, 220, 132, 0.18);
   --amber: #f9ab00;
   --amber-container: rgba(255, 194, 71, 0.2);
-  --bg: #0b1020;
-  --surface: #182238;
-  --surface-2: #111a30;
-  --surface-3: #1f2b45;
-  --outline: rgba(255, 255, 255, 0.1);
-  --text: #f3f6ff;
-  --text-2: #aab6d6;
-  --text-3: #7d8aad;
-  --gold: #ffc247;
+  --bg: #0d1322;
+  --surface: #1b2338;
+  --surface-2: #151d31;
+  --surface-3: #28324d;
+  --outline: rgba(130, 150, 210, 0.16);
+  --text: #eef2ff;
+  --text-2: #9aa6c4;
+  --text-3: #8692b3;
+  --gold: #f2c14e;
   /* Rarity: common white, rare orange, epic purple, legendary aurora (as in the game). */
   --r-common: #eef2fa;
   --r-rare: #ff9a3c;

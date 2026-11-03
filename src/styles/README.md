@@ -1,37 +1,47 @@
-# GRID CLASH design system v4 — "Bright Arena"
+# GRID CLASH design system v5 — "Dark Arena"
 
-Daylight, chunky and clean (see `docs/design/arena-style.md`, which the board renderer shares).
-Mid-tone sky-blue backgrounds, cream-blue light panels with navy text, dark-blue panels with white
-text, every pressable surface a physical piece (light top edge, two-tone face, darker bottom lip,
-soft drop; pressed = sinks onto its lip). Display type is Black Han Sans in white with a navy
-outline. Plain CSS; tokens live in `tokens.css`.
+Dark, rich and polished (see `docs/design/dark-arena.md`, shared with the board renderer and the
+illustrated backdrops). Night-blue backgrounds with a vignette, obsidian panels, candle gold as the
+sparse premium accent, and light that comes from the action: team glows, the selected unit, gold
+trim, arcane (storm/skills) and toxic (Brutile) accents. Every pressable surface is still a physical
+piece — a light top edge, a two-tone face, a darker bottom lip and a soft drop; pressed = it sinks
+onto its lip. Display type is Black Han Sans in ink with a near-black outline. Plain CSS; tokens live
+in `tokens.css`.
 
 ## Files (import order in `src/main.ts`)
 
 | File | Contents |
 | --- | --- |
 | `fonts.css` | Self-hosted `@font-face` (Pretendard, Black Han Sans, Exo 2 for the wordmark) |
-| `tokens.css` | Arena palette, text, outlines, type, space, radius, depth, background, motion; `.rarity-*`; the light-panel text context |
-| `base.css` | Reset, app shell (`#app` sky + lattice), focus ring, `.screen`, `.scroll-body`, `.appbar` |
+| `tokens.css` | Palette (doc hex values), derived shades, text, outlines, type, space, radius, depth, backgrounds, motion; `.rarity-*` |
+| `base.css` | Reset, app shell (`#app` gradient + arcane rings, backdrop layer `::before`, vignette `::after`), focus ring, `.screen`, `.scroll-body`, `.appbar` |
 | `components.css` | Buttons, icon buttons, press FX, cards, titles, chips, grade pills, unit art, tokens, movement diagram, switch, scrim/dialog/sheet/toast, `.enter` |
 | `lobby.css` · `collection.css` · `formation.css` · `matchmaking.css` | Screens |
 | `overlays.css` | Tutorial carousel, settings sheet, result dialog |
-| `game.css` | Match layout: bars, turn strip, clock, timer ring, board area, notes over the board, action-dock row |
-| `../ui/game/hud.css` | Match effects and panels: banners, flashes, float text, dock contents, selection chip, cut-in, ≡ drawer |
+| `game.css` | Match layout: bars, timer ring, turn strip (turn count + turn chip), notes line, board area, action-dock row |
+| `../ui/game/hud.css` | Match effects and panels: banners, flashes, float text, urgency, dock contents, selection chip, cut-in, ≡ drawer |
+
+## Backdrops
+
+`src/ui/backdrops.ts` preloads `public/bg/{lobby,matchmaking,match}.webp` after first paint. Only once
+an image has decoded does it set `--bg-<name>-img` (an absolute URL, so it works in dev, under
+`base: './'` and in the Capacitor WebView) and add `has-bg-<name>` on `<html>`; `#app::before` then
+fades the art in over the CSS gradient. A missing file leaves the gradient. The lobby art is used by
+the outer screens, the matchmaking art by `[data-screen='matchmaking']`, and the match art while
+`body.in-game`.
 
 ## Colour
 
-- Palette tokens are the design doc's exact hex values: `--sky-top/bottom`, `--navy-ink`, `--panel`
-  (`-edge`, `-well`, `-line`, `-hi`), `--panel-dark` (`-hi`, `-edge`), `--gold` (`-deep`, `-lip`),
-  `--green` (`-mid`, `-deep`), `--team-blue`/`--team-red` (`-light`, `-deep`), `--grass-*`, `--stone-*`,
-  `--violet-*`, `--storm-*`.
-- Text: `--text-1/2/3` are white-ish by default (blue surfaces). Inside light panels (`.card`, `.dialog`,
-  `.sheet`, `.tut`, `.fpanel`, `.tray-card`, `.play-panel`, `.unit-card`, or any `.on-light`) they flip to
-  navy. Contrast: ≥ 4.5 : 1 for text-1..3 on `--panel-dark` and on `--panel`. Never put body copy
-  directly on `--sky-top` (white is 3.3 : 1 there); use a panel or outlined display type.
-- Gold text on cream uses `#8a4a00`; green text on cream `--green-text`.
+- Palette tokens are the design doc's exact values: `--night-0/1/2`, `--panel`, `--panel-top`,
+  `--panel-lip`, `--line`, `--ink`, `--ink-muted`, `--gold` (`-deep`, `-lip`), `--arcane`, `--toxic`,
+  `--team-blue`/`--team-red` (`-light`, `-glow`, `-deep`), `--danger`, `--positive` (`-lip`).
+- Text: `--text-1` ink (14.6:1 on `--panel`), `--text-2` ink-muted (6.6:1), `--text-3` (4.8:1).
+  Gold copy uses `--gold-text`; labels on gold use `--gold-ink` (11:1). Arcane / toxic / positive
+  copy use `--arcane-text`, `--toxic-text`, `--positive-text`.
 - Rarity: `.rarity-common|rare|epic|legendary` exposes `--rar`, `--rar-deep`, `--rar-glow`, `--rar-soft`.
   Common = white, rare = orange, epic = purple, legendary = rotating rainbow (`--rar-rainbow`).
+- Gold is sparse: the primary CTA, the turn chip on my turn, stars, 3성 / selected items, frame
+  hairlines and victory moments.
 
 ## Type
 
@@ -41,23 +51,24 @@ outline. Plain CSS; tokens live in `tokens.css`.
 | Body | `--font-body` (Pretendard 400/600/800) | Running text, captions, hints |
 | Logotype | `--font-logo` (Exo 2 italic 900) | The GRID CLASH wordmark and the VS badge only |
 
-Outlined display type: `text-shadow: var(--ink-outline-s | -m | -l)` (white face, navy outline + drop).
+Outlined display type: `text-shadow: var(--ink-outline-s | -m | -l)` (ink face, `--outline` + drop).
 
 ## Depth
 
-- Light panel: `background: var(--panel-fill); box-shadow: var(--panel-shadow)`; panels on the sky add
-  the navy outline `0 0 0 2.5px var(--navy-ink), 0 var(--lip) 0 2.5px var(--navy-ink)`.
-- Dark panel: `var(--dpanel-fill)` + `var(--dpanel-shadow)` (or the navy-outlined variant used by the bars).
-- Lip `--lip` (5px), drops `--drop` / `--drop-l`. No glow except for real emphasis.
+- Panel: `background: var(--panel-fill); box-shadow: var(--panel-shadow)` (top highlight edge,
+  hairline rim, dark lip, soft drop). Premium / selected: `var(--panel-shadow-gold)`.
+- Inset well: `background: var(--panel-well); box-shadow: var(--well-shadow)`.
+- Bars on the backdrop (app bar, docks): `var(--bar-fill)` with a gold hairline.
+- Lip `--lip` (5px), drops `--drop` / `--drop-l`. Glows only for real emphasis (team, gold, arcane).
 
 ## Components (class API)
 
 | Component | Classes |
 | --- | --- |
-| Buttons | `.btn` + `--primary` (alias `--filled`, gold) · `--play` (hero CTA) · `--success` (green confirm) · `--secondary` (blue) · `--tonal` (cream) · `--danger` (red) · `--text`; `--sm`, `--lg`, `--block`; `[disabled]` |
-| Icon buttons | `.icon-btn` (chunky blue square, 48px), `--sm` (40px), `--light` (cream) |
+| Buttons | `.btn` (dark panel face) + `--primary` (alias `--filled`, gold) · `--play` (hero CTA) · `--success` (green confirm) · `--secondary` / `--tonal` (dark) · `--danger` (red) · `--text`; `--sm`, `--lg`, `--block`; `[disabled]` |
+| Icon buttons | `.icon-btn` (chunky dark square, 48px), `--sm` (40px), `--light` (quiet) |
 | Panels | `.card` (+`--tap`, `.pressable`) |
-| Titles | `.section-title` (+`--display` gold gem, white outlined on the sky, navy inside cards), `.section-link`, `.hint` |
+| Titles | `.section-title` (+`--display` gold gem), `.section-link`, `.hint` |
 | Chips | `.chip` (`--outline`, `--gold`, `--rarity`), `.badge`, `.lv-pill` (`--big`), `.lv-text` |
 | Art | `unitArt()` → `.unit-art--face/--card`; `pieceToken()` → `.token--xs/sm/md/lg`; `movementDiagram()` → `.move-diagram` |
 | Inputs / rows | `.switch[aria-checked]`, `.set-group > .set-row` (`--link`) |
@@ -65,13 +76,18 @@ Outlined display type: `text-shadow: var(--ink-outline-s | -m | -l)` (white face
 
 ## Match screen layout
 
-Rows: opponent bar · `.hud-strip` (turn pill + clock) · `.board-wrap` (canvas; `.board-overlay` holds the
-storm chip, auto-pass chip and coach mark, never taking input) · `.info-host` (action dock: selection chip,
-chain-skip / Brutile skill / targeting) · player bar. The strip and dock have their own rows so the dock's
-buttons never cover the board. Landscape ≥ 700px wide moves the strip left and the dock right of the board.
+Rows, each with a fixed height so the board never resizes: opponent bar · `.hud-strip` (turn count
+`.turn-count` + turn chip `.turn-pill`) · `.hud-notes` (storm chip, auto-pass chip, first-match coach;
+also carries the legacy `.board-overlay` hook) · `.board-wrap` (canvas) · `.info-host` (action dock:
+selection chip, chain skip / Brutile skill / targeting) · player bar. Short phones (`max-height:
+720px`) tighten the chrome. In a match, toasts drop in under the notes line. The turn timer ring
+glows in the team colour, turns gold at 10 s and pulses red in the last 5 s (`.is-critical`; a
+timeout is a forfeit), as does the player bar. Landscape ≥ 700px wide moves the strip and notes left
+and the dock right of the board.
 
 ## Motion
 
 `--dur-press 90ms` · `--dur-1 140` · `--dur-2 220` · `--dur-3 340` · `--dur-4 560`; easings `--ease-out`,
 `--ease-emph`, `--ease-spring`, `--ease-pop`, `--ease-in-out`. Press FX: `src/ui/components/press.ts`.
-`prefers-reduced-motion` zeroes the duration tokens and disables loops/entrances.
+`prefers-reduced-motion` zeroes the duration tokens and disables loops/entrances; urgency stays
+visible as a steady glow.

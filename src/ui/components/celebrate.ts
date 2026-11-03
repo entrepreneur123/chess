@@ -2,7 +2,8 @@
 import { prefersReducedMotion } from '../dom';
 import { overlayRoot } from './overlay';
 
-const COLORS = ['#1a73e8', '#4285f4', '#f9ab00', '#fbbc04', '#d93025', '#34a853', '#a142f4', '#ffffff'];
+// Dark Arena accents: candle gold, team blue, arcane, team red, ink.
+const COLORS = ['#f2c14e', '#ffe7a3', '#c8891e', '#3b8bff', '#8cc2ff', '#8b6cff', '#ff9aa0', '#eef2ff'];
 
 /**
  * Burst of confetti from the top-center. Returns a disposer (also auto-removes after ~3.2s).
