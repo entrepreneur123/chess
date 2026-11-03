@@ -42,6 +42,8 @@ CHAR = {
     "marki": dict(f0=92.0, formant=0.86, tempo=1.0, pull=0.4, tail=0.15, qmin=0.75, qmax=1.05),
     "walk": dict(f0=135.0, formant=1.0, tempo=0.96, pull=0.4, tail=0.08, qmin=0.8, qmax=1.2),
     "insaner": dict(f0=560.0, formant=1.1, tempo=0.9, pull=0.3, tail=0.12, qmin=0.85, qmax=1.35, mintempo=0.66),
+    # brutile (witch): an adult female voice kept in the ~230-270 Hz band, clear of sad (~187 Hz).
+    "brutile": dict(f0=250.0, formant=1.0, tempo=0.95, pull=0.35, tail=0.18, qmin=0.8, qmax=1.25, mintempo=0.7),
 }
 MAX_DUR = {"death": 1.9, "victory": 1.8, "skill": 1.7}
 MIN_TEMPO = 0.78  # never speed a take up by more than ~1.28x (rubberband stays natural-sounding)
@@ -377,7 +379,26 @@ def fx_insaner(x):
     return reverb(y, 0.5, 0.12, predelay=0.01, lp=7000, tail=0.12)
 
 
-FX = {"sad": fx_sad, "marki": fx_marki, "walk": fx_walk, "insaner": fx_insaner}
+def fx_brutile(x):
+    peak = np.abs(x).max() + 1e-9
+    y = biquad(x, "hp", 90)
+    # Sinister shadow: the line a fourth lower with shifted formants, quiet and 18 ms late.
+    shadow = ffilter(x, "rubberband=pitch=0.75:formant=shifted:pitchq=quality:transients=mixed")
+    shadow = shadow[: len(x)] if len(shadow) >= len(x) else np.pad(shadow, (0, len(x) - len(shadow)))
+    shadow = np.concatenate([np.zeros(int(0.018 * SR)), shadow])[: len(x)]
+    # Rasp: the hard-saturated voice, high-passed, adds a breathy crackle on loud syllables.
+    rasp = biquad(np.tanh(3.5 * y / peak) * peak, "hp", 2500)
+    y = y + 0.10 * rasp + 0.09 * shadow
+    y = np.tanh(1.25 * y / peak) * peak
+    y = biquad(y, "lowshelf", 250, 1.0)
+    y = biquad(y, "peak", 3500, 2.5, 1.0)
+    y = biquad(y, "highshelf", 8000, -1.5)
+    y = chorus(y, depth_ms=1.2, base_ms=9.0, rate=0.4, mix=0.15)
+    y = compress(y, -22, 3.0)
+    return reverb(y, 1.1, 0.16, predelay=0.02, lp=4500, tail=0.18)
+
+
+FX = {"sad": fx_sad, "marki": fx_marki, "walk": fx_walk, "insaner": fx_insaner, "brutile": fx_brutile}
 
 
 # ------------------------------------------------------------------------------------------------

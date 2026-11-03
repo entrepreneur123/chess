@@ -1,6 +1,7 @@
 """Loudness-normalise and encode the synthesized SFX (from gen_sfx.py) to .m4a.
 
 Usage:  python -I encode_sfx.py --wav <dir from gen_sfx.py> --out ../../../public/audio/sfx --qa qa-sfx.json
+        [--only brutile-,waste-death]   (name prefixes; QA entries of other files are kept)
 """
 import argparse
 import json
@@ -23,11 +24,13 @@ def main() -> None:
     ap.add_argument("--wav", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--qa", required=True)
+    ap.add_argument("--only", default="", help="comma list of name prefixes to (re)encode")
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
-    qa = {}
+    only = tuple(p.strip() for p in a.only.split(",") if p.strip())
+    qa = json.load(open(a.qa)) if only and os.path.exists(a.qa) else {}
     for f in sorted(os.listdir(a.wav)):
-        if not f.endswith(".wav"):
+        if not f.endswith(".wav") or (only and not f.startswith(only)):
             continue
         x, sr = sf.read(os.path.join(a.wav, f))
         assert sr == SR
@@ -43,7 +46,7 @@ def main() -> None:
                         peak_db=round(20 * math.log10(np.abs(z).max() + 1e-12), 2), centroid=round(centroid(z, SR)),
                         lead_ms=round(lead), trail_ms=round(trail), bytes=os.path.getsize(path))
         print(json.dumps(qa[name]))
-    json.dump(qa, open(a.qa, "w"), indent=1)
+    json.dump(dict(sorted(qa.items())), open(a.qa, "w"), indent=1)
 
 
 if __name__ == "__main__":

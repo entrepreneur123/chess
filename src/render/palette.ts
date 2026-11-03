@@ -72,14 +72,42 @@ export const RARITY_RING: Record<Rarity, { core: string; glow: string; glowAmt: 
 
 /**
  * Per-character strike / skill FX colours (sRGB hex), shared by both views:
- * sad = holy gold, marki = molten orange + dust, walk = shield blue-white, insaner = violet/crimson.
+ * sad = holy gold, marki = molten orange + dust, walk = shield blue-white, insaner = violet/crimson,
+ * brutile = sickly toxic green over black-purple (witch curse).
  */
 export const CHARACTER_FX: Record<CharacterId, { primary: string; secondary: string; core: string }> = {
   sad: { primary: '#FFC93A', secondary: '#FFF0B8', core: '#FFFFFF' },
   marki: { primary: '#FF6A1F', secondary: '#C9B9A0', core: '#FFE2B0' },
   walk: { primary: '#7CC8FF', secondary: '#DDF2FF', core: '#FFFFFF' },
   insaner: { primary: '#B24BFF', secondary: '#FF2A5C', core: '#F4DCFF' },
+  brutile: { primary: '#6BFF3A', secondary: '#5B1F86', core: '#E8FFC2' },
 };
+
+/**
+ * Brutile's wasteland ("불모지"): scorched black-brown ground split by sickly green glowing cracks,
+ * bubbling poison and a faint green miasma. Kept clear of the storm's purple/magenta and of the
+ * cyan / red move and capture markers. `invalid` = red ghost of a forbidden skill placement.
+ */
+export const WASTE_COLORS = {
+  /** Scorched ground (dark, slightly olive). */
+  ground: '#120F0A',
+  groundEdge: '#2A2414',
+  /** Glowing crack / poison colour and its hot core. */
+  glow: '#62FF2E',
+  core: '#E4FFB0',
+  /** Deep toxic green of the miasma / bubbles. */
+  miasma: '#2FAE1E',
+  /** Black-purple curse tone (cast rune, dissolve smoke). */
+  curse: '#5B1F86',
+  /** Skill targeting: anchor tint, valid ghost, invalid ghost. */
+  anchor: '#7DFF5A',
+  ghost: '#8CFF4A',
+  invalid: '#FF3B4E',
+  /** Danger mark on deadly move targets. */
+  danger: '#FF4A4A',
+  /** Tile tint under the wasteland. */
+  tile: '#1A1810',
+} as const;
 
 export const RARITY_LABELS: Record<Rarity, { en: string; ko: string }> = {
   common: { en: 'Common', ko: '일반' },
@@ -105,6 +133,7 @@ export const CHARACTER_RARITY: Record<CharacterId, Rarity> = {
   marki: 'rare',
   walk: 'epic',
   insaner: 'legendary',
+  brutile: 'legendary',
 };
 
 export const BOARD_COLORS = {

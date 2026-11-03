@@ -15,7 +15,7 @@
 import type { CharacterId } from '../engine/types';
 import { getProfile } from '../meta/profile';
 import { audioOut, getAudioContext, isSoundOn } from './sfx';
-import { CHAR_SFX, GENERIC_SFX, VOICE_CLIPS, type CharAudioEvent } from './voiceManifest';
+import { CHAR_SFX, GENERIC_SFX, VOICE_CLIPS, WASTE_DEATH_SFX, type CharAudioEvent } from './voiceManifest';
 
 export type { CharAudioEvent };
 
@@ -255,10 +255,21 @@ export function playVoice(character: CharacterId, event: CharAudioEvent, opts: V
 
 /** Character-specific sound effect (falls back to a shared effect for death). Overlaps freely. */
 export function playCharSfx(character: CharacterId, event: CharAudioEvent): void {
+  playSfx(CHAR_SFX[character]?.[event] ?? GENERIC_SFX[event]);
+}
+
+/**
+ * A piece of any character dissolving on brutile's wasteland (poison hiss + bubbling). Play it
+ * instead of the generic death effect for that death. Fire-and-forget, never throws.
+ */
+export function playWasteDeath(): void {
+  playSfx(WASTE_DEATH_SFX);
+}
+
+/** One-shot effect on the shared bus, de-duplicated within SFX_MIN_GAP_MS. Overlaps freely. */
+function playSfx(rel: string | null | undefined): void {
   try {
-    if (!hasBrowserAudio() || !soundOn()) return;
-    const rel = CHAR_SFX[character]?.[event] ?? GENERIC_SFX[event];
-    if (!rel) return;
+    if (!rel || !hasBrowserAudio() || !soundOn()) return;
     if (!audioOut()) return;
     const t = nowMs();
     const prev = lastSfxAt.get(rel);
@@ -279,6 +290,8 @@ function clipsFor(character: CharacterId): string[] {
   for (const list of Object.values(v)) for (const rel of list ?? []) out.add(rel);
   for (const rel of Object.values(CHAR_SFX[character] ?? {})) if (rel) out.add(rel);
   for (const rel of Object.values(GENERIC_SFX)) if (rel) out.add(rel);
+  // Wasteland only exists when brutile is on the board.
+  if (character === 'brutile' && WASTE_DEATH_SFX) out.add(WASTE_DEATH_SFX);
   return [...out];
 }
 

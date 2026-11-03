@@ -31,6 +31,7 @@ export const CHARACTER_MODEL_HEIGHT: Record<CharacterId, number> = {
   marki: 0.75,
   walk: 1.0,
   insaner: 1.0,
+  brutile: 1.0,
 };
 
 /** Uniform scale applied to each builder's output so that all units read at a similar size. */
@@ -39,6 +40,7 @@ const BODY_SCALE: Record<CharacterId, number> = {
   marki: 0.95,
   walk: 0.94,
   insaner: 0.92,
+  brutile: 0.92,
 };
 
 /** Head-centre height per character (used by the 'head' marker). */
@@ -47,6 +49,7 @@ const HEAD_POS: Record<CharacterId, [number, number, number]> = {
   marki: [0, 0.42, 0.45],
   walk: [0, 0.77, 0],
   insaner: [0, 0.84, 0],
+  brutile: [0, 0.84, 0],
 };
 
 const BUILDERS: Record<CharacterId, (g: THREE.Group, ctx: BuildCtx) => void> = {
@@ -54,6 +57,8 @@ const BUILDERS: Record<CharacterId, (g: THREE.Group, ctx: BuildCtx) => void> = {
   marki: buildMarki,
   walk: buildWalk,
   insaner: buildInsaner,
+  // Placeholder (3D arena disabled): Brutile reuses the imp build until she gets her own model.
+  brutile: buildInsaner,
 };
 
 /** Builds a THREE.Group ~1.0 unit tall (feet at y=0, facing +z). See file header for conventions. */

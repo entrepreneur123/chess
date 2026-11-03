@@ -7,7 +7,7 @@
  * The drawer does NOT pause the turn clock (no free thinking time); it re-renders on every
  * controller change while open, but only when something it shows actually changed.
  */
-import { BOARD_SIZE, CHARACTERS, getTargetsForPiece, inStorm, pieceDir, type FormationSlot, type GameState, type Piece, type PlayerId } from '../../engine';
+import { BOARD_SIZE, CHARACTERS, SKILL_UNLOCK_PLY, WASTE_SIZE, getTargetsForPiece, inStorm, pieceDir, skillUnlockIn, type FormationSlot, type GameState, type Piece, type PlayerId } from '../../engine';
 import { movementDiagram, rarityChip, starsOf, unitArt } from '../components/piece';
 import { overlayRoot, pushOverlay, registerForceClose } from '../components/overlay';
 import { h, replaceChildren } from '../dom';
@@ -37,7 +37,7 @@ export interface FieldPanel {
 function pieceKey(s: GameState): string {
   return (
     s.pieces.map((p) => `${p.id}@${p.pos.r},${p.pos.c}:${(p.absorbed ?? []).map((a) => a.character + a.level).join('')}`).join('|') +
-    `#${s.storm}`
+    `#${s.storm}#${s.waste.length}#${s.skillsUsed.join(',')}#${s.ply >= SKILL_UNLOCK_PLY}`
   );
 }
 
@@ -49,7 +49,7 @@ function miniMap(s: GameState, focus: string | null, onPick: (id: string) => voi
   for (let r = BOARD_SIZE - 1; r >= 0; r--) {
     for (let c = 0; c < BOARD_SIZE; c++) {
       const p = byPos.get(r * BOARD_SIZE + c);
-      const cls = `fmap__cell${(r + c) % 2 === 0 ? ' is-dark' : ''}${inStorm(c, s.storm) ? ' is-storm' : ''}${r <= 2 ? ' is-home-0' : r >= 9 ? ' is-home-1' : ''}`;
+      const cls = `fmap__cell${(r + c) % 2 === 0 ? ' is-dark' : ''}${inStorm(c, s.storm) ? ' is-storm' : ''}${s.waste.includes(r * BOARD_SIZE + c) ? ' is-waste' : ''}${r <= 2 ? ' is-home-0' : r >= 9 ? ' is-home-1' : ''}`;
       if (p) {
         grid.appendChild(
           h(
@@ -101,6 +101,24 @@ function infoCard(slot: FormationSlot, owner: PlayerId, s: GameState, focus: str
       ),
       h('div', { class: `fcard__status${piece ? '' : ' is-dead'}` }, status),
       h('div', { class: 'fcard__desc' }, def.descKo[level - 1]),
+      def.skill
+        ? h(
+            'div',
+            { class: 'fcard__skill' },
+            icon('magic', 14),
+            h('b', null, `스킬 · ${def.skill.nameKo} ${WASTE_SIZE[level]}×${WASTE_SIZE[level]}`),
+            ' ',
+            s.skillsUsed[owner] > 0
+              ? '사용함'
+              : s.storm > 0
+                ? '자기장으로 사용 불가'
+                : s.ply < SKILL_UNLOCK_PLY
+                  ? `${skillUnlockIn(s)}턴 후 사용 가능`
+                  : piece
+                    ? '사용 가능 · 닿으면 소멸'
+                    : '—',
+          )
+        : null,
       piece?.absorbed?.length
         ? h(
             'div',

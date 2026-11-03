@@ -52,13 +52,22 @@ describe('bot squad', () => {
     expect(botSquad('hard', ['insaner', 'sad', 'walk'], rng)).toEqual(['insaner', 'sad', 'walk']);
   });
 
-  it('sometimes swaps one member for the legendary on hard', () => {
+  it('sometimes swaps one member for a legendary on hard', () => {
     const rng = rngFrom(2);
     let withLegend = 0;
-    for (let i = 0; i < 200; i++) if (botSquad('hard', ['sad', 'marki', 'walk'], rng).includes('insaner')) withLegend++;
+    const seen = new Set<string>();
+    for (let i = 0; i < 200; i++) {
+      const sq = botSquad('hard', ['sad', 'marki', 'walk'], rng);
+      const legend = sq.find((id) => id === 'insaner' || id === 'brutile');
+      if (legend) {
+        withLegend++;
+        seen.add(legend);
+      }
+    }
+    expect([...seen].sort()).toEqual(['brutile', 'insaner']);
     expect(withLegend).toBeGreaterThan(200 * BOT_LEGENDARY_CHANCE.hard * 0.6);
     expect(withLegend).toBeLessThan(200 * BOT_LEGENDARY_CHANCE.hard * 1.4);
-    const opp = createOpponent('hard', { sad: 1, marki: 1, walk: 1, insaner: 1 }, rngFrom(3), ['sad', 'marki', 'walk']);
+    const opp = createOpponent('hard', { sad: 1, marki: 1, walk: 1, insaner: 1, brutile: 1 }, rngFrom(3), ['sad', 'marki', 'walk']);
     expect(validateFormation(opp.formation).ok).toBe(true);
     expect(opp.formation).toHaveLength(3);
   });

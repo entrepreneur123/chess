@@ -77,7 +77,8 @@ void main() {
     float n2 = noise(vWorld.xz * 3.5 - vec2(0.0, uTime * 1.1));
     float vein = smoothstep(0.08, 0.0, abs(n - 0.5)) * (0.55 + 0.45 * n2);
     float inner = pow(vUv.x, 2.2);
-    float sweep = exp(-pow((fract(vUv.y * 0.5 - uTime * 0.12) - 0.5) * 7.0, 2.0)) * 0.3;
+    float sw = (fract(vUv.y * 0.5 - uTime * 0.12) - 0.5) * 7.0; // pow() of a negative base is undefined
+    float sweep = exp(-sw * sw) * 0.3;
     col = uField * (0.22 + 0.32 * n) + uEdge * vein * 0.85 + uEdge * inner * 0.45 + uCore * sweep * (0.3 + 0.7 * n);
     col *= 0.9;
   } else if (kind < 1.5) {

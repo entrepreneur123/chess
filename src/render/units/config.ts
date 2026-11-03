@@ -221,10 +221,51 @@ export const LOOKS: Record<CharacterId, CharacterLook> = {
       },
     },
   },
+  // Legendary witch (placeholder for the disabled 3D arena: the imp body + devil outfit in toxic green;
+  // the board is top-down only for now, where Brutile is her illustrated token).
+  brutile: {
+    body: 'imp',
+    height: 1.45,
+    impact: 0.42,
+    rim: 0.55,
+    clips: {
+      idle: { src: 'Idle_Loop' },
+      run: { src: 'Jog_Fwd_Loop' },
+      attack: { src: 'Melee_Hook' },
+      hit: { src: 'Hit_Chest' },
+      death: { src: 'Death01', to: 1.3 },
+    },
+    levels: {
+      1: {
+        scale: 1,
+        glow: '#6BFF3A',
+        patternColor: '#6BFF3A',
+        eye: '#9CFF3A',
+        particles: { count: 6, size: 0.06, color: '#6BFF3A', core: '#E8FFC2', radius: 0.3, height: 1.0, speed: 0.35 },
+      },
+      2: {
+        scale: 1.05,
+        glow: '#6BFF3A',
+        patternColor: '#4CE02A',
+        eye: '#B6FF3A',
+        particles: { count: 12, size: 0.07, color: '#6BFF3A', core: '#E8FFC2', radius: 0.36, height: 1.3, speed: 0.4 },
+      },
+      3: {
+        scale: 1.12,
+        glow: '#6BFF3A',
+        patternColor: '#3BFF6A',
+        eye: '#D4FF4A',
+        particles: { count: 28, size: 0.11, color: '#6BFF3A', core: '#E8FFC2', radius: 0.48, height: 1.8, speed: 0.45 },
+        rune: { color: '#6BFF3A', aura: '#5B1F86' },
+        shaft: { color: '#8CFF6A', opacity: 0.5 },
+        idleSpeed: 0.9,
+      },
+    },
+  },
 };
 
 /** Clip used for each logical action (walk jumps, the others run). */
-export const MOVE_CLIP: Record<CharacterId, ClipName> = { sad: 'run', marki: 'run', walk: 'jump', insaner: 'run' };
+export const MOVE_CLIP: Record<CharacterId, ClipName> = { sad: 'run', marki: 'run', walk: 'jump', insaner: 'run', brutile: 'run' };
 
 /**
  * Board fit constants for the camera / picking code (tile units, measured from the unit's feet =

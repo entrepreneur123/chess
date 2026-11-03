@@ -1,8 +1,26 @@
 import { BotClient } from '../../ai/botClient';
 import { haptic, sfx } from '../../audio/sfx';
-import { playCharSfx, playVoice, preloadCharacterAudio, stopVoice } from '../../audio/voice';
+import { playCharSfx, playVoice, playWasteDeath, preloadCharacterAudio, stopVoice } from '../../audio/voice';
 import { VOICE_TEXT } from '../../audio/voiceManifest';
-import { CHARACTERS, createGame, getPieceById, materialScore, suddenDeathIn, type GameState, type Move, type Piece, type Pos } from '../../engine';
+import {
+  CHARACTERS,
+  SKILL_UNLOCK_PLY,
+  WASTE_SIZE,
+  createGame,
+  getPieceById,
+  materialScore,
+  skillAnchors,
+  skillBlock,
+  skillUnlockIn,
+  suddenDeathIn,
+  wasteArea,
+  type GameState,
+  type Move,
+  type Piece,
+  type Pos,
+  type SkillAction,
+  type SkillBlock,
+} from '../../engine';
 import { createBoardView, type IBoardView } from '../../render';
 import { MIN_MOVES_FOR_REWARD, PACING } from '../../meta/economy';
 import { DIFFICULTY_LABEL } from '../../meta/opponent';
@@ -47,13 +65,9 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   // Storm status: hidden until a side is down to one piece.
   const stormText = h('span', { class: 'storm-chip__text' });
   const stormChip = h('div', { class: 'storm-chip', role: 'status', 'aria-live': 'polite', hidden: true }, h('span', { class: 'storm-chip__icon', 'aria-hidden': 'true' }, icon('bolt', 14)), stormText);
-  // Chain move bar: the player may play one more move with the capturing Insaner, or skip it.
-  const bonusBar = h(
-    'div',
-    { class: 'bonus-bar', hidden: true },
-    h('span', { class: 'bonus-bar__text' }, icon('magic', 16), '인세이너 연쇄 이동 · 한 번 더 움직일 수 있어요'),
-    h('button', { class: 'btn btn--tonal btn--sm bonus-bar__skip', type: 'button', 'data-action': 'skip-bonus', onclick: () => ctrl?.skipBonus() }, '건너뛰기'),
-  );
+  // Action dock (below the board, never over it): chain move skip, Brutile's skill, skill targeting.
+  const actionBar = h('div', { class: 'action-bar', hidden: true, role: 'group' });
+  let dockKey = '';
   // Persistent hint while one side keeps auto-passing (the toast is shown only the first time).
   const passChip = h('div', { class: 'pass-chip', hidden: true });
   // First-match coach mark.
@@ -66,7 +80,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   const selStars = h('span', { class: 'sel-chip__stars' });
   const selHint = h('span', { class: 'sel-chip__hint' });
   const selChip = h('div', { class: 'sel-chip', hidden: true, 'aria-hidden': 'true' }, selArt, selName, selStars, selHint);
-  const infoHost = h('div', { class: 'info-host' }, selChip);
+  const infoHost = h('div', { class: 'info-host' }, actionBar, selChip);
   const field = createFieldPanel({
     formations: [params.playerFormation, params.botFormation],
     names: ['나', params.opponentName],
@@ -149,32 +163,6 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     topRing.el,
     menuBtn,
   );
-  // Camera toggle: 3D arena <-> top-down (persisted in settings).
-  const viewIcon = h('span', { class: 'view-toggle__icon', 'aria-hidden': 'true' });
-  const viewLabel = h('span', { class: 'view-toggle__label' });
-  const viewBtn = h(
-    'button',
-    { class: 'view-toggle', type: 'button', 'data-action': 'toggle-view', onclick: () => toggleView() },
-    viewIcon,
-    viewLabel,
-  );
-  const syncViewBtn = () => {
-    const top = getProfile().settings.view === 'top';
-    // The button shows the view it switches TO.
-    replaceChildren(viewIcon, icon(top ? 'cube' : 'topview', 18));
-    setText(viewLabel, top ? '3D' : '탑뷰');
-    viewBtn.setAttribute('aria-label', top ? '3D 시점으로 보기' : '위에서 내려다보기');
-    viewBtn.classList.toggle('is-top', top);
-  };
-  const toggleView = () => {
-    const next = getProfile().settings.view === 'top' ? 'tilt' : 'top';
-    updateProfile((p) => ({ ...p, settings: { ...p.settings, view: next } }));
-    board?.setViewMode?.(next);
-    syncViewBtn();
-    sfx('select');
-    haptic('light');
-  };
-  syncViewBtn();
   const resignBtn = h(
     'button',
     { class: 'icon-btn icon-btn--outlined', type: 'button', 'aria-label': '기권', 'data-action': 'resign', onclick: () => void askResign() },
@@ -189,7 +177,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     botRing.el,
     resignBtn,
   );
-  const boardWrap = h('div', { class: 'board-wrap' }, boardHost, fx, h('div', { class: 'board-overlay' }, pill, counter, stormChip, passChip, bonusBar, coach), viewBtn, infoHost);
+  const boardWrap = h('div', { class: 'board-wrap' }, boardHost, fx, h('div', { class: 'board-overlay' }, pill, counter, stormChip, passChip, coach), infoHost);
   const el = h('main', { class: 'game no-select' }, topBar, boardWrap, bottomBar);
 
   // ---------- runtime objects (created on mount)
@@ -205,6 +193,10 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   let lastTickSec = -1;
   let stormKey = '';
   let selChipKey = '';
+  let wasteKey = 0;
+  /** Brutile's wasteland targeting (the player is choosing where to lay it). */
+  let targeting: { pieceId: string; level: 1 | 2 | 3; anchors: Set<number>; preview: Pos | null } | null = null;
+  const notified = { unlock: false, storm: false };
   let stormStarted = initial.stormIn !== null;
   let lastClockSec = -1;
   const passToastShown = [false, false];
@@ -286,7 +278,13 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     if (victim && victim.id === move.captureId) playCharSfx(victim.character, 'death');
   };
   const moveFeedbackEnd = (move: Move) => {
-    if (move.captureId) impact(move);
+    if (move.wasted) {
+      if (mover) playCharSfx(mover.character, 'death');
+      playWasteDeath();
+      haptic('warn');
+      const mine = move.pieceId.startsWith(`p${HUMAN}-`);
+      spawnFx(h('div', { class: 'float-text float-text--waste' }, mine ? '불모지에 소멸!' : '상대가 불모지에 소멸!'), 1300);
+    } else if (move.captureId) impact(move);
     else sfx('land');
   };
   let lastTurnShown: number | null = null;
@@ -302,6 +300,129 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     if (ok) ctrl?.resign();
   };
 
+  const BLOCK_TEXT: Record<SkillBlock, string> = {
+    noSkill: '',
+    notYourTurn: '내 차례에 사용',
+    chain: '연쇄 이동 중',
+    notYet: '',
+    used: '이번 판에 이미 사용',
+    storm: '자기장 이후 사용 불가',
+    ended: '',
+  };
+
+  const stopTargeting = () => {
+    if (!targeting) return;
+    targeting = null;
+    board?.setSkillPreview?.(null, null);
+  };
+
+  const startTargeting = (pieceId: string) => {
+    const c = ctrl;
+    if (!c) return;
+    const p = getPieceById(c.state, pieceId);
+    if (!p || skillBlock(c.state, pieceId) !== null) return;
+    const anchorList = skillAnchors(c.state, pieceId).map((a) => a.r * 12 + a.c);
+    targeting = { pieceId, level: p.level, anchors: new Set(anchorList), preview: null };
+    // Only the area under consideration is drawn (valid corners would tint nearly the whole board).
+    board?.setSkillPreview?.([], null);
+    sfx('select');
+    haptic('light');
+    renderSnapshot(c.snapshot());
+  };
+
+  /** Anchor (lowest corner) of the area for a tapped square: the tap sits at the area's centre. */
+  const anchorFor = (pos: Pos, k: number): Pos => {
+    const clamp = (v: number) => Math.max(0, Math.min(12 - k, v));
+    return { r: clamp(pos.r - Math.floor((k - 1) / 2)), c: clamp(pos.c - Math.floor((k - 1) / 2)) };
+  };
+
+  const confirmSkill = () => {
+    const t = targeting;
+    if (!t || !t.preview || !t.anchors.has(t.preview.r * 12 + t.preview.c)) return;
+    const action: SkillAction = { kind: 'skill', pieceId: t.pieceId, anchor: t.preview };
+    stopTargeting();
+    if (!ctrl?.trySkill(action)) toast('지금은 불모지를 쓸 수 없어요', { tone: 'warn' });
+  };
+
+  const onTargetTap = (pos: Pos) => {
+    const t = targeting;
+    if (!t) return;
+    const k = WASTE_SIZE[t.level];
+    const anchor = anchorFor(pos, k);
+    const same = t.preview && t.preview.r === anchor.r && t.preview.c === anchor.c;
+    const valid = t.anchors.has(anchor.r * 12 + anchor.c);
+    // Tapping the previewed area again confirms it.
+    if (same && valid) {
+      confirmSkill();
+      return;
+    }
+    t.preview = anchor;
+    board?.setSkillPreview?.([], { squares: wasteArea(t.level, anchor), valid });
+    sfx(valid ? 'select' : 'tap');
+    if (ctrl) renderSnapshot(ctrl.snapshot());
+  };
+
+  /** The dock below the board: chain move, Brutile's skill button, or skill targeting controls. */
+  const renderDock = (snap: ControllerSnapshot) => {
+    const s = snap.state;
+    const myTurn = snap.phase === 'humanTurn' && !snap.paused;
+    if (targeting && (!myTurn || !getPieceById(s, targeting.pieceId) || skillBlock(s, targeting.pieceId) !== null)) stopTargeting();
+    const sel = snap.selection ? getPieceById(s, snap.selection.pieceId) : undefined;
+    let key = '';
+    let content: HTMLElement[] = [];
+    if (myTurn && s.bonusPieceId !== null) {
+      key = 'chain';
+      content = [
+        h('span', { class: 'action-bar__text' }, icon('magic', 16), '연쇄 이동 · 한 번 더!'),
+        h('button', { class: 'btn btn--tonal btn--sm', type: 'button', 'data-action': 'skip-bonus', onclick: () => ctrl?.skipBonus() }, '건너뛰기'),
+      ];
+    } else if (targeting) {
+      const t = targeting;
+      const k = WASTE_SIZE[t.level];
+      const valid = !!t.preview && t.anchors.has(t.preview.r * 12 + t.preview.c);
+      key = `aim|${t.preview?.r},${t.preview?.c}|${valid}`;
+      content = [
+        h('span', { class: 'action-bar__text' }, icon('target', 16), t.preview ? (valid ? '한 번 더 탭하거나 설치를 누르세요' : '말이 있는 칸에는 깔 수 없어요') : `불모지(${k}×${k})를 깔 곳을 탭하세요`),
+        h('button', { class: 'btn btn--text btn--sm', type: 'button', 'data-action': 'skill-cancel', onclick: () => { stopTargeting(); if (ctrl) renderSnapshot(ctrl.snapshot()); } }, '취소'),
+        h('button', { class: 'btn btn--filled btn--sm action-bar__go', type: 'button', 'data-action': 'skill-confirm', disabled: !valid, onclick: () => confirmSkill() }, '설치'),
+      ];
+    } else if (myTurn && sel && sel.owner === HUMAN && CHARACTERS[sel.character].skill) {
+      const block = skillBlock(s, sel.id);
+      const k = WASTE_SIZE[sel.level];
+      const reason = block === 'notYet' ? `${skillUnlockIn(s)}턴 후 사용 가능` : block ? BLOCK_TEXT[block] : `빈 칸 ${k}×${k} · 닿으면 소멸`;
+      key = `skill|${sel.id}|${block}|${reason}`;
+      content = [
+        h(
+          'button',
+          { class: `skill-btn${block ? ' is-blocked' : ''}`, type: 'button', 'data-action': 'skill', disabled: !!block, onclick: () => startTargeting(sel.id) },
+          h('span', { class: 'skill-btn__icon', 'aria-hidden': 'true' }, icon('magic', 20)),
+          h('span', { class: 'skill-btn__main' }, h('span', { class: 'skill-btn__name' }, `스킬 · ${CHARACTERS[sel.character].skill!.nameKo}`), h('span', { class: 'skill-btn__sub' }, reason)),
+        ),
+      ];
+    }
+    if (key === dockKey) return;
+    dockKey = key;
+    actionBar.hidden = !key;
+    actionBar.className = `action-bar${key ? ` action-bar--${key.split('|')[0]}` : ''}`;
+    replaceChildren(actionBar, ...content);
+  };
+
+  /** One-time notices: the skill unlocking, and the storm about to forbid it. */
+  const skillNotices = (snap: ControllerSnapshot) => {
+    const s = snap.state;
+    if (snap.phase === 'ended') return;
+    const mine = s.pieces.find((p) => p.owner === HUMAN && CHARACTERS[p.character].skill);
+    const unused = !!mine && s.skillsUsed[HUMAN] === 0 && s.storm === 0;
+    if (!notified.unlock && mine && unused && s.ply >= SKILL_UNLOCK_PLY && snap.phase === 'humanTurn') {
+      notified.unlock = true;
+      toast(`${CHARACTERS[mine.character].nameKo}의 스킬 '불모지'를 쓸 수 있어요! ${CHARACTERS[mine.character].nameKo}를 탭하세요`, { tone: 'success', duration: 2800 });
+    }
+    if (!notified.storm && unused && s.stormIn !== null && s.storm === 0) {
+      notified.storm = true;
+      toast(`자기장이 ${s.stormIn}턴 후 좁혀와요. 그 전에만 '불모지'를 쓸 수 있어요`, { tone: 'warn', duration: 3000 });
+    }
+  };
+
   const renderSnapshot = (snap: ControllerSnapshot) => {
     const s = snap.state;
     if (board) {
@@ -311,8 +432,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       }
       const sel = snap.selection;
       const selPiece = sel ? getPieceById(s, sel.pieceId) : undefined;
-      if (snap.phase === 'animating') {
-        board.setHighlights({ selected: null, moves: [], captures: [], lastMove: null });
+      if (snap.phase === 'animating' || targeting) {
+        board.setHighlights({ selected: targeting ? (selPiece?.pos ?? null) : null, moves: [], captures: [], lastMove: targeting ? snap.lastMove : null });
       } else {
         board.setHighlights({
           selected: selPiece?.pos ?? null,
@@ -321,6 +442,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
           lastMove: snap.lastMove,
           // A tapped enemy shows its reach in red; own pieces keep the white markers.
           tone: selPiece && selPiece.owner === BOT ? 'enemy' : 'own',
+          // Moves that end on wasteland are suicide: marked as deadly.
+          deadly: sel ? sel.moves.filter((m) => s.waste.includes(m.to.r * 12 + m.to.c)).map((m) => m.to) : [],
         });
       }
       board.setInteractive(snap.phase !== 'animating' && snap.phase !== 'ended' && !snap.paused);
@@ -335,7 +458,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     const sdSoon = sd !== null && sd <= SUDDEN_DEATH_WARN_PLIES;
     stormChip.hidden = snap.phase === 'ended' || (s.stormIn === null && !sdSoon);
     if (s.stormIn !== null) {
-      setText(stormText, s.storm > 0 ? `자기장 · 좌우 ${s.storm}줄 소멸 · ${s.stormIn}턴 후 축소` : `자기장 활성 · ${s.stormIn}턴 후 축소`);
+      const skillLeft = s.storm === 0 && s.pieces.some((p) => CHARACTERS[p.character].skill && s.skillsUsed[p.owner] === 0);
+      setText(stormText, s.storm > 0 ? `자기장 · 좌우 ${s.storm}줄 소멸 · ${s.stormIn}턴 후 축소` : `자기장 활성 · ${s.stormIn}턴 후 축소${skillLeft ? ' · 이후 스킬 금지' : ''}`);
       stormChip.classList.toggle('is-soon', s.stormIn <= 2);
     } else if (sdSoon) {
       setText(stormText, `서든데스까지 ${sd}수 · 이후 자기장이 좁혀와요`);
@@ -346,7 +470,13 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       // Started by the clock (both sides still have several pieces) rather than by a lone survivor.
       if (s.pieces.filter((p) => p.owner === HUMAN).length > 1 && s.pieces.filter((p) => p.owner === BOT).length > 1 && snap.phase !== 'ended') showSuddenDeath();
     }
-    bonusBar.hidden = !(snap.phase === 'humanTurn' && !snap.paused && s.bonusPieceId !== null);
+    renderDock(snap);
+    // Wasteland on the board (only ever grows).
+    if (board && s.waste.length !== wasteKey) {
+      wasteKey = s.waste.length;
+      board.setWaste?.(s.waste);
+    }
+    skillNotices(snap);
     // HUD
     // Pieces only disappear through captures, so the count is a sufficient change key.
     if (s.pieces.length !== rosterKey) {
@@ -518,7 +648,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       document.body.classList.add('in-game');
       bag.add(() => document.body.classList.remove('in-game'));
       try {
-        board = createBoardView(boardHost);
+        // The 3D arena is disabled for now: top-down board with illustrated tokens only.
+        board = createBoardView(boardHost, { topOnly: true });
       } catch (e) {
         console.error('board init failed', e);
         replaceChildren(boardHost, h('div', { class: 'board-error' }, '보드를 표시할 수 없습니다.'));
@@ -534,21 +665,40 @@ export function gameScreen(router: Router, params: GameParams): Screen {
         botThinkDelayMs: () => randInt(defaultRng, PACING.botThinkMinMs, PACING.botThinkMaxMs),
         animate: async (move, after) => {
           if (move.pieceId.startsWith(`p${HUMAN}-`)) finishCoach();
-          moveFeedbackStart(move, c.state);
+          // Stepping on wasteland destroys the mover: the board plays the toxic dissolve.
+          const m: Move = c.state.waste.includes(move.to.r * 12 + move.to.c) ? { ...move, wasted: true } : move;
+          moveFeedbackStart(m, c.state);
           if (b) {
             b.setInteractive(false);
-            await b.animateMove(move, after.pieces);
+            await b.animateMove(m, after.pieces);
             syncedPieces = after.pieces;
           }
-          if (!bag.isDisposed) moveFeedbackEnd(move);
+          if (!bag.isDisposed) moveFeedbackEnd(m);
+        },
+        animateSkill: async (action, after) => {
+          const caster = getPieceById(c.state, action.pieceId);
+          if (caster) {
+            const rel = playVoice(caster.character, 'skill', { level: caster.level, owner: caster.owner });
+            playCharSfx(caster.character, 'skill');
+            haptic('capture');
+            spawnFx(cutInEl({ character: caster.character, level: caster.level, owner: caster.owner, kind: 'skill', line: rel ? VOICE_TEXT[rel] : undefined }), CUTIN_MS);
+          }
+          if (b) {
+            b.setInteractive(false);
+            await b.animateSkill?.(action.pieceId, caster ? wasteArea(caster.level, action.anchor) : []);
+            b.setWaste?.(after.waste);
+            wasteKey = after.waste.length;
+          }
         },
       }));
       bag.add(() => c.dispose());
 
-      board?.setViewMode?.(getProfile().settings.view, false);
       board?.setPieces(initial.pieces);
       syncedPieces = initial.pieces;
-      board?.onCellClick((pos: Pos) => c.tapCell(pos));
+      board?.onCellClick((pos: Pos) => {
+        if (targeting) onTargetTap(pos);
+        else c.tapCell(pos);
+      });
       board?.onImpact?.((move) => {
         if (!bag.isDisposed) impact(move);
       });
@@ -576,6 +726,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
             }
             sfx(e.player === HUMAN ? 'levelup' : 'turn');
             if (e.player === HUMAN) haptic('capture');
+          } else if (e.type === 'skill') {
+            if (e.player === BOT) toast('상대 브루타일이 불모지를 깔았어요! 닿으면 소멸해요', { tone: 'warn', duration: 2600 });
           } else if (e.type === 'absorb') {
             const who = e.player === HUMAN ? '내 인세이너가' : '상대 인세이너가';
             toast(`${who} ${CHARACTERS[e.character].nameKo}의 이동 능력을 흡수했어요`, { tone: e.player === HUMAN ? 'success' : 'warn', duration: 2400 });

@@ -8,6 +8,8 @@ import {
   applyMove,
   applyTimeout,
   applyTimeUp,
+  applySkill,
+  isLegalSkill,
   getLegalMoves,
   getPieceAt,
   getPieceById,
@@ -23,6 +25,7 @@ import {
   type Piece,
   type PlayerId,
   type Pos,
+  type SkillAction,
   MATCH_TIME_MS,
 } from '../../engine';
 
@@ -53,14 +56,19 @@ export type ControllerEvent =
   | { type: 'bonus'; player: PlayerId; pieceId: string }
   /** `pieceId` (an Insaner) absorbed the movement of `character`. */
   | { type: 'absorb'; player: PlayerId; pieceId: string; character: CharacterId }
+  /** `pieceId` (Brutile) laid wasteland on `squares`. */
+  | { type: 'skill'; player: PlayerId; pieceId: string; squares: number[] }
   /** The storm advanced to `storm` columns per side, removing `killed`. */
   | { type: 'storm'; storm: number; killed: string[]; /** The removed pieces as they stood. */ lost: Piece[] }
   | { type: 'ended'; state: GameState };
 
 export interface ControllerPorts {
-  requestBotMove(state: GameState): Promise<Move | null>;
+  /** The bot's action: a move or Brutile's wasteland (SkillAction, `kind: 'skill'`). */
+  requestBotMove(state: GameState): Promise<Move | SkillAction | null>;
   /** Play the move on the board. `after` is the resulting state. Must resolve (even on failure). */
   animate(move: Move, after: GameState): Promise<void>;
+  /** Play a skill on the board. `after` is the resulting state. Must resolve (even on failure). */
+  animateSkill?(action: SkillAction, after: GameState): Promise<void>;
   /** Minimum visible think time for the bot. */
   botThinkDelayMs(): number;
   now?(): number;
@@ -199,6 +207,14 @@ export class GameController {
     }
   }
 
+  /** Brutile's wasteland for the human (own turn, not paused). Returns false if not allowed now. */
+  trySkill(action: SkillAction): boolean {
+    if (this.disposed || this._phase !== 'humanTurn' || this._paused || !isLegalSkill(this._state, action)) return false;
+    this.selection = null;
+    void this.playSkill(action);
+    return true;
+  }
+
   /** Decline the pending chain move (human only). Returns false if none is pending. */
   skipBonus(): boolean {
     if (this.disposed || this._phase !== 'humanTurn' || this._paused || this._state.bonusPieceId === null) return false;
@@ -323,7 +339,7 @@ export class GameController {
     const gen = this.gen;
     const stateAtRequest = this._state;
     const t0 = this.now();
-    let move: Move | null = null;
+    let move: Move | SkillAction | null = null;
     try {
       move = await this.ports.requestBotMove(stateAtRequest);
     } catch (e) {
@@ -335,8 +351,11 @@ export class GameController {
     if (wait > 0) await new Promise<void>((r) => this.setTimer(r, wait));
     await this.whenResumed();
     if (gen !== this.gen || this.disposed || this._phase !== 'botThinking') return;
-    if (move && isLegalMove(this._state, move)) {
-      await this.playMove(move);
+    if (move && 'kind' in move && move.kind === 'skill') {
+      if (isLegalSkill(this._state, move)) await this.playSkill(move);
+      else this.doTimeout();
+    } else if (move && isLegalMove(this._state, move as Move)) {
+      await this.playMove(move as Move);
     } else {
       // Bot couldn't produce a legal move: treat like a timeout so the game never stalls.
       this.doTimeout();
@@ -374,6 +393,33 @@ export class GameController {
     }
     if (gen !== this.gen || this.disposed) return;
     this._state = next;
+    this.announce(prev, next, 1);
+    this.checkEndOrContinue(true);
+  }
+
+  private async playSkill(action: SkillAction): Promise<void> {
+    const gen = ++this.gen;
+    this.stopTimer();
+    const prev = this._state;
+    let next: GameState;
+    try {
+      next = applySkill(prev, action);
+    } catch (e) {
+      console.warn('illegal skill rejected', e);
+      this.enterTurn();
+      return;
+    }
+    this._phase = 'animating';
+    this.emit({ type: 'change' });
+    try {
+      await this.ports.animateSkill?.(action, next);
+    } catch (e) {
+      console.warn('skill animation failed', e);
+    }
+    if (gen !== this.gen || this.disposed) return;
+    this._state = next;
+    const entry = next.history[prev.history.length];
+    if (entry?.kind === 'skill') this.emit({ type: 'skill', player: entry.player, pieceId: entry.pieceId, squares: entry.squares });
     this.announce(prev, next, 1);
     this.checkEndOrContinue(true);
   }

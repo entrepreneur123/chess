@@ -279,6 +279,86 @@
           "asr": "내가 최고야 키히히"
         }
       ]
+    },
+    "brutile": {
+      "voice": "An adult woman in her thirties, a wicked villainess witch queen. Sly, haughty, seductive and menacing mid-range female voice with a slight rasp, theatrical and mocking, savoring every word. Mature, not a child, not squeaky, not shrill.",
+      "clone": {
+        "ref": "refs/brutile-ref.flac",
+        "text": "내 저주를 받아라!",
+        "_from": "VoiceDesign take of brutile capture-2 (voice + style below), trimmed"
+      },
+      "lines": [
+        {
+          "id": "select-1",
+          "event": "select",
+          "text": "부르셨나, 애송이?",
+          "style": "Sly and condescending, a slow mocking purr."
+        },
+        {
+          "id": "select-2",
+          "event": "select",
+          "text": "후후, 저주가 필요해?",
+          "style": "A soft wicked chuckle, then a seductive, teasing question.",
+          "asr": "후후 저주가 필요해"
+        },
+        {
+          "id": "move-1",
+          "event": "move",
+          "text": "어디 한번 걸어볼까",
+          "style": "Leisurely and amused, haughty."
+        },
+        {
+          "id": "move-2",
+          "event": "move",
+          "text": "흐흥~ 가볼까?",
+          "style": "A smug, sing-song hum, then a lazy question.",
+          "asr": "흐흥 가볼까"
+        },
+        {
+          "id": "capture-1",
+          "event": "capture",
+          "text": "썩어 문드러져라!",
+          "style": "A venomous, hissing curse, spiteful and intense."
+        },
+        {
+          "id": "capture-2",
+          "event": "capture",
+          "text": "내 저주를 받아라!",
+          "style": "A commanding, wicked curse, forceful and theatrical."
+        },
+        {
+          "id": "capture-3",
+          "event": "capture",
+          "text": "히히! 끝이야!",
+          "style": "A short wicked witch cackle, then gleeful and cruel.",
+          "asr": "히히 끝이야"
+        },
+        {
+          "id": "skill-1",
+          "event": "skill",
+          "text": "이 땅은 죽었다!",
+          "style": "A dark, grand proclamation, menacing and powerful."
+        },
+        {
+          "id": "skill-2",
+          "event": "skill",
+          "text": "불모지여, 피어나라!",
+          "style": "Casting a dark spell, an ominous, grand incantation."
+        },
+        {
+          "id": "death-1",
+          "event": "death",
+          "text": "이… 이럴 리가…",
+          "style": "Shocked and dying, a weak, breathy, disbelieving gasp, fading."
+        },
+        {
+          "id": "victory-1",
+          "event": "victory",
+          "text": "모두 썩어라! 히히히!",
+          "style": "Triumphant and cruel, then a short wicked witch cackle.",
+          "asr": "모두 썩어라 히히히"
+        }
+      ]
     }
   }
 }

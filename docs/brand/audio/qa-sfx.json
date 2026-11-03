@@ -1,4 +1,44 @@
 {
+ "brutile-capture": {
+  "file": "sfx/brutile-capture.m4a",
+  "dur": 1.152,
+  "lufs": -16.43,
+  "peak_db": -3.44,
+  "centroid": 3185,
+  "lead_ms": 7,
+  "trail_ms": 42,
+  "bytes": 10470
+ },
+ "brutile-move": {
+  "file": "sfx/brutile-move.m4a",
+  "dur": 0.576,
+  "lufs": -17.2,
+  "peak_db": -2.06,
+  "centroid": 3605,
+  "lead_ms": 1,
+  "trail_ms": 42,
+  "bytes": 5816
+ },
+ "brutile-select": {
+  "file": "sfx/brutile-select.m4a",
+  "dur": 1.003,
+  "lufs": -17.01,
+  "peak_db": -2.04,
+  "centroid": 1752,
+  "lead_ms": 1,
+  "trail_ms": 30,
+  "bytes": 9276
+ },
+ "brutile-skill": {
+  "file": "sfx/brutile-skill.m4a",
+  "dur": 1.835,
+  "lufs": -17.15,
+  "peak_db": -1.79,
+  "centroid": 1790,
+  "lead_ms": 1,
+  "trail_ms": 32,
+  "bytes": 16110
+ },
  "death": {
   "file": "sfx/death.m4a",
   "dur": 1.067,
@@ -178,5 +218,15 @@
   "lead_ms": 1,
   "trail_ms": 43,
   "bytes": 8972
+ },
+ "waste-death": {
+  "file": "sfx/waste-death.m4a",
+  "dur": 1.237,
+  "lufs": -16.99,
+  "peak_db": -2.57,
+  "centroid": 3843,
+  "lead_ms": 0,
+  "trail_ms": 39,
+  "bytes": 11243
  }
 }

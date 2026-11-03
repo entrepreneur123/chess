@@ -222,7 +222,8 @@ totalEmissiveRadiance += uRim * fres * ${opts.rimStrength.toFixed(2)};
 // Fake environment reflection for metal: view-space sky/ground gradient + a soft horizon band.
 vec3 rv = reflect(-vV, nV);
 float sky = smoothstep(-0.35, 0.75, rv.y);
-float band = exp(-pow((rv.y - 0.32) * 5.0, 2.0));
+float bandY = (rv.y - 0.32) * 5.0;
+float band = exp(-bandY * bandY);
 vec3 env = mix(vec3(0.10, 0.09, 0.12), vec3(0.85, 0.9, 1.0), sky) + vec3(1.0, 0.96, 0.9) * band * 0.9;
 totalEmissiveRadiance += diffuseColor.rgb * env * vFx.y * 0.85;
 float gp = ${pulse ? '0.75 + 0.25 * sin(uTime * 4.2 + vBind.y * 2.0)' : '1.0'};

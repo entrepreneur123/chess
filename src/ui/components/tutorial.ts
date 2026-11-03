@@ -24,6 +24,7 @@ const SHORT_MOVE: Record<CharacterId, string> = {
   marki: '앞으로 직진 · 끝줄에서 뒤돌아요',
   walk: '앞줄로 점프 · 끝줄에서 뒤돌아요',
   insaner: '상하좌우 직진 · 잡은 적의 이동을 흡수',
+  brutile: '대각선 한 칸 · 불모지 스킬',
 };
 
 function goalArt(): Child {

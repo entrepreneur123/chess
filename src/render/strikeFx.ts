@@ -41,6 +41,7 @@ uniform vec3 uColor2;
 uniform float uSeed;
 varying vec2 vUv;
 ${NOISE_GLSL}
+float sq2(float x) { return x * x; }
 float sdShield(vec2 q) {
   float c1 = length(q - vec2(-0.63, 0.55)) - 1.25;
   float c2 = length(q - vec2(0.63, 0.55)) - 1.25;
@@ -57,7 +58,7 @@ void main() {
   if (uMode < 0.5) {
     // Molten crack shockwave: fast ring, jagged radial lava cracks that linger, dusty core.
     float R = 0.12 + 0.82 * e;
-    float ring = exp(-pow((r - R) / (0.03 + 0.06 * k), 2.0)) * fade;
+    float ring = exp(-sq2((r - R) / (0.03 + 0.06 * k))) * fade;
     float a = (ang / 6.2831853 + 0.5) * 11.0 + uSeed;
     float cell = floor(a);
     float jag = 0.16 * sin(r * 23.0 + cell * 7.1) + 0.08 * sin(r * 57.0 + cell * 3.3);
@@ -72,18 +73,18 @@ void main() {
     // Shield-shaped shock ring (its point at -y; BoardView turns it toward the strike) + an echo and a flash core.
     float s = 0.18 + 0.78 * e;
     float d = sdShield(p / s * 1.08) * s;
-    float line = exp(-pow(d / (0.025 + 0.03 * k), 2.0)) * fade;
+    float line = exp(-sq2(d / (0.025 + 0.03 * k))) * fade;
     float s2 = s * 0.62;
     float d2 = sdShield(p / s2 * 1.08) * s2;
-    float echo = exp(-pow(d2 / 0.02, 2.0)) * fade * fade * 0.6;
+    float echo = exp(-sq2(d2 / 0.02)) * fade * fade * 0.6;
     float fill = smoothstep(0.0, -0.25, d) * 0.22 * fade * fade;
     float flash = exp(-r * r / 0.03) * pow(fade, 3.0) * 1.4;
     col = uColor * (line * 1.6 + echo) + uColor2 * (fill + flash);
   } else if (uMode < 2.5) {
     // Holy sigil: twin rings and eight rotating rays.
     float R = 0.22 + 0.62 * e;
-    float ring = exp(-pow((r - R) / 0.022, 2.0));
-    float ring2 = exp(-pow((r - R * 0.7) / 0.014, 2.0)) * 0.7;
+    float ring = exp(-sq2((r - R) / 0.022));
+    float ring2 = exp(-sq2((r - R * 0.7) / 0.014)) * 0.7;
     float ra = abs(fract((ang + k * 1.4) / 6.2831853 * 8.0) - 0.5) * r * 6.2831853 / 8.0;
     float rays = smoothstep(0.03, 0.0, ra) * smoothstep(R * 1.05, 0.05, r) * 0.8;
     float glow = exp(-r * r / 0.05) * 0.5;
@@ -99,7 +100,7 @@ void main() {
     col = (mix(uColor2, uColor, n) * flame * 1.7 + uColor * inner) * pow(fade, 0.7);
   } else {
     float R = 0.2 + 0.75 * e;
-    col = uColor * exp(-pow((r - R) / 0.04, 2.0)) * fade;
+    col = uColor * exp(-sq2((r - R) / 0.04)) * fade;
   }
   col *= smoothstep(1.0, 0.92, r);
   gl_FragColor = vec4(col, 1.0);
@@ -107,6 +108,7 @@ void main() {
 }`;
 
 const SLASH_FS = /* glsl */ `
+float sq2(float x) { return x * x; }
 uniform float uK;
 uniform vec3 uColor;
 uniform vec3 uCore;
@@ -123,7 +125,7 @@ void main() {
   float th = 0.05 + 0.2 * mid;
   float d = r - 0.8;
   float blade = smoothstep(th, 0.0, abs(d + th * 0.6)) * step(d, 0.02);
-  float edge = exp(-pow(d / 0.018, 2.0)) * (0.4 + mid);
+  float edge = exp(-sq2(d / 0.018)) * (0.4 + mid);
   float fade = 1.0 - smoothstep(0.55, 1.0, uK);
   vec3 col = uColor * blade * 1.3 + uCore * edge * 1.6;
   gl_FragColor = vec4(col * vis * fade, 1.0);

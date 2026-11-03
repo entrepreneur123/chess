@@ -1,4 +1,4 @@
-import type { GameState, Move } from '../engine/types';
+import type { GameState, Move, SkillAction } from '../engine/types';
 import {
   N_SQUARES,
   fastFromState,
@@ -7,15 +7,26 @@ import {
   fastMake,
   fastMoveToMove,
   fastPass,
+  fastSkillToAction,
   fastUnmake,
   fastUnpass,
   genTargets,
   getLegalMoves,
+  isLegalSkill,
 } from '../engine';
 import type { FastBoard } from '../engine';
-import { CHARACTERS, CHAR_BY_CODE, CH_INSANER, CH_MARKI, CH_SAD, CH_WALK } from '../engine/characters';
+import { SKILL_FLAG, fastCanSkill, fastSkillFits, fastSkillSize } from '../engine/fast';
+import { CHARACTERS, CHAR_BY_CODE, CH_BRUTILE, CH_INSANER, CH_MARKI, CH_SAD, CH_WALK, N_CHARS } from '../engine/characters';
+import { BOARD_SIZE, SKILL_USES_PER_MATCH } from '../engine/types';
 
 export type Difficulty = 'easy' | 'normal' | 'hard';
+
+/** What the bot plays: a move, or Brutile's wasteland. */
+export type BotAction = Move | SkillAction;
+
+export function isSkillAction(a: BotAction | null | undefined): a is SkillAction {
+  return !!a && (a as SkillAction).kind === 'skill';
+}
 
 export interface ChooseMoveOptions {
   timeBudgetMs?: number;
@@ -32,9 +43,11 @@ const INF = 10_000_000;
 const MAX_PLY = 64;
 const MAX_MOVES = 128;
 const UNIT = 100; // material unit
+/** Eval bonus for holding an unused wasteland, by Brutile's level (index = level). */
+const SKILL_POTENTIAL = [0, 15, 25, 35];
 /** Material worth (in UNIT) of each absorbable pattern bit: half of the pattern owner's value. */
 const BIT_VALUE: number[] = [];
-for (let bit = 0; bit < 12; bit++) BIT_VALUE.push((CHARACTERS[CHAR_BY_CODE[(bit / 3) | 0]].value[bit % 3] * UNIT) / 2);
+for (let bit = 0; bit < N_CHARS * 3; bit++) BIT_VALUE.push((CHARACTERS[CHAR_BY_CODE[(bit / 3) | 0]].value[bit % 3] * UNIT) / 2);
 function absorbWorth(mask: number): number {
   let w = 0;
   for (let bit = 0; mask; bit++, mask >>= 1) if (mask & 1) w += BIT_VALUE[bit];
@@ -66,10 +79,11 @@ function buildAttackMaps(b: FastBoard): number[] {
     const s = b.sq[i];
     if (s < 0) continue;
     const side = b.owner[i];
-    const n = genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, attackBuf, 0, true, b.dir[i], b.storm, b.absorb[i]);
+    const n = genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, attackBuf, 0, true, b.dir[i], b.storm, b.absorb[i], b.waste);
     const v = b.value[i];
     for (let k = 0; k < n; k++) {
       const t = attackBuf[k];
+      if (b.waste[t]) continue; // suicide squares are neither mobility nor control
       const o = b.occ[t];
       if (o < 0 || b.owner[o] !== side) mob[side]++;
       const idx = side * N_SQUARES + t;
@@ -123,6 +137,12 @@ export function evaluate(b: FastBoard, side: number): number {
     } else if (ch === CH_WALK) {
       if (!facingEnemy) sc -= v * 0.2;
       sc += centerC * 4 + Math.min(room, 6) * 2;
+    } else if (ch === CH_BRUTILE) {
+      // Weak mover (1-star only steps diagonally forward): keep her safe and central.
+      if (!facingEnemy && b.lvl[i] === 1) sc -= v * 0.15;
+      sc += centerC * 3 + Math.min(room, 6);
+      // An unused wasteland is worth keeping until it wins something (before the storm closes in).
+      if (b.storm === 0 && b.skills[p] < SKILL_USES_PER_MATCH) sc += SKILL_POTENTIAL[b.lvl[i]];
     }
     // storm: standing next to (or on) the columns that vanish next is a liability
     if (b.stormIn >= 0) {
@@ -195,8 +215,10 @@ function orderMoves(ctx: SearchCtx, moves: Int32Array, scores: Int32Array, n: nu
   const killer = ctx.killers[ply];
   for (let k = 0; k < n; k++) {
     const mv = moves[k];
-    const cap = b.occ[mv & 255];
+    const to = mv & 255;
+    const cap = b.occ[to];
     if (cap >= 0) scores[k] = 10000 + b.value[cap] * 100 - b.value[mv >> 8];
+    else if (b.waste[to]) scores[k] = -10000; // suicide: search last
     else scores[k] = mv === killer ? 5000 : 0;
   }
   // insertion sort (n is small)
@@ -301,6 +323,7 @@ interface RootResult {
  */
 function searchRoot(
   b: FastBoard,
+  skills: number[],
   maxDepth: number,
   deadline: number,
   rng: () => number,
@@ -322,6 +345,9 @@ function searchRoot(
     return cap >= 0 ? 1000 + b.value[cap] * 10 - b.value[mv >> 8] : 0;
   };
   moves.sort((a, c) => capScore(c) - capScore(a));
+  // Wasteland candidates are searched like moves (only at the root); suicide moves go last.
+  for (const sk of skills) moves.push(sk);
+  moves.sort((a, c) => (b.waste[a & 255] && !(a & SKILL_FLAG) ? 1 : 0) - (b.waste[c & 255] && !(c & SKILL_FLAG) ? 1 : 0));
   const bonus = moves.map(() => Math.floor(rng() * (jitter + 1)));
   let result: RootResult = { move: moves[0], score: 0, depth: 0 };
   for (let depth = 1; depth <= maxDepth; depth++) {
@@ -365,6 +391,46 @@ function searchRoot(
   return result;
 }
 
+// ---------------------------------------------------------------- wasteland (Brutile skill)
+
+/**
+ * Up to `max` promising wasteland anchors for the side to move, encoded as root moves. Areas are
+ * scored by how much enemy reach they cover and how close they sit to enemy pieces (where they
+ * trap or block), minus the player's own reach they would spoil.
+ */
+function skillCandidates(b: FastBoard, max: number): number[] {
+  const side = b.turn;
+  let caster = -1;
+  for (let i = 0; i < b.n; i++) if (fastCanSkill(b, i)) caster = i;
+  if (caster < 0) return [];
+  buildAttackMaps(b);
+  const enemy = 1 - side;
+  const k = fastSkillSize(b, caster);
+  const cands: { mv: number; score: number }[] = [];
+  for (let anchor = 0; anchor < N_SQUARES; anchor++) {
+    if (!fastSkillFits(b, k, anchor)) continue;
+    const r0 = (anchor / BOARD_SIZE) | 0;
+    const c0 = anchor - r0 * BOARD_SIZE;
+    let score = 0;
+    for (let r = r0; r < r0 + k; r++) {
+      for (let c = c0; c < c0 + k; c++) {
+        const s = r * BOARD_SIZE + c;
+        if (b.waste[s]) continue;
+        score += attackCount[enemy * N_SQUARES + s] * 3 - attackCount[side * N_SQUARES + s] * 2;
+        for (let i = 0; i < b.n; i++) {
+          const q = b.sq[i];
+          if (q < 0 || b.owner[i] !== enemy) continue;
+          const qr = (q / BOARD_SIZE) | 0;
+          if (Math.abs(qr - r) <= 1 && Math.abs(q - qr * BOARD_SIZE - c) <= 1) score += 2;
+        }
+      }
+    }
+    if (score > 0) cands.push({ mv: SKILL_FLAG | (caster << 8) | anchor, score });
+  }
+  cands.sort((x, y) => y.score - x.score);
+  return cands.slice(0, max).map((x) => x.mv);
+}
+
 // ---------------------------------------------------------------- easy bot
 
 function isAttackedBy(b: FastBoard, sq: number, attacker: number): boolean {
@@ -378,10 +444,16 @@ function isAttackedBy(b: FastBoard, sq: number, attacker: number): boolean {
 }
 
 function chooseEasy(b: FastBoard, rng: () => number): number {
+  // Sometimes lay the wasteland at the most obvious spot.
+  const sk = skillCandidates(b, 1);
+  if (sk.length && rng() < 0.25) return sk[0];
   const side = b.turn;
   const buf = new Int32Array(MAX_MOVES);
   const n = fastGenMoves(b, side, buf, 0);
-  const moves = Array.from(buf.subarray(0, n));
+  // Never walk into wasteland unless nothing else is left.
+  const all = Array.from(buf.subarray(0, n));
+  const safeMoves = all.filter((mv) => !b.waste[mv & 255]);
+  const moves = safeMoves.length ? safeMoves : all;
   const pick = (arr: number[]) => arr[Math.min(arr.length - 1, Math.floor(rng() * arr.length))];
   const safeAfter = (mv: number) => {
     const undo = fastMake(b, mv);
@@ -409,28 +481,41 @@ function chooseEasy(b: FastBoard, rng: () => number): number {
 
 // ---------------------------------------------------------------- public API
 
-/** Pick a move for `state.turn`. Returns null only if there is no legal move (or the game ended). */
-export function chooseMove(state: GameState, difficulty: Difficulty, opts: ChooseMoveOptions = {}): Move | null {
+/**
+ * Pick an action for `state.turn`: a move or (with `allowSkill`, the default) Brutile's wasteland.
+ * Returns null only if there is nothing to play (no legal move; the engine auto-passes).
+ */
+export function chooseAction(state: GameState, difficulty: Difficulty, opts: ChooseMoveOptions & { allowSkill?: boolean } = {}): BotAction | null {
   if (state.status !== 'playing') return null;
   const legal = getLegalMoves(state);
   if (legal.length === 0) return null;
-  if (legal.length === 1) return legal[0];
   const rng = opts.rng ?? Math.random;
   const budget = Math.max(1, Math.min(opts.timeBudgetMs ?? DEFAULT_BUDGET[difficulty], HARD_CAP_MS));
   const start = now();
   const b = fastFromState(state);
+  const skills = opts.allowSkill === false ? [] : skillCandidates(b, difficulty === 'hard' ? 10 : 6);
+  if (legal.length === 1 && skills.length === 0) return legal[0];
   let mv: number;
   if (difficulty === 'easy') {
     mv = chooseEasy(b, rng);
   } else if (difficulty === 'normal') {
-    mv = searchRoot(b, 2 + (rng() < 0.5 ? 1 : 0), start + budget, rng, 25).move;
+    mv = searchRoot(b, skills, 2 + (rng() < 0.5 ? 1 : 0), start + budget, rng, 25).move;
   } else {
-    mv = searchRoot(b, MAX_PLY - 4, start + budget, rng, 4).move;
+    mv = searchRoot(b, skills, MAX_PLY - 4, start + budget, rng, 4).move;
+  }
+  if (mv !== undefined && mv & SKILL_FLAG) {
+    const action = fastSkillToAction(b, mv);
+    if (isLegalSkill(state, action)) return action;
+    return legal[0];
   }
   const move = fastMoveToMove(b, mv);
   // Safety net: always return something the engine accepts.
-  const ok = legal.find(
-    (m) => m.pieceId === move.pieceId && m.to.r === move.to.r && m.to.c === move.to.c,
-  );
+  const ok = legal.find((m) => m.pieceId === move.pieceId && m.to.r === move.to.r && m.to.c === move.to.c);
   return ok ?? legal[0];
+}
+
+/** Pick a MOVE for `state.turn` (never the skill). Returns null only if there is no legal move. */
+export function chooseMove(state: GameState, difficulty: Difficulty, opts: ChooseMoveOptions = {}): Move | null {
+  const a = chooseAction(state, difficulty, { ...opts, allowSkill: false });
+  return a && !isSkillAction(a) ? a : null;
 }

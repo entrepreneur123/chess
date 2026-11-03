@@ -1,5 +1,5 @@
 import type { Difficulty } from '../ai/bot';
-import { CHARACTER_IDS, STARTER_IDS, normalizeSquad, randomFormation, type CharacterId, type Formation, type Level } from '../engine';
+import { CHARACTERS, CHARACTER_IDS, STARTER_IDS, normalizeSquad, randomFormation, type CharacterId, type Formation, type Level } from '../engine';
 import { BOT_LEGENDARY_CHANCE } from './economy';
 import { defaultRng, pick, type Rng } from './rng';
 
@@ -37,13 +37,14 @@ export function botLevels(
 
 /**
  * The bot mirrors the player's squad (same three characters), except that on normal/hard it may
- * bring the legendary when the player has none: a preview of what boxes can unlock.
+ * bring a legendary (Insaner or Brutile) when the player has none: a preview of what boxes unlock.
  */
 export function botSquad(difficulty: Difficulty, playerSquad: readonly CharacterId[], rng: Rng = defaultRng): CharacterId[] {
   const squad = normalizeSquad(playerSquad.length ? playerSquad : STARTER_IDS);
-  if (!squad.includes('insaner') && rng() < BOT_LEGENDARY_CHANCE[difficulty]) {
+  const legends = CHARACTER_IDS.filter((id) => CHARACTERS[id].rarity === 'legendary');
+  if (!squad.some((id) => legends.includes(id)) && rng() < BOT_LEGENDARY_CHANCE[difficulty]) {
     const k = Math.min(squad.length - 1, Math.floor(rng() * squad.length));
-    squad[k] = 'insaner';
+    squad[k] = legends[Math.min(legends.length - 1, Math.floor(rng() * legends.length))];
   }
   return squad;
 }

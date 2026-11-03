@@ -38,7 +38,7 @@ OMP_WAIT_POLICY=PASSIVE $PY gen_voice.py --model $W/qwen-vd --base-model $W/qwen
 $PY process_voice.py --lines lines.json --raw $W/raw --asr $W/fw-medium \
     --out ../../../public/audio/vo --qa qa-voice.json
 $PY gen_sfx.py --out $W/sfx_wav
-$PY encode_sfx.py --wav $W/sfx_wav --out ../../../public/audio/sfx --qa qa-sfx.json
+$PY encode_sfx.py --wav $W/sfx_wav --out ../../../public/audio/sfx --qa qa-sfx.json  # --only brutile-,waste-death
 python3 write_manifest.py
 ```
 
@@ -64,6 +64,7 @@ delivery, partly restored by the growl layer, saturation and compression.
 | marki (minotaur) | 92 Hz | 0.86 | 1.00 | sub-octave growl layer with 34 Hz roughness, saturation, dark EQ, short dark room |
 | walk (shield soldier) | 135 Hz | 1.00 | 0.96 | high-pass, crisp 2.6 kHz presence, tighter compression, small room |
 | insaner (imp) | 560 Hz | 1.10 | 0.90 | 6-bit crush blend, quiet octave-down "demon" undertone, chorus, saturation |
+| brutile (witch) | 250 Hz | 1.00 | 0.95 | rasp layer (saturated, high-passed), quiet "shadow" a fourth lower and 18 ms late, slow chorus, 1.1 s dark hall |
 
 Pitch: every line is shifted by the character's global offset and pulled part of the way
 (`pull`) to the target (clamped to `qmin..qmax`), so lines stay expressive but sit in one range.

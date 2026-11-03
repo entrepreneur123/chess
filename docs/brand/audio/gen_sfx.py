@@ -430,6 +430,104 @@ def death() -> np.ndarray:
     return finish(room(y, 0.6, 0.15))
 
 
+def bubbles(dur: float, rate: float = 40, lo: float = 280, hi: float = 1100, decay: float = 0.03) -> np.ndarray:
+    """Poison bubbling: random short sine 'blips' whose pitch rises as each bubble pops (Minnaert-like)."""
+    y = silence(dur)
+    for _ in range(int(rate * dur)):
+        f = rng.uniform(lo, hi)
+        L = rng.uniform(0.025, 0.07)
+        t = t_axis(L)
+        ph = 2 * np.pi * np.cumsum(f * (1 + 2.2 * (t / L) ** 2)) / SR
+        b = np.sin(ph) * env_ad(len(t), 0.002, decay)
+        place(y, b, rng.uniform(0, max(0.0, dur - L)), rng.uniform(0.3, 1.0))
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def hiss(dur: float, lo: float = 2500, peak: float = 0.15) -> np.ndarray:
+    """Acid sizzle: bright noise with a crackle layer, quick swell then long decay."""
+    h = highpass(noise(dur), lo, 2) * (1 + 0.35 * np.sin(2 * np.pi * 27 * t_axis(dur)))
+    h = h / (np.max(np.abs(h)) + 1e-9) + 0.5 * highpass(crackle(dur, 700, 0.002), lo)
+    return h * bell_env(len(h), peak, 1.4) / 1.5
+
+
+def choir(dur: float, notes=(110.0, 130.81, 155.56, 220.0), rise: float = 1.06, vowel=(700, 1220, 2600)) -> np.ndarray:
+    """Dark 'aah' choir: detuned saw cluster through vowel formant band-passes, slowly gliding up."""
+    t = t_axis(dur)
+    glide = np.geomspace(1.0, rise, len(t))
+    vib = 1 + 0.006 * np.sin(2 * np.pi * 5.2 * t)
+    src = np.zeros_like(t)
+    for f in notes:
+        for d in (-0.006, 0.0, 0.0055):
+            src += signal.sawtooth(2 * np.pi * np.cumsum(f * (1 + d) * glide * vib) / SR + rng.uniform(0, 6.28))
+    y = sum(g * bandpass(src, fc * 0.85, fc * 1.15, 2) for fc, g in zip(vowel, (1.0, 0.55, 0.25)))
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def cloak_swish(dur: float = 0.32) -> np.ndarray:
+    """Heavy fabric swish: low-mid swept noise with a fluttering amplitude."""
+    w = swept_band(noise(dur), 350, 1600, 1.1) * bell_env(int(dur * SR), 0.45, 1.3)
+    w *= 1 + 0.45 * np.sin(2 * np.pi * 21 * t_axis(dur) + 1.0)
+    return w / (np.max(np.abs(w)) + 1e-9)
+
+
+def witch_chime(dur: float = 0.6) -> np.ndarray:
+    """Eerie bell: a tritone pair with a slow vibrato, the upper note slightly flat."""
+    t = t_axis(dur)
+    vib = 1 + 0.008 * np.sin(2 * np.pi * 6 * t)
+    y = np.zeros_like(t)
+    for f, g, at in ((880.0, 1.0, 0.0), (1244.5 * 0.995, 0.8, 0.07), (1760.0, 0.35, 0.07)):
+        n0 = int(at * SR)
+        tt = t[: len(t) - n0]
+        tone = (np.sin(2 * np.pi * np.cumsum(f * vib[: len(tt)]) / SR)
+                + 0.3 * np.sin(2 * np.pi * np.cumsum(2.01 * f * vib[: len(tt)]) / SR) * np.exp(-tt / 0.08))
+        y[n0:] += g * tone * env_ad(len(tt), 0.003, 0.28)
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def brutile_select() -> np.ndarray:
+    y = mix(0.75, (witch_chime(0.6), 0, 0.6), (whoosh(0.3, 3000, 900, 2.0, 0.4), 0.0, 0.12),
+            (sparkle(0.4, 1900, 5), 0.06, 0.35), (bubbles(0.35, 30, 400, 900), 0.12, 0.12))
+    return finish(room(y, 0.9, 0.25, 0.02, 5500, 0.3))
+
+
+def brutile_move() -> np.ndarray:
+    y = mix(0.55, (cloak_swish(0.34), 0, 0.85), (sparkle(0.32, 2100, 5), 0.1, 0.35),
+            (bubbles(0.3, 25, 350, 800), 0.12, 0.12))
+    return finish(room(y, 0.45, 0.14))
+
+
+def brutile_capture() -> np.ndarray:
+    # Curse blast: a sucking whoosh, a sizzling green-fire burst and a low dark boom with a dissonant sting.
+    w = whoosh(0.22, 800, 4200, 1.8, 0.85)
+    boom = thud(0.7, 85, 28, 0.25)
+    sting = sum(sweep_tone(0.45, f, f * 0.94, "saw", 0.15, 0.002) for f in (233.1, 329.6, 349.2))
+    y = mix(1.05, (w, 0, 0.45), (boom, 0.2, 1.0), (fire_burst(0.6), 0.2, 0.7), (hiss(0.7, 2500, 0.1), 0.22, 0.4),
+            (demon_growl(0.55, 48), 0.2, 0.35), (lowpass(sting / 3, 2600), 0.2, 0.22),
+            (bubbles(0.45, 35, 260, 900), 0.4, 0.2))
+    return finish(saturate(room(y, 0.8, 0.18, 0.012, 5000, 0.3), 1.4))
+
+
+def brutile_skill() -> np.ndarray:
+    # Wasteland cast: rising dark choir + drone, a ground crack at the climax, then bubbling poison.
+    choir_l = choir(1.0) * (np.clip(t_axis(1.0) / 0.8, 0, 1) ** 1.5)
+    drone = lowpass(sum(signal.sawtooth(2 * np.pi * 55 * (1 + d) * t_axis(1.0)) for d in (-0.01, 0.0, 0.012)), 400)
+    drone = drone / np.max(np.abs(drone)) * np.clip(t_axis(1.0) / 0.6, 0, 1)
+    crack = mix(0.5, (thud(0.5, 95, 30, 0.18), 0, 1.0), (bandpass(crackle(0.4, 1500, 0.004), 300, 6000), 0, 0.6),
+                (lowpass(crackle(0.5, 200, 0.006), 2500), 0.03, 0.4))
+    y = mix(1.55, (choir_l, 0, 0.45), (drone, 0, 0.3), (whoosh(0.8, 300, 3000, 1.5, 0.92), 0.05, 0.15),
+            (crack / np.max(np.abs(crack)), 0.85, 1.0), (bubbles(0.65, 45, 220, 950), 0.88, 0.35),
+            (hiss(0.6, 3000, 0.1), 0.86, 0.22))
+    return finish(room(y, 1.0, 0.2, 0.02, 5000, 0.3))
+
+
+def waste_death() -> np.ndarray:
+    # A piece dissolving in poison: acid hiss + bubbling, a falling gurgle; generic (any character).
+    gurgle = lowpass(sweep_tone(0.7, 300, 55, "tri", 0.3, 0.01) * (1 + 0.5 * np.sin(2 * np.pi * 17 * t_axis(0.7))), 1200)
+    y = mix(1.15, (thud(0.25, 120, 50, 0.06), 0, 0.45), (hiss(0.95, 2200, 0.12), 0.0, 0.75),
+            (bubbles(1.0, 55, 220, 1000), 0.04, 0.6), (gurgle, 0.05, 0.35), (bubbles(0.5, 20, 150, 400), 0.4, 0.3))
+    return finish(room(y, 0.5, 0.12))
+
+
 SFX = {
     "sad-select": sad_select,
     "sad-move": sad_move,
@@ -449,6 +547,12 @@ SFX = {
     "insaner-skill": insaner_skill,
     "insaner-chain": insaner_chain,
     "death": death,
+    # Appended after the originals: the shared rng is consumed in this order, so earlier sounds stay byte-identical.
+    "brutile-select": brutile_select,
+    "brutile-move": brutile_move,
+    "brutile-capture": brutile_capture,
+    "brutile-skill": brutile_skill,
+    "waste-death": waste_death,
 }
 
 

@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Board Lab (dev only)</title>
+    <!-- Faces are loaded relative to the page (./chars/...): resolve them like the game at /. -->
+    <base href="/" />
+    <style>
+      html, body { margin: 0; height: 100%; background: #070a15; color: #cfd8f0; font: 12px system-ui, sans-serif; }
+      #board { position: relative; width: 100vw; height: 470px; margin-top: 120px; }
+      #log { position: fixed; left: 8px; top: 8px; right: 8px; white-space: pre-wrap; opacity: 0.8; }
+    </style>
+  </head>
+  <body>
+    <div id="log"></div>
+    <div id="board"></div>
+    <script type="module" src="/src/render/dev/boardlab.ts"></script>
+  </body>
+</html>

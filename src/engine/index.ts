@@ -31,4 +31,4 @@ export {
 } from './rules';
 export type { FastBoard } from './fast';
 export type { SkillBlock } from './rules';
-export { fastFromState, fastGenMoves, fastHasMoves, fastMake, fastUnmake, fastPass, fastUnpass, fastMoveToMove } from './fast';
+export { fastFromState, fastGenMoves, fastHasMoves, fastMake, fastUnmake, fastPass, fastUnpass, fastMoveToMove, fastSkillToAction } from './fast';

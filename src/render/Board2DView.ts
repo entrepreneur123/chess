@@ -11,12 +11,20 @@
  * (onImpact) with the character's FX (sad holy slash + light beam, marki cracks + dust + heavy
  * shake, walk shield shock ring, insaner violet flames + soul stream), the victim flashes, shakes and
  * shatters, the attacker steps in. Enemy reach previews (tone 'enemy') are red.
+ *
+ * Brutile's wasteland (setWaste): cached per-square sprites (waste2d.ts) of scorched ground with
+ * glowing green cracks that run on into neighbouring wasteland squares, a pulsing additive glow and
+ * a poison bubble per square (~30 fps, static with reduced motion). setSkillPreview draws the
+ * targeting overlay, animateSkill the cast (rune, green bolt, squares cracking open), wasted moves
+ * dissolve the mover in green, and deadly move targets show a skull instead of the dot.
  */
 import { BOARD_SIZE, ZONE_DEPTH } from '../engine/types';
 import type { CharacterId, Level, Move, Piece, PlayerId, Pos } from '../engine/types';
-import type { BoardHighlights, IBoardView } from './types';
-import { ANIM, BOARD_COLORS, CHARACTER_FX, CHARACTER_RARITY, RARITY_RING, TEAM_COLORS } from './palette';
+import type { BoardHighlights, IBoardView, SkillPreview } from './types';
+import { ANIM, BOARD_COLORS, CHARACTER_FX, CHARACTER_RARITY, RARITY_RING, TEAM_COLORS, WASTE_COLORS } from './palette';
 import { STORM_COLORS } from './storm';
+import { wasteMask } from './waste';
+import { Waste2DSprites, wasteVariant } from './waste2d';
 import {
   clamp01,
   containerSize,
@@ -52,6 +60,28 @@ const FX_MS = 620;
 /** Token radius and rarity ring radius (fractions of a cell). */
 const TOKEN_R = 0.39;
 const RING_R = 0.455;
+/** Wasted move: the mover's toxic dissolve (ms). */
+const WASTE_DIE_MS = 560;
+/** Brutile's cast timeline (ms): bolt launch / travel, first crack, crack-open length, rune life. */
+const SKILL_BOLT_AT = 190;
+const SKILL_BOLT_MS = 250;
+const SKILL_CRACK_AT = 430;
+const SKILL_CRACK_MS = 300;
+const SKILL_RUNE_MS = 1000;
+
+interface Skill2D {
+  start: number;
+  casterId: string | null;
+  from: { r: number; c: number };
+  centre: { r: number; c: number };
+  squares: { sq: number; at: number; fired: boolean }[];
+  boltAt: number;
+  duration: number;
+  /** Bow of the bolt (signed, in cells) so it arcs sideways. */
+  bow: number;
+  shook: boolean;
+  resolve: () => void;
+}
 
 interface Layout {
   /** Board origin (top-left of the slab interior) in CSS px. */
@@ -82,6 +112,8 @@ interface Anim2D {
   deathStart: number;
   stepStart: number;
   landed: boolean;
+  /** The mover steps onto wasteland and dissolves there (absent from piecesAfter). */
+  wasted: boolean;
   piecesAfter: Piece[];
   resolve: () => void;
 }
@@ -157,6 +189,18 @@ export class Board2DView implements IBoardView {
   private hasLegendary = false;
   /** Pre-rendered tokens keyed by look + pixel size. */
   private readonly sprites = new Map<string, HTMLCanvasElement>();
+  /** Wasteland squares, their reveal (< 1 only while the cast cracks them open), sprites. */
+  private readonly waste = new Set<number>();
+  private readonly wasteOpen = new Map<number, number>();
+  private readonly wasteSprites = new Waste2DSprites();
+  /** Skill targeting overlay and the running cast. */
+  private anchors: number[] = [];
+  private preview: SkillPreview | null = null;
+  private previewSet = new Set<number>();
+  private skill: Skill2D | null = null;
+  /** Bolt-impact flash at the area centre (start time) and cast sparks. */
+  private tSkillHit = -1;
+  private readonly skillSparks: { x: number; y: number; a: number; v: number; t0: number }[] = [];
   private readonly onFaceLoaded = (): void => {
     this.sprites.clear();
     this.requestRender();
@@ -215,6 +259,110 @@ export class Board2DView implements IBoardView {
     this.requestRender();
   }
 
+  /** Wasteland squares (r * 12 + c, full list). */
+  setWaste(squares: number[]): void {
+    if (this.disposed) return;
+    const next = squares.filter((q) => Number.isInteger(q) && q >= 0 && q < BOARD_SIZE * BOARD_SIZE);
+    for (const q of [...this.wasteOpen.keys()]) if (!next.includes(q)) this.wasteOpen.delete(q);
+    this.waste.clear();
+    for (const q of next) this.waste.add(q);
+    this.requestRender();
+  }
+
+  /** Skill targeting: anchors get a subtle green tint, the preview area a green (or red) ghost. */
+  setSkillPreview(anchors: number[] | null, preview: SkillPreview | null): void {
+    if (this.disposed) return;
+    this.anchors = anchors ? [...anchors] : [];
+    this.preview = preview ? { squares: [...preview.squares], valid: preview.valid } : null;
+    this.previewSet = new Set(this.preview?.squares ?? []);
+    this.requestRender();
+  }
+
+  /**
+   * Brutile lays wasteland: rune + flare on the caster, a green bolt to the area, the squares crack
+   * open one after another, small shake. Always resolves (also when cut short or disposed).
+   */
+  animateSkill(caster: string, squares: number[]): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    this.finishAnimation(false);
+    const list = [...new Set(squares)].filter((q) => Number.isInteger(q) && q >= 0 && q < BOARD_SIZE * BOARD_SIZE);
+    if (list.length === 0) return Promise.resolve();
+    const now = performance.now();
+    const cp = this.pieces.find((p) => p.id === caster) ?? null;
+    const centre = { r: 0, c: 0 };
+    for (const q of list) {
+      centre.r += Math.floor(q / BOARD_SIZE) / list.length;
+      centre.c += (q % BOARD_SIZE) / list.length;
+    }
+    const from = cp ? { ...cp.pos } : { ...centre };
+    const cells = list.map((q) => {
+      const r = Math.floor(q / BOARD_SIZE);
+      const c = q % BOARD_SIZE;
+      return { q, d: Math.hypot(r - centre.r, c - centre.c) + 0.01 * Math.hypot(r - from.r, c - from.c) };
+    });
+    cells.sort((a, b) => a.d - b.d);
+    const crackAt = cp ? SKILL_CRACK_AT : 120;
+    const stagger = cells.length > 1 ? Math.min(75, 380 / (cells.length - 1)) : 0;
+    for (const c of cells) {
+      if (!this.waste.has(c.q)) this.wasteOpen.set(c.q, 0);
+      this.waste.add(c.q);
+    }
+    const dc = centre.c - from.c;
+    return new Promise<void>((resolve) => {
+      this.skill = {
+        start: now,
+        casterId: cp ? cp.id : null,
+        from,
+        centre,
+        squares: cells.map((c, i) => ({ sq: c.q, at: crackAt + i * stagger, fired: false })),
+        boltAt: cp ? SKILL_BOLT_AT : 0,
+        duration: crackAt + stagger * (cells.length - 1) + SKILL_CRACK_MS + 40,
+        bow: Math.min(1.6, 0.35 * Math.hypot(centre.r - from.r, dc)) * (dc >= 0 ? 1 : -1),
+        shook: false,
+        resolve,
+      };
+      this.requestRender();
+    });
+  }
+
+  private tickSkill(now: number): void {
+    const s = this.skill;
+    if (!s) return;
+    const t = now - s.start;
+    if (t >= s.duration) {
+      this.finishSkill();
+      return;
+    }
+    for (const q of s.squares) {
+      const k = (t - q.at) / SKILL_CRACK_MS;
+      if (k < 0) continue;
+      if (this.wasteOpen.has(q.sq)) this.wasteOpen.set(q.sq, easeOutCubic(clamp01(k)));
+      if (!q.fired) {
+        q.fired = true;
+        const x = this.cx(q.sq % BOARD_SIZE);
+        const y = this.cy(Math.floor(q.sq / BOARD_SIZE));
+        for (let i = 0; i < 7; i++) this.skillSparks.push({ x, y, a: i * 0.9 + q.sq * 0.37, v: 0.7 + 0.3 * Math.sin(q.sq + i * 2.1), t0: now });
+        if (!s.shook) {
+          s.shook = true;
+          this.tSkillHit = now;
+          this.tShake = now;
+          this.shakeAmp = this.reducedMotion ? 0 : 1.7;
+          this.shakeMs = 240;
+        }
+      }
+    }
+  }
+
+  /** End the cast now (natural end or cut short): every square fully open. */
+  private finishSkill(): void {
+    const s = this.skill;
+    if (!s) return;
+    this.skill = null;
+    for (const q of s.squares) this.wasteOpen.delete(q.sq);
+    this.requestRender();
+    s.resolve();
+  }
+
   private get stormActive(): boolean {
     return this.storm > 0 || this.stormNext !== null;
   }
@@ -251,6 +399,7 @@ export class Board2DView implements IBoardView {
     this.lastCapture = null;
     const captured = move.captureId ? (this.pieces.find((p) => p.id === move.captureId) ?? null) : null;
     const capture = !!move.captureId;
+    const wasted = !!move.wasted && !capture;
     const jump = ch === 'walk';
     const moveDur = jump ? ANIM.jump : slideDuration(move);
     const dr = move.to.r - move.from.r;
@@ -261,13 +410,17 @@ export class Board2DView implements IBoardView {
     const impactAt = capture ? moveDur + (jump ? 90 : 60) : Infinity;
     const deathStart = impactAt + HIT_MS;
     const stepStart = impactAt + STEP_AT;
-    const duration = capture ? Math.max(stepStart + STEP_MS, deathStart + DEATH_MS) + 20 : moveDur + (jump ? ANIM.land : 40);
+    const duration = capture
+      ? Math.max(stepStart + STEP_MS, deathStart + DEATH_MS) + 20
+      : wasted
+        ? moveDur + WASTE_DIE_MS + 30
+        : moveDur + (jump ? ANIM.land : 40);
     // Skill flavour on move start.
     this.trail.length = 0;
     const fx = CHARACTER_FX[ch];
-    if (ch === 'sad') {
+    if (ch === 'sad' || ch === 'brutile') {
       this.tGlint = now;
-      this.glintAt = { x: this.cx(mover.pos.c), y: this.cy(mover.pos.r) - this.layout.cell * 0.25 };
+      this.glintAt = { x: this.cx(mover.pos.c), y: this.cy(mover.pos.r) - this.layout.cell * (ch === 'sad' ? 0.25 : 0) };
       this.glintColor = fx.primary;
     } else if (chain) {
       this.tGlint = now;
@@ -296,6 +449,7 @@ export class Board2DView implements IBoardView {
         deathStart,
         stepStart,
         landed: false,
+        wasted,
         piecesAfter: clonePieces(piecesAfter),
         resolve,
       };
@@ -355,6 +509,7 @@ export class Board2DView implements IBoardView {
     const cell = (size - pad * 2) / BOARD_SIZE;
     this.layout = { x0: (w - size) / 2 + pad, y0: (h - size) / 2 + pad, cell, pad };
     this.sprites.clear();
+    this.wasteSprites.clear();
     this.buildBackdrop();
     this.requestRender();
   }
@@ -378,6 +533,7 @@ export class Board2DView implements IBoardView {
     this.canvas.height = 0;
     this.backdrop = null;
     this.sprites.clear();
+    this.wasteSprites.clear();
     this.canvas.remove();
     this.pieces = [];
     this.cellCb = null;
@@ -401,7 +557,7 @@ export class Board2DView implements IBoardView {
 
   private get pulsing(): boolean {
     const h = this.highlights;
-    return !!h.selected || (h.moves?.length ?? 0) > 0 || (h.captures?.length ?? 0) > 0;
+    return !!h.selected || (h.moves?.length ?? 0) > 0 || (h.captures?.length ?? 0) > 0 || (h.deadly?.length ?? 0) > 0;
   }
 
   private fxActive(now: number): boolean {
@@ -412,7 +568,9 @@ export class Board2DView implements IBoardView {
       (this.tGlint >= 0 && now - this.tGlint < 320) ||
       (this.tTurn >= 0 && now - this.tTurn < ANIM.turn) ||
       this.trail.length > 0 ||
-      this.fading.length > 0
+      this.fading.length > 0 ||
+      (this.tSkillHit >= 0 && now - this.tSkillHit < 520) ||
+      this.skillSparks.length > 0
     );
   }
 
@@ -422,9 +580,12 @@ export class Board2DView implements IBoardView {
     this.rafId = 0;
     if (this.disposed) return;
     if (this.anim) this.tickAnim(now);
-    const busy = !!this.anim || this.fxActive(now);
+    this.tickSkill(now);
+    const busy = !!this.anim || !!this.skill || this.fxActive(now);
     const ringLoop = this.hasLegendary && !this.reducedMotion && !document.hidden;
-    const loop = this.pulsing || ringLoop || this.storm > 0 || (this.stormActive && this.stormNext !== null && this.stormNext <= 2);
+    // Wasteland glow / bubbles and the targeting ghost breathe at <= ~30 fps (static if reduced motion).
+    const wasteLoop = !this.reducedMotion && !document.hidden && (this.waste.size > 0 || this.anchors.length > 0 || this.preview !== null);
+    const loop = this.pulsing || ringLoop || wasteLoop || this.storm > 0 || (this.stormActive && this.stormNext !== null && this.stormNext <= 2);
     if (!busy && loop && now - this.lastFrame < IDLE_FRAME_MS) {
       this.requestRender();
       return;
@@ -447,7 +608,7 @@ export class Board2DView implements IBoardView {
       this.tLand = now;
       this.landAt = { ...a.strike };
       const m = this.pieces.find((p) => p.id === a.moverId);
-      this.landColor = a.jump ? CHARACTER_FX.walk.primary : TEAM_COLORS[m ? m.owner : 0].glow;
+      this.landColor = a.wasted ? WASTE_COLORS.glow : a.jump ? CHARACTER_FX.walk.primary : TEAM_COLORS[m ? m.owner : 0].glow;
     }
     if (a.capture && !a.impactFired && t >= a.impactAt) {
       a.impactFired = true;
@@ -469,13 +630,15 @@ export class Board2DView implements IBoardView {
       a: (i / 12) * Math.PI * 2 + Math.sin(now + i * 7.3) * 0.35,
       v: 0.8 + 0.5 * (0.5 + 0.5 * Math.sin(now * 0.37 + i * 3.1)),
     }));
-    this.shakeAmp = a.character === 'marki' ? (this.reducedMotion ? 0.5 : 2.6) : a.character === 'walk' ? 1.5 : 1;
+    this.shakeAmp =
+      a.character === 'marki' ? (this.reducedMotion ? 0.5 : 2.6) : a.character === 'walk' ? 1.5 : a.character === 'brutile' ? (this.reducedMotion ? 0.6 : 1.6) : 1;
     this.shakeMs = a.character === 'marki' ? 260 : ANIM.shake;
     this.soulTo = a.character === 'insaner' ? a.moverId : null;
     if (a.character === 'insaner') this.lastCapture = { id: a.moverId, t: now };
   }
 
   private finishAnimation(natural: boolean): void {
+    this.finishSkill();
     const a = this.anim;
     if (!natural) {
       this.tLand = -1;
@@ -483,11 +646,14 @@ export class Board2DView implements IBoardView {
       this.tShake = -1;
       this.tTurn = -1;
       this.tGlint = -1;
+      this.tSkillHit = -1;
       this.trail.length = 0;
+      this.skillSparks.length = 0;
     }
     if (!a) return;
     this.anim = null;
-    this.collectStormVictims(a.piecesAfter, a.captured?.id ?? null);
+    // A mover destroyed on the wasteland already dissolved: never a storm ghost too.
+    this.collectStormVictims(a.piecesAfter, a.wasted ? a.moverId : (a.captured?.id ?? null));
     this.setPieceList(a.piecesAfter);
     if (a.capture && !a.impactFired) {
       a.impactFired = true;
@@ -563,6 +729,11 @@ export class Board2DView implements IBoardView {
           ctx.fillStyle = hexAlpha(STORM_COLORS.tile, 0.62);
           ctx.fill();
         }
+        const wk = this.wasteK(r * BOARD_SIZE + c);
+        if (wk > 0) {
+          ctx.fillStyle = hexAlpha(WASTE_COLORS.tile, 0.85 * wk);
+          ctx.fill();
+        }
         ctx.fillStyle = 'rgba(255,255,255,0.10)';
         ctx.fillRect(tx + rad * 0.6, ty, tw - rad * 1.2, bw);
         ctx.fillStyle = 'rgba(0,0,0,0.28)';
@@ -570,8 +741,10 @@ export class Board2DView implements IBoardView {
       }
     }
 
+    this.drawWaste(now);
     this.drawZoneLines(now);
     this.drawStorm(now);
+    this.drawSkillPreview(now);
 
     // Overlays: own reach = white/cyan, an enemy's reach preview = red.
     const h = this.highlights;
@@ -593,7 +766,17 @@ export class Board2DView implements IBoardView {
       ctx.stroke();
       ctx.restore();
     }
+    const deadly = new Set((h.deadly ?? []).map(posKey));
+    for (const p of h.deadly ?? []) {
+      // Moving there is suicide: a skull instead of the dot.
+      const d = cell * (0.95 + 0.06 * sp);
+      const S = Math.max(8, Math.round(cell * 0.95 * this.dpr));
+      ctx.globalAlpha = 0.85 + 0.15 * sp;
+      ctx.drawImage(this.wasteSprites.skullMark(S), this.cx(p.c) - d / 2, this.cy(p.r) - d / 2, d, d);
+      ctx.globalAlpha = 1;
+    }
     for (const p of h.moves ?? []) {
+      if (deadly.has(posKey(p))) continue;
       const x = this.cx(p.c);
       const y = this.cy(p.r);
       const rr = cell * (0.4 + 0.05 * sp);
@@ -608,6 +791,8 @@ export class Board2DView implements IBoardView {
       ctx.fill();
     }
 
+    const sk = this.skill;
+    if (sk && sk.casterId) this.drawRune(this.cx(sk.from.c), this.cy(sk.from.r), cell * 1.15, (now - sk.start) / SKILL_RUNE_MS, (now - sk.start) * 0.0016);
     // Pieces (back rows first so overlaps read naturally).
     const a = this.anim;
     const t = a ? now - a.start : 0;
@@ -644,7 +829,13 @@ export class Board2DView implements IBoardView {
         }
         const pop = 1 + 0.14 * bump(a.impactAt - 90, a.impactAt + 170, t);
         moverXY = { x, y: y - lift * cell * 0.1 };
-        if (t < a.moveDur && (a.jump || a.chain || a.charge)) this.pushTrail(moverXY.x, moverXY.y, now);
+        if (t < a.moveDur && (a.jump || a.chain || a.charge || a.character === 'brutile')) this.pushTrail(moverXY.x, moverXY.y, now);
+        if (a.wasted && t >= a.moveDur) {
+          const tx = this.cx(a.to.c);
+          const ty = this.cy(a.to.r);
+          moverDraw = () => this.drawWastedPiece(p, tx, ty, t - a.moveDur, now);
+          continue;
+        }
         moverDraw = () => this.drawPiece(p, x, y, sxz * pop, syy * pop, 1, lift, now);
         continue;
       }
@@ -660,7 +851,14 @@ export class Board2DView implements IBoardView {
       }
       const sel = posKey(p.pos) === this.hi.selected;
       const bob = sel ? 0.5 + 0.1 * Math.sin(now / 240) : 0;
-      this.drawPiece(p, this.cx(p.pos.c), this.cy(p.pos.r), sel ? 1.05 : 1, sel ? 1.05 : 1, 1, bob, now);
+      let sc = sel ? 1.05 : 1;
+      let flash = 0;
+      if (sk && p.id === sk.casterId) {
+        const tk = now - sk.start;
+        sc *= 1 + 0.2 * bump(0, 420, tk) + 0.08 * bump(sk.boltAt, sk.boltAt + 260, tk);
+        flash = 0.4 * Math.max(0, 1 - tk / 260);
+      }
+      this.drawPiece(p, this.cx(p.pos.c), this.cy(p.pos.r), sc, sc, 1, bob, now, flash);
     }
     // Capture targets sit on top of the threatened tokens.
     const cp = pulse01(now, 700);
@@ -678,6 +876,7 @@ export class Board2DView implements IBoardView {
     this.drawTrail(now);
     if (moverDraw) moverDraw();
     this.drawStormGhosts(now);
+    this.drawSkillFx(now);
 
     this.drawFx(now, a ? moverXY : null);
   }
@@ -852,6 +1051,357 @@ export class Board2DView implements IBoardView {
       }
       ctx.restore();
     }
+  }
+
+  /** Reveal of a wasteland square: 0 = none .. 1 = fully cracked open. */
+  private wasteK(sq: number): number {
+    return this.waste.has(sq) ? (this.wasteOpen.get(sq) ?? 1) : 0;
+  }
+
+  /** Wasteland squares: cached ground sprite, pulsing additive crack glow, one poison bubble each. */
+  private drawWaste(now: number): void {
+    if (this.waste.size === 0) return;
+    const ctx = this.ctx;
+    const { x0, y0, cell } = this.layout;
+    const S = Math.max(8, Math.round(cell * this.dpr));
+    const t = this.reducedMotion ? 0 : now / 1000;
+    for (const sq of this.waste) {
+      const r = Math.floor(sq / BOARD_SIZE);
+      const c = sq % BOARD_SIZE;
+      const k = this.wasteK(sq);
+      if (k <= 0) continue;
+      const x = x0 + c * cell;
+      const y = y0 + (BOARD_SIZE - 1 - r) * cell;
+      const v = wasteVariant(sq);
+      const m = wasteMask(this.waste, sq);
+      const mx = x + cell / 2;
+      const my = y + cell / 2;
+      ctx.save();
+      if (k < 1) {
+        // Cracking open from the centre outward.
+        ctx.beginPath();
+        ctx.arc(mx, my, cell * 0.78 * k, 0, Math.PI * 2);
+        ctx.clip();
+      }
+      ctx.drawImage(this.wasteSprites.ground(v, m, S), x, y, cell, cell);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = this.reducedMotion ? 0.45 : 0.3 + 0.32 * (0.5 + 0.5 * Math.sin(t * 2.2 + sq * 1.7));
+      ctx.drawImage(this.wasteSprites.glow(v, m, S), x, y, cell, cell);
+      ctx.globalAlpha = 1;
+      if (!this.reducedMotion) {
+        // One poison bubble per square: grows, glints, pops.
+        const h = ((sq * 2246822519) >>> 0) / 4294967296;
+        const ph = (t * 0.45 + h * 7) % 1;
+        if (ph < 0.9) {
+          const bx = x + cell * (0.25 + 0.5 * ((h * 13.7) % 1));
+          const by = y + cell * (0.25 + 0.5 * ((h * 7.3) % 1));
+          const br = cell * (0.03 + 0.07 * ph);
+          ctx.fillStyle = hexAlpha(WASTE_COLORS.miasma, 0.55);
+          ctx.beginPath();
+          ctx.arc(bx, by, br, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = hexAlpha(WASTE_COLORS.glow, 0.7);
+          ctx.lineWidth = Math.max(0.6, cell * 0.018);
+          ctx.stroke();
+          ctx.fillStyle = hexAlpha(WASTE_COLORS.core, 0.8);
+          ctx.beginPath();
+          ctx.arc(bx - br * 0.35, by - br * 0.35, br * 0.28, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+      if (k < 1) {
+        // Reveal front + poison eruption.
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = hexAlpha(WASTE_COLORS.glow, 0.9 * (1 - k));
+        ctx.lineWidth = cell * 0.06;
+        ctx.beginPath();
+        ctx.arc(mx, my, cell * 0.78 * k, 0, Math.PI * 2);
+        ctx.stroke();
+        const g = ctx.createRadialGradient(mx, my, 0, mx, my, cell * 0.6);
+        g.addColorStop(0, hexAlpha(WASTE_COLORS.core, 0.9 * Math.sin(Math.PI * k)));
+        g.addColorStop(0.4, hexAlpha(WASTE_COLORS.glow, 0.6 * Math.sin(Math.PI * k)));
+        g.addColorStop(1, hexAlpha(WASTE_COLORS.glow, 0));
+        ctx.fillStyle = g;
+        ctx.fillRect(mx - cell * 0.6, my - cell * 0.6, cell * 1.2, cell * 1.2);
+        ctx.restore();
+      }
+    }
+  }
+
+  /** Skill targeting overlay: anchors tinted, the preview area a green (red if invalid) ghost. */
+  private drawSkillPreview(now: number): void {
+    if (this.anchors.length === 0 && !this.preview) return;
+    const ctx = this.ctx;
+    const { x0, y0, cell } = this.layout;
+    const pulse = this.reducedMotion ? 0.5 : 0.5 + 0.5 * Math.sin((now / 1000) * 4.2);
+    const at = (sq: number): { x: number; y: number } => ({ x: x0 + (sq % BOARD_SIZE) * cell, y: y0 + (BOARD_SIZE - 1 - Math.floor(sq / BOARD_SIZE)) * cell });
+    ctx.save();
+    const inset = cell * 0.1;
+    for (const sq of this.anchors) {
+      if (this.previewSet.has(sq)) continue;
+      const { x, y } = at(sq);
+      ctx.fillStyle = hexAlpha(WASTE_COLORS.anchor, 0.06);
+      ctx.fillRect(x + inset, y + inset, cell - inset * 2, cell - inset * 2);
+      ctx.strokeStyle = hexAlpha(WASTE_COLORS.anchor, 0.2 + 0.1 * pulse);
+      ctx.lineWidth = Math.max(1, cell * 0.035);
+      roundRect(ctx, x + inset, y + inset, cell - inset * 2, cell - inset * 2, cell * 0.12);
+      ctx.stroke();
+    }
+    const pv = this.preview;
+    if (pv) {
+      const col = pv.valid ? WASTE_COLORS.ghost : WASTE_COLORS.invalid;
+      const S = Math.max(8, Math.round(cell * this.dpr));
+      for (const sq of this.previewSet) {
+        const { x, y } = at(sq);
+        ctx.fillStyle = hexAlpha(col, 0.2);
+        ctx.fillRect(x, y, cell, cell);
+        if (pv.valid) {
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.globalAlpha = 0.6 + 0.3 * pulse;
+          ctx.drawImage(this.wasteSprites.glow(wasteVariant(sq), wasteMask(this.previewSet, sq), S), x, y, cell, cell);
+          ctx.globalAlpha = 1;
+          ctx.globalCompositeOperation = 'source-over';
+        } else {
+          // Forbidden: red diagonal hatching.
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(x, y, cell, cell);
+          ctx.clip();
+          ctx.strokeStyle = hexAlpha(col, 0.45);
+          ctx.lineWidth = cell * 0.08;
+          for (let i = -1; i <= 3; i++) {
+            ctx.beginPath();
+            ctx.moveTo(x + (i - 1) * cell * 0.33, y + cell);
+            ctx.lineTo(x + (i + 2) * cell * 0.33, y);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+      }
+      // Outline around the whole area (sides without a preview neighbour).
+      ctx.strokeStyle = hexAlpha(col, 0.75 + 0.25 * pulse);
+      ctx.lineWidth = Math.max(1.5, cell * 0.07);
+      ctx.lineCap = 'round';
+      ctx.shadowColor = col;
+      ctx.shadowBlur = cell * 0.3;
+      ctx.beginPath();
+      for (const sq of this.previewSet) {
+        const { x, y } = at(sq);
+        const m = wasteMask(this.previewSet, sq);
+        const seg = (ax: number, ay: number, bx: number, by: number): void => {
+          ctx.moveTo(ax, ay);
+          ctx.lineTo(bx, by);
+        };
+        if (!(m & 1)) seg(x + cell, y, x + cell, y + cell);
+        if (!(m & 2)) seg(x, y, x, y + cell);
+        if (!(m & 4)) seg(x, y, x + cell, y);
+        if (!(m & 8)) seg(x, y + cell, x + cell, y + cell);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  /** Witch rune circle (rings, glyph ticks, hexagram over a black-purple disc) at (x, y). */
+  private drawRune(x: number, y: number, R: number, k: number, rot: number): void {
+    if (k >= 1) return;
+    const ctx = this.ctx;
+    const f = clamp01(k / 0.14) * (1 - clamp01((k - 0.62) / 0.38));
+    if (f <= 0) return;
+    const r = R * (0.72 + 0.28 * easeOutCubic(Math.min(1, k * 2.2)));
+    ctx.save();
+    ctx.globalAlpha = f;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, hexAlpha(WASTE_COLORS.curse, 0.55));
+    g.addColorStop(0.75, hexAlpha(WASTE_COLORS.curse, 0.35));
+    g.addColorStop(1, hexAlpha(WASTE_COLORS.curse, 0));
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = WASTE_COLORS.glow;
+    ctx.lineWidth = Math.max(1, r * 0.045);
+    ctx.beginPath();
+    ctx.arc(x, y, r * 0.92, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.lineWidth = Math.max(1, r * 0.03);
+    ctx.beginPath();
+    ctx.arc(x, y, r * 0.74, 0, Math.PI * 2);
+    ctx.stroke();
+    // Glyph ticks between the rings.
+    ctx.lineWidth = Math.max(1, r * 0.05);
+    for (let i = 0; i < 20; i++) {
+      const a0 = rot + (i / 20) * Math.PI * 2;
+      const len = 0.25 + 0.4 * ((i * 7) % 5) / 5;
+      ctx.beginPath();
+      ctx.arc(x, y, r * 0.83, a0, a0 + (Math.PI * 2 * len) / 20);
+      ctx.stroke();
+    }
+    // Hexagram, counter-rotating.
+    ctx.lineWidth = Math.max(1, r * 0.03);
+    for (const off of [0, Math.PI]) {
+      ctx.beginPath();
+      for (let i = 0; i <= 3; i++) {
+        const a = -rot * 1.6 + off + (i / 3) * Math.PI * 2 - Math.PI / 2;
+        const px = x + Math.cos(a) * r * 0.72;
+        const py = y + Math.sin(a) * r * 0.72;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  /** Cast effects over the pieces: caster flash, the green bolt, the impact flash, sparks. */
+  private drawSkillFx(now: number): void {
+    const ctx = this.ctx;
+    const cell = this.layout.cell;
+    const s = this.skill;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    if (s && s.casterId) {
+      const t = now - s.start;
+      const fx0 = this.cx(s.from.c);
+      const fy0 = this.cy(s.from.r);
+      // Caster flare.
+      const kf = t / 260;
+      if (kf < 1) {
+        const rr = cell * (0.5 + 0.9 * easeOutCubic(kf));
+        const g = ctx.createRadialGradient(fx0, fy0, 0, fx0, fy0, rr);
+        g.addColorStop(0, hexAlpha(WASTE_COLORS.core, 0.9 * (1 - kf)));
+        g.addColorStop(0.45, hexAlpha(WASTE_COLORS.glow, 0.6 * (1 - kf)));
+        g.addColorStop(1, hexAlpha(WASTE_COLORS.glow, 0));
+        ctx.fillStyle = g;
+        ctx.fillRect(fx0 - rr, fy0 - rr, rr * 2, rr * 2);
+      }
+      // Bolt along a sideways-bowed quadratic curve, jittered like lightning.
+      const kb = (t - s.boltAt) / SKILL_BOLT_MS;
+      if (kb >= 0) {
+        const head = easeOutCubic(clamp01(kb));
+        const tail = Math.pow(clamp01((t - s.boltAt - SKILL_BOLT_MS * 0.75) / 300), 2);
+        if (tail < 1) {
+          const tx = this.cx(s.centre.c);
+          const ty = this.cy(s.centre.r);
+          const dx = tx - fx0;
+          const dy = ty - fy0;
+          const len = Math.hypot(dx, dy) || 1;
+          const bx = (fx0 + tx) / 2 + (dy / len) * s.bow * cell;
+          const by = (fy0 + ty) / 2 - (dx / len) * s.bow * cell;
+          const N = 22;
+          const pts: { x: number; y: number }[] = [];
+          for (let i = 0; i <= N; i++) {
+            const u = tail + (head - tail) * (i / N);
+            const ox = (1 - u) * (1 - u) * fx0 + 2 * (1 - u) * u * bx + u * u * tx;
+            const oy = (1 - u) * (1 - u) * fy0 + 2 * (1 - u) * u * by + u * u * ty;
+            const j = (Math.sin(u * 37 + t * 0.05) * 0.6 + Math.sin(u * 91 - t * 0.09) * 0.4) * cell * 0.12 * Math.sin(Math.PI * u);
+            pts.push({ x: ox - (dy / len) * j, y: oy + (dx / len) * j });
+          }
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          for (const [w, col] of [
+            [0.3, hexAlpha(WASTE_COLORS.glow, 0.25)],
+            [0.12, hexAlpha(WASTE_COLORS.glow, 0.85)],
+            [0.04, hexAlpha(WASTE_COLORS.core, 1)],
+          ] as const) {
+            ctx.strokeStyle = col;
+            ctx.lineWidth = cell * w;
+            ctx.beginPath();
+            ctx.moveTo(pts[0].x, pts[0].y);
+            for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+            ctx.stroke();
+          }
+          const hp = pts[pts.length - 1];
+          const hg = ctx.createRadialGradient(hp.x, hp.y, 0, hp.x, hp.y, cell * 0.35);
+          hg.addColorStop(0, hexAlpha(WASTE_COLORS.core, 0.9));
+          hg.addColorStop(1, hexAlpha(WASTE_COLORS.glow, 0));
+          ctx.fillStyle = hg;
+          ctx.fillRect(hp.x - cell * 0.35, hp.y - cell * 0.35, cell * 0.7, cell * 0.7);
+        }
+      }
+    }
+    // Bolt impact: green flash + shock ring at the area centre.
+    if (this.tSkillHit >= 0) {
+      const k = (now - this.tSkillHit) / 520;
+      if (k >= 1) this.tSkillHit = -1;
+      else if (s) {
+        const x = this.cx(s.centre.c);
+        const y = this.cy(s.centre.r);
+        const e = easeOutCubic(k);
+        const g = ctx.createRadialGradient(x, y, 0, x, y, cell * (0.6 + 1.2 * e));
+        g.addColorStop(0, hexAlpha(WASTE_COLORS.core, 0.8 * (1 - k)));
+        g.addColorStop(0.5, hexAlpha(WASTE_COLORS.glow, 0.45 * (1 - k)));
+        g.addColorStop(1, hexAlpha(WASTE_COLORS.glow, 0));
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(x, y, cell * (0.6 + 1.2 * e), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = hexAlpha(WASTE_COLORS.glow, 0.85 * (1 - k));
+        ctx.lineWidth = cell * 0.07;
+        ctx.beginPath();
+        ctx.arc(x, y, cell * (0.4 + 1.6 * e), 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+    // Poison sparks thrown up by each cracking square.
+    for (let i = this.skillSparks.length - 1; i >= 0; i--) {
+      const p = this.skillSparks[i];
+      const k = (now - p.t0) / 420;
+      if (k >= 1) {
+        this.skillSparks.splice(i, 1);
+        continue;
+      }
+      const d = cell * (0.1 + 0.55 * easeOutCubic(k)) * p.v;
+      ctx.fillStyle = hexAlpha(i % 3 === 0 ? WASTE_COLORS.core : WASTE_COLORS.glow, 0.95 * (1 - k));
+      ctx.beginPath();
+      ctx.arc(p.x + Math.cos(p.a) * d, p.y + Math.sin(p.a) * d - k * cell * 0.15, cell * 0.045 * (1 - k * 0.5), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  /** A mover destroyed on wasteland: shudders, burns away from a green edge, toxic bubbles rise. */
+  private drawWastedPiece(p: Piece, x: number, y: number, tk: number, now: number): void {
+    const ctx = this.ctx;
+    const cell = this.layout.cell;
+    const k = clamp01(tk / WASTE_DIE_MS);
+    const shake = tk < 220 ? Math.sin(tk * 0.09) * cell * 0.04 * (1 - tk / 220) : 0;
+    const sc = 1 - 0.25 * easeOutCubic(k);
+    if (k < 1) this.drawPiece(p, x + shake, y + k * cell * 0.05, sc, sc, 1 - k * k, 0, now, 0);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    // Green burn glow over the token, strongest mid-way.
+    const gk = Math.sin(Math.PI * Math.min(1, k * 1.2));
+    const g = ctx.createRadialGradient(x, y, 0, x, y, cell * 0.55);
+    g.addColorStop(0, hexAlpha(WASTE_COLORS.glow, 0.55 * gk));
+    g.addColorStop(0.7, hexAlpha(WASTE_COLORS.miasma, 0.35 * gk));
+    g.addColorStop(1, hexAlpha(WASTE_COLORS.miasma, 0));
+    ctx.fillStyle = g;
+    ctx.fillRect(x - cell * 0.55, y - cell * 0.55, cell * 1.1, cell * 1.1);
+    // Flame ring licking out + rising bubbles.
+    ctx.strokeStyle = hexAlpha(WASTE_COLORS.glow, 0.85 * (1 - k));
+    ctx.lineWidth = cell * 0.06;
+    ctx.beginPath();
+    for (let i = 0; i <= 30; i++) {
+      const a = (i / 30) * Math.PI * 2;
+      const rr = cell * (0.3 + 0.35 * easeOutCubic(k)) + Math.abs(Math.sin(a * 5 + tk * 0.02)) * cell * 0.12 * (1 - k);
+      if (i === 0) ctx.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+      else ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+    }
+    ctx.stroke();
+    for (let b = 0; b < 6; b++) {
+      const ph = (tk / 600 + b / 6) % 1;
+      const bx = x + Math.cos(b * 2.4) * cell * 0.28;
+      const by = y + Math.sin(b * 2.4) * cell * 0.2 - ph * cell * 0.5;
+      ctx.fillStyle = hexAlpha(b % 2 ? WASTE_COLORS.core : WASTE_COLORS.glow, 0.8 * (1 - ph) * (1 - k * 0.5));
+      ctx.beginPath();
+      ctx.arc(bx, by, cell * 0.04 * (1 + ph), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
   }
 
   /** Glowing home-zone edge lines; the side to move is brighter and sweeps on turn change. */
@@ -1035,6 +1585,48 @@ export class Board2DView implements IBoardView {
             ctx.stroke();
           }
           ctx.shadowBlur = 0;
+          break;
+        }
+        case 'brutile': {
+          // Curse blast: green poison flame ring over black-purple smoke + toxic cracks.
+          ctx.globalCompositeOperation = 'source-over';
+          for (const b of this.capBurst) {
+            const d = cell * (0.2 + 0.6 * e) * b.v;
+            ctx.fillStyle = hexAlpha(WASTE_COLORS.curse, 0.35 * fade);
+            ctx.beginPath();
+            ctx.arc(x + Math.cos(b.a) * d, y + Math.sin(b.a) * d, cell * (0.12 + 0.16 * e), 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.strokeStyle = hexAlpha(fx.primary, Math.min(1, 1.3 * fade));
+          ctx.lineWidth = Math.max(1, cell * 0.045);
+          ctx.lineJoin = 'round';
+          for (const b of this.capBurst) {
+            const len = cell * (0.35 + 0.7 * b.v) * Math.min(1, e * 1.7);
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            for (let st = 1; st <= 4; st++) {
+              const d = (len * st) / 4;
+              const j = Math.sin(b.a * 11 + st * 2.7) * cell * 0.08;
+              ctx.lineTo(x + Math.cos(b.a) * d - Math.sin(b.a) * j, y + Math.sin(b.a) * d + Math.cos(b.a) * j);
+            }
+            ctx.stroke();
+          }
+          const R = cell * (0.25 + 0.6 * e);
+          for (let layer = 0; layer < 2; layer++) {
+            ctx.beginPath();
+            for (let i = 0; i <= 36; i++) {
+              const a = (i / 36) * Math.PI * 2;
+              const fl = Math.abs(Math.sin(a * 6 + el * 0.022 + layer * 1.3)) * cell * 0.24 * fade;
+              const rr = R + fl;
+              if (i === 0) ctx.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+              else ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+            }
+            ctx.closePath();
+            ctx.strokeStyle = hexAlpha(layer === 0 ? fx.primary : fx.core, 0.85 * fade);
+            ctx.lineWidth = cell * (0.08 - layer * 0.04);
+            ctx.stroke();
+          }
           break;
         }
         case 'insaner': {

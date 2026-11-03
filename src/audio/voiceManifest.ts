@@ -39,6 +39,14 @@ export const VOICE_CLIPS: Record<CharacterId, Partial<Record<CharAudioEvent, rea
     death: ['vo/insaner-death-1.m4a'],
     victory: ['vo/insaner-victory-1.m4a'],
   },
+  brutile: {
+    select: ['vo/brutile-select-1.m4a', 'vo/brutile-select-2.m4a'],
+    move: ['vo/brutile-move-1.m4a', 'vo/brutile-move-2.m4a'],
+    capture: ['vo/brutile-capture-1.m4a', 'vo/brutile-capture-2.m4a', 'vo/brutile-capture-3.m4a'],
+    skill: ['vo/brutile-skill-1.m4a', 'vo/brutile-skill-2.m4a'],
+    death: ['vo/brutile-death-1.m4a'],
+    victory: ['vo/brutile-victory-1.m4a'],
+  },
 };
 
 /** Spoken text of each clip (Korean), for captions/debugging. */
@@ -84,6 +92,17 @@ export const VOICE_TEXT: Readonly<Record<string, string>> = {
   'vo/insaner-chain-1.m4a': "한 번 더~!",
   'vo/insaner-death-1.m4a': "에잇… 재미없어.",
   'vo/insaner-victory-1.m4a': "내가 최고야! 키히히!",
+  'vo/brutile-select-1.m4a': "부르셨나, 애송이?",
+  'vo/brutile-select-2.m4a': "후후, 저주가 필요해?",
+  'vo/brutile-move-1.m4a': "어디 한번 걸어볼까",
+  'vo/brutile-move-2.m4a': "흐흥~ 가볼까?",
+  'vo/brutile-capture-1.m4a': "썩어 문드러져라!",
+  'vo/brutile-capture-2.m4a': "내 저주를 받아라!",
+  'vo/brutile-capture-3.m4a': "히히! 끝이야!",
+  'vo/brutile-skill-1.m4a': "이 땅은 죽었다!",
+  'vo/brutile-skill-2.m4a': "불모지여, 피어나라!",
+  'vo/brutile-death-1.m4a': "이… 이럴 리가…",
+  'vo/brutile-victory-1.m4a': "모두 썩어라! 히히히!",
 };
 
 /** Character-specific sound effects per event. */
@@ -92,9 +111,13 @@ export const CHAR_SFX: Record<CharacterId, Partial<Record<CharAudioEvent, string
   marki: { select: 'sfx/marki-select.m4a', move: 'sfx/marki-move.m4a', capture: 'sfx/marki-capture.m4a', skill: 'sfx/marki-skill.m4a' },
   walk: { select: 'sfx/walk-select.m4a', move: 'sfx/walk-move.m4a', capture: 'sfx/walk-capture.m4a', skill: 'sfx/walk-skill.m4a' },
   insaner: { select: 'sfx/insaner-select.m4a', move: 'sfx/insaner-move.m4a', capture: 'sfx/insaner-capture.m4a', skill: 'sfx/insaner-skill.m4a', chain: 'sfx/insaner-chain.m4a' },
+  brutile: { select: 'sfx/brutile-select.m4a', move: 'sfx/brutile-move.m4a', capture: 'sfx/brutile-capture.m4a', skill: 'sfx/brutile-skill.m4a' },
 };
 
 /** Shared effects used when a character has no specific one. */
 export const GENERIC_SFX: Partial<Record<CharAudioEvent, string>> = {
   death: 'sfx/death.m4a',
 };
+
+/** Any piece dissolving on brutile's wasteland (poison hiss + bubbling); null if not generated. */
+export const WASTE_DEATH_SFX: string | null = 'sfx/waste-death.m4a';

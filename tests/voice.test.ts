@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { CharacterId } from '../src/engine/types';
-import { playCharSfx, playVoice, preloadCharacterAudio, stopVoice } from '../src/audio/voice';
-import { CHAR_SFX, GENERIC_SFX, VOICE_CLIPS, type CharAudioEvent } from '../src/audio/voiceManifest';
+import { playCharSfx, playVoice, playWasteDeath, preloadCharacterAudio, stopVoice } from '../src/audio/voice';
+import {
+  CHAR_SFX,
+  GENERIC_SFX,
+  VOICE_CLIPS,
+  VOICE_TEXT,
+  WASTE_DEATH_SFX,
+  type CharAudioEvent,
+} from '../src/audio/voiceManifest';
 
 // The project has no @types/node: load the few fs helpers through an untyped dynamic import.
 interface Fs {
@@ -13,7 +20,9 @@ const nodeFs = 'node:fs';
 const fsP: Promise<Fs> = import(/* @vite-ignore */ nodeFs);
 const audioDir = decodeURIComponent(new URL('../public/audio/', import.meta.url).pathname);
 const join = (...parts: string[]) => parts.join('/').replace(/\/+/g, '/');
-const CHARS: CharacterId[] = ['sad', 'marki', 'walk', 'insaner'];
+// Typed as a full record so adding a CharacterId without listing it here fails to compile.
+const CHAR_SET: Record<CharacterId, true> = { sad: true, marki: true, walk: true, insaner: true, brutile: true };
+const CHARS = Object.keys(CHAR_SET) as CharacterId[];
 const VOICE_EVENTS: CharAudioEvent[] = ['select', 'move', 'capture', 'skill', 'death', 'victory'];
 const SFX_EVENTS: CharAudioEvent[] = ['select', 'move', 'capture', 'skill'];
 
@@ -24,6 +33,7 @@ function allFiles(): string[] {
     for (const f of Object.values(CHAR_SFX[c])) if (f) out.add(f);
   }
   for (const f of Object.values(GENERIC_SFX)) if (f) out.add(f);
+  if (WASTE_DEATH_SFX) out.add(WASTE_DEATH_SFX);
   return [...out];
 }
 
@@ -35,12 +45,20 @@ describe('character audio manifest', () => {
       expect(VOICE_CLIPS[c].capture!.length, `${c}.capture variants`).toBeGreaterThanOrEqual(2);
     }
     expect(VOICE_CLIPS.insaner.chain?.length ?? 0).toBeGreaterThan(0);
+    // chain is insaner's mechanic only.
+    for (const c of CHARS) if (c !== 'insaner') expect(VOICE_CLIPS[c].chain, `${c}.chain`).toBeUndefined();
+  });
+
+  it('captions every voice clip', () => {
+    for (const c of CHARS)
+      for (const list of Object.values(VOICE_CLIPS[c])) for (const f of list ?? []) expect(VOICE_TEXT[f], f).toBeTruthy();
   });
 
   it('has character sound effects for select/move/capture/skill, a chain chime and a shared death', () => {
     for (const c of CHARS) for (const e of SFX_EVENTS) expect(CHAR_SFX[c][e], `${c}.${e}`).toBeTruthy();
     expect(CHAR_SFX.insaner.chain).toBeTruthy();
     expect(GENERIC_SFX.death).toBeTruthy();
+    expect(WASTE_DEATH_SFX).toBe('sfx/waste-death.m4a');
   });
 
   it('every listed file exists under public/audio and is a small m4a', async () => {
@@ -68,6 +86,8 @@ describe('character audio manifest', () => {
   it('is a safe no-op without Web Audio (node test environment)', async () => {
     expect(() => playVoice('sad', 'capture', { level: 3, owner: 1 })).not.toThrow();
     expect(() => playCharSfx('insaner', 'chain')).not.toThrow();
+    expect(() => playVoice('brutile', 'skill', { level: 1 })).not.toThrow();
+    expect(() => playWasteDeath()).not.toThrow();
     expect(() => stopVoice()).not.toThrow();
     await expect(preloadCharacterAudio(CHARS)).resolves.toBeUndefined();
   });

@@ -8,7 +8,7 @@ import { MAX_LEVEL } from '../../meta/economy';
 import { canLevelUp, getProfile, isOwned, levelUp, levelUpCost, subscribeProfile, updateProfile } from '../../meta/profile';
 import { appBar } from '../components/appbar';
 import { confirmDialog } from '../components/dialog';
-import { coinChip, gemChip, movementDiagram, rarityChip } from '../components/piece';
+import { coinChip, gemChip, movementDiagram, rarityChip, unitArt } from '../components/piece';
 import { toast } from '../components/toast';
 import { Disposables, h, prefersReducedMotion, replaceChildren } from '../dom';
 import { icon } from '../icons';
@@ -21,6 +21,7 @@ export const TIER_TITLE: Record<CharacterId, [string, string, string]> = {
   marki: ['들판의 황소', '철갑 황소', '용암 황소'],
   walk: ['방패병', '강철 방패병', '마도 방패병'],
   insaner: ['꼬마 악마', '광기의 악동', '미친 왕'],
+  brutile: ['떠돌이 마녀', '독초의 흑마녀', '불모의 여왕'],
 };
 
 export const ROLE: Record<CharacterId, { role: string; trait: string }> = {
@@ -28,26 +29,18 @@ export const ROLE: Record<CharacterId, { role: string; trait: string }> = {
   marki: { role: '돌격형 공격수', trait: '앞으로만 일직선 돌진 · 사거리 최장' },
   walk: { role: '기습형 점퍼', trait: '사이의 말을 뛰어넘는 점프 · 넓은 앞줄 커버' },
   insaner: { role: '흡수형 광전사', trait: '적을 잡으면 그 말의 이동 능력을 흡수 · 3성은 잡은 뒤 한 번 더 이동' },
+  brutile: { role: '저주형 마녀', trait: '스킬 불모지: 빈 칸을 죽음의 땅으로 · 닿는 말은 소멸 (7턴째부터 1회)' },
 };
 
 /** Numeric "reach" per level for the stat bar (max squares reachable on an open board). */
 function reachCount(id: CharacterId, lv: Level): number {
-  const tbl: Record<CharacterId, [number, number, number]> = { sad: [4, 8, 12], marki: [3, 4, 6], walk: [5, 7, 9], insaner: [8, 12, 24] };
+  const tbl: Record<CharacterId, [number, number, number]> = { sad: [4, 8, 12], marki: [3, 4, 6], walk: [5, 7, 9], insaner: [8, 12, 24], brutile: [2, 3, 8] };
   return tbl[id][lv - 1];
 }
 
-/** Rendered 3D look of the unit at a level (blue team), from `docs/brand/render-units.mjs`. */
+/** The unit's illustration at a level (the board is top-down only for now, so no 3D renders). */
 function unitPreview(id: CharacterId, lv: Level) {
-  return h('img', {
-    class: `compare__model tier-${lv}`,
-    src: `./chars/unit-${id}-lv${lv}-0.png`,
-    alt: `${CHARACTERS[id].nameKo} ${lv}성 3D 모델`,
-    width: '96',
-    height: '96',
-    loading: 'lazy',
-    decoding: 'async',
-    draggable: 'false',
-  });
+  return unitArt(id, lv, { size: 84, cls: 'compare__model' });
 }
 
 export function collectionScreen(router: Router): Screen {
@@ -134,10 +127,11 @@ export function collectionScreen(router: Router): Screen {
         prog.level === 3 && owned ? h('div', { class: 'unit-card__aura', 'aria-hidden': 'true' }) : null,
         owned ? null : h('div', { class: 'unit-card__lock' }, icon('lock', 22), h('b', null, '미해금'), h('span', null, '상자에서 전설 카드를 뽑으면 해금')),
         h('div', { class: 'unit-card__tier', 'aria-hidden': 'true' }, levels.map((lv) => h('i', { class: lv <= prog.level ? 'is-on' : '' }))),
-        leveled ? h('div', { class: 'unit-card__burst', 'aria-hidden': 'true' }, h('span', { class: 'unit-card__burst-text' }, 'LEVEL UP!')) : null,
+        leveled ? h('div', { class: 'unit-card__burst', 'aria-hidden': 'true' }, h('span', { class: 'unit-card__burst-text' }, '승급!')) : null,
       ),
       h('p', { class: 'unit-card__trait' }, icon('info', 14), ROLE[id].trait),
       def.passiveKo ? h('p', { class: 'unit-card__passive' }, icon('magic', 14), h('b', null, '패시브 · 흡수'), ' ', def.passiveKo) : null,
+      def.skill ? h('p', { class: 'unit-card__passive unit-card__skill' }, icon('magic', 14), h('b', null, `스킬 · ${def.skill.nameKo}`), ' ', def.skill.descKo[prog.level - 1], ' · 7턴째부터 1회, 자기장이 좁혀오면 금지') : null,
       h(
         'div',
         { class: 'unit-card__stats' },

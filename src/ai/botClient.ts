@@ -1,12 +1,12 @@
-import type { GameState, Move } from '../engine/types';
-import { chooseMove } from './bot';
+import type { GameState } from '../engine/types';
+import { chooseAction, type BotAction } from './bot';
 import type { Difficulty } from './bot';
 
 interface Pending {
   id: number;
   state: GameState;
   difficulty: Difficulty;
-  resolve: (m: Move | null) => void;
+  resolve: (m: BotAction | null) => void;
   watchdog?: ReturnType<typeof setTimeout>;
 }
 
@@ -28,7 +28,7 @@ export class BotClient {
     try {
       if (typeof Worker !== 'undefined') {
         this.worker = new Worker(new URL('./bot.worker.ts', import.meta.url), { type: 'module' });
-        this.worker.onmessage = (e: MessageEvent<{ id: number; move: Move | null }>) => this.onReply(e.data);
+        this.worker.onmessage = (e: MessageEvent<{ id: number; move: BotAction | null }>) => this.onReply(e.data);
         this.worker.onerror = () => this.failWorker();
         this.worker.onmessageerror = () => this.failWorker();
       }
@@ -37,11 +37,11 @@ export class BotClient {
     }
   }
 
-  requestMove(state: GameState, difficulty: Difficulty): Promise<Move | null> {
+  requestMove(state: GameState, difficulty: Difficulty): Promise<BotAction | null> {
     if (this.disposed) return Promise.resolve(null);
     this.supersede();
     const id = this.nextId++;
-    return new Promise<Move | null>((resolve) => {
+    return new Promise<BotAction | null>((resolve) => {
       const p: Pending = { id, state, difficulty, resolve };
       this.pending = p;
       if (this.worker) {
@@ -65,13 +65,13 @@ export class BotClient {
     this.disposeWorker();
   }
 
-  private onReply(data: { id: number; move: Move | null }) {
+  private onReply(data: { id: number; move: BotAction | null }) {
     const p = this.pending;
     if (!p || !data || data.id !== p.id) return; // stale
     this.finish(p, data.move);
   }
 
-  private finish(p: Pending, move: Move | null) {
+  private finish(p: Pending, move: BotAction | null) {
     if (p.watchdog) clearTimeout(p.watchdog);
     if (this.pending === p) this.pending = null;
     p.resolve(move);
@@ -106,9 +106,9 @@ export class BotClient {
     // setTimeout so the UI gets a chance to paint before the (blocking) search.
     setTimeout(() => {
       if (this.pending !== p) return;
-      let move: Move | null = null;
+      let move: BotAction | null = null;
       try {
-        move = chooseMove(p.state, p.difficulty);
+        move = chooseAction(p.state, p.difficulty);
       } catch {
         move = null;
       }

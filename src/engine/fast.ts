@@ -4,10 +4,12 @@
  * Undo tokens: ((capturedIndex + 1) << 8) | fromSquare (+ bit 16 when the mover turned around).
  * Everything else a move changes (turn, chain move, absorbed abilities, storm clock and storm
  * kills) is pushed on an internal LIFO history so make/unmake stay exact.
+ * Skill actions (Brutile's wasteland) are encoded as SKILL_FLAG | (pieceIndex << 8) | anchorSquare.
+ * A move whose target is wasteland destroys the mover (WASTE_BIT in the undo token).
  */
-import { STORM_INTERVAL_PLIES, SUDDEN_DEATH_PLY } from './types';
-import type { CharacterId, GameState, Move, PlayerId } from './types';
-import { CHARACTERS, CHAR_BY_CODE, CHAR_CODE, CH_INSANER, abilityBit, absorbMaskOf } from './characters';
+import { BOARD_SIZE, SKILL_UNLOCK_PLY, SKILL_USES_PER_MATCH, STORM_INTERVAL_PLIES, SUDDEN_DEATH_PLY } from './types';
+import type { CharacterId, GameState, Move, PlayerId, SkillAction } from './types';
+import { CHARACTERS, CHAR_BY_CODE, CHAR_CODE, CH_BRUTILE, CH_INSANER, WASTE_SIZE, abilityBit, absorbMaskOf } from './characters';
 import { N_SQUARES, atTurnRow, genTargets, inStorm, posOf, sqOf } from './board';
 import { pieceDir } from './rules';
 
@@ -35,6 +37,10 @@ export interface FastBoard {
   ply: number;
   /** Material difference (side 0 minus side 1) of a storm that swallowed both sides' last pieces. */
   wipe: number;
+  /** Wasteland flags per square. */
+  waste: Uint8Array;
+  /** Skill uses per side. */
+  skills: Int8Array;
   /** LIFO scratch for make/unmake bookkeeping. */
   hist: Int32Array;
   histTop: number;
@@ -61,6 +67,8 @@ export function fastFromState(state: GameState): FastBoard {
     stormIn: state.stormIn ?? -1,
     ply: state.ply,
     wipe: 0,
+    waste: new Uint8Array(N_SQUARES),
+    skills: Int8Array.from(state.skillsUsed ?? [0, 0]),
     hist: new Int32Array(4096),
     histTop: 0,
   };
@@ -78,7 +86,38 @@ export function fastFromState(state: GameState): FastBoard {
     b.material[p.owner] += b.value[i];
     if (state.bonusPieceId === p.id) b.bonus = i;
   });
+  for (const s of state.waste ?? []) b.waste[s] = 1;
   return b;
+}
+
+/** Encoded skill action flag (see the file header). */
+export const SKILL_FLAG = 1 << 20;
+
+/** Can piece `i` lay its wasteland now (side to move, unlocked, not used up, storm not closing)? */
+export function fastCanSkill(b: FastBoard, i: number): boolean {
+  return (
+    b.ch[i] === CH_BRUTILE &&
+    b.sq[i] >= 0 &&
+    b.owner[i] === b.turn &&
+    b.bonus < 0 &&
+    b.storm === 0 &&
+    b.ply >= SKILL_UNLOCK_PLY &&
+    b.skills[b.owner[i]] < SKILL_USES_PER_MATCH
+  );
+}
+
+/** Is the k x k area with lowest corner `anchor` on the board and free of pieces? */
+export function fastSkillFits(b: FastBoard, k: number, anchor: number): boolean {
+  const r0 = (anchor / BOARD_SIZE) | 0;
+  const c0 = anchor - r0 * BOARD_SIZE;
+  if (r0 + k > BOARD_SIZE || c0 + k > BOARD_SIZE) return false;
+  for (let r = r0; r < r0 + k; r++) for (let c = c0; c < c0 + k; c++) if (b.occ[r * BOARD_SIZE + c] >= 0) return false;
+  return true;
+}
+
+/** Wasteland side length for piece `i`. */
+export function fastSkillSize(b: FastBoard, i: number): number {
+  return WASTE_SIZE[b.lvl[i]];
 }
 
 /** Generate all legal moves for `side` into `out` starting at `n` (chain move: only that piece). */
@@ -88,7 +127,7 @@ export function fastGenMoves(b: FastBoard, side: number, out: Int32Array, n = 0)
     if (s < 0 || b.owner[i] !== side) continue;
     if (b.bonus >= 0 && i !== b.bonus) continue;
     const start = n;
-    n = genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, out, n, false, b.dir[i], b.storm, b.absorb[i]);
+    n = genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, out, n, false, b.dir[i], b.storm, b.absorb[i], b.waste);
     const hi = i << 8;
     for (let k = start; k < n; k++) out[k] |= hi;
   }
@@ -102,13 +141,14 @@ export function fastHasMoves(b: FastBoard, side: number): boolean {
     const s = b.sq[i];
     if (s < 0 || b.owner[i] !== side) continue;
     if (b.bonus >= 0 && i !== b.bonus) continue;
-    if (genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, scratch, 0, false, b.dir[i], b.storm, b.absorb[i]) > 0) return true;
+    if (genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, scratch, 0, false, b.dir[i], b.storm, b.absorb[i], b.waste) > 0) return true;
   }
   return false;
 }
 
 const SAD_CODE = CHAR_CODE.sad;
 const FLIP_BIT = 1 << 16;
+const WASTE_BIT = 1 << 17;
 
 /** Remove a piece from the board (storm kill). */
 function kill(b: FastBoard, i: number): void {
@@ -182,9 +222,27 @@ function undoSwitch(b: FastBoard): void {
  * move), absorption, storm clock and storm kills. Returns an undo token for `fastUnmake`.
  */
 export function fastMake(b: FastBoard, mv: number): number {
-  const pi = mv >> 8;
+  if (mv & SKILL_FLAG) return makeSkill(b, mv);
+  const pi = (mv >> 8) & 255;
   const to = mv & 255;
   const from = b.sq[pi];
+  if (b.waste[to]) {
+    // Touching wasteland: the mover is destroyed on arrival.
+    b.occ[from] = -1;
+    b.sq[pi] = -1;
+    b.alive[b.owner[pi]]--;
+    b.material[b.owner[pi]] -= b.value[pi];
+    const oldBonus = b.bonus;
+    const oldStormIn = b.stormIn;
+    b.ply++;
+    switchSide(b);
+    const h = b.hist;
+    h[b.histTop++] = oldStormIn;
+    h[b.histTop++] = b.absorb[pi];
+    h[b.histTop++] = oldBonus;
+    h[b.histTop++] = 0;
+    return WASTE_BIT | from;
+  }
   const cap = b.occ[to];
   if (cap >= 0) {
     b.sq[cap] = -1;
@@ -224,6 +282,10 @@ export function fastMake(b: FastBoard, mv: number): number {
 }
 
 export function fastUnmake(b: FastBoard, mv: number, undo: number): void {
+  if (mv & SKILL_FLAG) {
+    unmakeSkill(b);
+    return;
+  }
   const h = b.hist;
   const chained = h[--b.histTop];
   const oldBonus = h[--b.histTop];
@@ -233,9 +295,16 @@ export function fastUnmake(b: FastBoard, mv: number, undo: number): void {
   b.ply--;
   b.bonus = oldBonus;
   b.stormIn = oldStormIn;
-  const pi = mv >> 8;
+  const pi = (mv >> 8) & 255;
   const to = mv & 255;
   const from = undo & 255;
+  if (undo & WASTE_BIT) {
+    b.sq[pi] = from;
+    b.occ[from] = pi;
+    b.alive[b.owner[pi]]++;
+    b.material[b.owner[pi]] += b.value[pi];
+    return;
+  }
   const cap = ((undo & 0xffff) >> 8) - 1;
   b.absorb[pi] = oldAbsorb;
   if (undo & FLIP_BIT) b.dir[pi] = -b.dir[pi];
@@ -251,6 +320,42 @@ export function fastUnmake(b: FastBoard, mv: number, undo: number): void {
   }
 }
 
+/** Lay piece `pi`'s wasteland at the encoded anchor (the turn passes). Caller checked legality. */
+function makeSkill(b: FastBoard, mv: number): number {
+  const pi = (mv >> 8) & 255;
+  const anchor = mv & 255;
+  const k = WASTE_SIZE[b.lvl[pi]];
+  const r0 = (anchor / BOARD_SIZE) | 0;
+  const c0 = anchor - r0 * BOARD_SIZE;
+  const h = b.hist;
+  let added = 0;
+  for (let r = r0; r < r0 + k; r++) {
+    for (let c = c0; c < c0 + k; c++) {
+      const s = r * BOARD_SIZE + c;
+      if (b.waste[s]) continue;
+      b.waste[s] = 1;
+      h[b.histTop++] = s;
+      added++;
+    }
+  }
+  h[b.histTop++] = added;
+  b.skills[b.owner[pi]]++;
+  h[b.histTop++] = b.owner[pi];
+  b.ply++;
+  switchSide(b);
+  return 0;
+}
+
+function unmakeSkill(b: FastBoard): void {
+  undoSwitch(b);
+  b.ply--;
+  const h = b.hist;
+  const side = h[--b.histTop];
+  b.skills[side]--;
+  const added = h[--b.histTop];
+  for (let k = 0; k < added; k++) b.waste[h[--b.histTop]] = 0;
+}
+
 /** The side to move passes (no legal move / chain move declined). Reverse with `fastUnpass`. */
 export function fastPass(b: FastBoard): void {
   b.ply++;
@@ -262,9 +367,14 @@ export function fastUnpass(b: FastBoard): void {
   b.ply--;
 }
 
+/** Convert an encoded skill action into an engine SkillAction. */
+export function fastSkillToAction(b: FastBoard, mv: number): SkillAction {
+  return { kind: 'skill', pieceId: b.ids[(mv >> 8) & 255], anchor: posOf(mv & 255) };
+}
+
 /** Convert an encoded move (before it is made) into an engine Move. */
 export function fastMoveToMove(b: FastBoard, mv: number): Move {
-  const pi = mv >> 8;
+  const pi = (mv >> 8) & 255;
   const to = mv & 255;
   const m: Move = { pieceId: b.ids[pi], from: posOf(b.sq[pi]), to: posOf(to) };
   const cap = b.occ[to];

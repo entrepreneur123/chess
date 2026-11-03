@@ -100,6 +100,8 @@ export function endReasonText(reason: EndReason | null, outcome: 'win' | 'loss' 
       return outcome === 'win' ? '상대가 3회 연속 시간을 초과해 기권 처리되었습니다.' : '3회 연속 시간을 초과해 기권 처리되었습니다.';
     case 'resign':
       return outcome === 'win' ? '상대가 기권했습니다.' : '기권했습니다.';
+    case 'waste':
+      return outcome === 'win' ? '상대의 마지막 말이 불모지에 닿아 소멸했습니다.' : '내 마지막 말이 불모지에 닿아 소멸했습니다.';
     case 'timeUp':
       return `대전 시간 10분이 끝나 남은 전력으로 판정했습니다.${outcome === 'draw' ? ' 전력이 같습니다.' : ''}`;
     case 'stalemate':

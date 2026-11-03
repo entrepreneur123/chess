@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
-import type { GameState, Move } from '../engine/types';
-import { chooseMove } from './bot';
-import type { Difficulty } from './bot';
+import type { GameState } from '../engine/types';
+import { chooseAction } from './bot';
+import type { BotAction, Difficulty } from './bot';
 
 export interface BotRequest {
   id: number;
@@ -10,16 +10,16 @@ export interface BotRequest {
 }
 export interface BotResponse {
   id: number;
-  move: Move | null;
+  move: BotAction | null;
 }
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
 
 ctx.onmessage = (e: MessageEvent<BotRequest>) => {
   const { id, state, difficulty } = e.data;
-  let move: Move | null = null;
+  let move: BotAction | null = null;
   try {
-    move = chooseMove(state, difficulty);
+    move = chooseAction(state, difficulty);
   } catch {
     move = null;
   }

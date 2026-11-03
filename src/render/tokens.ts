@@ -190,7 +190,12 @@ interface FaceSlot {
   map: { value: THREE.Texture | null };
   has: { value: number };
   requested: boolean;
+  /** Time of the last failed load (a missing face keeps the team placeholder; retried later). */
+  failedAt: number;
 }
+
+/** Wait before retrying a face that failed to load (missing file / offline). */
+const FACE_RETRY_MS = 15_000;
 
 /** Token geometry/materials + lazily loaded face textures (one set per BoardView). */
 export class TokenKit {
@@ -213,7 +218,7 @@ export class TokenKit {
     const key = `${character}:${level}`;
     let s = this.faces.get(key);
     if (!s) {
-      s = { map: { value: null }, has: { value: 0 }, requested: false };
+      s = { map: { value: null }, has: { value: 0 }, requested: false, failedAt: -Infinity };
       this.faces.set(key, s);
     }
     return s;
@@ -222,7 +227,7 @@ export class TokenKit {
   /** Start loading a face texture (no-op if already requested). */
   load(character: CharacterId, level: Level): void {
     const s = this.slot(character, level);
-    if (s.requested || this.disposed) return;
+    if (s.requested || this.disposed || performance.now() - s.failedAt < FACE_RETRY_MS) return;
     s.requested = true;
     this.loader.load(
       faceUrl(character, level),
@@ -244,7 +249,9 @@ export class TokenKit {
       },
       undefined,
       () => {
-        s.requested = false; // keep the placeholder; a later view switch retries
+        // Keep the team placeholder; a later piece / view switch retries after FACE_RETRY_MS.
+        s.requested = false;
+        s.failedAt = performance.now();
       },
     );
   }

@@ -29,26 +29,39 @@
  * tiles are dimmed, and pieces that vanish from the piece list while the storm is active (not a
  * move's capture) dissolve with a magenta storm edge instead of popping out.
  *
+ * Brutile's wasteland (waste.ts): setWaste = one instanced decal draw (scorched ground, glowing
+ * green cracks joined across neighbouring squares, poison bubbles, miasma), setSkillPreview = green
+ * anchor tint + green / red ghost of the area, animateSkill = rune + flare on the caster, a curse
+ * bolt to the area, squares cracking open one by one with a small shake; a `wasted` move dissolves
+ * the mover in green; BoardHighlights.deadly targets get a skull instead of the dot.
+ *
+ * Top-only boards (BoardViewOptions.topOnly, the game's board while the 3D arena is disabled):
+ * start in the top-down view and never leave it, never load the glTF units (no mixers, no idle
+ * loop), no shadow pass. The 3D path stays intact for topOnly = false.
+ *
  * Performance notes: tiles are one InstancedMesh, overlays are InstancedMeshes, effects reuse
- * pre-allocated meshes (no per-frame / per-move allocations), one 1024 shadow map, pixel ratio
- * capped at 2. Frames are only requested while something is animating: moves/effects at full
- * rate, the selection pulse at ~30 fps, unit idle loops at ~24 fps (off with prefers-reduced-motion
- * or setIdleAnimation(false), paused while the tab is hidden).
+ * pre-allocated meshes (no per-frame / per-move allocations), one 1024 shadow map (none when
+ * top-only), pixel ratio capped at 2, effect shaders pre-compiled when idle. Frames are only
+ * requested while something is animating: moves/effects at full rate; the selection pulse, the
+ * legendary ring and the wasteland at ~30 fps (ring / wasteland static with prefers-reduced-motion);
+ * unit idle loops at ~24 fps (off with prefers-reduced-motion or setIdleAnimation(false)); nothing
+ * while the tab is hidden. An idle top-only board with no legendary and no wasteland draws nothing.
  */
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { BOARD_SIZE, ZONE_DEPTH } from '../engine/types';
 import type { Level, Move, Piece, PlayerId, Pos, Rarity } from '../engine/types';
-import type { BoardHighlights, BoardViewMode, IBoardView } from './types';
+import type { BoardHighlights, BoardViewMode, BoardViewOptions, IBoardView, SkillPreview } from './types';
 import type { UnitActor } from './units/actor';
 import { loadUnitAssets, unitAssetsIfLoaded } from './units/assets';
 import { LOOKS, MOVE_CLIP } from './units/config';
 import type { UnitLibrary } from './units/library';
 import { DustPool, SparkPool } from './boardFx';
-import { ANIM, BOARD_COLORS, CHARACTER_FX, CHARACTER_RARITY, RARITY_COLORS, RARITY_GLOW, TEAM_COLORS } from './palette';
+import { ANIM, BOARD_COLORS, CHARACTER_FX, CHARACTER_RARITY, RARITY_COLORS, RARITY_GLOW, TEAM_COLORS, WASTE_COLORS } from './palette';
 import { GROUND_MODE, StrikeFx } from './strikeFx';
 import { RingMaterials, TokenKit } from './tokens';
 import { STORM_COLORS, StormFx } from './storm';
+import { WasteFx } from './waste';
 import {
   clamp01,
   containerSize,
@@ -198,7 +211,24 @@ interface RunningAnim {
   trail: boolean;
   /** Next footstep dust time (ms since start). */
   nextDust: number;
+  /** The mover steps onto wasteland and is destroyed there (toxic dissolve after the approach). */
+  wasted: boolean;
+  wasteFired: boolean;
   piecesAfter: Piece[];
+  resolve: () => void;
+}
+
+/** Brutile laying wasteland (animateSkill). */
+interface SkillAnim {
+  start: number;
+  caster: PieceVisual | null;
+  from: THREE.Vector3;
+  centre: THREE.Vector3;
+  /** Squares in crack order with their start time (ms since start) and world position. */
+  squares: { sq: number; at: number; x: number; z: number; fired: boolean }[];
+  boltAt: number;
+  duration: number;
+  shook: boolean;
   resolve: () => void;
 }
 
@@ -224,6 +254,21 @@ const STORM_MS = 520;
 const STORM_DUST = 0x9a4bff;
 const STORM_TILE = hexToRgb(STORM_COLORS.tile);
 const STORM_TILE_STRENGTH = 0.62;
+/** Wasteland: tile tint under the decal, toxic smoke colours (dust pool), mover dissolve (ms). */
+const WASTE_TILE = hexToRgb(WASTE_COLORS.tile);
+const SMOKE_GREEN = 0x1f4a14;
+const SMOKE_CURSE = 0x2e1240;
+const WASTE_DIE_MS = 560;
+/**
+ * Brutile's cast (animateSkill) timeline in ms: caster flare + rune, bolt launch / travel / fade,
+ * then the squares crack open one after another (stagger shrinks with the area size).
+ */
+const SKILL_BOLT_AT = 190;
+const SKILL_BOLT_MS = 250;
+const SKILL_BOLT_FADE = 300;
+const SKILL_CRACK_AT = 430;
+const SKILL_CRACK_MS = 300;
+const SKILL_RUNE_MS = 1000;
 
 /** Adds a fresnel rim light (team light color) to a standard material's emissive term. */
 function addRim(mat: THREE.MeshStandardMaterial, rimHex: string, strength: number, power = 2.3): void {
@@ -525,6 +570,11 @@ export class BoardView implements IBoardView {
   private readonly comet: THREE.Mesh;
   private readonly cometMat: THREE.MeshBasicMaterial;
   private readonly stormFx: StormFx;
+  /** Brutile's wasteland, skill targeting overlay, danger marks and cast effects. */
+  private readonly wasteFx: WasteFx;
+  private skill: SkillAnim | null = null;
+  /** Top-down only (BoardViewOptions.topOnly): no glTF units, no shadows, no view switching. */
+  private readonly topOnly: boolean;
   /** Storm state (see setStorm). */
   private storm = 0;
   private stormNext: number | null = null;
@@ -616,8 +666,14 @@ export class BoardView implements IBoardView {
   private readonly tmpM = new THREE.Matrix4();
   private readonly tmpC = new THREE.Color();
 
-  constructor(container: HTMLElement) {
+  constructor(container: HTMLElement, opts: BoardViewOptions = {}) {
     this.container = container;
+    this.topOnly = !!opts.topOnly;
+    if (this.topOnly) {
+      this.viewT = 1;
+      this.viewFrom = 1;
+      this.viewTo = 1;
+    }
     // Throws if WebGL is unavailable -> createBoardView falls back to 2D.
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'low-power' });
     const gl = this.renderer.getContext();
@@ -625,7 +681,8 @@ export class BoardView implements IBoardView {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO));
     this.renderer.setClearColor(BOARD_COLORS.background, 1);
     this.renderer.toneMapping = THREE.NoToneMapping;
-    this.renderer.shadowMap.enabled = true;
+    // Top-down tokens lie flat on their pucks: no shadow casters, so no shadow pass at all.
+    this.renderer.shadowMap.enabled = !this.topOnly;
     this.renderer.shadowMap.type = THREE.PCFShadowMap; // PCFSoft was removed in r18x; radius softens
     const canvas = this.renderer.domElement;
     canvas.style.display = 'block';
@@ -667,6 +724,8 @@ export class BoardView implements IBoardView {
     this.cometMat = zl.cometMat;
     this.stormFx = new StormFx(OVERLAY_Y + 0.004);
     this.scene.add(this.stormFx.mesh);
+    this.wasteFx = new WasteFx(OVERLAY_Y + 0.0005);
+    this.scene.add(this.wasteFx.group);
 
     const fx = this.buildFx(glowTex);
     this.landRing = fx.landRing;
@@ -698,7 +757,33 @@ export class BoardView implements IBoardView {
     }
     document.addEventListener('visibilitychange', this.onVisibility);
     this.resize();
-    this.initUnits();
+    // Top-down only: the glTF models (and the unit code) are never loaded.
+    if (!this.topOnly) this.initUnits();
+    this.scheduleWarmUp();
+  }
+
+  /**
+   * Compile the (hidden) effect shaders shortly after start-up — strikes, sparks, dust, wasteland,
+   * cast bolt / rune — so the first capture or Brutile cast does not hitch on shader compilation.
+   * Runs when the browser is idle; uses KHR_parallel_shader_compile (compileAsync) where available.
+   */
+  private scheduleWarmUp(): void {
+    const run = (): void => {
+      if (this.disposed) return;
+      // Without the parallel-compile extension compileAsync only warns and compiles synchronously.
+      const parallel = this.renderer.extensions.has('KHR_parallel_shader_compile');
+      for (const obj of [this.fxLayer, this.wasteFx.group]) {
+        try {
+          if (parallel) this.renderer.compileAsync(obj, this.camera, this.scene).catch(() => undefined);
+          else this.renderer.compile(obj, this.camera, this.scene);
+        } catch {
+          // Optional optimisation only.
+        }
+      }
+    };
+    const ric = (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+    if (ric) ric(run, { timeout: 1500 });
+    else setTimeout(run, 500);
   }
 
   /** Use the cached unit models, or load them; pieces show silhouettes until they arrive. */
@@ -739,7 +824,7 @@ export class BoardView implements IBoardView {
     const sun = new THREE.DirectionalLight(0xfff0dc, 1.9);
     sun.position.set(-5, 14, 8);
     sun.target.position.set(0, 0, 0);
-    sun.castShadow = true;
+    sun.castShadow = !this.topOnly;
     sun.shadow.mapSize.set(1024, 1024);
     const s = sun.shadow.camera;
     s.left = -8.5;
@@ -1037,6 +1122,8 @@ export class BoardView implements IBoardView {
       }
     }
     const capture = !!move.captureId;
+    // Stepping onto wasteland: the mover reaches the square, then dissolves (no strike, no impact).
+    const wasted = !!move.wasted && !capture;
 
     const jump = ch === 'walk';
     const moveDur = jump ? ANIM.jump : slideDuration(move);
@@ -1068,7 +1155,9 @@ export class BoardView implements IBoardView {
     const stepStart = impactAt + STEP_AT;
     const duration = capture
       ? Math.max(stepStart + STEP_MS, deathStart + DEATH_MS) + 20
-      : moveDur + (jump ? ANIM.land : 40);
+      : wasted
+        ? moveDur + WASTE_DIE_MS + 30
+        : moveDur + (jump ? ANIM.land : 40);
 
     if (actor) {
       if (len > 1e-6) actor.face(Math.atan2(dirX, dirZ), 0.12);
@@ -1084,7 +1173,8 @@ export class BoardView implements IBoardView {
     // Skill flavour on move start.
     const fx = CHARACTER_FX[ch];
     const charge = ch === 'marki' && dist >= 2;
-    const trail = jump || chain;
+    const witch = ch === 'brutile';
+    const trail = jump || chain || witch;
     const p0 = mover.root.position;
     if (ch === 'sad') {
       this.strike.glint(p0.x - dirZ * 0.18, 1.05, p0.z + dirX * 0.18, 0.9, fx.primary, 300, now);
@@ -1097,10 +1187,15 @@ export class BoardView implements IBoardView {
     } else if (chain) {
       this.strike.ground(1, GROUND_MODE.flame, p0.x, TILE_TOP + 0.012, p0.z, 0.75, fx.primary, fx.secondary, 520, now);
       this.strike.glint(p0.x, 0.9, p0.z, 1.0, '#FF4FE8', 280, now);
+    } else if (witch) {
+      // Brutile: a green hex glint and a puff of curse smoke where she lifts off.
+      this.strike.glint(p0.x, 0.75, p0.z, 0.85, fx.primary, 300, now);
+      this.dust.ring(p0.x, TILE_TOP + 0.05, p0.z, 7, 0.9, 0.42, 0.6, SMOKE_CURSE, 0.5);
     }
     if (trail) {
       this.camera.getWorldDirection(this.camDir);
-      this.strike.trailStart(jump ? fx.primary : '#D04BFF', jump ? fx.core : '#FFD6FA', jump ? 0.34 : 0.42, jump ? 300 : 260, dirX, dirZ, this.camDir);
+      if (witch) this.strike.trailStart(fx.primary, fx.core, 0.36, 340, dirX, dirZ, this.camDir);
+      else this.strike.trailStart(jump ? fx.primary : '#D04BFF', jump ? fx.core : '#FFD6FA', jump ? 0.34 : 0.42, jump ? 300 : 260, dirX, dirZ, this.camDir);
     }
 
     return new Promise<void>((resolve) => {
@@ -1134,6 +1229,8 @@ export class BoardView implements IBoardView {
         chain,
         trail,
         nextDust: 0,
+        wasted,
+        wasteFired: false,
         piecesAfter,
         resolve,
       };
@@ -1205,6 +1302,140 @@ export class BoardView implements IBoardView {
     this.requestRender();
   }
 
+  /** Wasteland squares (r * 12 + c, full list): scorched ground with glowing green cracks. */
+  setWaste(squares: number[]): void {
+    if (this.disposed) return;
+    this.wasteFx.setWaste(squares);
+    this.applyHighlights();
+    this.requestRender();
+  }
+
+  /** Skill targeting: anchors get a subtle green tint, the preview area a green (or red) ghost. */
+  setSkillPreview(anchors: number[] | null, preview: SkillPreview | null): void {
+    if (this.disposed) return;
+    this.wasteFx.setPreview(anchors, preview);
+    this.requestRender();
+  }
+
+  /**
+   * Brutile lays wasteland: her token flares over a rune circle, a green curse bolt arcs to the
+   * area, then the squares crack open one after another with a poison eruption and a small shake.
+   * ~0.9-1.2 s. Always resolves (also when cut short by setPieces / animateMove / dispose). The
+   * squares are part of the wasteland afterwards (setWaste with the full list is still expected).
+   */
+  animateSkill(caster: string, squares: number[]): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    this.finishAnimation(false);
+    const list = [...new Set(squares)].filter((sq) => Number.isInteger(sq) && sq >= 0 && sq < BOARD_SIZE * BOARD_SIZE);
+    const cv = this.visuals.get(caster) ?? null;
+    if (list.length === 0) return Promise.resolve();
+    const now = performance.now();
+    const centre = new THREE.Vector3();
+    for (const sq of list) centre.x += cellX(sq % BOARD_SIZE) / list.length;
+    for (const sq of list) centre.z += cellZ(Math.floor(sq / BOARD_SIZE)) / list.length;
+    const from = cv ? cv.root.position.clone() : centre.clone();
+    from.y = 0;
+    // Cracks spread from the bolt's landing point (area centre), nearest-to-caster first on ties.
+    const cells = list.map((sq) => {
+      const x = cellX(sq % BOARD_SIZE);
+      const z = cellZ(Math.floor(sq / BOARD_SIZE));
+      return { sq, x, z, d: Math.hypot(x - centre.x, z - centre.z) + 0.01 * Math.hypot(x - from.x, z - from.z) };
+    });
+    cells.sort((p, q) => p.d - q.d);
+    const boltAt = cv ? SKILL_BOLT_AT : 0;
+    const crackAt = cv ? SKILL_CRACK_AT : 120;
+    const stagger = cells.length > 1 ? Math.min(75, 380 / (cells.length - 1)) : 0;
+    const squaresT = cells.map((c, i) => ({ sq: c.sq, at: crackAt + i * stagger, x: c.x, z: c.z, fired: false }));
+    const duration = crackAt + stagger * (cells.length - 1) + SKILL_CRACK_MS + 40;
+    this.wasteFx.addClosed(list);
+    this.applyHighlights();
+
+    const fx = CHARACTER_FX.brutile;
+    if (cv) {
+      // Caster flare: rune circle, green flash, glint, curse smoke.
+      const p = cv.root.position;
+      this.wasteFx.runeShow(p.x, p.z, 2.3);
+      this.flashMat.color.set(fx.primary);
+      this.flash.position.set(p.x, 0.55, p.z);
+      this.flash.visible = true;
+      this.tCap = now;
+      this.strike.glint(p.x, 0.8, p.z, 1.1, fx.primary, 340, now);
+      this.dust.ring(p.x, TILE_TOP + 0.06, p.z, 10, 1.1, 0.5, 0.75, SMOKE_CURSE, 0.3);
+      this.sparks.burst(p.x, 0.6, p.z, 10, 2.2, fx.primary, now % 97);
+      // Bolt: a quadratic arc bowed sideways (reads in the top-down view) and lifted (tilted view).
+      const dx = centre.x - from.x;
+      const dz = centre.z - from.z;
+      const len = Math.hypot(dx, dz) || 1;
+      const bow = Math.min(1.6, 0.35 * len) * (dx >= 0 ? 1 : -1);
+      this.wasteFx.beamShow(from.x, from.z, (from.x + centre.x) / 2 - (dz / len) * bow, (from.z + centre.z) / 2 + (dx / len) * bow, centre.x, centre.z, TILE_TOP + 0.32, 0.5 + 0.08 * len);
+    }
+    return new Promise<void>((resolve) => {
+      this.skill = { start: now, caster: cv, from, centre, squares: squaresT, boltAt, duration, shook: false, resolve };
+      this.requestRender();
+    });
+  }
+
+  /** Advance the cast; returns true while it runs. */
+  private tickSkill(now: number): boolean {
+    const s = this.skill;
+    if (!s) return false;
+    const t = now - s.start;
+    if (t >= s.duration) {
+      this.finishSkill();
+      return false;
+    }
+    const fx = CHARACTER_FX.brutile;
+    const cv = s.caster;
+    if (cv) {
+      const pop = 1 + 0.2 * bump(0, 420, t) + 0.08 * bump(s.boltAt, s.boltAt + 260, t);
+      cv.token.scale.set(pop, 1, pop);
+      cv.tokenMat.uniforms.uFlash.value = 0.4 * Math.max(0, 1 - t / 260);
+      this.wasteFx.runeUpdate(t / SKILL_RUNE_MS, t * 0.0016);
+      const kb = (t - s.boltAt) / SKILL_BOLT_MS;
+      if (kb >= 0) {
+        const head = easeOutCubic(clamp01(kb)) * 1.02;
+        const tail = clamp01((t - s.boltAt - SKILL_BOLT_MS * 0.75) / SKILL_BOLT_FADE);
+        this.wasteFx.beamUpdate(head, tail * tail, t / 1000);
+      }
+    }
+    let opening = false;
+    for (let i = 0; i < s.squares.length; i++) {
+      const q = s.squares[i];
+      const k = (t - q.at) / SKILL_CRACK_MS;
+      if (k < 0) continue;
+      if (k < 1.2) opening = true;
+      this.wasteFx.setOpen(q.sq, easeOutCubic(clamp01(k)));
+      if (!q.fired) {
+        q.fired = true;
+        const seed = (now + i * 17) % 97;
+        this.sparks.burst(q.x, 0.25, q.z, 6, 2.0, fx.primary, seed);
+        if (!s.shook) {
+          s.shook = true;
+          // Impact of the bolt: green flash + shock ring at the area centre and a small shake.
+          this.startCaptureFx(s.centre, fx.primary, 0.85, now, this.reducedMotion ? 0 : 1.7, 240);
+          this.burst.visible = false; // no debris chunks: the ground itself cracks open
+        }
+      }
+    }
+    // The tiles under the opening squares darken with them (tile tint follows the reveal).
+    if (opening) this.applyTileColors();
+    return true;
+  }
+
+  /** End the cast now (natural end or cut short): every square fully open, effects hidden. */
+  private finishSkill(): void {
+    const s = this.skill;
+    if (!s) return;
+    this.skill = null;
+    this.wasteFx.clearCast();
+    if (s.caster) {
+      s.caster.token.scale.set(1, 1, 1);
+      s.caster.tokenMat.uniforms.uFlash.value = 0;
+    }
+    this.requestRender();
+    s.resolve();
+  }
+
   /** True while the storm rule is in play (anything vanishing near the edges is a storm removal). */
   private get stormActive(): boolean {
     return this.storm > 0 || this.stormNext !== null;
@@ -1232,7 +1463,7 @@ export class BoardView implements IBoardView {
    * `animate` is false (or reduced motion is preferred). Safe to call repeatedly.
    */
   setViewMode(mode: BoardViewMode, animate = true): void {
-    if (this.disposed) return;
+    if (this.disposed || this.topOnly) return; // top-only boards never leave the top-down view
     const to = mode === 'top' ? 1 : 0;
     if (to === this.viewTo && (this.tView >= 0 || this.viewT === to)) return;
     this.viewTo = to;
@@ -1316,6 +1547,7 @@ export class BoardView implements IBoardView {
     this.soulTarget = null;
     this.pieceLayer.clear();
     this.stormFx.dispose();
+    this.wasteFx.dispose();
     this.units?.dispose();
     this.units = null;
     this.dust.dispose();
@@ -1481,6 +1713,13 @@ export class BoardView implements IBoardView {
     if (v.body) v.figure.remove(v.body);
     v.actor?.dispose();
     v.actor = null;
+    if (this.topOnly) {
+      // Tokens only: no 3D body at all (the tap proxy just covers the coin).
+      v.body = null;
+      v.figure.visible = false;
+      v.proxy.scale.set(0.45, PUCK_TOP + 0.3, 0.45);
+      return;
+    }
     let height = 0.95;
     if (this.units) {
       try {
@@ -1536,21 +1775,37 @@ export class BoardView implements IBoardView {
   // ---------------------------------------------------------------- highlights
 
   private applyHighlights(): void {
+    this.applyTileColors();
+    this.applyMarkers();
+  }
+
+  /** Tile tints: base two-tone + home zones + highlights + storm columns + wasteland. */
+  private applyTileColors(): void {
     const hi = this.hi;
     for (let r = 0; r < BOARD_SIZE; r++) {
       for (let c = 0; c < BOARD_SIZE; c++) {
         let rgb = tileRgb(r, c, hi);
         if (this.storm > 0 && this.stormColumn(c)) rgb = mixRgb(rgb, STORM_TILE, STORM_TILE_STRENGTH);
+        const wk = this.wasteFx.openOf(r * BOARD_SIZE + c);
+        if (wk > 0) rgb = mixRgb(rgb, WASTE_TILE, 0.85 * wk);
         this.tmpC.setRGB(rgb[0], rgb[1], rgb[2], THREE.SRGBColorSpace);
         this.tiles.setColorAt(r * BOARD_SIZE + c, this.tmpC);
       }
     }
     if (this.tiles.instanceColor) this.tiles.instanceColor.needsUpdate = true;
+  }
+
+  /** Move dots, capture rings, danger marks and the selection ring. */
+  private applyMarkers(): void {
 
     const clean = (list: Pos[] | undefined): Pos[] =>
       (list ?? []).filter((p) => p.r >= 0 && p.r < BOARD_SIZE && p.c >= 0 && p.c < BOARD_SIZE);
-    this.placedMoves = clean(this.highlights.moves);
+    // Deadly targets (wasteland) get a skull instead of the dot.
+    const deadly = clean(this.highlights.deadly).map(posKey);
+    const deadlySet = new Set(deadly);
+    this.placedMoves = clean(this.highlights.moves).filter((p) => !deadlySet.has(posKey(p)));
     this.placedCaps = clean(this.highlights.captures);
+    this.wasteFx.setDeadly(deadly);
     this.placeInstances(this.moveDots, this.placedMoves, 1);
     this.placeInstances(this.captureRings, this.placedCaps, 1);
     this.placeInstances(this.captureGlow, this.placedCaps, 1);
@@ -1568,7 +1823,7 @@ export class BoardView implements IBoardView {
       this.selectGlow.position.set(cellX(sel.c), OVERLAY_Y, cellZ(sel.r));
     }
     if (!this.anim) this.applyLift();
-    this.pulsing = !!sel || this.placedMoves.length > 0 || this.placedCaps.length > 0;
+    this.pulsing = !!sel || this.placedMoves.length > 0 || this.placedCaps.length > 0 || deadly.length > 0;
   }
 
   private placeInstances(mesh: THREE.InstancedMesh, list: Pos[], scale: number): void {
@@ -1652,8 +1907,9 @@ export class BoardView implements IBoardView {
     // Tallest piece on the far row (only matters for the tilted view).
     const topY = 2.2 * (1 - t) + 0.4 * t; // TILE_TOP + PUCK_TOP + UNIT_MAX_HEIGHT
     pts.push(new THREE.Vector3(-HALF, topY, -HALF), new THREE.Vector3(HALF, topY, -HALF));
-    const marginX = portrait ? 0.985 : 0.92;
-    const marginY = portrait ? 0.95 : 0.92;
+    // Top-down: the flat board fills the limiting side edge to edge (phones: the full width).
+    const marginX = THREE.MathUtils.lerp(portrait ? 0.985 : 0.92, 0.985, t);
+    const marginY = THREE.MathUtils.lerp(portrait ? 0.95 : 0.92, 0.975, t);
     const target = new THREE.Vector3(0, 0, 0);
     const right = new THREE.Vector3();
     const up = new THREE.Vector3();
@@ -1722,7 +1978,9 @@ export class BoardView implements IBoardView {
   private readonly frame = (now: number): void => {
     this.rafId = 0;
     if (this.disposed) return;
-    const animating = this.tickAnimation(now);
+    const moving = this.tickAnimation(now);
+    const casting = this.tickSkill(now);
+    const animating = moving || casting;
     const viewMoving = this.tickView(now);
     const fxActive = this.updateFx(now) || viewMoving;
     // Hidden units (top-down view) only advance while they still have a one-shot to finish.
@@ -1739,7 +1997,9 @@ export class BoardView implements IBoardView {
     const stormLoop = this.stormFx.active && !document.hidden;
     // Legendary rainbow ring: a light ~30 fps tick only while one is on the board.
     const ringLoop = this.idleAnim && this.legendaryCount > 0 && !document.hidden;
-    if (!busy && (this.pulsing || idleLoop || stormLoop || ringLoop)) {
+    // Wasteland cracks / bubbles, skill ghost and danger marks breathe at the same light rate.
+    const wasteLoop = this.idleAnim && this.wasteFx.animated && !document.hidden;
+    if (!busy && (this.pulsing || idleLoop || stormLoop || ringLoop || wasteLoop)) {
       const cap = this.pulsing ? IDLE_FRAME_MS : idleLoop ? IDLE_ANIM_FRAME_MS : IDLE_FRAME_MS;
       if (now - this.lastFrame < cap) {
         this.requestRender(); // idle pulse / idle loops are throttled; skip drawing this tick
@@ -1759,12 +2019,15 @@ export class BoardView implements IBoardView {
       for (const v of this.fading) v.actor?.update(dt);
       this.units?.update(now / 1000);
     }
-    if (this.idleAnim) this.rings.time.value = now / 1000;
+    if (this.idleAnim) {
+      this.rings.time.value = now / 1000;
+      this.wasteFx.update(now / 1000, pulse01(now, 800));
+    }
     if (stormLoop) this.stormFx.update(now / 1000);
     this.lastFrame = now;
     this.updatePulse(now);
     this.renderer.render(this.scene, this.camera);
-    if (busy || this.pulsing || idleLoop || stormLoop || ringLoop) this.requestRender();
+    if (busy || this.pulsing || idleLoop || stormLoop || ringLoop || wasteLoop) this.requestRender();
     else this.lastTick = 0;
   };
 
@@ -1827,6 +2090,10 @@ export class BoardView implements IBoardView {
     }
     if (a.trail && t <= a.moveDur + 16) this.strike.trailPush(root.position.x, inner.position.y + (a.jump ? 0.62 : 0.55), root.position.z, now);
     if (t < a.moveDur && t >= a.nextDust) this.footstep(a, t);
+    if (a.wasted && t >= a.moveDur) {
+      this.tickWasted(a, t, now);
+      return true;
+    }
     if (!a.landed && t >= a.moveDur) {
       a.landed = true;
       const fx = CHARACTER_FX[a.mover.piece.character];
@@ -1835,6 +2102,10 @@ export class BoardView implements IBoardView {
       this.dust.ring(a.strikeAt.x, TILE_TOP + 0.04, a.strikeAt.z, a.jump ? 12 : big ? 10 : 6, a.jump ? 1.8 : big ? 1.5 : 1.0, big ? 0.55 : 0.38, 0.6, DUST, k);
       if (a.trail) this.strike.trailEnd();
       if (a.jump) this.strike.ground(1, GROUND_MODE.ring, a.strikeAt.x, TILE_TOP + 0.012, a.strikeAt.z, 0.95, fx.secondary, fx.core, 380, now);
+      if (a.mover.piece.character === 'brutile' && !a.capture) {
+        this.strike.ground(1, GROUND_MODE.ring, a.strikeAt.x, TILE_TOP + 0.012, a.strikeAt.z, 0.8, fx.primary, fx.core, 380, now);
+        this.sparks.burst(a.strikeAt.x, 0.3, a.strikeAt.z, 8, 1.8, fx.primary, now % 97);
+      }
       if (a.mover.actor && !a.capture && !a.jump) a.mover.actor.idle(0.12);
     }
     if (!a.attackFired && t >= a.attackStart) {
@@ -1944,11 +2215,80 @@ export class BoardView implements IBoardView {
         this.strike.setSoulTarget(a.mover.root.position.x, 0.75, a.mover.root.position.z);
         this.lastCapture = { id: mp.id, t: now };
         break;
+      case 'brutile':
+        // Curse blast: green poison flames + a toxic pillar, curse cracks, smoke, a green burn-away.
+        this.strike.pillar(at.x, TILE_TOP, at.z, fx.primary, fx.secondary, fx.core, true, 640, now);
+        this.strike.ground(0, GROUND_MODE.flame, at.x, gy, at.z, 1.15, fx.primary, fx.secondary, 680, now);
+        this.strike.ground(1, GROUND_MODE.crack, at.x, gy, at.z, 1.4, fx.primary, WASTE_COLORS.curse, 760, now);
+        this.sparks.burst(at.x, 0.8, at.z, 16, 3.4, fx.primary, seed);
+        this.sparks.burst(at.x, 0.55, at.z, 8, 2.4, fx.core, (seed + 31) % 97);
+        this.dust.ring(at.x, TILE_TOP + 0.08, at.z, 12, 1.6, 0.6, 0.9, SMOKE_GREEN, 0.3);
+        this.dust.ring(at.x, TILE_TOP + 0.14, at.z, 8, 1.0, 0.5, 1.0, SMOKE_CURSE, 1.0);
+        if (a.captured) (a.captured.tokenMat.uniforms.uEdge.value as THREE.Color).set(fx.primary);
+        shake = this.reducedMotion ? 0.6 : 1.6;
+        flash = 0.75;
+        break;
     }
     this.startCaptureFx(at, fx.primary, flash, now, shake, shakeMs);
     const act = a.captured?.actor;
     if (act?.has('hit')) act.play('hit', { once: true, hold: true, fade: 0.04, timeScale: Math.min(2.5, act.clipDuration('hit') / 0.45) });
     this.emitImpact(a.move);
+  }
+
+  /**
+   * The mover stands on wasteland: the poison erupts under it (green flame ring, sparks, toxic
+   * smoke), it shudders, then its token burns away from a green edge while it sinks in.
+   */
+  private tickWasted(a: RunningAnim, t: number, now: number): void {
+    const v = a.mover;
+    const fx = CHARACTER_FX.brutile;
+    const p = a.to;
+    if (!a.wasteFired) {
+      a.wasteFired = true;
+      a.landed = true;
+      a.nextDust = 0;
+      if (a.trail) this.strike.trailEnd();
+      v.root.position.copy(a.to);
+      v.inner.scale.set(1, 1, 1);
+      v.inner.position.y = TILE_TOP;
+      const gy = TILE_TOP + 0.012;
+      this.strike.ground(0, GROUND_MODE.flame, p.x, gy, p.z, 0.95, fx.primary, WASTE_COLORS.curse, WASTE_DIE_MS + 160, now);
+      this.strike.ground(1, GROUND_MODE.ring, p.x, gy, p.z, 0.9, fx.primary, fx.core, 420, now);
+      this.sparks.burst(p.x, 0.35, p.z, 14, 2.6, fx.primary, now % 97);
+      this.dust.ring(p.x, TILE_TOP + 0.06, p.z, 10, 1.0, 0.55, 0.9, SMOKE_GREEN, 0.2);
+      this.dust.ring(p.x, TILE_TOP + 0.1, p.z, 6, 0.6, 0.45, 1.0, SMOKE_CURSE, 1.3);
+      this.flashMat.color.set(fx.primary);
+      this.flash.position.set(p.x, 0.5, p.z);
+      this.flash.visible = true;
+      this.tCap = now;
+      (v.tokenMat.uniforms.uEdge.value as THREE.Color).set(fx.primary);
+      const act = v.actor;
+      if (act && this.units) {
+        act.play('death', { once: true, hold: true, fade: 0.06, timeScale: act.clipDuration('death') / (WASTE_DIE_MS / 1000) });
+        act.setDying(this.units.dyingMaterial(v.piece));
+      }
+    }
+    const tk = t - a.moveDur;
+    const k = clamp01(tk / WASTE_DIE_MS);
+    const u = v.tokenMat.uniforms;
+    u.uFlash.value = 0;
+    const shudder = tk < 220 ? Math.sin(tk * 0.09) * 0.035 * (1 - tk / 220) : 0;
+    v.token.position.set(shudder, TOKEN_Y - 0.06 * k, 0);
+    u.uDissolve.value = clamp01((k - 0.12) / 0.88);
+    const ts = 1 - 0.18 * easeOutCubic(k);
+    v.token.scale.set(ts, 1, ts);
+    const rs = Math.max(0.001, 1 - easeOutCubic(k));
+    v.ring.scale.set(rs, 1, rs);
+    const ps = Math.max(0.001, 1 - easeOutCubic(clamp01((k - 0.3) / 0.7)));
+    v.puck.scale.set(ps, ps, ps);
+    v.decal.scale.set(ps, 1, ps);
+    if (v.actor && this.units) this.units.setDissolve(clamp01((k - 0.1) / 0.9));
+    // A thin trail of rising toxic bubbles while it dissolves.
+    if (tk >= a.nextDust) {
+      a.nextDust = tk + 70;
+      const ang = tk * 0.05;
+      this.sparks.streak(p.x + Math.cos(ang) * 0.22, 0.2, p.z + Math.sin(ang) * 0.22, Math.cos(ang) * 0.5, 1.2, Math.sin(ang) * 0.5, 0.4, fx.primary, 0);
+    }
   }
 
   private startLandFx(at: THREE.Vector3, hex: string, now: number): void {
@@ -1960,6 +2300,19 @@ export class BoardView implements IBoardView {
 
   /** Footstep / hoof dust behind a running unit. */
   private footstep(a: RunningAnim, t: number): void {
+    if (a.mover.piece.character === 'brutile') {
+      // Green sparkle trail: tiny glittering streaks drifting off the witch's path.
+      a.nextDust = t + 45;
+      const p = a.mover.root.position;
+      const n = (t / 45) | 0;
+      const side = n % 2 === 0 ? 1 : -1;
+      const sx = -a.dirZ * side;
+      const sz = a.dirX * side;
+      const fx = CHARACTER_FX.brutile;
+      this.sparks.streak(p.x + sx * 0.16 - a.dirX * 0.18, 0.32 + 0.1 * (n % 3), p.z + sz * 0.16 - a.dirZ * 0.18, sx * 0.7 - a.dirX * 0.4, 0.9, sz * 0.7 - a.dirZ * 0.4, 0.34, n % 3 === 0 ? fx.core : fx.primary, 0);
+      if (n % 3 === 0) this.dust.emit(p.x - a.dirX * 0.25, TILE_TOP + 0.05, p.z - a.dirZ * 0.25, -a.dirX * 0.3, 0.25, -a.dirZ * 0.3, 0.32, 0.55, SMOKE_CURSE);
+      return;
+    }
     const bull = a.mover.piece.character === 'marki';
     a.nextDust = t + (a.jump ? 1e9 : bull ? 50 : 70);
     const p = a.mover.root.position;
@@ -2180,6 +2533,7 @@ export class BoardView implements IBoardView {
 
   /** Jump the running animation (if any) to its end state and resolve it. */
   private finishAnimation(natural: boolean): void {
+    this.finishSkill();
     const a = this.anim;
     if (!natural) this.clearFx();
     if (!a) return;
@@ -2188,6 +2542,12 @@ export class BoardView implements IBoardView {
     a.mover.token.scale.set(1, 1, 1);
     if (a.trail) this.strike.trailEnd();
     if (a.captured) this.removeVisual(a.captured);
+    if (a.wasted && this.visuals.get(a.mover.piece.id) === a.mover && !a.piecesAfter.some((p) => p.id === a.mover.piece.id)) {
+      // Destroyed on the wasteland: drop it here (never a storm fade / pop-out).
+      this.visuals.delete(a.mover.piece.id);
+      this.removeVisual(a.mover);
+      this.units?.setDissolve(0);
+    }
     // onImpact fires exactly once per capturing move, even if the animation is cut short.
     if (a.capture && !a.impactFired) {
       a.impactFired = true;
