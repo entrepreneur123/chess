@@ -32,7 +32,9 @@ export interface ScreenParams {
   lobby: undefined;
   formation: undefined;
   collection: undefined;
-  matchmaking: { difficulty: import('../ai/bot').Difficulty };
+  shop: undefined;
+  arenas: undefined;
+  matchmaking: import('./screens/gameParams').MatchRequest;
   game: import('./screens/gameParams').GameParams;
 }
 export type ScreenName = keyof ScreenParams;

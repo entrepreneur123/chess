@@ -11,16 +11,20 @@ import './styles/matchmaking.css';
 import './styles/overlays.css';
 import './styles/game.css';
 import './styles/nav.css';
+import './styles/progression.css';
 import { installAudio } from './audio/sfx';
 import { APP_NAME } from './meta/economy';
 import { getProfile } from './meta/profile';
 import { createTabBar } from './ui/components/tabBar';
 import { Router } from './ui/router';
+import { arenasScreen } from './ui/screens/arenas';
 import { collectionScreen } from './ui/screens/collection';
 import { formationScreen } from './ui/screens/formation';
 import { gameScreen } from './ui/screens/game';
 import { lobbyScreen } from './ui/screens/lobby';
 import { matchmakingScreen } from './ui/screens/matchmaking';
+import { shopScreen } from './ui/screens/shop';
+import { installMusic } from './ui/musicBridge';
 
 document.title = APP_NAME;
 
@@ -31,12 +35,16 @@ document.addEventListener('dblclick', (e) => e.preventDefault(), { passive: fals
 getProfile(); // load + sanitize persisted data early
 // Create/resume the AudioContext on the first gesture (autoplay policy); without this the game stays silent.
 installAudio();
+// Background music follows settings.sound && settings.music (no-op until src/audio/music.ts exists).
+installMusic();
 
 const outlet = document.getElementById('app')!;
 const router = new Router(outlet)
   .register('lobby', lobbyScreen)
   .register('formation', formationScreen)
   .register('collection', collectionScreen)
+  .register('shop', shopScreen)
+  .register('arenas', arenasScreen)
   .register('matchmaking', matchmakingScreen)
   .register('game', gameScreen);
 router.useTabBar(createTabBar((name) => void router.switchTab(name)));

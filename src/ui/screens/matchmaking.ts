@@ -1,18 +1,22 @@
 /**
- * Matchmaking: a short "searching" beat (radar around the player's lead unit + rotating tips),
- * then a split-screen VS card with both sides' key art before the match starts.
+ * Matchmaking: a short "searching" beat (radar around the player's lead unit, the mode and the
+ * rating band being searched, rotating tips), then a split-screen VS card with both sides' key
+ * art, ratings and arenas before the match starts. Every opponent is an AI and says so.
  */
-import type { Difficulty } from '../../ai/bot';
 import { CHARACTERS, squadOf, validateFormation, type CharacterId, type Formation, type Level, type Rarity } from '../../engine';
 import { PACING } from '../../meta/economy';
-import { createOpponent, DIFFICULTY_LABEL } from '../../meta/opponent';
-import { getProfile, levelsOf } from '../../meta/profile';
+import { createOpponent, DIFFICULTY_LABEL, matchArenaId, type Opponent } from '../../meta/opponent';
+import { formationAllowed, getProfile, levelsOf } from '../../meta/profile';
+import { DUNGEON_LABEL, MODE_LABEL, OPPONENT_BAND, arenaById, arenaForRating, clampRating } from '../../meta/progression';
 import { randInt, defaultRng } from '../../meta/rng';
+import { preloadArt } from '../backdrops';
+import { arenaBadge } from '../components/currency';
 import { pieceToken, unitArt } from '../components/piece';
 import { clearToasts, toast } from '../components/toast';
 import { Disposables, h, replaceChildren } from '../dom';
 import { icon } from '../icons';
 import type { Router, Screen } from '../router';
+import type { MatchRequest } from './gameParams';
 
 const RARITY_RANK: Record<Rarity, number> = { common: 0, rare: 1, epic: 2, legendary: 3 };
 const TIPS = [
@@ -39,14 +43,29 @@ function leadUnit(squad: CharacterId[], levels: Record<CharacterId, Level>, excl
   )[0];
 }
 
-export function matchmakingScreen(router: Router, params: { difficulty: Difficulty }): Screen {
+export function matchmakingScreen(router: Router, params: MatchRequest): Screen {
   const bag = new Disposables();
   const profile = getProfile();
-  const difficulty = params.difficulty;
+  const mode = params.mode;
+  const dungeonLevel = mode === 'dungeon' ? (params.dungeonLevel ?? profile.dungeonLevel) : undefined;
   const levels = levelsOf(profile);
-  const playerFormation = validateFormation(profile.formation).ok ? profile.formation : null;
+  const playerFormation = validateFormation(profile.formation).ok && formationAllowed(profile.formation, profile.owned) ? profile.formation : null;
   const mySquad = squadOf(playerFormation ?? profile.formation);
   const myLead = leadUnit(mySquad, levels);
+  const myRating = clampRating(profile.rating);
+  const myArena = arenaForRating(myRating);
+  const opp: Opponent =
+    mode === 'dungeon'
+      ? createOpponent({ mode: 'dungeon', level: dungeonLevel! }, defaultRng)
+      : createOpponent({ mode, rating: myRating, playerGrades: (playerFormation ?? profile.formation).map((s) => s.level) }, defaultRng);
+  const themeArena = arenaById(matchArenaId(mode, myRating, opp.arena));
+  const modeChip = mode === 'dungeon' ? `${MODE_LABEL.dungeon} · ${DUNGEON_LABEL[dungeonLevel!]}` : MODE_LABEL[mode];
+  const searchLine =
+    mode === 'dungeon'
+      ? `AI · ${DIFFICULTY_LABEL[opp.difficulty]} 수읽기`
+      : mode === 'ranked'
+      ? `AI · ${myArena.index} 전장 · 레이팅 ${Math.max(myArena.min, myRating - OPPONENT_BAND.ranked)}–${myArena.max === null ? myRating + OPPONENT_BAND.ranked : Math.min(myArena.max, myRating + OPPONENT_BAND.ranked)}`
+      : `AI · 레이팅 ${Math.max(0, myRating - OPPONENT_BAND.casual)}–${myRating + OPPONENT_BAND.casual}`;
 
   const stage = h('div', { class: 'mm__stage', 'aria-live': 'polite' });
   const el = h(
@@ -75,12 +94,14 @@ export function matchmakingScreen(router: Router, params: { difficulty: Difficul
         h('span', { class: 'radar__core' }, unitArt(myLead, levels[myLead], { size: 104 })),
       ),
       h('h2', { class: 'mm__title' }, '상대를 찾는 중', h('span', { class: 'mm__dots', 'aria-hidden': 'true' }, h('i'), h('i'), h('i'))),
-      h('p', { class: 'mm__sub' }, h('span', { class: 'chip chip--gold' }, `AI · ${DIFFICULTY_LABEL[difficulty]}`)),
+      h('p', { class: 'mm__sub mm__sub--mode' }, h('span', { class: 'chip chip--gold', 'data-mode': mode }, modeChip)),
+      h('p', { class: 'mm__band' }, searchLine),
       tip,
     );
   };
 
-  const side = (who: 'me' | 'opp', name: string, lv: Record<CharacterId, Level>, owner: 0 | 1, formation: Formation) => {
+  const side = (who: 'me' | 'opp', name: string, lv: Record<CharacterId, Level>, owner: 0 | 1, formation: Formation, rating: number, arenaId: Opponent['arena']) => {
+    const ar = arenaById(arenaId);
     // The opponent leads with a different unit than the player so the VS card is a real face-off.
     const squad = squadOf(formation);
     const lead = who === 'me' ? myLead : leadUnit(squad, lv, myLead);
@@ -91,14 +112,15 @@ export function matchmakingScreen(router: Router, params: { difficulty: Difficul
       h(
         'div',
         { class: 'versus__plate' },
-        h('span', { class: 'versus__eyebrow' }, who === 'me' ? 'BLUE TEAM' : `RED TEAM · AI ${DIFFICULTY_LABEL[difficulty]}`),
-        h('span', { class: 'versus__name', 'data-opponent': who === 'opp' ? name : undefined }, name),
+        h('span', { class: 'versus__eyebrow' }, who === 'me' ? 'BLUE TEAM' : 'RED TEAM · AI'),
+        h('span', { class: 'versus__name', 'data-opponent': who === 'opp' ? name : undefined }, who === 'opp' ? h('span', { class: 'ai-tag' }, 'AI') : null, name),
+        h('span', { class: 'versus__rank', 'data-rating': rating }, arenaBadge(ar, 'sm'), h('b', { class: 't-num' }, String(rating)), h('span', null, `${ar.index} 전장`)),
         h('div', { class: 'versus__pieces' }, formation.map((s) => pieceToken(s.character, s.level, owner, 'sm'))),
       ),
     );
   };
 
-  const found = (name: string, oppLevels: Record<CharacterId, Level>, oppFormation: Formation) => {
+  const found = () => {
     el.classList.add('is-found');
     clearToasts(); // nothing may cover the VS card
     replaceChildren(
@@ -106,15 +128,15 @@ export function matchmakingScreen(router: Router, params: { difficulty: Difficul
       h(
         'div',
         { class: 'versus' },
-        side('me', '나', levels, 0, playerFormation ?? profile.formation),
+        side('me', '나', levels, 0, playerFormation ?? profile.formation, myRating, myArena.id),
         h('div', { class: 'versus__vs', 'aria-hidden': 'true' }, h('span', null, 'VS')),
-        side('opp', name, oppLevels, 1, oppFormation),
+        side('opp', opp.name, opp.levels, 1, opp.formation, opp.rating, opp.arena),
       ),
       h(
         'div',
         { class: 'mm__found' },
         h('h2', { class: 'mm__title mm__title--found' }, '상대 발견!'),
-        h('p', { class: 'mm__sub' }, h('span', { class: 'chip chip--outline' }, icon('lock', 14), '상대 진형 비공개')),
+        h('p', { class: 'mm__sub mm__sub--row' }, h('span', { class: 'chip chip--gold' }, modeChip), h('span', { class: 'chip chip--outline' }, icon('lock', 14), '상대 진형 비공개')),
       ),
     );
   };
@@ -126,14 +148,19 @@ export function matchmakingScreen(router: Router, params: { difficulty: Difficul
         toast('저장된 진형이 없어 추천 배치로 대전합니다', { duration: 2600 });
       }
       searching();
-      const opp = createOpponent(difficulty, levels, defaultRng, mySquad);
+      void preloadArt(themeArena.backdrop);
       const search = randInt(defaultRng, PACING.searchMinMs, PACING.searchMaxMs);
       bag.timeout(() => {
-        found(opp.name, opp.levels, opp.formation);
+        found();
         bag.timeout(() => {
           router.navigate('game', {
-            difficulty,
+            mode,
+            dungeonLevel,
+            difficulty: opp.difficulty,
             opponentName: opp.name,
+            opponentRating: opp.rating,
+            opponentArena: opp.arena,
+            themeArena: themeArena.id,
             playerFormation: playerFormation ?? profile.formation,
             botFormation: opp.formation,
           });

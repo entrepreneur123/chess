@@ -50,6 +50,9 @@ const PATHS = {
   topview: 'M3 3h18v18H3V3zm2 2v6h6V5H5zm8 0v6h6V5h-6zm-8 8v6h6v-6H5zm8 0v6h6v-6h-6z',
   menu: 'M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z',
   card: 'M7 2h10a3 3 0 0 1 3 3v14a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V5a3 3 0 0 1 3-3zm5 5-3 5 3 5 3-5-3-5z',
+  castle: 'M3 21V9h2V5h2v2h2V5h2v2h2V5h2v2h2V5h2v4h2v12h-7v-5a2 2 0 0 0-4 0v5H3zm4-9v2h2v-2H7zm8 0v2h2v-2h-2z',
+  music: 'M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z',
+  road: 'M11 3h2v3h-2V3zm0 5h2v3h-2V8zm0 5h2v3h-2v-3zm0 5h2v3h-2v-3zM4 21 7.5 3h2L6 21H4zm14 0L14.5 3h2L20 21h-2z',
   target:
     'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 3a7 7 0 1 1 0 14 7 7 0 0 1 0-14zm0 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm0 2.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3z',
 } as const;

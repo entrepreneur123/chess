@@ -28,8 +28,11 @@ import {
 } from '../../engine';
 import { createBoardView, type IBoardView } from '../../render';
 import { PACING } from '../../meta/economy';
-import { DIFFICULTY_LABEL } from '../../meta/opponent';
-import { applyMatchResult, getProfile, updateProfile, type MatchOutcome } from '../../meta/profile';
+import { getProfile, setProfile, settleMatch, updateProfile, type MatchOutcome, type MatchSummary } from '../../meta/profile';
+import { DUNGEON_LABEL, arenaById } from '../../meta/progression';
+import { useMatchBackdrop } from '../backdrops';
+import { duck, playArenaMusic } from '../musicBridge';
+import { resultPanel } from '../game/resultPanel';
 import { randInt, defaultRng } from '../../meta/rng';
 import { installBoardDrag, type BoardDrag } from '../components/boardDrag';
 import { confetti } from '../components/celebrate';
@@ -123,6 +126,16 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     fx.appendChild(el);
     bag.timeout(() => el.remove(), ms);
   };
+  /** Cut-ins carry a voice line: the music ducks under them. */
+  let duckUntil = 0;
+  const spawnCutIn = (el: HTMLElement) => {
+    spawnFx(el, CUTIN_MS);
+    duck(true);
+    duckUntil = Date.now() + CUTIN_MS;
+    bag.timeout(() => {
+      if (Date.now() >= duckUntil - 5) duck(false);
+    }, CUTIN_MS);
+  };
   const showTurnBanner = (mine: boolean) => {
     spawnFx(
       mine
@@ -169,7 +182,13 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       'div',
       { class: 'pbar__info' },
       h('div', { class: 'pbar__name' }, params.opponentName),
-      h('div', { class: 'pbar__meta' }, `AI · ${DIFFICULTY_LABEL[params.difficulty]}`),
+      h(
+        'div',
+        { class: 'pbar__meta', 'data-opponent-rating': params.opponentRating },
+        params.mode === 'dungeon' && params.dungeonLevel
+          ? `AI · 던전 ${DUNGEON_LABEL[params.dungeonLevel]}`
+          : `AI · ${params.opponentRating} · ${arenaById(params.opponentArena).index} 전장`,
+      ),
     ),
     topRoster,
     topRing.el,
@@ -203,6 +222,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   let boardDrag: BoardDrag | null = null;
   let syncedPieces: Piece[] | null = null;
   let resultShown = false;
+  let settled = false;
   let pillCls = '';
   let rosterKey = -1;
   let prevPhase: Phase | null = null;
@@ -289,7 +309,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     showCaptureFx(byMe);
     if (mover && mover.id === move.pieceId) {
       playCharSfx(mover.character, 'capture');
-      spawnFx(cutInEl({ character: mover.character, level: mover.level, owner: mover.owner, kind: 'capture', line: shout ?? undefined }), CUTIN_MS);
+      spawnCutIn(cutInEl({ character: mover.character, level: mover.level, owner: mover.owner, kind: 'capture', line: shout ?? undefined }));
     }
     if (victim && victim.id === move.captureId) playCharSfx(victim.character, 'death');
   };
@@ -607,11 +627,21 @@ export function gameScreen(router: Router, params: GameParams): Screen {
 
   const outcomeOf = (s: GameState): MatchOutcome => (s.winner === null ? 'draw' : s.winner === HUMAN ? 'win' : 'loss');
 
+  /** Applies the match to the profile. Runs exactly once per match (guarded by `settled`). */
+  const settle = (outcome: MatchOutcome): MatchSummary | null => {
+    if (settled) return null;
+    settled = true;
+    const r = settleMatch(getProfile(), { mode: params.mode, result: outcome, dungeonLevel: params.dungeonLevel, rng: defaultRng, now: new Date() });
+    setProfile(r.profile);
+    return r.summary;
+  };
+
   const showResult = async (s: GameState) => {
     if (resultShown) return;
     resultShown = true;
     const outcome = outcomeOf(s);
-    const after = updateProfile((p) => applyMatchResult(p, outcome));
+    const summary = settle(outcome);
+    const after = getProfile();
     setCoach('');
     field.close();
     await bag.sleep(s.endReason === 'resign' ? 150 : 650);
@@ -619,6 +649,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     clearToasts(); // nothing may sit on top of (or compete with) the result
     const title = outcome === 'win' ? '승리!' : outcome === 'loss' ? '패배' : '무승부';
     const adjudicated = s.endReason === 'stalemate' || (s.endReason === 'storm' && s.pieces.length === 0);
+    const panel = summary ? resultPanel(summary, { onShop: () => router.navigate('shop') }) : null;
+    if (panel) bag.add(() => panel.dispose());
     // Hero strip: the player's surviving units celebrate (win) or the opponent's units stand (loss).
     const heroOwner = outcome === 'loss' ? BOT : HUMAN;
     const heroPieces = s.pieces.filter((pc) => pc.owner === heroOwner);
@@ -632,9 +664,10 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       { class: 'result__body' },
       hero,
       h('p', { class: 'result__reason', 'data-reason': s.endReason ?? '' }, endReasonText(s.endReason, outcome, s.endReason === 'storm' && s.pieces.length === 0)),
-      outcome === 'loss' ? h('p', { class: 'result__cheer' }, '진형·성급을 바꿔 다시 도전해 보세요') : null,
+      outcome === 'loss' && params.mode !== 'ranked' ? h('p', { class: 'result__cheer' }, '진형·성급을 바꿔 다시 도전해 보세요') : null,
       adjudicated && s.pieces.length > 0 ? h('p', { class: 'result__score' }, `전력  나 ${materialScore(s, HUMAN)} : ${materialScore(s, BOT)} 상대`) : null,
-      h('p', { class: 'result__total', 'data-record': '' }, icon('trophy', 16), `통산 ${after.stats.wins}승 ${after.stats.losses}패 ${after.stats.draws}무`),
+      panel?.el ?? null,
+      params.mode === 'dungeon' ? null : h('p', { class: 'result__total', 'data-record': '' }, icon('trophy', 16), `통산 ${after.stats.wins}승 ${after.stats.losses}패 ${after.stats.draws}무`),
     );
     const dialog = showDialog<'again' | 'lobby'>({
       title,
@@ -651,6 +684,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
         { label: '다시 하기', value: 'again', variant: 'filled' },
       ],
     });
+    panel?.start();
     // The winning side's leading survivor has the last word.
     const speaker = outcome === 'draw' ? undefined : heroPieces[0];
     if (speaker) playVoice(speaker.character, 'victory', { level: speaker.level, owner: speaker.owner });
@@ -661,7 +695,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     } else sfx(outcome === 'loss' ? 'lose' : 'draw');
     const choice = await dialog;
     if (bag.isDisposed) return;
-    if (choice === 'again') router.navigate('matchmaking', { difficulty: params.difficulty });
+    if (choice === 'again') router.navigate('matchmaking', { mode: params.mode, dungeonLevel: params.dungeonLevel });
     else router.home();
   };
 
@@ -669,6 +703,10 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     el,
     mount() {
       document.body.classList.add('in-game');
+      const theme = arenaById(params.themeArena);
+      useMatchBackdrop(theme.backdrop);
+      playArenaMusic(theme.id);
+      bag.add(() => duck(false));
       bag.add(() => document.body.classList.remove('in-game'));
       try {
         // The 3D arena is disabled for now: top-down board with illustrated tokens only.
@@ -704,7 +742,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
             const rel = playVoice(caster.character, 'skill', { level: caster.level, owner: caster.owner });
             playCharSfx(caster.character, 'skill');
             haptic('capture');
-            spawnFx(cutInEl({ character: caster.character, level: caster.level, owner: caster.owner, kind: 'skill', line: rel ? VOICE_TEXT[rel] : undefined }), CUTIN_MS);
+            spawnCutIn(cutInEl({ character: caster.character, level: caster.level, owner: caster.owner, kind: 'skill', line: rel ? VOICE_TEXT[rel] : undefined }));
           }
           if (b) {
             b.setInteractive(false);

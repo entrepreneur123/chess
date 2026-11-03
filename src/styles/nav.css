@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Bottom tab bar (router chrome on the top-level screens): 캐릭터 · 대전 · 진형.
+   Bottom tab bar (router chrome on the top-level screens): 상점 · 캐릭터 · 대전 · 진형 · 전장.
    An iron bar with a gold hairline; each tab is a big icon + a short label,
    the active tab is lit in gold, and the centre Battle tab is a raised
    chunky button that pokes above the bar.
@@ -10,7 +10,7 @@
   z-index: 6;
   flex: none;
   display: grid;
-  grid-template-columns: 1fr 1.15fr 1fr;
+  grid-template-columns: 1fr 1fr 1.2fr 1fr 1fr;
   align-items: stretch;
   height: calc(var(--tab-h) + var(--sab));
   padding: 0 calc(var(--s-2) + var(--sar)) var(--sab) calc(var(--s-2) + var(--sal));

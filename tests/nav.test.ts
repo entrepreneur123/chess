@@ -87,6 +87,8 @@ function setup(opts: { formationLeave?: () => boolean | Promise<boolean> } = {})
   router
     .register('lobby', make('lobby'))
     .register('collection', make('collection'))
+    .register('shop', make('shop'))
+    .register('arenas', make('arenas'))
     .register('formation', make('formation', opts.formationLeave ? { beforeLeave: opts.formationLeave } : {}))
     .register('matchmaking', make('matchmaking'));
   const bar = new FakeEl();
@@ -98,10 +100,13 @@ function setup(opts: { formationLeave?: () => boolean | Promise<boolean> } = {})
 }
 
 describe('tab model', () => {
-  it('has Battle (the lobby) in the centre, raised, between 캐릭터 and 진형', () => {
-    expect(TABS.map((t) => t.label)).toEqual(['캐릭터', '대전', '진형']);
-    expect(TABS[1]).toMatchObject({ name: 'lobby', main: true });
+  it('has Battle (the lobby) in the centre, raised: 상점 · 캐릭터 · 대전 · 진형 · 전장', () => {
+    expect(TABS.map((t) => t.label)).toEqual(['상점', '캐릭터', '대전', '진형', '전장']);
+    expect(TABS[2]).toMatchObject({ name: 'lobby', main: true });
+    expect(TABS.filter((t) => t.main)).toHaveLength(1);
     expect(isTabScreen('formation')).toBe(true);
+    expect(isTabScreen('shop')).toBe(true);
+    expect(isTabScreen('arenas')).toBe(true);
     expect(isTabScreen('game')).toBe(false);
   });
 });
@@ -163,7 +168,7 @@ describe('Router tab navigation', () => {
   it('pushed screens (matchmaking) have no tab bar', async () => {
     const t = setup();
     t.router.home();
-    t.router.navigate('matchmaking', { difficulty: 'easy' });
+    t.router.navigate('matchmaking', { mode: 'ranked' });
     expect(t.shown()).toEqual(['matchmaking']);
     expect(t.outlet.children[0].classes.has('has-tabbar')).toBe(false);
   });

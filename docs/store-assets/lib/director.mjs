@@ -22,11 +22,12 @@ export const STORE_OUT = resolve(here, '../out');
 export const PHONE = { width: 390, height: 780 };
 
 /**
- * Demo profile. Every grade is freely selectable in the app, so this is simply a squad the player
- * could pick. The 7-3 record is seeded so the lobby does not show an empty "0승 0패".
+ * Demo profile (schema v4): a player in arena 3 (독초 늪 신전) who owns every character, with the
+ * squad's stars upgraded. The 7-3 record is seeded so the screens do not show an empty "0승 0패".
  */
 export const DEMO_PROFILE = {
-  version: 3,
+  version: 4,
+  owned: { sad: 2, marki: 2, walk: 3, insaner: 3, brutile: 3 },
   grades: { sad: 2, marki: 2, walk: 3, insaner: 3, brutile: 3 },
   formation: [
     { character: 'walk', level: 3, row: 2, col: 4 },
@@ -34,9 +35,14 @@ export const DEMO_PROFILE = {
     { character: 'brutile', level: 3, row: 2, col: 8 },
   ],
   formationSaved: true,
+  tokens: 42,
+  essence: 86,
+  rating: 742,
+  bestRating: 760,
+  dungeon: { lastClaimDay: null },
+  dungeonLevel: 'normal',
   stats: { wins: 7, losses: 3, draws: 0 },
-  difficulty: 'normal',
-  settings: { sound: true, voice: true, haptics: false, view: 'top' },
+  settings: { sound: true, music: true, voice: true, haptics: false, view: 'top' },
   onboarding: { tutorialSeen: true, firstMoveDone: true },
 };
 
@@ -173,7 +179,6 @@ export const SEL = {
   toast: '.toast',
   /** Bottom tab bar buttons (v6): collection (캐릭터), lobby (대전), formation (진형). */
   tab: (name) => `nav.tabbar .tab[data-nav="${name}"]`,
-  difficulty: (d) => `.seg__btn[data-difficulty="${d}"]`,
   startMatch: '[data-action="start-match"]',
   /** In-game hand card of one of my pieces (piece id, e.g. "p0-walk"). */
   handCard: (pieceId) => `.hand-card[data-action="hand-card"][data-piece="${pieceId}"]`,
@@ -256,10 +261,11 @@ export async function tapTab(page, name) {
   await page.waitForSelector(`[data-screen="${name}"]`);
 }
 
-/** From the lobby: pick the difficulty on the segmented control, then tap the gold 대전 시작. */
-export async function startMatch(page, difficulty = 'normal') {
-  await page.click(SEL.difficulty(difficulty));
-  await sleep(250);
+/**
+ * From the lobby: tap the gold 전장전 CTA. (The difficulty control is gone: the AI strength now
+ * follows the arena; `_difficulty` is kept for call-site compatibility.)
+ */
+export async function startMatch(page, _difficulty = 'normal') {
   await page.click(SEL.startMatch);
   await page.waitForSelector('[data-screen="matchmaking"]');
 }

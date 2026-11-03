@@ -35,22 +35,24 @@ GRID CLASH는 체스처럼 간단한 규칙 위에 '캐릭터 능력'을 얹은 
 🌀 자기장이 좁혀온다
 한쪽이 말 하나만 남거나 40턴이 지나면 3수씩 둘 때마다 좌우 바깥 줄이 자기장으로 변합니다. 닿은 말은 즉시 소멸, 끝까지 숨을 곳은 없습니다.
 
-🤖 언제든 바로 한 판
-쉬움 · 보통 · 어려움, 난이도마다 봇의 성급과 수읽기가 달라집니다. 어려움 봇은 3성 분대에 전설을 반드시 데려와요.
+🏆 여섯 전장을 오르는 전장전
+전장전에서 이기면 레이팅이 오르고, 달빛 룬 투기장부터 천공의 정점까지 여섯 전장을 차례로 올라갑니다. 지면 내려갈 수도 있어요. 레이팅 걱정 없이 연습하고 싶다면 견습전투!
+※ 현재 모든 상대는 AI이며, 화면에도 AI로 표시됩니다.
 
-🎁 전부 열려 있어요
-상자도 재화도 없습니다. 다섯 캐릭터 모두 처음부터, 1성 · 2성 · 3성 중 원하는 성급으로 골라 출전하세요.
+💎 영입하고, 강화하고
+전장전·견습전투에서 모은 에센셜로 상점에서 새 캐릭터를 영입하세요. 전장을 오를수록 브루타일, 인세이너가 열립니다.
+매일 던전(쉬움 · 보통 · 어려움 · 극악)에서 첫 승리를 거두면 토큰을 받고, 토큰으로 1성 → 2성 → 3성 강화! 강화한 성급까지는 원하는 성급을 골라 출전할 수 있어요.
 
 ✨ 특징
 • 한눈에 읽히는 탑다운 보드와 캐릭터 일러스트 · 공격 컷인 · AI 성우 음성
 • 설치 후 바로 플레이, 회원가입 없음
-• 오프라인 플레이 지원 (봇 대전)
+• 오프라인 플레이 지원 (AI 대전)
 • 세로 화면 최적화
 
-※ 게임 데이터는 기기에 저장됩니다. 현재 광고와 실제 결제는 없습니다.
+※ 게임 데이터(레이팅·재화 포함)는 기기에 저장됩니다. 게임 내 재화(토큰·에센셜)는 플레이로만 얻으며, 현재 광고와 실제 결제는 없습니다.
 ```
 
-약 620자
+약 1,290자 (공백·줄바꿈 포함)
 
 ## 게임 이름 후보 (참고)
 
@@ -88,18 +90,26 @@ Intermediates go to `docs/store-assets/out/raw/` (gitignored).
 ### Screenshot list (1080x1920, listing order)
 
 Each image is a real in-app screen (390x780 @2x) in a framed, captioned Dark Arena composition.
-Captions must stay true to the current rules (all grades freely selectable, no shop or currency,
-a timeout is a forfeit loss, the storm starts at turn 40 or when a side is down to 1 piece).
+Captions must stay true to the current rules (two in-game currencies earned only by playing: tokens
+from the daily dungeon upgrade stars and essence from 전장전 / 견습전투 unlocks characters in the
+shop; no real-money purchases; every opponent is an AI; a timeout is a forfeit loss; the storm
+starts at turn 40 or when a side is down to 1 piece).
+
+> The demo profile in `docs/store-assets/lib/director.mjs` is schema v4 and `startMatch` taps the
+> 전장전 CTA (the difficulty control is gone). The opponent generator changed with progression, so
+> `MATCH_SEED` and the scripted match that depends on the seeded opponent squad must be re-derived
+> before the next capture run; the screenshot rows below still describe the old lobby and
+> collection captures.
 
 | # | Key | Screen | Eyebrow | Title | Sub |
 | --- | --- | --- | --- | --- | --- |
-| 1 | lobby | Lobby: arena showcase, difficulty control, 대전 시작, tab bar | 1:1 전술 보드게임 | 말 3개, 144칸 / 한 수의 심리전 | 12×12 아레나에서 펼치는 1:1 대전 |
+| 1 | lobby | Lobby: arena card with rating and progress, 전장전 CTA, 견습전투 / 던전 row, tab bar | 1:1 전술 보드게임 | 말 3개, 144칸 / 한 수의 심리전 | 12×12 아레나에서 펼치는 1:1 대전 |
 | 2 | board | 인세이너 picked from the hand: card highlighted, reach markers on the board | 카드나 말을 탭 | 탭 한 번에 / 이동 범위가 한눈에 | 말마다 다른 움직임 · 끌어서 이동도 가능 |
 | 3 | walk | 월크's jump capture over my own 인세이너, the real capture cut-in frozen mid-sweep | 월크 · 영웅 | 뛰어넘어 잡는 / 기습 점프 | 사이의 말을 넘어 앞줄로 착지 |
 | 4 | brutile | 브루타일 skill targeting: 3×3 wasteland preview, 설치 dock | 브루타일 · 전설 | 닿으면 소멸 / 땅을 저주하라 | 스킬 불모지 · 아군이든 적이든 소멸 |
 | 5 | storm | Storm active (opponent down to 1 piece), wasteland skull, capture ring | 서든데스 | 자기장이 / 좁혀온다 | 40턴이 지나거나 말이 1개만 남으면 발동 |
 | 6 | formation | 진형 tab: 인세이너 picked up, legal squares lit | 진형 편성 | 진형이 곧 전략 | 내 구역 3×12 어디든 배치 |
-| 7 | collection | 캐릭터 tab: 브루타일 card with the 1성/2성/3성 picker | 상점도 재화도 없음 | 성급은 / 내 마음대로 | 다섯 캐릭터 모두 1·2·3성 자유 선택 |
+| 7 | collection | 캐릭터 tab: 브루타일 card with the token upgrade and the 1성/2성/3성 picker | 토큰으로 강화 | 성급을 / 끌어올려라 | 던전 토큰으로 1성 → 2성 → 3성 |
 | 8 | victory | Result screen after the last capture | 한 수 45초 | 상대 말을 모두 / 잡으면 승리 | 시간을 넘기면 즉시 몰수패 |
 
 The caption copy lives in `SHOTS` in `docs/store-assets/capture.mjs`.
@@ -117,7 +127,7 @@ normalised to -16 LUFS / -1.5 dBTP. The cut is defined by `BEATS` in `docs/store
 ## 콘텐츠 등급 / 개인정보 메모
 
 - 폭력: 추상적인 말 잡기(기물 제거)만 존재, 유혈·현실 폭력 없음 → 전체이용가 예상
-- 결제: 없음(재화·상자·상점 없음)
+- 결제: 실제 결제 없음. 게임 내 재화(토큰·에센셜)와 에센셜 상점은 있으나 플레이로만 획득, 상자·확률형 아이템 없음
 - 광고: 없음
 - 데이터 수집: 없음. 모든 진행 데이터는 기기(localStorage)에만 저장 → 데이터 보안 섹션 "수집 안 함"
 - 개인정보처리방침 URL: 결제/광고/분석 도입 전까지는 "데이터 수집 없음" 정책 페이지 필요 (Play 정책상 URL 필수)

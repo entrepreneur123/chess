@@ -90,9 +90,9 @@ export const SHOTS = [
   },
   {
     key: 'collection',
-    eyebrow: '상점도 재화도 없음',
-    title: '<em>성급</em>은<br>내 마음대로',
-    sub: '다섯 캐릭터 모두 1·2·3성 자유 선택',
+    eyebrow: '토큰으로 강화',
+    title: '<em>성급</em>을<br>끌어올려라',
+    sub: '던전 토큰으로 1성 → 2성 → 3성',
     art: '/docs/brand/illust/illust-sad-lv3.jpg',
     artSide: 'right',
     accent: 'gold',

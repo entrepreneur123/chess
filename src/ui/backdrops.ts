@@ -14,6 +14,8 @@ const BACKDROPS = {
 type BackdropName = keyof typeof BACKDROPS;
 
 let installed = false;
+let arenaMatchApplied = false;
+let fallbackMatchUrl: string | null = null;
 
 function load(name: BackdropName): void {
   const root = document.documentElement;
@@ -22,6 +24,12 @@ function load(name: BackdropName): void {
   img.decoding = 'async';
   img.onload = () => {
     const done = () => {
+      // An arena backdrop already in place wins over the generic match art.
+      if (name === 'match') fallbackMatchUrl = url;
+      if (name === 'match' && arenaMatchApplied) {
+        root.classList.add('has-bg-match');
+        return;
+      }
       root.style.setProperty(`--bg-${name}-img`, `url("${url}")`);
       root.classList.add(`has-bg-${name}`);
     };
@@ -46,4 +54,63 @@ export function installBackdrops(): void {
     load('matchmaking');
     load('match');
   }, 2500);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Arena art (public/arenas/<id>/): the match backdrop follows the arena being played. Missing
+// art (404 / decode failure) falls back to bg/match.webp, which installBackdrops() preloads.
+// ---------------------------------------------------------------------------------------------
+
+/** url -> decoded ok (true) / failed (false) / pending (promise). */
+const artState = new Map<string, boolean | Promise<boolean>>();
+
+/** Absolute URL of a public asset given as a relative path ("./arenas/x/bg.webp"). */
+export function publicUrl(rel: string): string {
+  return new URL(`${import.meta.env.BASE_URL}${rel.replace(/^\.\//, '')}`, document.baseURI).href;
+}
+
+/** Preload an image once; resolves true when it decoded, false when it is missing or broken. */
+export function preloadArt(rel: string): Promise<boolean> {
+  const url = publicUrl(rel);
+  const known = artState.get(url);
+  if (known !== undefined) return Promise.resolve(known);
+  const p = new Promise<boolean>((resolve) => {
+    const img = new Image();
+    img.decoding = 'async';
+    img.onload = () => {
+      const ok = () => resolve(true);
+      if (typeof img.decode === 'function') img.decode().then(ok, ok);
+      else ok();
+    };
+    img.onerror = () => resolve(false);
+    img.src = url;
+  }).then((ok) => {
+    artState.set(url, ok);
+    return ok;
+  });
+  artState.set(url, p);
+  return p;
+}
+
+let matchToken = 0;
+
+/**
+ * Use an arena's backdrop for the match layer (--bg-match-img). Until it has decoded, and for
+ * good if it is missing, the generic bg/match.webp stays.
+ */
+export function useMatchBackdrop(rel: string): void {
+  const token = ++matchToken;
+  void preloadArt(rel).then((ok) => {
+    if (token !== matchToken) return;
+    const root = document.documentElement;
+    if (!ok) {
+      // Back to the generic art (if a previous arena's art was showing).
+      if (arenaMatchApplied && fallbackMatchUrl) root.style.setProperty('--bg-match-img', `url("${fallbackMatchUrl}")`);
+      arenaMatchApplied = false;
+      return;
+    }
+    arenaMatchApplied = true;
+    root.style.setProperty('--bg-match-img', `url("${publicUrl(rel)}")`);
+    root.classList.add('has-bg-match');
+  });
 }

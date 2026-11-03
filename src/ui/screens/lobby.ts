@@ -1,26 +1,28 @@
 /**
- * Lobby (the 대전 tab): player identity + settings on top, the current-arena showcase in the
- * centre (arena art, a holo grid floor and the fielded squad), then the difficulty segmented
- * control directly above the gold "대전 시작" CTA. The tab bar (router chrome) sits below.
+ * Lobby (the 대전 tab): the progression top bar (rating + arena badge, tokens, essence), the
+ * current-arena card in the centre (arena art, holo floor, the fielded squad, rating and a bar to
+ * the next arena), then the gold 전장전 CTA and a secondary row with 견습전투 and 던전 (with the
+ * daily reward badge). The tab bar (router chrome) sits below.
  *
  * The static skeleton (arena art, figures) is built once so images and entrance animations don't
  * replay; only the data-driven slots re-render on profile changes.
  */
-import type { Difficulty } from '../../ai/bot';
 import { CHARACTERS, CHARACTER_IDS, type CharacterId, type Level, type Rarity } from '../../engine';
 import { APP_NAME } from '../../meta/economy';
-import { DIFFICULTY_LABEL } from '../../meta/opponent';
-import { getProfile, squadOfProfile, subscribeProfile, updateProfile } from '../../meta/profile';
-import { currentArena, nextArena } from '../arenas';
-import { showSettings } from '../components/settingsSheet';
+import { getProfile, squadOfProfile, subscribeProfile } from '../../meta/profile';
+import { arenaProgress, dungeonRewardAvailable, type DungeonLevel } from '../../meta/progression';
+import { preloadArt } from '../backdrops';
+import { arenaBadge, topBar } from '../components/currency';
+import { showDungeonPicker } from '../components/dungeonSheet';
 import { isTutorialOpen, showTutorial } from '../components/tutorial';
-import { unitArt } from '../components/piece';
 import { Disposables, h, replaceChildren } from '../dom';
 import { icon } from '../icons';
+import { playHomeMusic } from '../musicBridge';
 import type { Router, Screen } from '../router';
 
-const DIFFS: Difficulty[] = ['easy', 'normal', 'hard'];
 const RARITY_RANK: Record<Rarity, number> = { common: 0, rare: 1, epic: 2, legendary: 3 };
+/** Shown when an arena's own card art is missing. */
+export const FALLBACK_ARENA_ART = './bg/match.webp';
 
 /** The fielded squad ordered for the key visual: [featured (highest rarity), left, right]. */
 function heroOrder(): CharacterId[] {
@@ -28,6 +30,15 @@ function heroOrder(): CharacterId[] {
 }
 
 const artSrc = (id: CharacterId, lv: Level) => `./chars/${id}-lv${lv}.jpg`;
+
+/** An <img> of arena art that falls back to the generic arena once if the file is missing. */
+export function arenaArt(src: string, cls: string): HTMLImageElement {
+  const img = h('img', { class: cls, src, alt: '', decoding: 'async', draggable: 'false' });
+  img.addEventListener('error', () => {
+    if (!img.src.endsWith(FALLBACK_ARENA_ART.slice(1))) img.src = FALLBACK_ARENA_ART;
+  });
+  return img;
+}
 
 /** The GRID CLASH wordmark (pure type + CSS). */
 export function wordmark(size: 'md' | 'lg' = 'lg'): HTMLElement {
@@ -57,12 +68,15 @@ function squadStage(levels: Record<CharacterId, Level>): HTMLElement {
 export function lobbyScreen(router: Router): Screen {
   const bag = new Disposables();
   const el = h('main', { class: 'lobby' });
-  const arena = currentArena();
-  const next = nextArena();
+  const prog = arenaProgress(getProfile().rating);
+  const arena = prog.arena;
+  const bar = topBar(router, { onDungeon: () => openDungeon() });
+  bag.add(bar.dispose);
+
+  const openDungeon = () => showDungeonPicker((level: DungeonLevel) => router.navigate('matchmaking', { mode: 'dungeon', dungeonLevel: level }));
 
   // ---- dynamic slots
-  const identHost = h('div', { class: 'ident' });
-  const diffHost = h('div', { class: 'seg', role: 'radiogroup', 'aria-label': '난이도' });
+  const dungeonBadge = h('span', { class: 'mode-btn__badge' });
   let stageHost: HTMLElement = h('div');
   let heroKey = '';
 
@@ -72,35 +86,64 @@ export function lobbyScreen(router: Router): Screen {
       class: 'btn btn--play btn--block',
       type: 'button',
       'data-action': 'start-match',
-      onclick: () => router.navigate('matchmaking', { difficulty: getProfile().difficulty }),
+      'data-mode': 'ranked',
+      onclick: () => router.navigate('matchmaking', { mode: 'ranked' }),
     },
     icon('swords', 30),
-    h('span', { class: 'btn--play__text' }, '대전 시작'),
+    h('span', { class: 'btn--play__text' }, '전장전'),
+    h('span', { class: 'btn--play__sub' }, '레이팅 · 에센셜'),
   );
 
+  const casualBtn = h(
+    'button',
+    { class: 'mode-btn pressable', type: 'button', 'data-action': 'start-casual', onclick: () => router.navigate('matchmaking', { mode: 'casual' }) },
+    h('span', { class: 'mode-btn__icon' }, icon('target', 22)),
+    h('span', { class: 'mode-btn__main' }, h('span', { class: 'mode-btn__name' }, '견습전투'), h('span', { class: 'mode-btn__sub' }, '레이팅 변동 없음')),
+  );
+  const dungeonBtn = h(
+    'button',
+    { class: 'mode-btn mode-btn--dungeon pressable', type: 'button', 'data-action': 'open-dungeon', onclick: openDungeon },
+    h('span', { class: 'mode-btn__icon' }, icon('castle', 22)),
+    h('span', { class: 'mode-btn__main' }, h('span', { class: 'mode-btn__name' }, '던전'), dungeonBadge),
+  );
+
+  const pct = Math.round(prog.progress * 100);
   const arenaCard = h(
     'section',
-    { class: 'arena enter', style: '--i:0', 'aria-label': `현재 전장 · ${arena.name}`, 'data-arena': arena.id },
-    h('img', { class: 'arena__art', src: arena.art, alt: '', decoding: 'async', draggable: 'false' }),
+    { class: 'arena enter', style: `--i:0;--arena-accent:${arena.accent}`, 'aria-label': `현재 전장 · ${arena.index} 전장 ${arena.name}`, 'data-arena': arena.id },
+    arenaArt(arena.card, 'arena__art'),
     h('div', { class: 'arena__floor', 'aria-hidden': 'true' }, h('div', { class: 'arena__grid' })),
     stageHost,
     h('div', { class: 'arena__shade', 'aria-hidden': 'true' }),
     h('div', { class: 'arena__brand' }, wordmark('md')),
     h(
+      'button',
+      { class: 'icon-btn arena__help', type: 'button', 'aria-label': '게임 방법', 'data-action': 'how-to-play', onclick: () => void showTutorial() },
+      icon('help', 22),
+    ),
+    h(
       'div',
       { class: 'arena__foot' },
       h(
         'div',
-        { class: 'arena__plate' },
-        h('span', { class: 'arena__eyebrow' }, icon('shield', 12), '현재 전장'),
-        h('span', { class: 'arena__name' }, arena.name),
+        { class: 'arena__row' },
+        h(
+          'div',
+          { class: 'arena__plate' },
+          h('span', { class: 'arena__eyebrow' }, arenaBadge(arena, 'sm'), `${arena.index} 전장`),
+          h('span', { class: 'arena__name' }, arena.name),
+        ),
+        h('div', { class: 'arena__rating', 'data-rating': getProfile().rating }, h('span', { class: 'arena__rating-label' }, '레이팅'), h('b', { class: 't-num' }, String(getProfile().rating))),
       ),
-      // Teaser slot for score-based arenas (none announced yet).
       h(
         'div',
-        { class: `arena__next${next ? '' : ' is-locked'}`, 'data-slot': 'next-arena' },
-        h('span', { class: 'arena__next-icon' }, icon('lock', 14)),
-        h('span', { class: 'arena__next-text' }, h('b', null, '다음 전장'), next ? next.name : '곧 공개'),
+        { class: 'arena__progress' },
+        h('div', { class: 'meter', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(pct), 'aria-label': '다음 전장까지 진행도' }, h('i', { class: 'meter__fill', style: `width:${pct}%` })),
+        h(
+          'span',
+          { class: 'arena__togo' },
+          prog.next ? [icon('up', 12), `다음 ${prog.next.name}까지 `, h('b', null, String(prog.toNext))] : [icon('crown', 12), '최고 전장 · 전설'],
+        ),
       ),
     ),
   );
@@ -108,32 +151,12 @@ export function lobbyScreen(router: Router): Screen {
   replaceChildren(
     el,
     h('div', { class: 'lobby-bg', 'aria-hidden': 'true' }, h('div', { class: 'lobby-bg__aura' })),
-    h(
-      'header',
-      { class: 'lobby__top' },
-      identHost,
-      h(
-        'button',
-        { class: 'icon-btn', type: 'button', 'aria-label': '설정', 'data-action': 'settings', onclick: () => showSettings() },
-        icon('settings'),
-      ),
-    ),
+    bar.el,
     h(
       'div',
       { class: 'scroll-body lobby__body' },
       arenaCard,
-      h(
-        'section',
-        { class: 'play enter', style: '--i:1', 'aria-label': 'AI 대전' },
-        diffHost,
-        playBtn,
-        h(
-          'button',
-          { class: 'help-link pressable', type: 'button', 'data-action': 'how-to-play', onclick: () => void showTutorial() },
-          icon('help', 18),
-          '게임 방법',
-        ),
-      ),
+      h('section', { class: 'play enter', style: '--i:1', 'aria-label': 'AI 대전' }, playBtn, h('div', { class: 'mode-row' }, casualBtn, dungeonBtn)),
     ),
   );
 
@@ -150,46 +173,10 @@ export function lobbyScreen(router: Router): Screen {
     const p = getProfile();
     const levels = Object.fromEntries(CHARACTER_IDS.map((id) => [id, p.grades[id]])) as Record<CharacterId, Level>;
     renderStage(levels);
-    const [featured] = heroOrder();
-    const games = p.stats.wins + p.stats.losses + p.stats.draws;
-    replaceChildren(
-      identHost,
-      h('span', { class: 'ident__avatar' }, unitArt(featured, levels[featured], { size: 44 })),
-      h(
-        'span',
-        { class: 'ident__main' },
-        h('span', { class: 'ident__name' }, '지휘관'),
-        h(
-          'span',
-          { class: 'ident__record', 'aria-label': `전적 ${p.stats.wins}승 ${p.stats.losses}패 ${p.stats.draws}무` },
-          h('span', { class: 'ident__w' }, h('b', null, String(p.stats.wins)), '승'),
-          h('span', { class: 'ident__l' }, h('b', null, String(p.stats.losses)), '패'),
-          h('span', null, h('b', null, String(p.stats.draws)), '무'),
-          games > 0 ? h('span', { class: 'ident__rate' }, `승률 ${Math.round((p.stats.wins / games) * 100)}%`) : null,
-        ),
-      ),
-    );
-
-    replaceChildren(
-      diffHost,
-      DIFFS.map((d, i) =>
-        h(
-          'button',
-          {
-            class: `seg__btn seg__btn--${d}${p.difficulty === d ? ' is-active' : ''}`,
-            type: 'button',
-            role: 'radio',
-            'aria-checked': p.difficulty === d ? 'true' : 'false',
-            'data-difficulty': d,
-            onclick: () => {
-              if (getProfile().difficulty !== d) updateProfile((q) => ({ ...q, difficulty: d }));
-            },
-          },
-          h('span', { class: 'seg__stars', 'aria-hidden': 'true' }, [0, 1, 2].map((k) => icon('star', 11, k <= i ? 'is-on' : ''))),
-          h('span', { class: 'seg__label' }, DIFFICULTY_LABEL[d]),
-        ),
-      ),
-    );
+    const open = dungeonRewardAvailable(p.dungeon.lastClaimDay);
+    dungeonBadge.className = `mode-btn__badge${open ? ' is-open' : ''}`;
+    dungeonBadge.dataset.dungeon = open ? 'open' : 'claimed';
+    replaceChildren(dungeonBadge, open ? [h('i', { class: 'mode-btn__dot', 'aria-hidden': 'true' }), '오늘 보상 가능'] : [icon('check', 12), '오늘 받음']);
   };
 
   render();
@@ -197,6 +184,9 @@ export function lobbyScreen(router: Router): Screen {
   return {
     el,
     mount() {
+      playHomeMusic();
+      // Warm the match backdrop of this arena so the board never pops in.
+      bag.timeout(() => void preloadArt(arena.backdrop), 1200);
       // First launch: open the how-to-play carousel once the lobby has faded in.
       if (!getProfile().onboarding.tutorialSeen) {
         bag.timeout(() => {

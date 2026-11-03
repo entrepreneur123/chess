@@ -11,9 +11,9 @@ import {
   type Formation,
 } from '../../engine';
 import { haptic, sfx } from '../../audio/sfx';
-import { getProfile, levelsOf, syncFormationLevels, updateProfile } from '../../meta/profile';
-import { appBar, settingsButton } from '../components/appbar';
-import { showSettings } from '../components/settingsSheet';
+import { formationAllowed, getProfile, levelsOf, ownedIds, syncFormationLevels, updateProfile } from '../../meta/profile';
+import { topBar } from '../components/currency';
+import { playHomeMusic } from '../musicBridge';
 import { confirmDialog } from '../components/dialog';
 import { DragGhost, trackPointerDrag, type DragTracker } from '../components/drag';
 import { formationGrid, placeInFormation, ROW_LABELS } from '../components/formationGrid';
@@ -30,6 +30,10 @@ const sameFormation = (a: Formation, b: Formation) =>
 export function formationScreen(router: Router): Screen {
   const profile = getProfile();
   const levels = levelsOf(profile);
+  /** Only owned characters can be placed (the shop unlocks the others). */
+  const roster = ownedIds(profile);
+  const lockedCount = CHARACTER_IDS.length - roster.length;
+  const bar = topBar(router);
   let saved: Formation = profile.formation.map((s) => ({ ...s }));
   let work: Formation = saved.map((s) => ({ ...s }));
   let selected: CharacterId | null = null;
@@ -206,7 +210,7 @@ export function formationScreen(router: Router): Screen {
         character = (card.dataset.character as CharacterId | undefined) ?? null;
       }
     }
-    if (!character || !CHARACTERS[character]) return;
+    if (!character || !CHARACTERS[character] || !roster.includes(character)) return;
     const id = character;
     tracker = trackPointerDrag(ev, el, {
       start: (x, y) => {
@@ -247,6 +251,10 @@ export function formationScreen(router: Router): Screen {
       return;
     }
     const f = syncFormationLevels(work, levelsOf(getProfile()));
+    if (!formationAllowed(f, getProfile().owned)) {
+      toast('보유한 캐릭터만 배치할 수 있어요', { tone: 'warn' });
+      return;
+    }
     updateProfile((p) => ({ ...p, formation: f, formationSaved: true }));
     saved = f.map((s) => ({ ...s }));
     toast('진형을 저장했습니다', { tone: 'success' });
@@ -258,7 +266,7 @@ export function formationScreen(router: Router): Screen {
     replaceChildren(gridHost, formationGrid(work, { selected, onCell: placeAt }));
     replaceChildren(
       trayHost,
-      CHARACTER_IDS.map((id) => {
+      roster.map((id) => {
         const def = CHARACTERS[id];
         const slot = work.find((s) => s.character === id);
         const lv = levels[id];
@@ -314,7 +322,7 @@ export function formationScreen(router: Router): Screen {
 
   replaceChildren(
     el,
-    appBar('진형 편성', { trailing: settingsButton(() => showSettings()) }),
+    bar.el,
     h(
       'div',
       { class: 'scroll-body formation__body' },
@@ -328,6 +336,15 @@ export function formationScreen(router: Router): Screen {
       statusHost,
       h('h3', { class: 'section-title section-title--display section-title--pad' }, '내 캐릭터'),
       trayHost,
+      lockedCount > 0
+        ? h(
+            'button',
+            { class: 'hint hint--pad tray-more pressable', type: 'button', 'data-action': 'go-shop', onclick: () => void router.switchTab('shop') },
+            icon('lock', 16),
+            `미보유 캐릭터 ${lockedCount}명 · 상점에서 영입`,
+            icon('chevron', 16),
+          )
+        : null,
     ),
     h(
       'div',
@@ -372,10 +389,12 @@ export function formationScreen(router: Router): Screen {
     onBack: () => void leave(),
     beforeLeave: confirmLeave,
     mount() {
+      playHomeMusic();
       window.addEventListener('pointerup', onPointerEnd);
       window.addEventListener('pointercancel', onPointerEnd);
     },
     dispose() {
+      bar.dispose();
       tracker?.cancel();
       el.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('pointerup', onPointerEnd);

@@ -1,5 +1,5 @@
 /**
- * Persistent bottom tab bar for the top-level screens (캐릭터 · 대전 · 진형). The router owns
+ * Persistent bottom tab bar for the top-level screens (상점 · 캐릭터 · 대전 · 진형 · 전장). The router owns
  * the single instance: it is appended under every tab screen and hidden on the others, so it
  * never re-animates or flickers between tabs.
  */

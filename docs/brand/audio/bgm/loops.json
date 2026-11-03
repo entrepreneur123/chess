@@ -1,0 +1,62 @@
+{
+  "moonrune": {
+    "bpm": 84,
+    "bars": 24,
+    "key": "D minor",
+    "loopStart": 0.512,
+    "loopEnd": 69.07733333333333,
+    "loopSamples": 3291136,
+    "sampleRate": 48000,
+    "kbps": 76
+  },
+  "emberforge": {
+    "bpm": 100,
+    "bars": 32,
+    "key": "C minor",
+    "loopStart": 0.512,
+    "loopEnd": 77.312,
+    "loopSamples": 3686400,
+    "sampleRate": 48000,
+    "kbps": 68
+  },
+  "blightmire": {
+    "bpm": 90,
+    "bars": 24,
+    "key": "F# Phrygian",
+    "loopStart": 0.512,
+    "loopEnd": 64.512,
+    "loopSamples": 3072000,
+    "sampleRate": 48000,
+    "kbps": 80
+  },
+  "frostkeep": {
+    "bpm": 96,
+    "bars": 28,
+    "key": "B minor",
+    "loopStart": 0.512,
+    "loopEnd": 70.50666666666666,
+    "loopSamples": 3359744,
+    "sampleRate": 48000,
+    "kbps": 74
+  },
+  "madcrown": {
+    "bpm": 110,
+    "bars": 32,
+    "key": "Bb harmonic minor",
+    "loopStart": 0.512,
+    "loopEnd": 70.336,
+    "loopSamples": 3351552,
+    "sampleRate": 48000,
+    "kbps": 74
+  },
+  "apex": {
+    "bpm": 120,
+    "bars": 36,
+    "key": "E minor / E major",
+    "loopStart": 0.512,
+    "loopEnd": 72.512,
+    "loopSamples": 3456000,
+    "sampleRate": 48000,
+    "kbps": 72
+  }
+}

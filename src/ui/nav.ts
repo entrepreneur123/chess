@@ -15,9 +15,11 @@ export interface TabDef {
 
 /** Left to right. Battle (the lobby, the router's root) sits in the middle. */
 export const TABS: readonly TabDef[] = [
+  { name: 'shop', label: '상점', icon: 'store' },
   { name: 'collection', label: '캐릭터', icon: 'cards' },
   { name: 'lobby', label: '대전', icon: 'swords', main: true },
   { name: 'formation', label: '진형', icon: 'grid' },
+  { name: 'arenas', label: '전장', icon: 'castle' },
 ];
 
 export const TAB_SCREENS: readonly ScreenName[] = TABS.map((t) => t.name);

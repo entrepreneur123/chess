@@ -1,3 +1,15 @@
+/**
+ * AI opponents. There is no online backend yet, so EVERY opponent is an AI and is labelled "AI"
+ * in the UI. Matchmaking still simulates a rating band (docs/design/progression.md "Opponents"),
+ * so a real server can later serve the same `Opponent` shape.
+ *
+ *  - 전장전 / 견습전투: a simulated rating near the player's (see `opponentRating`); the squad is
+ *    drawn only from characters opened up to that rating's arena (the cumulative shop pool); the
+ *    grades track the player's fielded grades (rounded average ± 1, clamped to 1–3); the AI
+ *    strength is set by the opponent's arena (`ARENA_AI`).
+ *  - 던전: fixed tiers per difficulty (easy / normal / hard as before; extreme = three 3성 with at
+ *    least one legendary, at extreme strength).
+ */
 import type { Difficulty } from '../ai/bot';
 import {
   BOARD_SIZE,
@@ -12,16 +24,28 @@ import {
   type FormationSlot,
   type Level,
 } from '../engine';
-import { defaultRng, pick, type Rng } from './rng';
+import { ARENA_AI, ARENA_DEFS, arenaForRating, opponentRating, shopPool, type ArenaId, type DungeonLevel, type MatchMode } from './progression';
+import { defaultRng, pick, randInt, type Rng } from './rng';
 
 const BOT_NAMES = ['전략가 하늘', '체크메이트 민', '나이트 루나', '그림자 준', '북풍 서윤', '철벽 도윤', '번개 지호', '기사 하린'];
+const DUNGEON_NAMES: Record<DungeonLevel, string> = { easy: '던전 수문장', normal: '던전 파수꾼', hard: '던전 군주', extreme: '심연의 지배자' };
 
 export interface Opponent {
+  /** Always an AI until an online backend exists (the UI says so). */
+  isAI: true;
   name: string;
   difficulty: Difficulty;
   levels: Record<CharacterId, Level>;
   formation: Formation;
+  /** Display rating (simulated). */
+  rating: number;
+  /** The arena that rating belongs to. */
+  arena: ArenaId;
 }
+
+export type OpponentRequest =
+  | { mode: 'ranked' | 'casual'; rating: number; playerGrades: readonly Level[] }
+  | { mode: 'dungeon'; level: DungeonLevel };
 
 /** Characters with the legendary rarity (Insaner, Brutile). */
 export const LEGENDARY_IDS: CharacterId[] = CHARACTER_IDS.filter((id) => CHARACTERS[id].rarity === 'legendary');
@@ -38,14 +62,14 @@ function drawDistinct(rng: Rng, pool: readonly CharacterId[], n: number): Charac
 }
 
 /**
- * The bot's three characters. It no longer mirrors the player:
+ * The dungeon bot's three characters:
  *  - easy / normal: 3 distinct characters drawn uniformly from the whole roster (legendaries too);
- *  - hard: one legendary drawn at random, plus 2 distinct characters from the rest (a second
- *    legendary only by chance).
+ *  - hard / extreme: one legendary drawn at random, plus 2 distinct characters from the rest (a
+ *    second legendary only by chance).
  * `_playerSquad` is kept for call-site compatibility and ignored.
  */
 export function botSquad(difficulty: Difficulty, _playerSquad: readonly CharacterId[] = STARTER_IDS, rng: Rng = defaultRng): CharacterId[] {
-  if (difficulty === 'hard' && LEGENDARY_IDS.length > 0) {
+  if ((difficulty === 'hard' || difficulty === 'extreme') && LEGENDARY_IDS.length > 0) {
     const legend = LEGENDARY_IDS[Math.min(LEGENDARY_IDS.length - 1, Math.floor(rng() * LEGENDARY_IDS.length))];
     const rest = drawDistinct(
       rng,
@@ -61,12 +85,11 @@ export function botSquad(difficulty: Difficulty, _playerSquad: readonly Characte
 }
 
 /**
- * Star grades of the bot's squad:
- *  - easy:   every character 2성
- *  - normal: one random member 3성, the other two 2성
- *  - hard:   every character 3성
+ * Star grades of the dungeon bot's squad:
+ *  - easy:          every character 2성
+ *  - normal:        one random member 3성, the other two 2성
+ *  - hard, extreme: every character 3성
  * Characters outside the squad get 2성 (they are never fielded).
- * `_playerLevels` is kept for call-site compatibility and ignored.
  */
 export function botLevels(
   difficulty: Difficulty,
@@ -75,11 +98,18 @@ export function botLevels(
   squad: readonly CharacterId[] = STARTER_IDS,
 ): Record<CharacterId, Level> {
   const out = {} as Record<CharacterId, Level>;
-  for (const id of CHARACTER_IDS) out[id] = difficulty === 'hard' ? 3 : 2;
+  for (const id of CHARACTER_IDS) out[id] = difficulty === 'hard' || difficulty === 'extreme' ? 3 : 2;
   if (difficulty === 'normal' && squad.length > 0) {
     out[squad[Math.min(squad.length - 1, Math.floor(rng() * squad.length))]] = 3;
   }
   return out;
+}
+
+/** The centre the AI's grades are drawn around: the player's fielded grades, averaged and rounded. */
+export function aiGradeCenter(playerGrades: readonly Level[]): Level {
+  if (playerGrades.length === 0) return 1;
+  const avg = playerGrades.reduce((s, g) => s + g, 0) / playerGrades.length;
+  return Math.max(1, Math.min(3, Math.round(avg))) as Level;
 }
 
 /**
@@ -117,7 +147,7 @@ function placedFormation(rng: Rng, squad: readonly CharacterId[], levels: Record
   return out;
 }
 
-/** Bot formation: fully random on easy, sensible-but-varied on normal / hard. Always valid. */
+/** Bot formation: fully random on easy, sensible-but-varied above. Always valid. */
 export function botFormation(difficulty: Difficulty, squad: readonly CharacterId[], levels: Record<CharacterId, Level>, rng: Rng = defaultRng): Formation {
   if (difficulty !== 'easy') {
     const f = placedFormation(rng, squad, levels);
@@ -126,16 +156,46 @@ export function botFormation(difficulty: Difficulty, squad: readonly CharacterId
   return randomFormation(rng, levels, squad);
 }
 
-/** A bot opponent for `difficulty`. The player's levels and squad no longer influence the bot. */
-export function createOpponent(
-  difficulty: Difficulty,
-  _playerLevels?: Partial<Record<CharacterId, Level>>,
-  rng: Rng = defaultRng,
-  _playerSquad: readonly CharacterId[] = STARTER_IDS,
-): Opponent {
-  const squad = botSquad(difficulty, _playerSquad, rng);
-  const levels = botLevels(difficulty, _playerLevels, rng, squad);
-  return { name: pick(rng, BOT_NAMES), difficulty, levels, formation: botFormation(difficulty, squad, levels, rng) };
+/**
+ * A display rating for a dungeon tier: a rating from the first arena whose AI plays at that
+ * strength (the top arena is open-ended, so its first 200 points are used).
+ */
+function dungeonRating(level: DungeonLevel, rng: Rng): number {
+  const a = ARENA_DEFS.find((x) => ARENA_AI[x.id] === level) ?? ARENA_DEFS[0];
+  return randInt(rng, a.min, a.max ?? a.min + 200);
 }
 
-export const DIFFICULTY_LABEL: Record<Difficulty, string> = { easy: '쉬움', normal: '보통', hard: '어려움' };
+/** An AI opponent for a mode (see the module comment). */
+export function createOpponent(req: OpponentRequest, rng: Rng = defaultRng): Opponent {
+  if (req.mode === 'dungeon') {
+    const difficulty: Difficulty = req.level;
+    const squad = botSquad(difficulty, STARTER_IDS, rng);
+    const levels = botLevels(difficulty, undefined, rng, squad);
+    const rating = dungeonRating(req.level, rng);
+    return {
+      isAI: true,
+      name: DUNGEON_NAMES[req.level],
+      difficulty,
+      levels,
+      formation: botFormation(difficulty, squad, levels, rng),
+      rating,
+      arena: arenaForRating(rating).id,
+    };
+  }
+  const rating = opponentRating(req.mode, req.rating, rng);
+  const arena = arenaForRating(rating);
+  const difficulty: Difficulty = ARENA_AI[arena.id];
+  const squad = drawDistinct(rng, shopPool(arena), PIECES_PER_SIDE);
+  const center = aiGradeCenter(req.playerGrades);
+  const levels = {} as Record<CharacterId, Level>;
+  for (const id of CHARACTER_IDS) levels[id] = center;
+  for (const id of squad) levels[id] = Math.max(1, Math.min(3, center + randInt(rng, -1, 1))) as Level;
+  return { isAI: true, name: pick(rng, BOT_NAMES), difficulty, levels, formation: botFormation(difficulty, squad, levels, rng), rating, arena: arena.id };
+}
+
+export const DIFFICULTY_LABEL: Record<Difficulty, string> = { easy: '쉬움', normal: '보통', hard: '어려움', extreme: '극악' };
+
+/** Which arena's theme (art, music) a match uses: the opponent's for casual, the player's otherwise. */
+export function matchArenaId(mode: MatchMode, playerRating: number, opponentArena: ArenaId): ArenaId {
+  return mode === 'casual' ? opponentArena : arenaForRating(playerRating).id;
+}

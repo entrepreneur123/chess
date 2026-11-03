@@ -58,6 +58,7 @@ describe('hostile character ids', () => {
   it('a save with a hostile formation and grades loads as a playable default', () => {
     const raw = {
       ...createDefaultProfile(),
+      owned: { ...createDefaultProfile().owned, sad: 3, constructor: 3 },
       grades: { sad: 3, constructor: 2, __proto__: { sad: 1 } },
       formation: [
         { character: 'constructor', level: 1, row: 0, col: 0 },
@@ -71,6 +72,7 @@ describe('hostile character ids', () => {
     expect(validateFormation(p.formation).ok).toBe(true);
     expect(p.formationSaved).toBe(false);
     expect(p.grades.sad).toBe(3);
+    expect(p.owned).not.toHaveProperty('constructor', 3);
     expect(p.stats.wins).toBe(Number.MAX_SAFE_INTEGER);
     expect(p.stats.losses).toBe(0);
     expect(p.stats.draws).toBe(0);

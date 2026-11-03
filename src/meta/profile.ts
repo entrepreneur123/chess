@@ -366,7 +366,7 @@ export function buyCharacter(p: Profile, id: CharacterId): ActionResult<BuyRefus
 export function upgradeBlocker(p: Profile, id: CharacterId): UpgradeRefusal | null {
   const o = p.owned[id] ?? 0;
   if (o < 1) return 'locked';
-  const cost = upgradeCost(id, o);
+  const cost = upgradeCost(id, o as Level);
   if (cost === null) return 'max';
   if (p.tokens < cost) return 'tokens';
   return null;
