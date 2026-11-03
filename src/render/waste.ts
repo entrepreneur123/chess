@@ -174,6 +174,7 @@ uniform float uTime;
 uniform vec3 uAnchor;
 uniform vec3 uPreview;
 uniform float uInvalid;
+uniform vec3 uCurseDark;
 varying vec2 vUv;
 varying vec2 vW;
 varying float vA;
@@ -183,12 +184,13 @@ void main() {
   vec2 p = vUv - 0.5;
   float pulse = 0.5 + 0.5 * sin(uTime * 4.2);
   if (vB < 0.5) {
-    // Anchor: faint green fill + a soft rounded-square inner frame.
+    // Anchor: a soft plum rounded-square inner frame + a faint darkening (reads on the grass
+    // without washing it out).
     vec2 ap = abs(p);
-    float d = length(max(ap - vec2(0.32), 0.0)) - 0.1;
-    float frame = smoothstep(0.022, 0.0, abs(d + 0.02));
-    vec3 col = uAnchor * (0.03 + frame * (0.1 + 0.08 * pulse));
-    gl_FragColor = vec4(col, 0.04);
+    float d = length(max(ap - vec2(0.3), 0.0)) - 0.1;
+    float frame = smoothstep(0.03, 0.012, abs(d + 0.02));
+    float a = 0.035 + frame * (0.3 + 0.12 * pulse);
+    gl_FragColor = vec4(uAnchor * a, a);
   } else {
     float dEdge = openEdge(p, vA);
     float line = smoothstep(0.045, 0.02, dEdge);
@@ -197,8 +199,10 @@ void main() {
     vec2 v = voronoi(q);
     float crack = 1.0 - smoothstep(0.01, 0.05, v.x);
     float pat = mix(crack, step(0.55, fract((vW.x + vW.y) * 3.2 - uTime * 0.6)) * 0.55, uInvalid);
-    vec3 col = uPreview * (0.16 + pat * (0.55 + 0.35 * pulse) + inner * 0.3 + line * (0.9 + 0.5 * pulse));
-    gl_FragColor = vec4(col, 0.38);
+    // Dark cursed-earth ghost (darkens the grass) with bright cracks and a glowing outline.
+    float a = 0.5 + 0.1 * pulse;
+    vec3 col = uCurseDark * a + uPreview * (pat * (0.6 + 0.35 * pulse) + inner * 0.12 + line * (0.95 + 0.4 * pulse));
+    gl_FragColor = vec4(col, a);
   }
   #include <colorspace_fragment>
 }`;
@@ -454,6 +458,7 @@ export class WasteFx {
           uAnchor: { value: new THREE.Color(WASTE_COLORS.anchor) },
           uPreview: { value: new THREE.Color(WASTE_COLORS.ghost) },
           uInvalid: { value: 0 },
+          uCurseDark: { value: new THREE.Color(WASTE_COLORS.ground) },
         },
         vertexShader: CELL_VS,
         fragmentShader: GHOST_FS,

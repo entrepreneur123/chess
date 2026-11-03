@@ -7,7 +7,9 @@
     <!-- Faces are loaded relative to the page (./chars/...): resolve them like the game at /. -->
     <base href="/" />
     <style>
-      html, body { margin: 0; height: 100%; background: #070a15; color: #cfd8f0; font: 12px system-ui, sans-serif; }
+      html, body { margin: 0; height: 100%; color: #eaf2ff; font: 12px system-ui, sans-serif; }
+      /* Same sky gradient the app paints behind the (transparent) board canvas. */
+      body { background: linear-gradient(180deg, #4f8ee8 0%, #2a59b8 100%) fixed; }
       #board { position: relative; width: 100vw; height: 470px; margin-top: 120px; }
       #log { position: fixed; left: 8px; top: 8px; right: 8px; white-space: pre-wrap; opacity: 0.8; }
     </style>

@@ -4,7 +4,6 @@ import type { CharacterId, Level, Move, Piece, PlayerId, Pos } from '../engine/t
 import type { BoardHighlights } from './types';
 import {
   ANIM,
-  BACKDROP,
   BOARD_COLORS,
   HOME_TINT_STRENGTH,
   LAST_MOVE_TINT_STRENGTH,
@@ -75,6 +74,11 @@ const RGB_TEAM_GLOW: Record<PlayerId, RGB> = {
   1: hexToRgb(TEAM_COLORS[1].glow),
 };
 
+/** Highlight tint strengths over the grass (soft: the markers carry the meaning). */
+const ENEMY_MOVE_TINT = 0.16;
+const CAPTURE_TINT = 0.5;
+const SELECTED_TINT = 0.62;
+
 /** Precomputed lookup sets for a highlight state. */
 export interface HighlightIndex {
   selected: number;
@@ -108,6 +112,14 @@ export function indexHighlights(h: BoardHighlights): HighlightIndex {
   };
 }
 
+/** Saturation boost of the home-zone tiles after the team tint. */
+const HOME_SATURATION = 1.22;
+
+/** Perceived brightness (sRGB, Rec. 601 weights). */
+function luma(c: RGB): number {
+  return 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
+}
+
 /** Team whose tint is used for a highlighted zone range (falls back to Blue). */
 function zoneTeam(zone: [number, number]): PlayerId {
   return zone[0] >= BOARD_SIZE / 2 ? 1 : 0;
@@ -118,19 +130,27 @@ export function tileRgb(r: number, c: number, hi: HighlightIndex): RGB {
   let col: RGB = (r + c) % 2 === 0 ? RGB_DARK : RGB_LIGHT;
   const home = homeOwner(r);
   if (home !== null) {
-    // Strongest at the back rank, fading towards the zone edge line.
+    // Slightly stronger at the back rank (~24 %), ~20 % at the zone edge line.
     const depth = home === 0 ? r : BOARD_SIZE - 1 - r;
-    col = mixRgb(col, RGB_TEAM_ZONE[home], HOME_TINT_STRENGTH * (1.15 - 0.2 * depth));
+    // Keep the tile's brightness: the team colours are darker than the grass, and a plain mix
+    // would turn the red side into dull olive.
+    const lum0 = luma(col);
+    col = mixRgb(col, RGB_TEAM_ZONE[home], HOME_TINT_STRENGTH * (1.08 - 0.08 * depth));
+    const k = lum0 / Math.max(1e-4, luma(col));
+    col = [col[0] * k, col[1] * k, col[2] * k];
+    // ...and a little of the grass's lost saturation (mixing toward a complementary hue greys it).
+    const l = luma(col);
+    col = [clamp01(l + (col[0] - l) * HOME_SATURATION), clamp01(l + (col[1] - l) * HOME_SATURATION), clamp01(l + (col[2] - l) * HOME_SATURATION)];
   }
   if (hi.zone && r >= hi.zone[0] && r <= hi.zone[1]) {
     const t = zoneTeam(hi.zone);
     col = mixRgb(col, mixRgb(RGB_TEAM_GLOW[t], RGB_TEAM_ZONE[t], 0.5), ZONE_TINT_STRENGTH);
   }
-  const k = r * BOARD_SIZE + c;
-  if (hi.last.has(k)) col = mixRgb(col, RGB_LAST, LAST_MOVE_TINT_STRENGTH);
-  if (hi.enemy && hi.moves.has(k)) col = mixRgb(col, RGB_ENEMY_MOVE, 0.42);
-  if (hi.captures.has(k)) col = mixRgb(col, RGB_CAP, 0.85);
-  if (hi.selected === k) col = mixRgb(col, hi.enemy ? RGB_ENEMY_SEL : RGB_SEL, 0.9);
+  const sq = r * BOARD_SIZE + c;
+  if (hi.last.has(sq)) col = mixRgb(col, RGB_LAST, LAST_MOVE_TINT_STRENGTH);
+  if (hi.enemy && hi.moves.has(sq)) col = mixRgb(col, RGB_ENEMY_MOVE, ENEMY_MOVE_TINT);
+  if (hi.captures.has(sq)) col = mixRgb(col, RGB_CAP, CAPTURE_TINT);
+  if (hi.selected === sq) col = mixRgb(col, hi.enemy ? RGB_ENEMY_SEL : RGB_SEL, SELECTED_TINT);
   return col;
 }
 
@@ -191,48 +211,4 @@ export function shakeOffset(k: number, axis: 0 | 1): number {
   const decay = 1 - k;
   const phase = k * Math.PI * 2 * 3;
   return ANIM.shakePx * decay * (axis === 0 ? Math.sin(phase) : Math.cos(phase * 1.3 + 0.7));
-}
-
-/**
- * Paint the arena backdrop (dark radial gradient + faint team glows: Red at the top, Blue at
- * the bottom, + fine grain against banding) into a canvas context of size w x h.
- */
-export function paintBackdrop(ctx: CanvasRenderingContext2D, w: number, h: number, seed = 7): void {
-  const g = ctx.createRadialGradient(w / 2, h * 0.5, 0, w / 2, h * 0.5, Math.hypot(w, h) * 0.55);
-  g.addColorStop(0, BACKDROP.center);
-  g.addColorStop(1, BACKDROP.edge);
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, w, h);
-  const glow = (color: string, cy: number): void => {
-    const rgb = hexToRgb(color);
-    const rg = ctx.createRadialGradient(w / 2, cy, 0, w / 2, cy, Math.max(w, h) * 0.62);
-    rg.addColorStop(0, rgbToCss(rgb, BACKDROP.teamGlow));
-    rg.addColorStop(1, rgbToCss(rgb, 0));
-    ctx.fillStyle = rg;
-    ctx.fillRect(0, 0, w, h);
-  };
-  glow(TEAM_COLORS[1].zone, -h * 0.02); // far side (Red) at the top of the screen
-  glow(TEAM_COLORS[0].zone, h * 1.02); // near side (Blue) at the bottom
-  // Faint arena rings (a hint of a summoning circle behind the board).
-  ctx.strokeStyle = 'rgba(140,170,255,0.07)';
-  ctx.lineWidth = Math.max(1, Math.min(w, h) * 0.004);
-  for (const f of [0.34, 0.5, 0.68]) {
-    ctx.beginPath();
-    ctx.ellipse(w / 2, h / 2, w * f, h * f * 0.78, 0, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-  // Vignette.
-  const v = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.35, w / 2, h / 2, Math.hypot(w, h) * 0.62);
-  v.addColorStop(0, 'rgba(0,0,0,0)');
-  v.addColorStop(1, 'rgba(0,0,0,0.55)');
-  ctx.fillStyle = v;
-  ctx.fillRect(0, 0, w, h);
-  // Grain.
-  const rnd = makeRng(seed);
-  const n = Math.round((w * h) / 90);
-  for (let i = 0; i < n; i++) {
-    const a = 0.025 + rnd() * 0.035;
-    ctx.fillStyle = rnd() < 0.5 ? `rgba(255,255,255,${a})` : `rgba(0,0,0,${a * 1.6})`;
-    ctx.fillRect(rnd() * w, rnd() * h, 1, 1);
-  }
 }

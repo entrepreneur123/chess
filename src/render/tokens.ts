@@ -5,10 +5,13 @@
  *    rarity, shared by all units: common = clean white, rare = orange glow, epic = purple glow,
  *    legendary = rainbow hue sweeping around the ring with a rotating shimmer (driven by the shared
  *    `time` uniform; the board only re-renders it at a light rate while a legendary is on screen).
- *  - Token: round board-game coin lying on the puck, showing the character's face illustration
- *    (public/chars/<id>-lv<n>-face.jpg) inside a team-coloured rim with 1..3 gold star pips. One
- *    material per piece (it carries the per-piece cross-fade / hit flash / dissolve uniforms) over a
- *    face texture shared per (character, level) and loaded lazily (sRGB, mipmaps, anisotropy).
+ *  - Token: a thick, chunky board-game coin seen from above: its edge (team-deep, milled) shows
+ *    below the top face, a navy keyline runs around the whole silhouette, the top face has a
+ *    team-colour rim lit from the top-left (light top, deep bottom, a specular arc), an inset bevel
+ *    ring, the character's face illustration (public/chars/<id>-lv<n>-face.jpg) and 1..3 gold star
+ *    pips with navy outlines on the lower rim. One material per piece (it carries the per-piece
+ *    cross-fade / hit flash / dissolve uniforms) over a face texture shared per (character, level)
+ *    and loaded lazily (sRGB, mipmaps, anisotropy).
  */
 import * as THREE from 'three';
 import type { CharacterId, Level, PlayerId, Rarity } from '../engine/types';
@@ -16,8 +19,8 @@ import { faceUrl } from './common';
 import { BOARD_COLORS, RARITY_RING, TEAM_COLORS } from './palette';
 
 /** Ring radius (world units, centre of the band) and the half width of the solid band. */
-export const RING_RADIUS = 0.447;
-const RING_HALF = 0.024;
+export const RING_RADIUS = 0.452;
+const RING_HALF = 0.026;
 /** Quad half size of the ring decal (band + glow). */
 export const RING_QUAD = 0.62;
 
@@ -44,9 +47,10 @@ void main() {
   float d = abs(r - ${RING_RADIUS.toFixed(3)});
   float aa = fwidth(r) * 1.2;
   float band = 1.0 - smoothstep(${RING_HALF.toFixed(3)} - aa, ${RING_HALF.toFixed(3)} + aa, d);
-  float glow = exp(-pow(d / 0.075, 2.0)) * uGlowAmt;
-  // Thin dark keyline just inside the band so a white ring still reads on light tiles.
-  float key = (1.0 - smoothstep(0.006, 0.006 + aa, abs(r - (${(RING_RADIUS - RING_HALF - 0.008).toFixed(3)})))) * 0.55;
+  float glow = exp(-pow(max(0.0, r - ${(RING_RADIUS + RING_HALF).toFixed(3)}) / 0.05, 2.0)) * uGlowAmt * step(${RING_RADIUS.toFixed(3)}, r);
+  // Navy keylines on both sides of the band so every ring (even white) reads on the grass.
+  float kd = abs(d - ${RING_HALF.toFixed(3)} - 0.006);
+  float key = (1.0 - smoothstep(0.007, 0.007 + aa, kd)) * 0.8;
   vec3 core = uCore;
   vec3 g = uGlow;
   if (uRainbow > 0.5) {
@@ -58,9 +62,12 @@ void main() {
     core += vec3(sh * 0.8);
     glow *= 0.85 + 0.3 * sh;
   }
-  float aCore = band * 0.96;
-  vec3 col = core * aCore + g * glow * (1.0 - aCore);
-  float alpha = max(aCore, key * (1.0 - band));
+  float aCore = band;
+  // Keyline colour: navy-ink #1b2445 (linear).
+  vec3 navy = vec3(0.0110, 0.0176, 0.0595);
+  float aKey = key * (1.0 - band);
+  vec3 col = core * aCore + navy * aKey + g * glow * (1.0 - aCore) * (1.0 - aKey);
+  float alpha = max(aCore, aKey);
   gl_FragColor = vec4(col, alpha);
   #include <colorspace_fragment>
 }`;
@@ -108,6 +115,14 @@ export class RingMaterials {
 
 const TOKEN_VS = RING_VS;
 
+/** Coin geometry (world units, top-down quad space, +y = screen up). */
+const COIN_R = 0.385;
+/** Top face centre (lifted) and the edge's lowest disc centre: the coin's thickness on screen. */
+const COIN_TOP_Y = 0.024;
+const COIN_EDGE_Y = -0.046;
+const COIN_KEY = 0.022;
+const g3 = (x: number): string => x.toFixed(4);
+
 const TOKEN_FS = /* glsl */ `
 uniform sampler2D uMap;
 uniform float uHasMap;
@@ -141,46 +156,67 @@ float vnoise(vec2 p) {
   return mix(mix(hash2(i), hash2(i + vec2(1.0, 0.0)), f.x), mix(hash2(i + vec2(0.0, 1.0)), hash2(i + vec2(1.0, 1.0)), f.x), f.y);
 }
 void main() {
-  vec2 p = (vUv - 0.5) * 2.0;
-  float r = length(p);
-  float aa = fwidth(r) * 1.25;
-  float disc = 1.0 - smoothstep(1.0 - aa, 1.0, r);
-  if (disc <= 0.0) discard;
-  // Face illustration (or a team-tinted placeholder while it loads), vignetted toward the rim.
+  // Quad space in world units (1 x 1 quad), +y = screen up.
+  vec2 q = vUv - 0.5;
+  float aa = fwidth(q.x) * 1.1;
+  // Silhouette: the top disc swept down to the edge disc (a vertical capsule), plus a keyline.
+  vec2 qs = vec2(q.x, q.y - clamp(q.y, ${g3(COIN_EDGE_Y)}, ${g3(COIN_TOP_Y)}));
+  float dSil = length(qs) - ${g3(COIN_R)};
+  float cover = 1.0 - smoothstep(${g3(COIN_KEY)} - aa, ${g3(COIN_KEY)} + aa, dSil);
+  if (cover <= 0.0) discard;
+  vec2 pt = (q - vec2(0.0, ${g3(COIN_TOP_Y)})) / ${g3(COIN_R)};
+  float r = length(pt);
+  float ar = aa / ${g3(COIN_R)};
+  vec3 navy = vec3(0.0110, 0.0176, 0.0595);
+  // Coin edge (thickness): deep team colour, darker toward the bottom, fine milling.
+  float mill = 0.92 + 0.08 * sin(asin(clamp(q.x / ${g3(COIN_R)}, -1.0, 1.0)) * 34.0);
+  float ey = clamp((q.y - ${g3(COIN_EDGE_Y - COIN_R)}) / ${g3(COIN_TOP_Y - COIN_EDGE_Y + 0.12)}, 0.0, 1.0);
+  vec3 edge = mix(uTeamDark * 0.55, uTeamDark * 1.05, ey) * mill;
+  vec3 col = edge;
+  // Top face.
+  float inTop = 1.0 - smoothstep(1.0 - ar, 1.0 + ar, r);
+  vec2 dir = pt / max(r, 1e-4);
+  float lit = clamp(0.5 + 0.5 * dot(dir, normalize(vec2(-0.55, 0.83))), 0.0, 1.0);
+  // Face illustration (or a team-tinted placeholder while it loads).
   vec3 face;
   if (uHasMap > 0.5) {
-    face = texture2D(uMap, p * 0.5 * 0.8 + vec2(0.5, 0.49)).rgb;
+    face = texture2D(uMap, pt * 0.5 * 0.8 + vec2(0.5, 0.49)).rgb;
   } else {
-    face = mix(uTeamDark * 0.55, vec3(0.02, 0.025, 0.05), smoothstep(0.0, 0.85, length(p - vec2(0.0, 0.15))));
+    face = mix(uTeamDark * 0.6, uTeamDark * 0.18, smoothstep(0.0, 0.85, length(pt - vec2(0.0, 0.15))));
   }
-  face *= 1.0 - 0.38 * smoothstep(0.5, 0.8, r);
-  vec3 col = face;
-  // Dark bevel, team rim (lit from the top-left), outer dark edge.
-  col = mix(col, vec3(0.012, 0.016, 0.035), smoothstep(0.775 - aa, 0.775 + aa, r));
-  float lit = clamp(0.5 + 0.5 * dot(normalize(p + 1e-5), normalize(vec2(-0.55, 0.83))), 0.0, 1.0);
-  vec3 rim = mix(uTeamDark, mix(uTeam, uTeamLight, 0.55), lit);
-  float spec = pow(lit, 10.0) * 0.7;
-  float band = smoothstep(0.815 - aa, 0.815 + aa, r);
-  col = mix(col, rim + spec, band);
-  col = mix(col, uTeamDark * 0.35, smoothstep(0.955 - aa, 0.955 + aa, r));
-  // Level stars on the lower rim.
+  // Inset shading: the rim casts a soft shadow onto the top-left of the face.
+  face *= 1.0 - 0.45 * smoothstep(0.56, 0.78, r) * (0.35 + 0.65 * lit);
+  vec3 top = face;
+  // Inset bevel ring (dark where the light can't reach, light on the lower right).
+  vec3 bevel = mix(mix(uTeamLight, vec3(1.0), 0.25), navy * 2.0, lit);
+  top = mix(top, bevel, smoothstep(0.775 - ar, 0.775 + ar, r));
+  // Team rim, lit from the top-left: light top, main, deep bottom + a specular arc.
+  vec3 rim = mix(uTeamDark, uTeam, smoothstep(0.1, 0.55, lit));
+  rim = mix(rim, uTeamLight, smoothstep(0.6, 0.95, lit));
+  float arc = smoothstep(0.035, 0.0, abs(r - 0.915)) * smoothstep(0.8, 0.98, lit);
+  rim += vec3(0.75) * arc;
+  top = mix(top, rim, smoothstep(0.815 - ar, 0.815 + ar, r));
+  // Level stars on the lower rim (navy outline, gold with a light top).
   for (int i = 0; i < 3; i++) {
     if (float(i) >= uLevel) break;
-    float a = -1.5708 + (float(i) - (uLevel - 1.0) * 0.5) * 0.43;
-    vec2 c = vec2(cos(a), sin(a)) * 0.8;
-    float d = sdStar5(p - c, 0.135, 0.5);
-    col = mix(col, vec3(0.03, 0.02, 0.0), 1.0 - smoothstep(-aa, aa, d - 0.035));
-    vec3 g = mix(uGold, vec3(1.0, 0.97, 0.85), clamp((p.y - c.y) * 5.0 + 0.4, 0.0, 1.0));
-    col = mix(col, g, 1.0 - smoothstep(-aa, aa, d));
+    float a = -1.5708 + (float(i) - (uLevel - 1.0) * 0.5) * 0.42;
+    vec2 c = vec2(cos(a), sin(a)) * 0.895;
+    float d = sdStar5(pt - c, 0.14, 0.5);
+    top = mix(top, navy, 1.0 - smoothstep(-ar, ar, d - 0.045));
+    vec3 gcol = mix(uGold * vec3(0.95, 0.62, 0.2), mix(uGold, vec3(1.0, 0.98, 0.85), 0.5), clamp((pt.y - c.y) * 5.0 + 0.5, 0.0, 1.0));
+    top = mix(top, gcol, 1.0 - smoothstep(-ar, ar, d));
   }
+  col = mix(col, top, inTop);
+  // Navy keyline around the whole coin (outside the silhouette).
+  col = mix(navy, col, 1.0 - smoothstep(-aa, aa, dSil));
   col = mix(col, vec3(1.0), uFlash);
-  float alpha = uOpacity * disc;
+  float alpha = uOpacity * cover;
   if (uDissolve > 0.0) {
-    float n = vnoise(p * 4.0 + 3.0) * 0.65 + vnoise(p * 11.0) * 0.35;
+    float n = vnoise(pt * 4.0 + 3.0) * 0.65 + vnoise(pt * 11.0) * 0.35;
     float th = uDissolve * 1.12 - 0.04;
     if (n < th) discard;
-    float edge = 1.0 - smoothstep(0.0, 0.09, n - th);
-    col += uEdge * edge * 2.2;
+    float e2 = 1.0 - smoothstep(0.0, 0.09, n - th);
+    col += uEdge * e2 * 2.2;
   }
   gl_FragColor = vec4(col, alpha);
   #include <colorspace_fragment>
@@ -199,8 +235,8 @@ const FACE_RETRY_MS = 15_000;
 
 /** Token geometry/materials + lazily loaded face textures (one set per BoardView). */
 export class TokenKit {
-  /** Coin face: a disc lying flat (uv up = world -z = screen up in the top-down view). */
-  readonly geometry = new THREE.CircleGeometry(0.41, 56).rotateX(-Math.PI / 2);
+  /** Coin quad lying flat (uv up = world -z = screen up in the top-down view); the shader cuts it. */
+  readonly geometry = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
   private readonly faces = new Map<string, FaceSlot>();
   private readonly textures: THREE.Texture[] = [];
   private readonly loader = new THREE.TextureLoader();

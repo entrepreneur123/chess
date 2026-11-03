@@ -32,6 +32,7 @@ void main() {
   float a = smoothstep(1.0, 0.2, r) * pow(1.0 - vAge, 1.3) * 0.85;
   if (a < 0.01) discard;
   gl_FragColor = vec4(vColor, a);
+  #include <colorspace_fragment>
 }`;
 
 export class DustPool {

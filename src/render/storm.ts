@@ -1,6 +1,7 @@
 /**
  * Storm ("자기장") overlay for the 3D board: the outermost LEFT and RIGHT columns that the storm has
- * consumed get an animated electric purple/magenta energy field, ONE additive draw call:
+ * consumed get an animated purple haze with soft magenta energy veins, ONE premultiplied draw call
+ * (the floor haze tints / darkens the bright grass, veins / wall / warning frame add light):
  *  - a floor sheet over the consumed tiles (scrolling noise + bright veins, brighter at the
  *    inner boundary),
  *  - a vertical energy wall at the boundary between consumed and safe columns (rising noise,
@@ -19,8 +20,8 @@ export const STORM_COLORS = {
   edge: '#FF3DF0',
   /** Hot core (floor line, vein cores). */
   core: '#FFC8FB',
-  /** Tile tint inside the storm. */
-  tile: '#2A1040',
+  /** Tile tint inside the storm (muted purple under the haze). */
+  tile: '#4A2A78',
 } as const;
 
 const VS = /* glsl */ `
@@ -79,8 +80,11 @@ void main() {
     float inner = pow(vUv.x, 2.2);
     float sw = (fract(vUv.y * 0.5 - uTime * 0.12) - 0.5) * 7.0; // pow() of a negative base is undefined
     float sweep = exp(-sw * sw) * 0.3;
-    col = uField * (0.22 + 0.32 * n) + uEdge * vein * 0.85 + uEdge * inner * 0.45 + uCore * sweep * (0.3 + 0.7 * n);
-    col *= 0.9;
+    // Purple haze (alpha darkens / tints the grass) + soft veins and a brighter inner boundary.
+    float a = 0.4 + 0.16 * n + 0.12 * inner;
+    col = uField * a * (0.9 + 0.3 * n) + uEdge * vein * 0.4 + uEdge * inner * 0.22 + uCore * sweep * (0.2 + 0.5 * n);
+    gl_FragColor = vec4(col, a);
+    return;
   } else if (kind < 1.5) {
     // Wall: rising noise, crackling arcs, hot floor line, soft top fade. Hidden while uStorm = 0.
     float h = vUv.y;
@@ -99,7 +103,7 @@ void main() {
     float ticks = step(0.5, fract(vUv.y * 18.0 - uTime * 1.5)) * smoothstep(0.75, 1.0, vUv.x);
     col = (uEdge * (0.1 + 0.2 * pulse) + uEdge * max(ex, ez) * (0.55 + 0.6 * pulse) + uCore * ticks * 0.2 * pulse) * uWarn;
   }
-  gl_FragColor = vec4(col, 1.0);
+  gl_FragColor = vec4(col, 0.0);
 }`;
 
 export class StormFx {
@@ -164,12 +168,17 @@ export class StormFx {
       fragmentShader: FS,
       transparent: true,
       depthWrite: false,
-      blending: THREE.AdditiveBlending,
+      // Premultiplied: the floor writes alpha (haze), the wall / warning frame alpha 0 (= additive).
+      blending: THREE.CustomBlending,
+      blendSrc: THREE.OneFactor,
+      blendDst: THREE.OneMinusSrcAlphaFactor,
       side: THREE.DoubleSide,
     });
     this.mesh = new THREE.Mesh(this.geo, this.mat);
     this.mesh.frustumCulled = false;
-    this.mesh.renderOrder = 4;
+    // Over the ground decals / rarity rings (2), under the coins (4) even when depth-sorting would
+    // put this board-wide mesh after a corner token.
+    this.mesh.renderOrder = 3.5;
     this.mesh.visible = false;
     this.mesh.raycast = () => undefined;
   }
