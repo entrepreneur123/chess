@@ -10,6 +10,7 @@ import {
   WASTE_SIZE,
   createGame,
   getPieceById,
+  josa,
   materialScore,
   skillAnchors,
   skillBlock,
@@ -445,7 +446,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     const unused = !!mine && s.skillsUsed[HUMAN] === 0 && s.storm === 0;
     if (!notified.unlock && mine && unused && s.ply >= SKILL_UNLOCK_PLY && snap.phase === 'humanTurn') {
       notified.unlock = true;
-      toast(`${CHARACTERS[mine.character].nameKo}의 스킬 '불모지'를 쓸 수 있어요! ${CHARACTERS[mine.character].nameKo}를 탭하세요`, { tone: 'success', duration: 2800 });
+      toast(`${CHARACTERS[mine.character].nameKo}의 스킬 '불모지'를 쓸 수 있어요! ${josa(CHARACTERS[mine.character].nameKo, '을/를')} 탭하세요`, { tone: 'success', duration: 2800 });
     }
     if (!notified.storm && unused && s.stormIn !== null && s.storm === 0) {
       notified.storm = true;

@@ -41,11 +41,13 @@ export const DEMO_PROFILE = {
 };
 
 /**
- * Math.random seed. With it the matchmaking screen deterministically builds the opponent
- * "번개 지호" (normal): walk 2성 at (10,8), insaner 2성 at (10,2), sad 3성 at (9,5) (absolute
- * squares; the scripted match below depends on exactly this squad).
+ * Math.random seed, applied the moment the matchmaking screen opens (see seedMatchmaking). With it
+ * the matchmaking screen deterministically builds the opponent "번개 지호" (normal): walk 2성 at
+ * (10,8), insaner 2성 at (10,2), sad 3성 at (9,5) (absolute squares; the scripted match below
+ * depends on exactly this squad). Re-seeding at that moment keeps the opponent the same however
+ * many random numbers the screens before it used.
  */
-export const MATCH_SEED = 1;
+export const MATCH_SEED = 87589;
 
 /** Start `vite` (DEV server, so the DEV-only hooks exist). Returns { base, stop }. */
 export async function startDevServer(port = 5191) {
@@ -80,12 +82,13 @@ export async function startDevServer(port = 5191) {
 }
 
 /** Browser context with the demo profile, the seeded Math.random and (optionally) audio logging. */
-export async function newPhoneContext(browser, { profile = DEMO_PROFILE, seed = MATCH_SEED, audioLog = false, scale = 2 } = {}) {
-  const ctx = await browser.newContext({ viewport: PHONE, deviceScaleFactor: scale, hasTouch: false });
+export async function newPhoneContext(browser, { profile = DEMO_PROFILE, seed = MATCH_SEED, audioLog = false, scale = 2, viewport = PHONE } = {}) {
+  const ctx = await browser.newContext({ viewport, deviceScaleFactor: scale, hasTouch: false });
   await ctx.addInitScript(
     ([p, s]) => {
       localStorage.setItem('tactics12.profile', JSON.stringify(p));
       let a = s >>> 0;
+      window.__reseed = (k) => (a = k >>> 0);
       Math.random = () => {
         a = (a + 0x6d2b79f5) >>> 0;
         let t = a;
@@ -168,6 +171,12 @@ export const SEL = {
   lobbyScreen: '[data-screen="lobby"]',
   bootSplash: '.boot-splash-out',
   toast: '.toast',
+  /** Bottom tab bar buttons (v6): collection (캐릭터), lobby (대전), formation (진형). */
+  tab: (name) => `nav.tabbar .tab[data-nav="${name}"]`,
+  difficulty: (d) => `.seg__btn[data-difficulty="${d}"]`,
+  startMatch: '[data-action="start-match"]',
+  /** In-game hand card of one of my pieces (piece id, e.g. "p0-walk"). */
+  handCard: (pieceId) => `.hand-card[data-action="hand-card"][data-piece="${pieceId}"]`,
   skillButton: '[data-action="skill"]',
   skillConfirm: '[data-action="skill-confirm"]',
   cutIn: '.cutin',
@@ -177,29 +186,102 @@ export const SEL = {
   formationCell: (row, col) => `[data-row="${row}"][data-col="${col}"]`,
   collectionCard: (id) => `[data-character="${id}"]`,
 };
-export const SCREENS = { formation: 'formation', collection: 'collection', matchmaking: 'matchmaking' };
 
-export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/**
+ * Real-time multiplier for every wait in this module. The promo recorder slows the page clock down
+ * (installTimeWarp) and calls setTimeScale() with the same factor, so the scripted pauses keep
+ * their on-screen (virtual) length.
+ */
+let SLOW = 1;
+export function setTimeScale(scale) {
+  SLOW = 1 / scale;
+}
+export const sleep = (ms) => new Promise((r) => setTimeout(r, ms * SLOW));
+
+/**
+ * Slow the page's clock to `scale` x real time: Date, performance.now, requestAnimationFrame
+ * timestamps and setTimeout/setInterval delays (CSS/Web Animations are slowed separately through
+ * CDP Animation.setPlaybackRate). Software WebGL renders the board at ~13 fps in real time; at
+ * 0.2x the recorder gets ~30 frames per virtual second. window.__warp = { scale, d0 } lets the
+ * recorder map page (virtual) times back to wall-clock time: real = d0 + (virtual - d0) / scale.
+ */
+export async function installTimeWarp(ctx, scale) {
+  await ctx.addInitScript((S) => {
+    const rNow = performance.now.bind(performance);
+    const t0 = rNow();
+    const vnow = () => t0 + (rNow() - t0) * S;
+    performance.now = vnow;
+    const RD = Date;
+    const d0 = RD.now();
+    const vd = () => d0 + (RD.now() - d0) * S;
+    class VDate extends RD {
+      constructor(...a) {
+        if (a.length) super(...a);
+        else super(vd());
+      }
+      static now() {
+        return vd();
+      }
+    }
+    window.Date = VDate;
+    const rRaf = window.requestAnimationFrame.bind(window);
+    window.requestAnimationFrame = (cb) => rRaf(() => cb(vnow()));
+    const rST = window.setTimeout.bind(window);
+    const rSI = window.setInterval.bind(window);
+    window.setTimeout = (fn, ms, ...a) => rST(fn, (ms || 0) / S, ...a);
+    window.setInterval = (fn, ms, ...a) => rSI(fn, (ms || 0) / S, ...a);
+    window.__warp = { scale: S, d0 };
+  }, scale);
+}
 
 /** Open the app at the lobby and wait until the boot splash is gone. */
 export async function openApp(page, base) {
   await page.goto(base + '/');
   await page.waitForSelector(SEL.lobbyScreen);
-  await page.waitForFunction((s) => !document.querySelector(s), SEL.bootSplash, { timeout: 8000 }).catch(() => {});
+  await page.waitForFunction((s) => !document.querySelector(s), SEL.bootSplash, { timeout: 8000 * SLOW }).catch(() => {});
   await page.evaluate(() => document.fonts.ready);
-  // One click unlocks the AudioContext (autoplay policy) exactly like a player's first tap.
-  await page.mouse.click(2, PHONE_H() - 2).catch(() => {});
+  // A key press is a user gesture: it unlocks the AudioContext (autoplay policy) like a player's
+  // first tap, without hitting any control (the tab bar now spans the bottom edge).
+  await page.keyboard.press('Shift');
   await sleep(300);
 }
-const PHONE_H = () => PHONE.height;
 
 export async function navigate(page, name, params) {
   await page.evaluate(([n, p]) => (p ? window.__router.navigate(n, p) : window.__router.navigate(n)), [name, params]);
 }
 
+/** Switch top-level screens the way a player does: tap the bottom tab bar. */
+export async function tapTab(page, name) {
+  await page.click(SEL.tab(name));
+  await page.waitForSelector(`[data-screen="${name}"]`);
+}
+
+/** From the lobby: pick the difficulty on the segmented control, then tap the gold 대전 시작. */
+export async function startMatch(page, difficulty = 'normal') {
+  await page.click(SEL.difficulty(difficulty));
+  await sleep(250);
+  await page.click(SEL.startMatch);
+  await page.waitForSelector('[data-screen="matchmaking"]');
+}
+
+/**
+ * Make the next matchmaking screen deterministic: re-seed Math.random right when the router opens
+ * it (whether by the 대전 시작 tap or by navigate()). Call once after openApp().
+ */
+export async function seedMatchmaking(page, seed = MATCH_SEED) {
+  await page.evaluate((k) => {
+    const r = window.__router;
+    const nav = r.navigate.bind(r);
+    r.navigate = (name, ...rest) => {
+      if (name === 'matchmaking') window.__reseed(k);
+      return nav(name, ...rest);
+    };
+  }, seed);
+}
+
 /** Wait for the match to be mounted, then load the engine module into the page as window.__E. */
 export async function waitForMatch(page) {
-  await page.waitForFunction(() => !!window.__game?.controller, null, { timeout: 20000 });
+  await page.waitForFunction(() => !!window.__game?.controller, null, { timeout: 20000 * SLOW });
   await page.evaluate(async () => {
     window.__E = await import('/src/engine/index.ts');
   });
@@ -219,6 +301,8 @@ export async function scriptBot(page, moves, thinkMs = 650) {
       window.__botErrors = [];
       c.ports.botThinkDelayMs = () => think;
       c.ports.requestBotMove = async (s) => {
+        // holdBot()/releaseBot(): keep the opponent "thinking" while a still is taken.
+        while (window.__botHold) await new Promise((r) => setTimeout(r, 40));
         const next = queue.shift();
         if (!next) {
           window.__botErrors.push('bot queue empty');
@@ -238,6 +322,10 @@ export async function scriptBot(page, moves, thinkMs = 650) {
   );
 }
 
+/** Keep the scripted opponent from answering until releaseBot() (its turn clock keeps running). */
+export const holdBot = (page) => page.evaluate(() => (window.__botHold = true));
+export const releaseBot = (page) => page.evaluate(() => (window.__botHold = false));
+
 /** Viewport-centre of a board square (CSS px). */
 export async function cellCenter(page, r, c) {
   const rect = await page.evaluate(([r, c]) => window.__game.board.cellRect({ r, c }), [r, c]);
@@ -251,14 +339,14 @@ export async function tapCell(page, r, c) {
 }
 
 /** Wait until it is the player's turn again (or the match ended). */
-export async function waitHumanTurn(page, timeout = 15000) {
+export async function waitHumanTurn(page, timeout = 15000 * SLOW) {
   await page.waitForFunction(() => {
     const c = window.__game?.controller;
     return c && (c.phase === 'humanTurn' || c.phase === 'ended');
   }, null, { timeout });
 }
 
-export async function waitPhase(page, phase, timeout = 15000) {
+export async function waitPhase(page, phase, timeout = 15000 * SLOW) {
   await page.waitForFunction((ph) => window.__game?.controller?.phase === ph, phase, { timeout });
 }
 
@@ -306,12 +394,15 @@ export const BOT_SCRIPT = [
  * Play one PLAYER_SCRIPT step through the real UI: tap the piece (its reach shows), hold, tap the
  * destination. For the skill step: tap Brutile, press the skill button, tap the area centre (the
  * preview shows), then press 설치. `hooks.selected` / `hooks.aiming` run while the reach / the
- * wasteland preview is on screen, `hooks.played` right after the move/skill was committed (used
+ * wasteland preview is on screen, `hooks.begin` once it is the player's turn (before any tap),
+ * `hooks.played` right after the move/skill was committed (used
  * for screenshots).
  */
 export async function playStep(page, step, { holdMs = 650, hooks = {} } = {}) {
+  // `step.viaHand` (a piece id) selects the piece by tapping its hand card instead of the board.
   await waitHumanTurn(page);
   const ply = await plyOf(page);
+  if (hooks.begin) await hooks.begin();
   if (step.skill) {
     await tapCell(page, step.skill[0], step.skill[1]);
     await sleep(holdMs);
@@ -323,13 +414,14 @@ export async function playStep(page, step, { holdMs = 650, hooks = {} } = {}) {
     await page.click(SEL.skillConfirm);
     if (hooks.played) await hooks.played();
   } else {
-    await tapCell(page, step.from[0], step.from[1]);
+    if (step.viaHand) await page.click(SEL.handCard(step.viaHand));
+    else await tapCell(page, step.from[0], step.from[1]);
     await sleep(holdMs);
     if (hooks.selected) await hooks.selected();
     await tapCell(page, step.to[0], step.to[1]);
     if (hooks.played) await hooks.played();
   }
-  await page.waitForFunction((p) => window.__game.controller.state.ply > p, ply, { timeout: 10000 });
+  await page.waitForFunction((p) => window.__game.controller.state.ply > p, ply, { timeout: 10000 * SLOW });
 }
 
 /** Expect a piece (by id) at a square, or gone (null). */
@@ -340,16 +432,45 @@ export async function expectPiece(page, id, at) {
 }
 
 /**
- * Freeze the illustration cut-in (CSS animations of the real `.cutin` element) at `atMs` of its
- * 1250 ms life so a still shows its full-on frame. Must run before the game removes it.
+ * Freeze the next illustration cut-in (CSS animations of the real `.cutin` element) at `atMs` of
+ * its 1250 ms life so a still shows its full-on frame. Call BEFORE the move that triggers it: a
+ * MutationObserver freezes the element the moment the game adds it, so a slow (software WebGL)
+ * frame rate cannot make the capture miss the window. The game removes the element with a timer;
+ * that one remove() is deferred until releaseCutIn(). Then await cutInFrozen() and take the still.
  */
-export async function freezeCutIn(page, atMs = 520, timeout = 6000) {
-  await page.waitForSelector(SEL.cutIn, { timeout });
+export async function armCutInFreeze(page, atMs = 620) {
   await page.evaluate(([t, sel]) => {
-    const el = document.querySelector(sel);
-    for (const a of el.getAnimations({ subtree: true })) {
-      a.pause();
-      a.currentTime = t;
-    }
+    window.__frozenCutIn = null;
+    const mo = new MutationObserver(() => {
+      const el = document.querySelector(sel);
+      if (!el) return;
+      mo.disconnect();
+      for (const a of el.getAnimations({ subtree: true })) {
+        a.pause();
+        a.currentTime = t;
+      }
+      el.remove = () => (el.__removeDeferred = true);
+      window.__frozenCutIn = el;
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
   }, [atMs, SEL.cutIn]);
+}
+
+export async function cutInFrozen(page, timeout = 10000 * SLOW) {
+  await page.waitForFunction(() => !!window.__frozenCutIn, null, { timeout });
+  // Let the frozen frame (and the cut-in art) paint.
+  await page.evaluate(() => window.__frozenCutIn.querySelector('img')?.decode().catch(() => {}));
+  await sleep(150);
+}
+
+/** Undo armCutInFreeze(): resume the animations and let the game's pending remove() happen. */
+export async function releaseCutIn(page) {
+  await page.evaluate(() => {
+    const el = window.__frozenCutIn;
+    if (!el) return;
+    window.__frozenCutIn = null;
+    delete el.remove;
+    if (el.__removeDeferred) el.remove();
+    else for (const a of el.getAnimations({ subtree: true })) a.play();
+  });
 }

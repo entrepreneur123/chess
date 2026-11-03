@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<!--
+  Promo video layers, Dark Arena v5 / v6 style. Served by the Vite DEV server (the app's bundled fonts
+  load); lib/video.mjs opens it at the output size and calls window.renderLayer(spec), then screenshots
+  it (transparent where the layer is transparent). The gameplay itself is real recorded footage that
+  ffmpeg places in the phone screen; this page draws only the backdrop, the phone bezel, the caption
+  cards and the end card.
+    spec.kind: 'bg'      opaque backdrop under the footage (with the phone's drop shadow)
+               'frame'   transparent layer over the footage: the phone bezel (rounds the screen corners)
+               'caption' transparent caption card (eyebrow + title, optional character art in 16:9)
+               'end'     opaque end card (wordmark, squad art, CTA)
+    spec.aspect: '9x16' (1080x1920) or '16x9' (1920x1080); spec.screen: { x, y, w, h } of the footage.
+-->
+<link rel="stylesheet" href="/src/styles/fonts.css" />
+<style>
+  :root {
+    --night-0: #070a12; --night-1: #0d1322; --panel: #1b2338; --line: #33405f;
+    --ink: #eef2ff; --outline: #05070d;
+    --gold: #f2c14e; --gold-hi: #ffe7a3; --gold-deep: #c8891e; --gold-lip: #6e4510;
+    --blue: 59, 139, 255; --red: 255, 70, 85; --cyan: 120, 220, 255; --arcane: 139, 108, 255; --toxic: 124, 255, 90; --goldc: 242, 193, 78;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { overflow: hidden; background: transparent; }
+  body { position: relative; font-family: 'Pretendard', system-ui, sans-serif; color: var(--ink); }
+  .abs { position: absolute; }
+  .fill { position: absolute; inset: 0; }
+  .backdrop { position: absolute; inset: 0; background-size: cover; background-position: center; }
+  .shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(13, 19, 34, 0.35), rgba(7, 10, 18, 0.75)); }
+  .vignette { position: absolute; inset: 0; background: radial-gradient(120% 90% at 50% 50%, transparent 55%, rgba(7, 10, 18, 0.9) 100%); }
+  .grid-floor { position: absolute; perspective: 420px; perspective-origin: 50% 0%;
+    -webkit-mask-image: linear-gradient(180deg, transparent, #000 45%); mask-image: linear-gradient(180deg, transparent, #000 45%); }
+  .grid-floor i { position: absolute; left: 50%; bottom: 0; aspect-ratio: 1; transform: translateX(-50%) rotateX(64deg); transform-origin: 50% 100%;
+    background:
+      linear-gradient(180deg, rgba(var(--red), 0.3), transparent 24%, transparent 74%, rgba(var(--blue), 0.42)),
+      linear-gradient(rgba(var(--cyan), 0.5) 2px, transparent 2px) 0 0 / 100% 8.333%,
+      linear-gradient(90deg, rgba(var(--cyan), 0.5) 2px, transparent 2px) 0 0 / 8.333% 100%,
+      rgba(13, 19, 34, 0.5);
+    box-shadow: 0 0 0 3px rgba(var(--cyan), 0.6), 0 0 80px rgba(var(--blue), 0.5); }
+  .phone-shadow { position: absolute; border-radius: 60px; box-shadow: 0 40px 90px rgba(0, 0, 0, 0.8), 0 0 140px rgba(var(--blue), 0.28); background: #090d17; }
+  .bezel { position: absolute; border-style: solid; border-color: #151d31; background: transparent;
+    box-shadow: 0 0 0 2px rgba(242, 193, 78, 0.8), 0 0 0 5px #090d17; }
+  .bezel::before { content: ''; position: absolute; inset: -1px; border-radius: inherit; box-shadow: inset 0 0 0 2px #28324d; }
+  /* HUD corner brackets (board bezel language). */
+  .hud b { position: absolute; width: 46px; height: 46px; border: 0 solid rgba(var(--cyan), 0.75); filter: drop-shadow(0 0 8px rgba(var(--cyan), 0.6)); }
+  .hud b:nth-child(1) { left: 0; top: 0; border-width: 4px 0 0 4px; }
+  .hud b:nth-child(2) { right: 0; top: 0; border-width: 4px 4px 0 0; }
+  .hud b:nth-child(3) { left: 0; bottom: 0; border-width: 0 0 4px 4px; }
+  .hud b:nth-child(4) { right: 0; bottom: 0; border-width: 0 4px 4px 0; }
+
+  .eyebrow { display: inline-flex; align-items: center; gap: 12px; padding: 10px 22px 10px 18px; border-radius: 999px;
+    font: 800 34px/1 'Pretendard', sans-serif; letter-spacing: 0.02em; color: var(--gold);
+    background: rgba(17, 23, 39, 0.94); box-shadow: inset 0 0 0 2px rgba(242, 193, 78, 0.6), 0 6px 18px rgba(0, 0, 0, 0.45); }
+  .eyebrow i { width: 12px; height: 12px; transform: rotate(45deg); border-radius: 2px; background: linear-gradient(135deg, var(--gold-hi), var(--gold) 50%, var(--gold-deep)); }
+  .title { font: 400 92px/1.1 'Black Han Sans', sans-serif; color: var(--ink); word-break: keep-all; white-space: nowrap;
+    text-shadow: -3px -3px 0 var(--outline), 3px -3px 0 var(--outline), -3px 3px 0 var(--outline), 3px 3px 0 var(--outline),
+      0 -3px 0 var(--outline), -3px 0 0 var(--outline), 3px 0 0 var(--outline), 0 7px 0 var(--outline), 0 10px 28px rgba(0, 0, 0, 0.7); }
+  .title em { font-style: normal; color: var(--gold); }
+  .cap9 { position: absolute; left: 0; right: 0; top: 0; height: 300px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;
+    background: linear-gradient(180deg, rgba(7, 10, 18, 0.88), rgba(7, 10, 18, 0.62) 75%, rgba(7, 10, 18, 0)); }
+  .cap16 { position: absolute; left: 0; top: 0; bottom: 0; width: 1200px; }
+  .cap16 .wash { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(7, 10, 18, 0.92) 0%, rgba(7, 10, 18, 0.8) 44%, rgba(7, 10, 18, 0) 70%); }
+  .cap16 .art { position: absolute; left: 650px; top: 150px; height: 800px; aspect-ratio: 3 / 4; background-size: cover; background-position: 50% 30%;
+    -webkit-mask-image: radial-gradient(ellipse 50% 50% at 50% 46%, #000 52%, transparent 100%); mask-image: radial-gradient(ellipse 50% 50% at 50% 46%, #000 52%, transparent 100%); }
+  .cap16 .copy { position: absolute; left: 120px; top: 0; bottom: 0; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 30px; }
+  .cap16 .title { font-size: 104px; white-space: normal; }
+
+  /* Wordmark: the app's two-tone recipe (src/styles/lobby.css .wordmark). */
+  .wordmark { display: flex; gap: 0.22em; font: italic 900 120px/1 'Exo 2', sans-serif; letter-spacing: -0.01em; white-space: nowrap; }
+  .wordmark span { position: relative; padding: 0 0.06em; color: transparent; }
+  .wordmark span::before, .wordmark span::after { content: attr(data-text); position: absolute; inset: 0; padding: inherit; }
+  .wordmark span::before { color: var(--outline); -webkit-text-stroke: 0.17em var(--outline); text-shadow: 0 0.1em 0 var(--outline), 0 0.2em 0.5em rgba(0, 0, 0, 0.6); }
+  .wordmark span:last-child::before { text-shadow: 0 0.1em 0 var(--outline), 0 0 0.6em rgba(242, 193, 78, 0.45), 0 0.2em 0.5em rgba(0, 0, 0, 0.6); }
+  .wordmark span::after { -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  .wordmark span:first-child::after { background-image: linear-gradient(180deg, #fff 0 50%, #c3cdea 50% 100%); }
+  .wordmark span:last-child::after { background-image: linear-gradient(180deg, var(--gold-hi) 0%, var(--gold) 50%, var(--gold-deep) 50% 100%); }
+  .tag { font: 800 30px/1 'Pretendard', sans-serif; letter-spacing: 0.32em; color: #8fd8ff; text-shadow: 0 0 14px rgba(var(--cyan), 0.5); }
+  .fig { position: absolute; aspect-ratio: 3 / 4; }
+  .fig img { display: block; width: 100%; height: 100%; object-fit: cover;
+    -webkit-mask-image: radial-gradient(ellipse 50% 50% at 50% 46%, #000 56%, transparent 100%); mask-image: radial-gradient(ellipse 50% 50% at 50% 46%, #000 56%, transparent 100%); }
+  .fig--side img { filter: brightness(0.8) saturate(0.95); }
+  .cta { display: inline-flex; align-items: center; justify-content: center; gap: 18px; padding: 0 64px; height: 132px; border-radius: 30px;
+    font: 400 64px/1 'Black Han Sans', sans-serif; color: #2a1803;
+    background: linear-gradient(180deg, var(--gold-hi), var(--gold) 42%, var(--gold-deep)); box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.55), 0 10px 0 var(--gold-lip), 0 22px 40px rgba(0, 0, 0, 0.55), 0 0 60px rgba(var(--goldc), 0.35); }
+  .cta svg { width: 54px; height: 54px; }
+  .chips { display: flex; gap: 14px; }
+  .chip { display: inline-flex; align-items: center; gap: 10px; padding: 12px 22px; border-radius: 999px; font: 800 28px/1 'Pretendard', sans-serif; color: var(--ink);
+    background: rgba(27, 35, 56, 0.94); box-shadow: inset 0 0 0 2px var(--line), inset 0 2px 0 rgba(255, 255, 255, 0.06); }
+  .chip i { width: 11px; height: 11px; transform: rotate(45deg); border-radius: 2px; background: linear-gradient(135deg, var(--gold-hi), var(--gold) 50%, var(--gold-deep)); }
+  .hook { font: 400 64px/1.18 'Black Han Sans', sans-serif; color: var(--ink); text-align: center; word-break: keep-all;
+    text-shadow: -3px -3px 0 var(--outline), 3px -3px 0 var(--outline), -3px 3px 0 var(--outline), 3px 3px 0 var(--outline), 0 7px 0 var(--outline), 0 10px 24px rgba(0, 0, 0, 0.6); }
+  .hook em { font-style: normal; color: var(--gold); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+  const ACCENT = { blue: '59, 139, 255', red: '255, 70, 85', toxic: '124, 255, 90', arcane: '139, 108, 255', gold: '242, 193, 78' };
+  // The app's own 'swords' glyph (src/ui/icons.ts), as on the lobby's 대전 시작 button.
+  const SWORDS = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 3 5.79 3.88 14.7 12.79 12.79 14.7 3.88 5.79zM16.44 10.5l1.34 1.34-5.94 5.94-1.34-1.34zM15.41 13.92l3.39 3.4-1.48 1.48-3.4-3.39zM19.12 16.58l1.84 1.83-2.55 2.55-1.83-1.84zM20.12 5.79 11.21 14.7 9.3 12.79 18.21 3.88 21 3zM13.5 16.44l-1.34 1.34-5.94-5.94 1.34-1.34zM10.08 15.41l-3.4 3.39-1.48-1.48 3.39-3.4zM7.42 19.12 5.59 20.96 3.04 18.41 4.88 16.58z"/></svg>';
+  const el = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstChild; };
+  const wordmark = (px) => `<div class="wordmark" style="font-size:${px}px" role="img" aria-label="GRID CLASH"><span data-text="GRID">GRID</span><span data-text="CLASH">CLASH</span></div>`;
+  const BACKDROP = '/docs/brand/bg/match.png';
+  const END_BACKDROP = '/docs/brand/bg/lobby.png';
+  const ILL = (id) => `/docs/brand/illust/illust-${id}-lv3.jpg`;
+
+  function bg(spec, W, H) {
+    const s = spec.screen, b = spec.bezel;
+    const floor = spec.aspect === '9x16'
+      ? `<div class="grid-floor" style="left:-200px;right:-200px;bottom:-40px;height:900px"><i style="width:1500px"></i></div>`
+      : `<div class="grid-floor" style="left:0;right:-200px;bottom:-60px;height:560px"><i style="width:2000px"></i></div>`;
+    return `
+      <div class="backdrop" style="background-image:url(${spec.aspect === '9x16' ? BACKDROP : END_BACKDROP});${spec.aspect === '16x9' ? 'filter:blur(2px) brightness(0.85);inset:-20px' : ''}"></div>
+      <div class="fill" style="background:radial-gradient(60% 40% at 50% 70%, rgba(${ACCENT.blue},0.25), transparent 70%), radial-gradient(50% 30% at 80% 8%, rgba(${ACCENT.red},0.22), transparent 70%)"></div>
+      ${floor}
+      <div class="shade"></div>
+      <div class="vignette"></div>
+      <div class="phone-shadow" style="left:${s.x - b}px;top:${s.y - b}px;width:${s.w + 2 * b}px;height:${s.h + 2 * b}px"></div>`;
+  }
+
+  function frame(spec) {
+    const s = spec.screen, b = spec.bezel, r = spec.radius;
+    return `<div class="bezel" style="left:${s.x - b}px;top:${s.y - b}px;width:${s.w + 2 * b}px;height:${s.h + 2 * b}px;border-width:${b}px;border-radius:${r + b}px"></div>`;
+  }
+
+  function caption(spec) {
+    const acc = ACCENT[spec.accent ?? 'gold'];
+    if (spec.aspect === '9x16') {
+      return `<div class="cap9" style="box-shadow: inset 0 -2px 0 rgba(${acc},0)">
+        <span class="eyebrow"><i></i><span>${spec.eyebrow}</span></span>
+        <div class="title" id="title">${spec.title}</div></div>`;
+    }
+    return `<div class="cap16">
+        ${spec.art ? `<div class="art" style="background-image:url(${ILL(spec.art)})"></div>` : ''}
+        <div class="wash"></div>
+        <div class="copy"><span class="eyebrow"><i></i><span>${spec.eyebrow}</span></span>
+        <div class="title" id="title">${spec.title.replace(/<br>/g, '<br>')}</div></div></div>`;
+  }
+
+  function end(spec, W, H) {
+    const tall = spec.aspect === '9x16';
+    const figs = tall
+      ? `<div class="fig fig--side" style="left:-40px;top:520px;height:760px"><img src="${ILL('walk')}"></div>
+         <div class="fig fig--side" style="left:580px;top:500px;height:780px"><img src="${ILL('brutile')}"></div>
+         <div class="fig" style="left:150px;top:420px;height:1040px"><img src="${ILL('insaner')}"></div>`
+      : `<div class="fig fig--side" style="left:930px;top:250px;height:720px"><img src="${ILL('walk')}"></div>
+         <div class="fig fig--side" style="left:1480px;top:200px;height:760px"><img src="${ILL('brutile')}"></div>
+         <div class="fig" style="left:1110px;top:20px;height:1060px"><img src="${ILL('insaner')}"></div>`;
+    const floor = tall
+      ? `<div class="grid-floor" style="left:-200px;right:-200px;bottom:300px;height:700px"><i style="width:1400px"></i></div>`
+      : `<div class="grid-floor" style="left:700px;right:-300px;bottom:-60px;height:600px"><i style="width:1700px"></i></div>`;
+    const copy = tall
+      ? `<div class="abs" style="left:0;right:0;top:150px;display:flex;flex-direction:column;align-items:center;gap:22px">
+           <img src="/docs/brand/out/icon-rounded-512.png" style="width:150px;height:150px;border-radius:34px;box-shadow:0 0 0 3px rgba(242,193,78,.75),0 16px 40px rgba(0,0,0,.6)">
+           ${wordmark(124)}<div class="tag">12×12 TACTICS ARENA</div></div>
+         <div class="abs" style="left:0;right:0;top:1420px;bottom:0;display:flex;flex-direction:column;align-items:center;gap:40px;padding-top:40px;
+              background:linear-gradient(180deg, rgba(7,10,18,0), rgba(7,10,18,.9) 22%, rgba(7,10,18,.96))">
+           <div class="hook">말 <em>3</em>개로 펼치는 심리전</div>
+           <div class="cta">${SWORDS}지금 플레이</div>
+           <div class="chips"><span class="chip"><i></i>1:1 전술 대전</span><span class="chip"><i></i>진형 편성</span><span class="chip"><i></i>다섯 캐릭터</span></div></div>`
+      : `<div class="abs" style="left:0;top:0;bottom:0;width:1150px;background:linear-gradient(90deg, rgba(7,10,18,.95), rgba(7,10,18,.85) 60%, rgba(7,10,18,0))"></div>
+         <div class="abs" style="left:130px;top:0;bottom:0;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:28px">
+           <div style="display:flex;align-items:center;gap:30px"><img src="/docs/brand/out/icon-rounded-512.png" style="width:140px;height:140px;border-radius:32px;box-shadow:0 0 0 3px rgba(242,193,78,.75),0 16px 40px rgba(0,0,0,.6)">
+           <div>${wordmark(116)}<div class="tag" style="margin-top:14px">12×12 TACTICS ARENA</div></div></div>
+           <div class="hook" style="text-align:left;margin-top:14px">말 <em>3</em>개로 펼치는 심리전</div>
+           <div class="cta" style="margin-top:12px">${SWORDS}지금 플레이</div>
+           <div class="chips"><span class="chip"><i></i>1:1 전술 대전</span><span class="chip"><i></i>진형 편성</span><span class="chip"><i></i>다섯 캐릭터</span></div></div>`;
+    return `
+      <div class="backdrop" style="background-image:url(${END_BACKDROP})"></div>
+      <div class="fill" style="background:radial-gradient(50% 36% at ${tall ? '50% 52%' : '70% 50%'}, rgba(${ACCENT.arcane},0.45), transparent 70%), radial-gradient(60% 30% at 50% 100%, rgba(${ACCENT.blue},0.4), transparent 70%)"></div>
+      ${floor}${figs}
+      <div class="vignette"></div>
+      <div class="hud abs" style="inset:28px"><b></b><b></b><b></b><b></b></div>
+      ${copy}`;
+  }
+
+  /** Render one layer. Resolves when every image and face is ready; returns layout facts for checks. */
+  window.renderLayer = async (spec) => {
+    const [W, H] = spec.aspect === '9x16' ? [1080, 1920] : [1920, 1080];
+    document.documentElement.style.width = document.body.style.width = W + 'px';
+    document.documentElement.style.height = document.body.style.height = H + 'px';
+    const root = document.getElementById('root');
+    root.style.cssText = `position:relative;width:${W}px;height:${H}px;overflow:hidden;background:${spec.kind === 'bg' || spec.kind === 'end' ? '#0d1322' : 'transparent'}`;
+    const html = { bg, frame, caption, end }[spec.kind](spec, W, H);
+    root.innerHTML = html;
+    await Promise.all([...root.querySelectorAll('img')].map((i) => i.decode().catch(() => {})));
+    const urls = [...root.querySelectorAll('[style*="url("]')].map((e) => (e.style.backgroundImage.match(/url\("?([^")]+)"?\)/) || [])[1]).filter(Boolean);
+    await Promise.all(urls.map((u) => new Promise((ok) => { const i = new Image(); i.onload = i.onerror = ok; i.src = u; })));
+    await Promise.all([
+      document.fonts.load('400 92px "Black Han Sans"', '가A'),
+      document.fonts.load('800 30px Pretendard', '가A'),
+      document.fonts.load('italic 900 120px "Exo 2"', 'GRID'),
+    ]);
+    await document.fonts.ready;
+    const t = document.getElementById('title');
+    const r = t ? t.getBoundingClientRect() : null;
+    return { titleRight: r ? r.right : 0, titleLeft: r ? r.left : 0, titleBottom: r ? r.bottom : 0, width: W };
+  };
+</script>
+</body>
+</html>

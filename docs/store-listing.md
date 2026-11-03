@@ -64,17 +64,55 @@ GRID CLASH는 체스처럼 간단한 규칙 위에 '캐릭터 능력'을 얹은 
 
 전략 보드게임, 체스, 턴제 전략, 1:1 대전, 캐릭터 수집, 퍼즐, 두뇌 게임, 오프라인 게임, tactics, board game, chess variant
 
-## 스크린샷 촬영 목록 (세로 1080×1920 권장, 최소 2장 · 최대 8장)
+## Store assets (screenshots, feature graphic, promo video)
 
-1. 로비 — "말 3개, 144칸, 한 수에 갈리는 심리전" 캡션
-2. 전투 보드(내 말 선택 + 이동 가능 칸 표시) — "탭 한 번으로 이동, 경로의 적을 잡아라"
-3. 월크 점프 캡처 장면 — "뛰어넘고 잡는 기습 점프"
-3-1. 브루타일 불모지 시전 장면 — "닿으면 소멸, 땅을 저주하라"
-4. 진형 편성 화면 — "진형이 곧 전략"
-5. 캐릭터 화면(성급 선택) — "성급은 내 마음대로"
-6. 승리 화면 — "상대 말 3개를 모두 잡으면 승리"
+Regenerate everything with one command (about 8 minutes on 4 cores; needs Playwright + Chromium and
+ffmpeg with libx264/aac/loudnorm):
 
-촬영 스크립트: `docs/store-assets/capture.mjs` (작성 예정) 또는 Playwright로 `npx vite preview` 화면을 360×640@3x로 캡처.
+```bash
+node docs/store-assets/capture.mjs
+```
+
+Run a subset with `node docs/store-assets/capture.mjs shots feature video` (any of the three).
+The script starts its own Vite DEV server on port 5191 and drives the real app (seeded demo profile,
+real taps on the tab bar, lobby, hand cards and board, an engine-checked scripted opponent).
+Intermediates go to `docs/store-assets/out/raw/` (gitignored).
+
+| Output | Size |
+| --- | --- |
+| `docs/store-assets/out/shot-<n>-<key>.png` | 8 Google Play screenshots, 1080x1920 |
+| `docs/brand/out/feature-graphic-1024x500.png` | feature graphic (source `docs/brand/feature-graphic.html`) |
+| `docs/store-assets/out/promo-9x16.mp4` | promo video 1080x1920, ~23 s, H.264 + AAC, faststart |
+| `docs/store-assets/out/promo-16x9.mp4` | promo video 1920x1080 (YouTube), same cut |
+
+### Screenshot list (1080x1920, listing order)
+
+Each image is a real in-app screen (390x780 @2x) in a framed, captioned Dark Arena composition.
+Captions must stay true to the current rules (all grades freely selectable, no shop or currency,
+a timeout is a forfeit loss, the storm starts at turn 40 or when a side is down to 1 piece).
+
+| # | Key | Screen | Eyebrow | Title | Sub |
+| --- | --- | --- | --- | --- | --- |
+| 1 | lobby | Lobby: arena showcase, difficulty control, 대전 시작, tab bar | 1:1 전술 보드게임 | 말 3개, 144칸 / 한 수의 심리전 | 12×12 아레나에서 펼치는 1:1 대전 |
+| 2 | board | 인세이너 picked from the hand: card highlighted, reach markers on the board | 카드나 말을 탭 | 탭 한 번에 / 이동 범위가 한눈에 | 말마다 다른 움직임 · 끌어서 이동도 가능 |
+| 3 | walk | 월크's jump capture over my own 인세이너, the real capture cut-in frozen mid-sweep | 월크 · 영웅 | 뛰어넘어 잡는 / 기습 점프 | 사이의 말을 넘어 앞줄로 착지 |
+| 4 | brutile | 브루타일 skill targeting: 3×3 wasteland preview, 설치 dock | 브루타일 · 전설 | 닿으면 소멸 / 땅을 저주하라 | 스킬 불모지 · 아군이든 적이든 소멸 |
+| 5 | storm | Storm active (opponent down to 1 piece), wasteland skull, capture ring | 서든데스 | 자기장이 / 좁혀온다 | 40턴이 지나거나 말이 1개만 남으면 발동 |
+| 6 | formation | 진형 tab: 인세이너 picked up, legal squares lit | 진형 편성 | 진형이 곧 전략 | 내 구역 3×12 어디든 배치 |
+| 7 | collection | 캐릭터 tab: 브루타일 card with the 1성/2성/3성 picker | 상점도 재화도 없음 | 성급은 / 내 마음대로 | 다섯 캐릭터 모두 1·2·3성 자유 선택 |
+| 8 | victory | Result screen after the last capture | 한 수 45초 | 상대 말을 모두 / 잡으면 승리 | 시간을 넘기면 즉시 몰수패 |
+
+The caption copy lives in `SHOTS` in `docs/store-assets/capture.mjs`.
+
+### Promo video cut (both aspects, ~23 s)
+
+Hook (월크's jump capture with its cut-in, from the first frame) → 진형 tab → lobby and 대전 시작 →
+VS card → 인세이너 picked from the hand → 브루타일's skill and cut-in → the opponent's 월크 dissolving
+on the wasteland → storm chip → 인세이너's final capture and cut-in → victory → end card (wordmark,
+"지금 플레이"). Captions: 뛰어넘어 격파! · 진형이 곧 전략 · 말 3개, 144칸 · 한 수 45초 심리전 ·
+이동 범위가 한눈에 · 땅을 저주하라 · 닿으면 소멸 · 자기장이 좁혀온다 · 모두 잡으면 승리!
+The soundtrack is the game's own `public/audio` clips placed at the moments the game played them,
+normalised to -16 LUFS / -1.5 dBTP. The cut is defined by `BEATS` in `docs/store-assets/lib/video.mjs`.
 
 ## 콘텐츠 등급 / 개인정보 메모
 
