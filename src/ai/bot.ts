@@ -20,7 +20,10 @@ import { SKILL_FLAG, fastCanSkill, fastSkillFits, fastSkillSize } from '../engin
 import { CHARACTERS, CHAR_BY_CODE, CH_BRUTILE, CH_INSANER, CH_MARKI, CH_SAD, CH_WALK, N_CHARS } from '../engine/characters';
 import { BOARD_SIZE, SKILL_USES_PER_MATCH } from '../engine/types';
 
-export type Difficulty = 'easy' | 'normal' | 'hard';
+/** Bot strength. `extreme` (극악) is the dungeon's top tier and the AI of the top arena. */
+export type Difficulty = 'easy' | 'normal' | 'hard' | 'extreme';
+
+export const DIFFICULTIES: readonly Difficulty[] = ['easy', 'normal', 'hard', 'extreme'];
 
 /** What the bot plays: a move, or Brutile's wasteland. */
 export type BotAction = Move | SkillAction;
@@ -41,11 +44,13 @@ export interface ChooseMoveOptions {
  */
 const HARD_CAP_MS = 1400;
 /**
- * Strength per difficulty:
- *  - easy:   mostly a heuristic picker (free captures, otherwise a random non-suicidal move, often
- *            leaving pieces hanging); sometimes a 1-ply search with a large random bias.
- *  - normal: a 2-3 ply search with a moderate random bias and an occasional casual move.
- *  - hard:   iterative deepening to the full budget, tiny random bias, no deliberate blunders.
+ * Strength per difficulty. THIS TABLE IS THE ONLY PLACE THE BOT IS TUNED (the owner tunes it):
+ *  - easy:    mostly a heuristic picker (free captures, otherwise a random non-suicidal move, often
+ *             leaving pieces hanging); sometimes a 1-ply search with a large random bias.
+ *  - normal:  a 2-3 ply search with a moderate random bias and an occasional casual move.
+ *  - hard:    iterative deepening to the full budget, tiny random bias, no deliberate blunders.
+ *  - extreme: (극악) like hard with the largest budget (capped by HARD_CAP_MS), no random bias and
+ *             more wasteland anchors considered at the root.
  */
 interface Strength {
   budgetMs: number;
@@ -63,6 +68,7 @@ const STRENGTH: Record<Difficulty, Strength> = {
   easy: { budgetMs: 60, depth: 1, extraDepthChance: 0, jitter: 90, casualChance: 0.65, skillCands: 2 },
   normal: { budgetMs: 350, depth: 2, extraDepthChance: 0.5, jitter: 25, casualChance: 0.08, skillCands: 6 },
   hard: { budgetMs: 1000, depth: 60 /* MAX_PLY - 4 */, extraDepthChance: 0, jitter: 4, casualChance: 0, skillCands: 10 },
+  extreme: { budgetMs: 1350, depth: 60 /* MAX_PLY - 4 */, extraDepthChance: 0, jitter: 0, casualChance: 0, skillCands: 16 },
 };
 
 const WIN = 1_000_000;

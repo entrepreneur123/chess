@@ -197,3 +197,63 @@ export function dayKey(now: Date = new Date()): string {
 export function dungeonRewardAvailable(lastClaimDay: string | null, now: Date = new Date()): boolean {
   return lastClaimDay !== dayKey(now);
 }
+
+// ---------------------------------------------------------------------------------------------
+// Modes and simulated matchmaking (lead defaults, tunable; see the spec's "Opponents")
+// ---------------------------------------------------------------------------------------------
+
+/** 전장전 (ranked), 견습전투 (casual) or the daily 던전 (dungeon). */
+export type MatchMode = 'ranked' | 'casual' | 'dungeon';
+
+export const MODE_LABEL: Record<MatchMode, string> = { ranked: '전장전', casual: '견습전투', dungeon: '던전' };
+
+/** Bot strength names (the same set as `Difficulty` in src/ai/bot.ts). */
+export type AiStrength = 'easy' | 'normal' | 'hard' | 'extreme';
+
+/**
+ * Half-width of the simulated opponent rating band. Ranked stays inside the player's arena;
+ * casual uses a wider band and may cross arena borders. (lead default: about ±60 / ±150)
+ */
+export const OPPONENT_BAND: Record<'ranked' | 'casual', number> = { ranked: 60, casual: 150 };
+
+/** AI strength per arena (lead default: 1 easy, 2–3 normal, 4–5 hard, 6 extreme). */
+export const ARENA_AI: Record<ArenaId, AiStrength> = {
+  moonrune: 'easy',
+  emberforge: 'normal',
+  blightmire: 'normal',
+  frostkeep: 'hard',
+  madcrown: 'hard',
+  apex: 'extreme',
+};
+
+/**
+ * A simulated opponent rating for 전장전 / 견습전투. Ranked: the player's rating ± the ranked band,
+ * clamped to the player's arena. Casual: ± the wider band, only floored at 0.
+ */
+export function opponentRating(mode: 'ranked' | 'casual', rating: number, rng: Rng): number {
+  const r = clampRating(rating);
+  const band = OPPONENT_BAND[mode];
+  let lo = Math.max(0, r - band);
+  let hi = r + band;
+  if (mode === 'ranked') {
+    const a = arenaForRating(r);
+    lo = Math.max(lo, a.min);
+    hi = a.max === null ? hi : Math.min(hi, a.max);
+  }
+  return randInt(rng, lo, Math.max(lo, hi));
+}
+
+/** Where a rating sits in its arena: progress (0..1) toward the next arena and points still needed. */
+export function arenaProgress(rating: number): { arena: ArenaDef; next: ArenaDef | null; progress: number; toNext: number } {
+  const r = clampRating(rating);
+  const arena = arenaForRating(r);
+  const next = nextArenaOf(arena);
+  if (!next) return { arena, next, progress: 1, toNext: 0 };
+  const span = next.min - arena.min;
+  return { arena, next, progress: Math.max(0, Math.min(1, (r - arena.min) / span)), toNext: Math.max(0, next.min - r) };
+}
+
+/** "301–600" / "2001+" (UI copy for an arena's rating range). */
+export function arenaRangeLabel(a: ArenaDef): string {
+  return a.max === null ? `${a.min}+` : `${a.min}–${a.max}`;
+}
