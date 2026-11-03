@@ -1,7 +1,31 @@
 {
   "permissions": {
     "allow": [
-      "Bash"
+      "Bash",
+      "Read",
+      "Edit",
+      "Write",
+      "Glob",
+      "Grep",
+      "NotebookEdit",
+      "WebFetch",
+      "WebSearch",
+      "mcp__Vercel",
+      "mcp__github",
+      "mcp__Magic_Patterns",
+      "mcp__Higgsfield_AI",
+      "mcp__ElevenLabs",
+      "mcp__Figma",
+      "mcp__Context7",
+      "mcp__Supabase",
+      "mcp__v0",
+      "mcp__claude-artifacts",
+      "mcp__claude-code-remote",
+      "mcp__Sentry",
+      "mcp__PostHog",
+      "mcp__Linear",
+      "mcp__Cloudflare_Developer_Platform",
+      "mcp__Twilio"
     ]
   }
 }
