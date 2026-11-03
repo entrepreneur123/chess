@@ -75,7 +75,7 @@ export function matchmakingScreen(router: Router, params: { difficulty: Difficul
         h('span', { class: 'radar__core' }, unitArt(myLead, levels[myLead], { size: 104 })),
       ),
       h('h2', { class: 'mm__title' }, '상대를 찾는 중', h('span', { class: 'mm__dots', 'aria-hidden': 'true' }, h('i'), h('i'), h('i'))),
-      h('p', { class: 'mm__sub' }, h('span', { class: 'chip chip--gold' }, `난이도 ${DIFFICULTY_LABEL[difficulty]}`), '비슷한 실력의 상대를 찾고 있어요'),
+      h('p', { class: 'mm__sub' }, h('span', { class: 'chip chip--gold' }, `AI · ${DIFFICULTY_LABEL[difficulty]}`)),
       tip,
     );
   };
@@ -114,7 +114,7 @@ export function matchmakingScreen(router: Router, params: { difficulty: Difficul
         'div',
         { class: 'mm__found' },
         h('h2', { class: 'mm__title mm__title--found' }, '상대 발견!'),
-        h('p', { class: 'mm__sub' }, h('span', { class: 'chip chip--outline' }, icon('lock', 14), '상대 진형 비공개'), ' 곧 대전이 시작됩니다'),
+        h('p', { class: 'mm__sub' }, h('span', { class: 'chip chip--outline' }, icon('lock', 14), '상대 진형 비공개')),
       ),
     );
   };

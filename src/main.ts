@@ -10,9 +10,11 @@ import './styles/formation.css';
 import './styles/matchmaking.css';
 import './styles/overlays.css';
 import './styles/game.css';
+import './styles/nav.css';
 import { installAudio } from './audio/sfx';
 import { APP_NAME } from './meta/economy';
 import { getProfile } from './meta/profile';
+import { createTabBar } from './ui/components/tabBar';
 import { Router } from './ui/router';
 import { collectionScreen } from './ui/screens/collection';
 import { formationScreen } from './ui/screens/formation';
@@ -37,6 +39,7 @@ const router = new Router(outlet)
   .register('collection', collectionScreen)
   .register('matchmaking', matchmakingScreen)
   .register('game', gameScreen);
+router.useTabBar(createTabBar((name) => void router.switchTab(name)));
 
 router.home();
 

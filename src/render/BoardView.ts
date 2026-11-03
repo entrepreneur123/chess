@@ -38,13 +38,16 @@
  * Top-only boards (BoardViewOptions.topOnly, the game's board while the 3D arena is disabled):
  * start in the top-down view and never leave it, never load the glTF units (no mixers, no idle
  * loop), no shadow pass. The 3D path stays intact for topOnly = false.
- * Their look is the "Dark Arena" of docs/design/dark-arena.md (arena.ts): a transparent canvas
- * over the page's dark backdrop, a painted iron frame (gold trim, lip, soft outer shadow) under 144
- * raised slate tiles drawn by one unlit instanced tile shader (exact palette colours, bevel + front
- * lip), a field overlay (frame AO), glowing team zone-edge lines, chunky coins (tokens.ts) with
- * glowing rarity rings, luminous additive markers (ice-cyan / red glow dots, glowing selection
- * frame) under a glowing red capture ring, and a lifted selection shown as a screen-up offset with
- * a spreading shadow (applyTopLift).
+ * Their look is the v6 "tactical hologram" of docs/design/v6-clean-tactical.md (arena.ts): a
+ * transparent canvas over the page's dark backdrop, a painted slim bezel (HUD corner brackets, ruler
+ * ticks, thin gold accents, soft outer shadow) under 144 flat deep-navy cells drawn by one unlit
+ * instanced cell shader (exact palette colours, faint top light + glass rim), a hologram overlay
+ * (home-zone team washes, hex micro-texture, thin glowing cyan grid, intersection crosses), bright
+ * thin team zone-edge lines, an optional team-coloured edge glow (setTurnGlow), a faint periodic
+ * scan sweep (off with reduced motion), chunky coins (tokens.ts) with glowing rarity rings,
+ * luminous additive markers (ice-cyan / red glow dots, glowing selection frame) under a glowing red
+ * capture ring, and a lifted selection shown as a screen-up offset with a spreading shadow
+ * (applyTopLift).
  *
  * Performance notes: tiles are one InstancedMesh, overlays are InstancedMeshes, effects reuse
  * pre-allocated meshes (no per-frame / per-move allocations), one 1024 shadow map (none when
@@ -52,7 +55,9 @@
  * requested while something is animating: moves/effects at full rate; the selection pulse, the
  * legendary ring and the wasteland at ~30 fps (ring / wasteland static with prefers-reduced-motion);
  * unit idle loops at ~24 fps (off with prefers-reduced-motion or setIdleAnimation(false)); nothing
- * while the tab is hidden. An idle top-only board with no legendary and no wasteland draws nothing.
+ * while the tab is hidden. An idle top-only board with no legendary and no wasteland draws nothing
+ * except the ambient scan sweep (2.6 s at ~30 fps every 9 s, woken by one timer; never with
+ * prefers-reduced-motion).
  */
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
@@ -64,7 +69,7 @@ import { loadUnitAssets, unitAssetsIfLoaded } from './units/assets';
 import { LOOKS, MOVE_CLIP } from './units/config';
 import type { UnitLibrary } from './units/library';
 import { DustPool, SparkPool } from './boardFx';
-import { ANIM, BOARD_COLORS, CHARACTER_FX, CHARACTER_RARITY, RARITY_COLORS, RARITY_GLOW, TEAM_COLORS, WASTE_COLORS } from './palette';
+import { ANIM, ARENA, BOARD_COLORS, CHARACTER_FX, CHARACTER_RARITY, HOLO, RARITY_COLORS, RARITY_GLOW, TEAM_COLORS, WASTE_COLORS } from './palette';
 import { GROUND_MODE, StrikeFx } from './strikeFx';
 import { RingMaterials, TokenKit } from './tokens';
 import { STORM_COLORS, StormFx } from './storm';
@@ -100,6 +105,7 @@ import {
   makeSlabTexture,
   makeTileMaterial,
   makeTileTexture,
+  makeTurnGlowTexture,
 } from './textures';
 import { DOT_WHITEN, FRAME_FIT, MARKER_QUAD } from './arena';
 
@@ -152,6 +158,18 @@ const ZONE_LINE_Z: Record<PlayerId, number> = {
   1: -(HALF - (ZONE_DEPTH - 0.5)),
 };
 const BURST_COUNT = 14;
+/** Turn glow (setTurnGlow): fade length (ms) and full opacity of the additive edge glow. */
+const TURN_GLOW_MS = 320;
+const TURN_GLOW_OPACITY = 0.45;
+/**
+ * Ambient hologram scan (top-only, off with reduced motion / setIdleAnimation(false)): a faint cyan
+ * band sweeps down the field for SCAN_MS once every SCAN_PERIOD_MS; no frames are drawn between
+ * sweeps (a single timer wakes the board).
+ */
+const SCAN_MS = 2600;
+const SCAN_PERIOD_MS = 9000;
+const SCAN_FIRST_MS = 2500;
+const SCAN_BAND = 1.6;
 
 const cellX = (c: number): number => c - HALF;
 const cellZ = (r: number): number => HALF - r;
@@ -592,6 +610,19 @@ export class BoardView implements IBoardView {
   private readonly zoneHaloMat: Record<PlayerId, THREE.MeshBasicMaterial> = {} as Record<PlayerId, THREE.MeshBasicMaterial>;
   private readonly comet: THREE.Mesh;
   private readonly cometMat: THREE.MeshBasicMaterial;
+  /** Turn glow (top-only arena): additive edge glow in the team colour, fading in / out. */
+  private turnGlowMesh: THREE.Mesh | null = null;
+  private turnGlowMat: THREE.MeshBasicMaterial | null = null;
+  private glowOwner: PlayerId | null = null;
+  private glowLevel = 0;
+  private glowFrom = 0;
+  private glowTo = 0;
+  private tGlow = -1;
+  /** Ambient scan band (top-only arena), its next sweep start and the timer that wakes it. */
+  private scanMesh: THREE.Mesh | null = null;
+  private scanMat: THREE.MeshBasicMaterial | null = null;
+  private scanStart = performance.now() + SCAN_FIRST_MS;
+  private scanTimer = 0;
   private readonly stormFx: StormFx;
   /** Brutile's wasteland, skill targeting overlay, danger marks and cast effects. */
   private readonly wasteFx: WasteFx;
@@ -899,9 +930,10 @@ export class BoardView implements IBoardView {
   }
 
   /**
-   * Top-down "Dark Arena": the iron frame + field well as one painted plane (arena.ts) under the
-   * tiles, and the field overlay (frame ambient occlusion) right above them. Unlit (exact palette
-   * colours), two draws, two small textures.
+   * Top-down v6 "tactical hologram" arena: the bezel + field well as one painted plane (arena.ts)
+   * under the cells, the hologram overlay (zone washes, hex texture, glowing grid, edge shadow)
+   * right above them, the turn glow (setTurnGlow) and the ambient scan band. Unlit (exact palette
+   * colours); four draws (two only while idle without a turn glow), four small textures.
    */
   private buildArena(): void {
     const frame = makeFrameTexture();
@@ -911,17 +943,52 @@ export class BoardView implements IBoardView {
     pMesh.position.set(0, TILE_TOP - 0.02, frame.offsetZ);
     pMesh.renderOrder = -3;
     pMesh.raycast = noRaycast;
-    const oTex = makeFieldOverlayTexture();
-    const oGeo = new THREE.PlaneGeometry(BOARD_SIZE, BOARD_SIZE).rotateX(-Math.PI / 2);
-    const oMat = new THREE.MeshBasicMaterial({ map: oTex, transparent: true, depthWrite: false });
+    const ov = makeFieldOverlayTexture();
+    const oGeo = new THREE.PlaneGeometry(ov.size, ov.size).rotateX(-Math.PI / 2);
+    const oMat = new THREE.MeshBasicMaterial({ map: ov.tex, transparent: true, depthWrite: false });
     const oMesh = new THREE.Mesh(oGeo, oMat);
     oMesh.position.y = TILE_TOP + 0.001;
     oMesh.renderOrder = 0;
     oMesh.raycast = noRaycast;
-    this.scene.add(pMesh, oMesh);
-    this.ownGeometries.push(pGeo, oGeo);
-    this.ownMaterials.push(pMat, oMat);
-    this.ownTextures.push(frame.tex, oTex);
+    // Turn glow: the same plane as the frame, painted white, tinted per team, additive.
+    const gTex = makeTurnGlowTexture();
+    const gMat = new THREE.MeshBasicMaterial({
+      map: gTex,
+      color: TEAM_COLORS[0].glow,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const gMesh = new THREE.Mesh(pGeo, gMat);
+    gMesh.position.set(0, TILE_TOP + 0.002, frame.offsetZ);
+    gMesh.renderOrder = 0.5; // over the grid, under the wasteland (1) and the markers
+    gMesh.visible = false;
+    gMesh.raycast = noRaycast;
+    // Ambient scan band (soft horizontal band across the field).
+    const bandTex = makeBandTexture();
+    const sGeo = new THREE.PlaneGeometry(BOARD_SIZE, SCAN_BAND).rotateX(-Math.PI / 2);
+    const sMat = new THREE.MeshBasicMaterial({
+      map: bandTex,
+      color: ARENA.grid,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const sMesh = new THREE.Mesh(sGeo, sMat);
+    sMesh.position.y = TILE_TOP + 0.003;
+    sMesh.renderOrder = 0.6;
+    sMesh.visible = false;
+    sMesh.raycast = noRaycast;
+    this.turnGlowMesh = gMesh;
+    this.turnGlowMat = gMat;
+    this.scanMesh = sMesh;
+    this.scanMat = sMat;
+    this.scene.add(pMesh, oMesh, gMesh, sMesh);
+    this.ownGeometries.push(pGeo, oGeo, sGeo);
+    this.ownMaterials.push(pMat, oMat, gMat, sMat);
+    this.ownTextures.push(frame.tex, ov.tex, gTex, bandTex);
   }
 
   private buildTiles(): THREE.InstancedMesh {
@@ -1045,8 +1112,8 @@ export class BoardView implements IBoardView {
     const bandTex = makeBandTexture();
     const cometTex = makeCometTexture();
     this.ownTextures.push(bandTex, cometTex);
-    const lineGeo = new THREE.PlaneGeometry(BOARD_SIZE - 0.1, this.topOnly ? 0.055 : 0.09).rotateX(-Math.PI / 2);
-    const haloGeo = new THREE.PlaneGeometry(BOARD_SIZE + 0.1, 1.0).rotateX(-Math.PI / 2);
+    const lineGeo = new THREE.PlaneGeometry(BOARD_SIZE - 0.1, this.topOnly ? 0.04 : 0.09).rotateX(-Math.PI / 2);
+    const haloGeo = new THREE.PlaneGeometry(BOARD_SIZE + 0.1, 0.8).rotateX(-Math.PI / 2);
     const cometGeo = new THREE.PlaneGeometry(3.2, 0.34).rotateX(-Math.PI / 2);
     this.ownGeometries.push(lineGeo, haloGeo, cometGeo);
     const add = (id: PlayerId): void => {
@@ -1060,7 +1127,8 @@ export class BoardView implements IBoardView {
         polygonOffsetFactor: -3,
         polygonOffsetUnits: -3,
       };
-      const lineMat = new THREE.MeshBasicMaterial({ ...base, opacity: 0.8 });
+      // The line itself is the team's light tone: a bright, thin edge over the soft glow.
+      const lineMat = new THREE.MeshBasicMaterial({ ...base, color: TEAM_COLORS[id].light, opacity: 0.8 });
       const haloMat = new THREE.MeshBasicMaterial({ ...base, map: bandTex, opacity: 0.35 });
       this.ownMaterials.push(lineMat, haloMat);
       const line = new THREE.Mesh(lineGeo, lineMat);
@@ -1405,6 +1473,80 @@ export class BoardView implements IBoardView {
     this.requestRender();
   }
 
+  /**
+   * Turn feedback: a subtle glow on the board edge in `owner`'s team colour (null = off). Fades in /
+   * out over TURN_GLOW_MS (instant with reduced motion); a static glow costs no frames.
+   */
+  setTurnGlow(owner: 0 | 1 | null): void {
+    if (this.disposed || !this.turnGlowMat || owner === this.glowOwner) return;
+    const prev = this.glowOwner;
+    this.glowOwner = owner;
+    if (owner !== null) this.turnGlowMat.color.set(TEAM_COLORS[owner].glow);
+    // Switching teams restarts from dark so the colour never snaps on a lit glow.
+    this.glowFrom = prev !== null && owner !== null ? 0 : this.glowLevel;
+    this.glowTo = owner === null ? 0 : 1;
+    if (this.reducedMotion) {
+      this.tGlow = -1;
+      this.applyGlow(this.glowTo);
+    } else {
+      this.tGlow = performance.now();
+    }
+    this.requestRender();
+  }
+
+  private applyGlow(level: number): void {
+    this.glowLevel = level;
+    if (!this.turnGlowMat || !this.turnGlowMesh) return;
+    this.turnGlowMat.opacity = level * TURN_GLOW_OPACITY;
+    this.turnGlowMesh.visible = level > 0.002;
+  }
+
+  /** Advance the turn glow fade; true while it still needs frames. */
+  private tickGlow(now: number): boolean {
+    if (this.tGlow < 0) return false;
+    const k = clamp01((now - this.tGlow) / TURN_GLOW_MS);
+    this.applyGlow(this.glowFrom + (this.glowTo - this.glowFrom) * easeOutCubic(k));
+    if (k >= 1) {
+      this.tGlow = -1;
+      return false;
+    }
+    return true;
+  }
+
+  /** Ambient scan band: true while a sweep is on screen (light ~30 fps frames). No allocations. */
+  private tickScan(now: number): boolean {
+    const mesh = this.scanMesh;
+    if (!mesh || !this.scanMat) return false;
+    if (!this.idleAnim || document.hidden) {
+      mesh.visible = false;
+      return false;
+    }
+    if (now >= this.scanStart + SCAN_MS) {
+      this.scanStart += Math.ceil((now - this.scanStart - SCAN_MS) / SCAN_PERIOD_MS + 1e-6) * SCAN_PERIOD_MS;
+    }
+    const k = (now - this.scanStart) / SCAN_MS;
+    if (k < 0 || k >= 1) {
+      mesh.visible = false;
+      return false;
+    }
+    mesh.visible = true;
+    const reach = HALF + 0.5 - SCAN_BAND * 0.25;
+    mesh.position.z = -reach + 2 * reach * k;
+    this.scanMat.opacity = HOLO.scan * Math.sin(Math.PI * k);
+    return true;
+  }
+
+  /** Idle board: wake up for the next scan sweep with one timer (no frames until then). */
+  private scheduleScan(now: number): void {
+    if (this.scanTimer) clearTimeout(this.scanTimer);
+    this.scanTimer = 0;
+    if (!this.scanMesh || !this.idleAnim || document.hidden || this.disposed) return;
+    this.scanTimer = window.setTimeout(() => {
+      this.scanTimer = 0;
+      this.requestRender();
+    }, Math.max(16, this.scanStart - now));
+  }
+
   /** Optional extra: enable/disable the units' idle loops (battery saver). */
   setIdleAnimation(enabled: boolean): void {
     this.idleAnim = enabled;
@@ -1650,6 +1792,8 @@ export class BoardView implements IBoardView {
     this.impactCb = null;
     if (this.rafId) cancelAnimationFrame(this.rafId);
     this.rafId = 0;
+    if (this.scanTimer) clearTimeout(this.scanTimer);
+    this.scanTimer = 0;
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     const canvas = this.renderer.domElement;
@@ -2017,8 +2161,8 @@ export class BoardView implements IBoardView {
     for (const id of [0, 1] as const) {
       const active = id === this.turn;
       const b = active && id === this.turnFxPlayer ? boost : 0;
-      this.zoneLineMat[id].opacity = Math.min(1, (active ? 0.9 : 0.5) + b * 0.5);
-      this.zoneHaloMat[id].opacity = Math.min(1, (active ? 0.36 : 0.16) + b * 0.55);
+      this.zoneLineMat[id].opacity = Math.min(1, (active ? 0.95 : 0.6) + b * 0.5);
+      this.zoneHaloMat[id].opacity = Math.min(1, (active ? 0.2 : 0.1) + b * 0.55);
       this.zoneHalo[id].scale.set(1, 1, 1 + b * 0.7);
       this.zoneLine[id].scale.set(1, 1, 1 + b * 1.4);
     }
@@ -2137,7 +2281,8 @@ export class BoardView implements IBoardView {
     const casting = this.tickSkill(now);
     const animating = moving || casting;
     const viewMoving = this.tickView(now);
-    const fxActive = this.updateFx(now) || viewMoving;
+    const glowing = this.tickGlow(now);
+    const fxActive = this.updateFx(now) || viewMoving || glowing;
     // Hidden units (top-down view) only advance while they still have a one-shot to finish.
     let unitsBusy = false;
     let haveActors = false;
@@ -2154,7 +2299,8 @@ export class BoardView implements IBoardView {
     const ringLoop = this.idleAnim && this.legendaryCount > 0 && !document.hidden;
     // Wasteland cracks / bubbles, skill ghost and danger marks breathe at the same light rate.
     const wasteLoop = this.idleAnim && this.wasteFx.animated && !document.hidden;
-    if (!busy && (this.pulsing || idleLoop || stormLoop || ringLoop || wasteLoop)) {
+    const scanLoop = this.tickScan(now);
+    if (!busy && (this.pulsing || idleLoop || stormLoop || ringLoop || wasteLoop || scanLoop)) {
       const cap = this.pulsing ? IDLE_FRAME_MS : idleLoop ? IDLE_ANIM_FRAME_MS : IDLE_FRAME_MS;
       if (now - this.lastFrame < cap) {
         this.requestRender(); // idle pulse / idle loops are throttled; skip drawing this tick
@@ -2183,8 +2329,12 @@ export class BoardView implements IBoardView {
     this.updatePulse(now);
     if (this.topOnly) this.applyTopLift();
     this.renderer.render(this.scene, this.camera);
-    if (busy || this.pulsing || idleLoop || stormLoop || ringLoop || wasteLoop) this.requestRender();
-    else this.lastTick = 0;
+    if (busy || this.pulsing || idleLoop || stormLoop || ringLoop || wasteLoop || scanLoop) {
+      this.requestRender();
+    } else {
+      this.lastTick = 0;
+      this.scheduleScan(now);
+    }
   };
 
   private readonly onVisibility = (): void => {

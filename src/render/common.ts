@@ -129,9 +129,10 @@ export function tileRgb(r: number, c: number, hi: HighlightIndex): RGB {
   let col: RGB = (r + c) % 2 === 0 ? RGB_DARK : RGB_LIGHT;
   const home = homeOwner(r);
   if (home !== null) {
-    // Team-deep tint, strongest at the back rank and fading toward the zone edge line.
+    // Soft team-deep tint, a touch stronger toward the zone edge line (the glow wash and the
+    // bright edge line sit there). Red is mixed a little harder: over navy it would turn violet.
     const depth = home === 0 ? r : BOARD_SIZE - 1 - r;
-    col = mixRgb(col, RGB_TEAM_ZONE[home], HOME_TINT_STRENGTH * (1.12 - 0.14 * depth));
+    col = mixRgb(col, RGB_TEAM_ZONE[home], HOME_TINT_STRENGTH * (0.8 + 0.12 * depth) * (home === 1 ? 1.2 : 1));
   }
   // Soft field vignette (per tile, so both views and the highlight repaints agree): the centre of
   // the arena is a touch brighter than its corners, never a flat colour over the whole field.

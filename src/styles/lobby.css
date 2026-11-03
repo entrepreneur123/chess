@@ -1,23 +1,15 @@
 /* ==========================================================================
-   Lobby — the moonlit arena gate (public/bg/lobby.webp over the base
-   gradient), an iron-framed hero showcase, the outlined wordmark, the
-   obsidian PLAY panel (difficulty tiles + gold CTA), the squad card and a
-   chunky bottom dock.
+   Lobby (the 대전 tab, v6 "Clean Tactical"): identity + settings on top, the
+   current-arena showcase card in the centre, then the difficulty segmented
+   control directly above the gold "대전 시작" CTA. The bottom tab bar is
+   router chrome (nav.css). Everything fits one phone screen (360x640 too).
    ========================================================================== */
 .lobby {
-  --top-h: 60px;
-  --hero-h: clamp(200px, calc(100vh - 500px), 420px);
-  --dock-h: 84px;
   position: relative;
   overflow: hidden;
 }
-@supports (height: 100dvh) {
-  .lobby {
-    --hero-h: clamp(200px, calc(100dvh - 500px), 420px);
-  }
-}
 
-/* ---- Ambient light behind the hero: a cool moon glow and faint slow beams -------- */
+/* ---- Ambient light behind the arena card ----------------------------------------- */
 .lobby-bg {
   position: absolute;
   inset: 0;
@@ -28,269 +20,415 @@
 .lobby-bg__aura {
   position: absolute;
   left: 50%;
-  top: calc(var(--top-h) + var(--hero-h) * 0.35);
+  top: 38%;
   width: min(150vw, 900px);
   aspect-ratio: 1;
   transform: translate(-50%, -50%);
-  background: radial-gradient(closest-side, rgba(139, 108, 255, 0.2), rgba(59, 139, 255, 0.07) 45%, transparent 72%);
+  background: radial-gradient(closest-side, rgba(139, 108, 255, 0.18), rgba(59, 139, 255, 0.06) 45%, transparent 72%);
 }
-.lobby-bg__rays {
-  position: absolute;
-  left: 50%;
-  top: calc(var(--top-h) + var(--hero-h) * 0.35);
-  width: 1300px;
-  height: 1300px;
-  margin: -650px 0 0 -650px;
-  background: repeating-conic-gradient(from 0deg, rgba(180, 196, 255, 0.035) 0deg 6deg, transparent 6deg 20deg);
-  -webkit-mask-image: radial-gradient(closest-side, #000 8%, transparent 60%);
-  mask-image: radial-gradient(closest-side, #000 8%, transparent 60%);
-  animation: rays-spin 140s linear infinite;
-  will-change: transform;
-}
-@keyframes rays-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-/* ---- Top bar ------------------------------------------------------------------ */
+
+/* ---- Top bar: player identity (left) and settings (right), nothing else ----------- */
 .lobby__top {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  position: relative;
   z-index: 5;
+  flex: none;
   display: flex;
   align-items: center;
   gap: var(--s-2);
-  min-height: calc(var(--top-h) + var(--sat));
-  padding: calc(var(--s-2) + var(--sat)) calc(var(--gutter) + var(--sar)) 0 calc(var(--gutter) + var(--sal));
-  background: linear-gradient(180deg, rgba(7, 10, 18, 0.8) 30%, rgba(7, 10, 18, 0));
+  padding: calc(var(--s-2) + var(--sat)) var(--gutter) var(--s-1);
 }
 .lobby__top .icon-btn {
   margin-left: auto;
 }
-/* Record chip: an obsidian pill with a gold trophy gem. */
-.lobby__record {
-  display: inline-flex;
+.ident {
+  display: flex;
   align-items: center;
-  gap: 7px;
-  height: 36px;
-  padding: 0 14px 0 5px;
-  border-radius: var(--r-full);
-  background: linear-gradient(180deg, rgba(37, 47, 74, 0.95), rgba(22, 29, 48, 0.95));
-  box-shadow:
-    inset 0 1px 0 var(--panel-hi),
-    inset 0 0 0 1px rgba(72, 88, 128, 0.85),
-    0 3px 0 var(--panel-lip),
-    0 10px 16px -10px rgba(0, 0, 0, 0.8);
-  color: var(--ink);
-  font-family: var(--font-display);
-  font-size: 15px;
-  font-variant-numeric: tabular-nums;
-  text-shadow: 0 1px 0 var(--outline);
+  gap: 10px;
+  min-width: 0;
 }
-.lobby__record .icon {
-  box-sizing: content-box;
-  padding: 4px;
-  border-radius: 50%;
-  background: linear-gradient(180deg, #f7cf63, var(--gold-deep));
+.ident__avatar {
+  display: inline-flex;
+  flex: none;
+}
+.ident__avatar .unit-art__lv {
+  display: none;
+}
+.ident__avatar .unit-art img {
   box-shadow:
-    inset 0 1px 0 rgba(255, 240, 196, 0.8),
-    0 0 10px -1px rgba(242, 193, 78, 0.55);
-  color: var(--gold-ink);
+    0 0 0 2px var(--gold),
+    0 0 0 4px var(--outline),
+    0 0 14px -2px rgba(242, 193, 78, 0.55);
+}
+.ident__main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.ident__name {
+  font-family: var(--font-display);
+  font-size: 18px;
+  line-height: 1.2;
+  color: var(--ink);
+  text-shadow: var(--ink-outline-s);
+}
+.ident__record {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--text-2);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-bold);
+  white-space: nowrap;
+}
+.ident__record b {
+  margin-right: 1px;
+  font-family: var(--font-num);
+  font-weight: 400;
+  font-size: 15px;
+  color: var(--ink);
+}
+.ident__w b {
+  color: var(--positive-text);
+}
+.ident__l b {
+  color: var(--team-red-light);
+}
+.ident__rate {
+  color: var(--text-3);
 }
 
-/* ---- Scrolling body ------------------------------------------------------------- */
+/* ---- Body ------------------------------------------------------------------------- */
 .lobby__body {
   position: relative;
   z-index: 1;
-  gap: var(--s-4);
-  padding-top: calc(var(--top-h) + var(--sat) + var(--s-1));
-  padding-bottom: calc(var(--dock-h) + var(--s-6) + var(--sab));
+  gap: var(--s-3);
+  padding-top: var(--s-2);
+  padding-bottom: var(--s-3);
 }
 
-/* ---- Hero showcase: an iron-framed window into the arena ------------------------- */
-.hero {
+/* ---- Arena showcase: framed window into the current arena ------------------------- */
+.arena {
   position: relative;
-  z-index: 1;
-  height: calc(var(--hero-h) + 30px);
-}
-.hero__stage {
-  position: absolute;
-  inset: 0 0 30px;
+  flex: 1 0 auto;
+  min-height: 188px;
   overflow: hidden;
+  isolation: isolate;
   border-radius: 22px;
-  background:
-    radial-gradient(70% 55% at 50% 40%, rgba(139, 108, 255, 0.34) 0%, rgba(59, 139, 255, 0.12) 42%, transparent 72%),
-    linear-gradient(180deg, #1a2240 0%, #121a30 55%, var(--night-1) 100%);
+  background: linear-gradient(180deg, #18213b, var(--night-1));
   box-shadow:
+    inset 0 0 0 1.5px rgba(242, 193, 78, 0.55),
+    inset 0 1px 0 rgba(255, 231, 163, 0.35),
     0 6px 0 var(--panel-lip),
     0 26px 40px -16px rgba(0, 0, 0, 0.85);
-  animation: stage-in 700ms var(--ease-emph) both;
 }
-/* The frame sits above the art: iron band, gold hairline, inner shade. */
-.hero__stage::after {
+/* HUD-style corner brackets on the frame. */
+.arena::after {
   content: '';
   position: absolute;
-  inset: 0;
-  z-index: 5;
-  border-radius: inherit;
+  inset: 8px;
+  z-index: 8;
   pointer-events: none;
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 220, 140, 0.55),
-    inset 0 0 0 4px #0b0f1a,
-    inset 0 0 0 5px rgba(170, 190, 255, 0.14),
-    inset 0 -40px 50px -24px rgba(7, 10, 18, 0.85),
-    inset 0 18px 30px -18px rgba(7, 10, 18, 0.7);
+  --bk: rgba(255, 231, 163, 0.75);
+  background:
+    linear-gradient(var(--bk), var(--bk)) top left / 16px 2px,
+    linear-gradient(var(--bk), var(--bk)) top left / 2px 16px,
+    linear-gradient(var(--bk), var(--bk)) top right / 16px 2px,
+    linear-gradient(var(--bk), var(--bk)) top right / 2px 16px,
+    linear-gradient(var(--bk), var(--bk)) bottom left / 16px 2px,
+    linear-gradient(var(--bk), var(--bk)) bottom left / 2px 16px,
+    linear-gradient(var(--bk), var(--bk)) bottom right / 16px 2px,
+    linear-gradient(var(--bk), var(--bk)) bottom right / 2px 16px;
+  background-repeat: no-repeat;
+  border-radius: 14px;
 }
-@keyframes stage-in {
-  from {
-    opacity: 0;
-    transform: translateY(14px) scale(0.97);
-  }
+.arena__art {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 6%;
+  opacity: 0.95;
 }
-/* Moonlight burst behind the figures. */
-.hero__glow {
+/* Holo grid floor: a 12x12 field in perspective, team glows at the near / far edges. */
+.arena__floor {
+  position: absolute;
+  left: -20%;
+  right: -20%;
+  bottom: -6%;
+  z-index: 1;
+  height: 62%;
+  perspective: 420px;
+  perspective-origin: 50% 0%;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 34%);
+  mask-image: linear-gradient(180deg, transparent 0%, #000 34%);
+}
+.arena__grid {
   position: absolute;
   left: 50%;
-  top: 44%;
-  width: calc(var(--hero-h) * 2.4);
-  height: calc(var(--hero-h) * 2.4);
-  transform: translate(-50%, -50%);
+  bottom: 0;
+  width: min(440px, 120%);
+  aspect-ratio: 1;
+  transform: translateX(-50%) rotateX(62deg);
+  transform-origin: 50% 100%;
+  border-radius: 6px;
   background:
-    radial-gradient(closest-side, rgba(190, 180, 255, 0.28), rgba(139, 108, 255, 0.08) 40%, transparent 60%),
-    repeating-conic-gradient(from 0deg, rgba(190, 200, 255, 0.06) 0deg 7deg, transparent 7deg 22deg);
-  -webkit-mask-image: radial-gradient(closest-side, #000 20%, transparent 70%);
-  mask-image: radial-gradient(closest-side, #000 20%, transparent 70%);
-  animation: rays-spin 90s linear infinite;
+    linear-gradient(180deg, rgba(255, 70, 85, 0.32), transparent 22%, transparent 78%, rgba(59, 139, 255, 0.4)),
+    repeating-linear-gradient(90deg, rgba(110, 220, 255, 0.34) 0 1.5px, transparent 1.5px calc(100% / 12)),
+    repeating-linear-gradient(0deg, rgba(110, 220, 255, 0.34) 0 1.5px, transparent 1.5px calc(100% / 12)),
+    rgba(10, 16, 32, 0.55);
+  box-shadow:
+    0 0 0 2px rgba(110, 220, 255, 0.5),
+    0 0 40px rgba(95, 176, 255, 0.35);
 }
-.hero__fig {
+.arena__shade {
   position: absolute;
-  bottom: -2%;
-  height: calc(var(--hero-h) * 1.02);
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(7, 10, 18, 0.55) 0%, transparent 26%),
+    linear-gradient(0deg, rgba(7, 10, 18, 0.92) 0%, rgba(7, 10, 18, 0.55) 22%, transparent 42%);
+}
+
+/* The fielded squad standing on the floor (masked illustrations). */
+.arena__stage {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+.arena__fig {
+  position: absolute;
+  bottom: 12%;
+  height: 60%;
   aspect-ratio: 3 / 4;
-  animation: hero-in 900ms var(--ease-emph) both;
+  animation: fig-in 900ms var(--ease-emph) both;
   animation-delay: calc(var(--i) * 120ms + 120ms);
 }
-.hero__fig img {
+.arena__fig img {
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  -webkit-mask-image: radial-gradient(ellipse 50% 52% at 50% 46%, #000 60%, transparent 100%);
-  mask-image: radial-gradient(ellipse 50% 52% at 50% 46%, #000 60%, transparent 100%);
-  animation: hero-float 7s var(--ease-in-out) infinite;
-  will-change: transform;
+  -webkit-mask-image: radial-gradient(ellipse 50% 52% at 50% 46%, #000 58%, transparent 100%);
+  mask-image: radial-gradient(ellipse 50% 52% at 50% 46%, #000 58%, transparent 100%);
+  animation: fig-float 7s var(--ease-in-out) infinite;
 }
-.hero__fig--c {
+.arena__fig--c {
   left: 50%;
   z-index: 3;
-  margin-left: calc(var(--hero-h) * -0.3825);
+  height: 66%;
+  bottom: 13%;
+  transform: translateX(-50%);
 }
-.hero__fig--l,
-.hero__fig--r {
+.arena__fig--l,
+.arena__fig--r {
   z-index: 2;
-  bottom: 8%;
-  height: calc(var(--hero-h) * 0.8);
+  height: 48%;
+  bottom: 20%;
 }
-.hero__fig--l {
-  right: calc(50% + var(--hero-h) * 0.05);
-  --from-x: -40px;
+.arena__fig--l {
+  right: 58%;
+  --from-x: -32px;
 }
-.hero__fig--r {
-  left: calc(50% + var(--hero-h) * 0.05);
-  --from-x: 40px;
+.arena__fig--r {
+  left: 58%;
+  --from-x: 32px;
 }
-.hero__fig--l img,
-.hero__fig--r img {
-  filter: brightness(0.55) saturate(0.85);
+.arena__fig--l img,
+.arena__fig--r img {
+  filter: brightness(0.6) saturate(0.85);
   animation-duration: 9s;
   animation-delay: -3s;
 }
-.hero__fig--r img {
+.arena__fig--r img {
   animation-delay: -6s;
 }
-@keyframes hero-in {
+@keyframes fig-in {
   from {
     opacity: 0;
-    transform: translateX(var(--from-x, 0)) translateY(24px) scale(0.96);
+    translate: var(--from-x, 0) 20px;
   }
 }
-@keyframes hero-float {
+@keyframes fig-float {
   50% {
-    transform: translateY(-6px);
+    transform: translateY(-5px);
   }
-}
-/* The stage floor: night mist the wordmark sits on. */
-.hero__floor {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 4;
-  height: 38%;
-  background: linear-gradient(180deg, rgba(13, 19, 34, 0), rgba(13, 19, 34, 0.8) 55%, var(--night-1));
 }
 
-/* Wordmark + tagline overlap the bottom edge of the frame. */
-.hero__brand {
+.arena__brand {
   position: absolute;
+  top: 16px;
   left: 0;
   right: 0;
-  bottom: 0;
   z-index: 6;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+.arena__foot {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 14px;
+  z-index: 6;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+.arena__plate {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  animation: brand-in 800ms var(--ease-pop) 360ms both;
+  min-width: 0;
 }
-@keyframes brand-in {
-  from {
-    opacity: 0;
-    transform: scale(1.2);
-  }
-}
-.hero__tag {
+.arena__eyebrow {
   display: inline-flex;
   align-items: center;
-  height: 26px;
-  padding: 0 14px;
-  border-radius: var(--r-full);
-  background: rgba(7, 10, 18, 0.85);
-  box-shadow:
-    inset 0 0 0 1px rgba(242, 193, 78, 0.4),
-    0 3px 0 rgba(0, 0, 0, 0.5);
-  color: var(--gold-100);
-  font-size: var(--fs-caption);
+  gap: 4px;
+  color: var(--gold-text);
+  font-size: var(--fs-micro);
   font-weight: var(--fw-bold);
-  letter-spacing: 0.28em;
-  text-indent: 0.28em;
+  letter-spacing: 0.08em;
+  text-shadow: 0 1px 0 var(--outline);
 }
-.hero__plate {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  z-index: 6;
-  display: flex;
+.arena__name {
+  font-family: var(--font-display);
+  font-size: 22px;
+  line-height: 1.15;
+  color: var(--ink);
+  text-shadow: var(--ink-outline-m);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* "다음 전장" teaser: a locked obsidian chip. */
+.arena__next {
+  flex: none;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 6px 5px 12px;
+  height: 34px;
+  padding: 0 12px 0 5px;
   border-radius: var(--r-full);
-  background: rgba(7, 10, 18, 0.72);
+  background: rgba(7, 10, 18, 0.78);
   box-shadow:
-    inset 0 0 0 1px rgba(72, 88, 128, 0.8),
+    inset 0 0 0 1px rgba(72, 88, 128, 0.85),
     0 3px 0 rgba(0, 0, 0, 0.45);
   -webkit-backdrop-filter: blur(4px);
   backdrop-filter: blur(4px);
-  animation: enter-rise var(--dur-4) var(--ease-emph) 700ms both;
 }
-.hero__plate-name {
+.arena__next-icon {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--panel-well);
+  box-shadow: inset 0 0 0 1px rgba(72, 88, 128, 0.85);
+  color: var(--text-2);
+}
+.arena__next-text {
+  display: flex;
+  flex-direction: column;
+  color: var(--text-2);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-bold);
+  line-height: 1.2;
+}
+.arena__next-text b {
+  color: var(--ink);
+  font-weight: var(--fw-bold);
+}
+
+/* ---- Play block: difficulty segmented control + CTA + how-to-play ------------------ */
+.play {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.seg {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--r-l);
+  background: var(--panel-well);
+  box-shadow: var(--well-shadow);
+}
+.seg__btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-height: 48px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  transition:
+    background var(--dur-1) var(--ease-out),
+    box-shadow var(--dur-1) var(--ease-out),
+    color var(--dur-1) var(--ease-out);
+}
+.seg__stars {
+  display: flex;
+  gap: 1px;
+  color: rgba(150, 170, 230, 0.3);
+}
+.seg__stars .is-on {
+  color: var(--text-3);
+}
+.seg__label {
+  font-family: var(--font-display);
+  font-size: 16px;
+  line-height: 1.1;
+}
+.seg__btn.is-active {
+  background: var(--panel-fill);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 231, 163, 0.3),
+    inset 0 0 0 1.5px rgba(242, 193, 78, 0.8),
+    0 3px 0 var(--panel-lip);
+  color: var(--ink);
+  text-shadow: var(--ink-outline-s);
+}
+.seg__btn.is-active .seg__stars .is-on {
+  color: var(--gold);
+  filter: drop-shadow(0 0 3px rgba(242, 193, 78, 0.6));
+}
+.seg__btn:active {
+  transform: translateY(1px);
+}
+.play .btn--play {
+  min-height: 68px;
+}
+.help-link {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 48px;
+  margin: -6px 0 -4px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--r-full);
+  background: transparent;
+  color: var(--gold-text);
   font-family: var(--font-display);
   font-size: 15px;
-  line-height: 1;
-  color: var(--ink);
+  cursor: pointer;
 }
+.help-link:active {
+  background: rgba(242, 193, 78, 0.1);
+}
+
 
 /* ---- Wordmark: ink + gold faces, thick dark outline and lip ------------------------ */
 .wordmark {
@@ -353,435 +491,43 @@
   background-image: linear-gradient(180deg, var(--gold-hi) 0%, var(--gold) 50%, var(--gold-deep) 50% 100%);
 }
 
-/* ---- PLAY panel ----------------------------------------------------------------- */
-.play-panel {
-  position: relative;
-  z-index: 3;
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-3);
-  padding: var(--s-3) var(--s-3) var(--s-1);
-  margin-bottom: var(--lip);
-  border-radius: var(--r-xl);
-  background: var(--panel-fill);
-  color: var(--text-1);
-  box-shadow: var(--panel-shadow);
-}
-.play-panel__head {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--s-2);
-}
-.play-panel__head::before,
-.play-panel__head::after {
-  content: '';
-  flex: 1;
-  max-width: 64px;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(242, 193, 78, 0.6));
-}
-.play-panel__head::after {
-  transform: scaleX(-1);
-}
-.play-panel__head .t-eyebrow {
-  text-transform: uppercase;
-  color: var(--gold-100);
-  font-size: var(--fs-label);
-  letter-spacing: 0.12em;
-}
-.play-panel .btn--play {
-  margin-top: var(--s-1);
-}
-.play-panel__foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s-2);
-  padding: 0 var(--s-1);
-}
-
-/* Difficulty tiles */
-.diff {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
-  padding: 6px 6px 9px;
-  border-radius: var(--r-l);
-  background: var(--panel-well);
-  box-shadow: var(--well-shadow);
-}
-.diff__btn {
-  --tone: 95, 176, 255;
-  position: relative;
-  display: grid;
-  justify-items: center;
-  align-content: center;
-  gap: 1px;
-  min-height: 62px;
-  padding: 6px 4px;
-  border: 0;
-  border-radius: var(--r-m);
-  background: linear-gradient(180deg, #252e48, #1b2238);
-  box-shadow:
-    inset 0 1px 0 var(--panel-hi),
-    inset 0 0 0 1px rgba(51, 64, 95, 0.8),
-    0 3px 0 var(--panel-lip);
-  color: var(--text-2);
-  cursor: pointer;
-  transition:
-    transform var(--dur-press) var(--ease-out),
-    box-shadow var(--dur-press) var(--ease-out);
-}
-.diff__btn:active {
-  transform: translateY(2px);
-  box-shadow:
-    inset 0 1px 0 var(--panel-hi),
-    inset 0 0 0 1px rgba(51, 64, 95, 0.8),
-    0 1px 0 var(--panel-lip);
-}
-.diff__btn--easy {
-  --tone: 60, 207, 122;
-}
-.diff__btn--hard {
-  --tone: 255, 70, 85;
-}
-.diff__stars {
-  display: flex;
-  gap: 1px;
-  color: rgba(150, 170, 230, 0.2);
-}
-.diff__stars .is-on {
-  color: rgba(150, 170, 230, 0.55);
-}
-.diff__label {
-  font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 400;
-  line-height: 1.2;
-  color: var(--text-2);
-}
-.diff__sub {
-  color: var(--text-3);
-  font-size: var(--fs-micro);
-  font-weight: var(--fw-bold);
-}
-/* Selected: the tile lights up in its tone (easy green · normal blue · hard red). */
-.diff__btn.is-active {
-  background:
-    radial-gradient(90% 80% at 50% 0%, rgba(var(--tone), 0.38), transparent 75%),
-    linear-gradient(180deg, #27324f, #1a2238);
-  box-shadow:
-    inset 0 1px 0 rgba(var(--tone), 0.55),
-    inset 0 0 0 1.5px rgba(var(--tone), 0.85),
-    0 4px 0 var(--panel-lip),
-    0 0 18px -4px rgba(var(--tone), 0.6);
-  transform: translateY(-2px);
-  animation: diff-pick 320ms var(--ease-spring);
-}
-.diff__btn.is-active .diff__label {
-  color: var(--ink);
-  text-shadow: var(--ink-outline-s);
-}
-.diff__btn.is-active .diff__sub {
-  color: rgb(var(--tone));
-  filter: brightness(1.35);
-}
-.diff__btn.is-active .diff__stars .is-on {
-  color: var(--gold);
-  filter: drop-shadow(0 0 3px rgba(242, 193, 78, 0.6));
-}
-@keyframes diff-pick {
-  from {
-    transform: translateY(0) scale(0.94);
-  }
-}
-
-/* Record + help */
-.record {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s-3);
-  color: var(--text-2);
-  font-size: var(--fs-caption);
-  font-weight: var(--fw-bold);
-}
-.record b {
-  margin-right: 2px;
-  color: var(--ink);
-  font-family: var(--font-num);
-  font-size: 20px;
-  font-weight: 400;
-  font-variant-numeric: tabular-nums;
-}
-.record__item--w b {
-  color: var(--positive-text);
-}
-.record__item--l b {
-  color: var(--team-red-light);
-}
-.help-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: var(--touch);
-  padding: 0 var(--s-2);
-  border: 0;
-  border-radius: var(--r-full);
-  background: transparent;
-  color: var(--gold-text);
-  font-size: var(--fs-label);
-  font-weight: var(--fw-bold);
-  cursor: pointer;
-  overflow: hidden;
-}
-.help-chip:active {
-  background: rgba(242, 193, 78, 0.1);
-}
-
-/* ---- Squad card ------------------------------------------------------------------ */
-.squad {
-  display: block;
-  padding: var(--s-4) var(--s-3) var(--s-3);
-  overflow: hidden;
-}
-.squad__body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-3);
-}
-.squad .section-head {
-  padding: 0 var(--s-1);
-}
-.squad__roster {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--s-3);
-  padding: 0 var(--s-1);
-}
-.squad__unit {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-.squad__unit .unit-art--card {
-  width: 100%;
-  height: auto;
-  aspect-ratio: 3 / 4;
-  border-radius: var(--r-s);
-}
-.squad__name {
-  margin-top: 4px;
-  font-family: var(--font-display);
-  font-size: 16px;
-  line-height: 1.1;
-  color: var(--ink);
-  text-shadow: 0 1px 0 var(--outline);
-}
-.squad__meta {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-/* Mini formation preview in an iron tray. */
-.squad__grid {
-  padding: var(--s-2);
-  border-radius: var(--r-m);
-  background: var(--panel-well);
-  box-shadow: var(--well-shadow);
-}
-.enemy-hint {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  width: max-content;
-  margin: 0 auto 6px;
-  padding: 2px 10px 2px 8px;
-  border-radius: var(--r-full);
-  background: rgba(158, 28, 39, 0.45);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 70, 85, 0.65),
-    0 0 12px -3px rgba(255, 70, 85, 0.5);
-  color: var(--team-red-light);
-  font-size: var(--fs-caption);
-  font-weight: var(--fw-bold);
-  letter-spacing: 0.04em;
-  text-shadow: 0 1px 0 var(--outline);
-}
-.enemy-hint--sm {
-  font-size: var(--fs-micro);
-}
-
-/* ---- Bottom dock: two chunky tiles on an iron tray -------------------------------- */
-.dock {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: var(--z-dock);
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: var(--s-3);
-  padding: var(--s-3) calc(var(--gutter) + var(--sar)) calc(var(--s-3) + var(--sab)) calc(var(--gutter) + var(--sal));
-  border-radius: 22px 22px 0 0;
-  background: var(--bar-fill);
-  box-shadow:
-    inset 0 1px 0 rgba(242, 193, 78, 0.3),
-    inset 0 0 0 1px rgba(51, 64, 95, 0.6),
-    0 -14px 30px -10px rgba(0, 0, 0, 0.8);
-  animation: dock-in var(--dur-4) var(--ease-emph) 420ms both;
-}
-@keyframes dock-in {
-  from {
-    transform: translateY(100%);
-  }
-}
-.menu-tile {
-  --tone: 139, 108, 255;
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  min-height: 58px;
-  margin-bottom: 5px;
-  padding: 0 12px 0 8px;
-  border: 0;
-  border-radius: var(--r-l);
-  background:
-    radial-gradient(80% 120% at 15% 50%, rgba(var(--tone), 0.22), transparent 70%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0 46%, transparent 46%),
-    linear-gradient(180deg, #2a3452, #1c243c);
-  box-shadow:
-    inset 0 1px 0 rgba(var(--tone), 0.4),
-    inset 0 0 0 1px rgba(var(--tone), 0.45),
-    0 5px 0 var(--panel-lip),
-    0 10px 16px -8px rgba(0, 0, 0, 0.7);
-  color: var(--ink);
-  cursor: pointer;
-  overflow: visible;
-  transition:
-    transform var(--dur-press) var(--ease-out),
-    box-shadow var(--dur-press) var(--ease-out);
-}
-.menu-tile:active {
-  transform: translateY(4px);
-  box-shadow:
-    inset 0 1px 0 rgba(var(--tone), 0.4),
-    inset 0 0 0 1px rgba(var(--tone), 0.45),
-    0 1px 0 var(--panel-lip);
-}
-.menu-tile--blue {
-  --tone: 95, 176, 255;
-}
-.menu-tile__icon {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  flex: none;
-  border-radius: 12px;
-  background: linear-gradient(180deg, rgba(var(--tone), 0.95), rgba(var(--tone), 0.55));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.45),
-    0 2px 0 rgba(0, 0, 0, 0.5),
-    0 0 14px -2px rgba(var(--tone), 0.65);
-  color: #fff;
-}
-.menu-tile__icon .icon {
-  filter: drop-shadow(0 1.5px 0 rgba(7, 10, 18, 0.7));
-}
-.menu-tile__label {
-  font-family: var(--font-display);
-  font-size: 17px;
-  line-height: 1.1;
-  color: var(--ink);
-  text-shadow: var(--ink-outline-s);
-  white-space: nowrap;
-}
-.menu-tile .badge {
-  top: -8px;
-  right: -4px;
-}
-
 /* ---- Small phones ----------------------------------------------------------------- */
-@media (max-height: 680px) {
-  .lobby {
-    --dock-h: 76px;
-    --hero-h: 210px;
-  }
-  .play-panel {
-    gap: var(--s-2);
-  }
-  .diff__btn {
-    min-height: 52px;
-  }
-  .diff__sub {
-    display: none;
-  }
-  .btn--play {
-    min-height: 64px;
-    font-size: 28px;
-  }
-  .menu-tile {
-    min-height: 52px;
-  }
-  .menu-tile__icon {
-    width: 34px;
-    height: 34px;
-  }
-}
-@media (max-width: 370px) {
-  .menu-tile__label {
-    font-size: 15px;
-  }
-  .menu-tile {
-    gap: 6px;
-  }
-}
-
-/* ---- Tablet / desktop: centred column, floating dock ------------------------------ */
-@media (min-width: 720px) {
-  .lobby {
-    --hero-h: clamp(240px, calc(100vh - 530px), 420px);
-  }
+@media (max-height: 700px) {
   .lobby__top {
-    padding-left: calc((100% - var(--column)) / 2);
-    padding-right: calc((100% - var(--column)) / 2);
-  }
-  .dock {
-    left: 50%;
-    right: auto;
-    bottom: var(--s-4);
-    width: var(--column);
-    padding-bottom: var(--s-3);
-    border-radius: 24px;
-    transform: translateX(-50%);
-    box-shadow:
-      inset 0 1px 0 rgba(242, 193, 78, 0.3),
-      inset 0 0 0 1px rgba(51, 64, 95, 0.6),
-      0 6px 0 var(--panel-lip),
-      var(--drop-l);
-    animation: none;
+    padding-top: calc(6px + var(--sat));
   }
   .lobby__body {
-    padding-bottom: calc(var(--dock-h) + var(--s-10));
+    gap: var(--s-2);
+  }
+  .play {
+    gap: var(--s-2);
+  }
+  .play .btn--play {
+    min-height: 60px;
+    font-size: 28px;
+  }
+  .seg__btn {
+    min-height: 48px;
+  }
+  .arena__brand .wordmark--md {
+    font-size: 26px;
+  }
+  .help-link {
+    margin: -4px 0 -6px;
+  }
+}
+
+/* ---- Tablet / desktop: centred column ---------------------------------------------- */
+@media (min-width: 600px) {
+  .lobby__top {
+    padding-left: max(var(--gutter), calc((100% - var(--column)) / 2));
+    padding-right: max(var(--gutter), calc((100% - var(--column)) / 2));
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .lobby-bg__rays,
-  .hero__stage,
-  .hero__glow,
-  .hero__fig,
-  .hero__fig img,
-  .hero__brand,
-  .hero__plate,
-  .dock,
-  .diff__btn.is-active {
+  .arena__fig,
+  .arena__fig img {
     animation: none !important;
   }
 }

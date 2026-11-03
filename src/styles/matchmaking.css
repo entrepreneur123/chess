@@ -52,7 +52,7 @@
   z-index: 2;
   display: flex;
   justify-content: center;
-  padding: var(--s-2) var(--s-4) var(--s-5);
+  padding: var(--s-2) var(--s-4) calc(var(--s-5) + var(--sab));
 }
 .mm__cancel {
   min-width: 140px;

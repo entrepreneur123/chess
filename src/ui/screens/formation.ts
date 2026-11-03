@@ -12,7 +12,8 @@ import {
 } from '../../engine';
 import { haptic, sfx } from '../../audio/sfx';
 import { getProfile, levelsOf, syncFormationLevels, updateProfile } from '../../meta/profile';
-import { appBar } from '../components/appbar';
+import { appBar, settingsButton } from '../components/appbar';
+import { showSettings } from '../components/settingsSheet';
 import { confirmDialog } from '../components/dialog';
 import { DragGhost, trackPointerDrag, type DragTracker } from '../components/drag';
 import { formationGrid, placeInFormation, ROW_LABELS } from '../components/formationGrid';
@@ -46,17 +47,18 @@ export function formationScreen(router: Router): Screen {
 
   const isDirty = () => !sameFormation(work, saved) || !getProfile().formationSaved;
 
+  /** Unsaved edits: ask before leaving (back or a tab switch). */
+  const confirmLeave = async () =>
+    sameFormation(work, saved) ||
+    confirmDialog({
+      title: '저장하지 않고 나갈까요?',
+      body: '변경한 배치가 사라집니다.',
+      confirmLabel: '나가기',
+      danger: true,
+    });
+
   const leave = async () => {
-    if (!sameFormation(work, saved)) {
-      const ok = await confirmDialog({
-        title: '저장하지 않고 나갈까요?',
-        body: '변경한 배치가 사라집니다.',
-        confirmLabel: '나가기',
-        danger: true,
-      });
-      if (!ok) return;
-    }
-    router.home();
+    if (await confirmLeave()) router.home();
   };
 
   const FULL_MSG = `말은 ${PIECES_PER_SIDE}개까지 배치할 수 있어요. 배치된 말을 탭하면 교체됩니다`;
@@ -298,12 +300,12 @@ export function formationScreen(router: Router): Screen {
             { class: `hint${selected ? ' is-holding' : ''}` },
             icon(selected ? 'touch' : 'info', 16),
             drag
-              ? `${josa(CHARACTERS[drag.character].nameKo, '을/를')} 놓을 칸에서 손을 떼세요. 다른 말 위에 놓으면 자리를 바꿉니다.`
+              ? `놓을 칸에서 손을 떼세요 · 말 위에 놓으면 교체`
               : selected
               ? work.some((s) => s.character === selected)
-                ? `${josa(CHARACTERS[selected].nameKo, '을/를')} 놓을 칸을 탭하세요. 다른 말 위에 놓으면 자리를 바꿉니다.`
-                : `${josa(CHARACTERS[selected].nameKo, '을/를')} 투입할 말을 탭하세요. 그 말과 교체됩니다.`
-              : `말을 끌어다 칸에 놓거나, 탭해서 집은 뒤 칸을 탭해 배치하세요. 분대는 ${PIECES_PER_SIDE}명입니다.`,
+                ? `${josa(CHARACTERS[selected].nameKo, '을/를')} 놓을 칸을 탭하세요`
+                : `${josa(CHARACTERS[selected].nameKo, '와/과')} 바꿀 말을 탭하세요`
+              : `끌어다 놓거나 탭해서 배치 · 분대 ${PIECES_PER_SIDE}명`,
           )
         : h('ul', { class: 'errors' }, v.errors.map((e) => h('li', null, e))),
     );
@@ -312,7 +314,7 @@ export function formationScreen(router: Router): Screen {
 
   replaceChildren(
     el,
-    appBar('진형 편성', { onBack: () => void leave() }),
+    appBar('진형 편성', { trailing: settingsButton(() => showSettings()) }),
     h(
       'div',
       { class: 'scroll-body formation__body' },
@@ -368,6 +370,7 @@ export function formationScreen(router: Router): Screen {
   return {
     el,
     onBack: () => void leave(),
+    beforeLeave: confirmLeave,
     mount() {
       window.addEventListener('pointerup', onPointerEnd);
       window.addEventListener('pointercancel', onPointerEnd);

@@ -108,4 +108,10 @@ export interface IBoardView {
    * faded on its square until this is called with null.
    */
   setDragging?(pieceId: string | null): void;
+  /**
+   * Optional (turn feedback): a subtle glow on the board edge in that team's colour (0 = player /
+   * blue, 1 = opponent / red), null = off. Fades in / out (instant with prefers-reduced-motion);
+   * calling it again with the same owner is a no-op, so it is safe to call on every UI refresh.
+   */
+  setTurnGlow?(owner: 0 | 1 | null): void;
 }

@@ -1,10 +1,13 @@
 /**
  * Lightweight Canvas2D fallback board (flat, top-down) used when WebGL is unavailable.
- * Same palette, highlights, pieces, animations and API as the WebGL BoardView, and the same
- * "Dark Arena" look (arena.ts): the iron frame, the raised slate tiles and the field overlay are
- * painted once per size into a static layer; each frame draws that layer plus only the tiles whose
- * tint differs (highlights, storm, wasteland), markers (luminous sprites cached per size, blended
- * with 'lighter' like the WebGL additive markers), tokens and effects. Transparent canvas.
+ * Same palette, highlights, pieces, animations and API as the WebGL BoardView, and the same v6
+ * "tactical hologram" look (arena.ts): the bezel and the flat navy cells are painted once per size
+ * into a static layer and the hologram overlay (zone washes, hex texture, glowing grid) into a
+ * second one; each frame draws the first, only the cells whose tint differs (highlights, storm,
+ * wasteland), the overlay, the turn glow (setTurnGlow, a cached sprite per team), markers (luminous
+ * sprites cached per size, blended with 'lighter' like the WebGL additive markers), tokens and
+ * effects. Transparent canvas. This is the low-end path, so the WebGL board's ambient scan sweep
+ * is left out here: an idle 2D board draws nothing.
  * Player 0 (row 0) is at the bottom of the screen; col 0 at the left.
  *
  * Pieces are illustrated tokens: the character's face art (public/chars/<id>-lv<n>-face.jpg,
@@ -49,7 +52,9 @@ import {
 import type { HighlightIndex } from './common';
 import {
   DOT_WHITEN,
+  FIELD_OVERLAY_MARGIN,
   FRAME_FIT,
+  FRAME_WIDTH,
   MARKER_QUAD,
   paintCaptureRing,
   paintFieldOverlay,
@@ -57,6 +62,7 @@ import {
   paintGlowDot,
   paintSelectGlow,
   paintTile,
+  paintTurnGlow,
   tileOuterPath,
 } from './arena';
 
@@ -90,6 +96,10 @@ const SKILL_BOLT_MS = 250;
 const SKILL_CRACK_AT = 430;
 const SKILL_CRACK_MS = 300;
 const SKILL_RUNE_MS = 1000;
+/** Turn glow (setTurnGlow): fade length (ms), full opacity and sprite margin around the field (cells). */
+const TURN_GLOW_MS = 320;
+const TURN_GLOW_OPACITY = 0.45;
+const TURN_GLOW_MARGIN = FRAME_WIDTH + 0.2;
 
 interface Skill2D {
   start: number;
@@ -182,8 +192,21 @@ export class Board2DView implements IBoardView {
   private down: { id: number; x: number; y: number } | null = null;
   /** Piece being dragged by the UI (drawn faded on its square), see setDragging. */
   private draggingId: string | null = null;
-  /** Static board layer (frame, base slate tiles, field overlay) at device pixels, rebuilt on resize. */
+  /** Static board layer (bezel, base cells) at device pixels, rebuilt on resize. */
   private boardLayer: HTMLCanvasElement | null = null;
+  /**
+   * Static hologram overlay (zone washes, hex texture, grid, edge shadow) at device pixels, drawn
+   * over the cells each frame so re-tinted cells keep their grid (as the WebGL overlay plane).
+   */
+  private overlayLayer: HTMLCanvasElement | null = null;
+  /** Turn glow: owner, fade state and the per-team sprites (built lazily per size). */
+  private glowOwner: PlayerId | null = null;
+  private glowLevel = 0;
+  private glowFrom = 0;
+  private glowTo = 0;
+  private tGlow = -1;
+  private readonly glowSprites: [HTMLCanvasElement | null, HTMLCanvasElement | null] = [null, null];
+  private glowColor: PlayerId = 0;
   private turn: PlayerId = 0;
   private tLand = -1;
   private landAt: { r: number; c: number } = { r: 0, c: 0 };
@@ -539,6 +562,55 @@ export class Board2DView implements IBoardView {
     this.requestRender();
   }
 
+  /**
+   * Turn feedback: a subtle glow on the board edge in `owner`'s team colour (null = off). Fades in /
+   * out over TURN_GLOW_MS (instant with reduced motion).
+   */
+  setTurnGlow(owner: 0 | 1 | null): void {
+    if (this.disposed || owner === this.glowOwner) return;
+    const prev = this.glowOwner;
+    this.glowOwner = owner;
+    if (owner !== null) this.glowColor = owner;
+    // Switching teams restarts from dark so the colour never snaps on a lit glow.
+    this.glowFrom = prev !== null && owner !== null ? 0 : this.glowLevel;
+    this.glowTo = owner === null ? 0 : 1;
+    if (this.reducedMotion) {
+      this.tGlow = -1;
+      this.glowLevel = this.glowTo;
+    } else {
+      this.tGlow = performance.now();
+    }
+    this.requestRender();
+  }
+
+  private tickGlow(now: number): void {
+    if (this.tGlow < 0) return;
+    const k = clamp01((now - this.tGlow) / TURN_GLOW_MS);
+    this.glowLevel = this.glowFrom + (this.glowTo - this.glowFrom) * easeOutCubic(k);
+    if (k >= 1) this.tGlow = -1;
+  }
+
+  /** The team's turn glow sprite at the current size: painted white, then tinted (as the WebGL tint). */
+  private glowSprite(team: PlayerId): HTMLCanvasElement | null {
+    const cached = this.glowSprites[team];
+    if (cached) return cached;
+    const d = this.dpr;
+    const s = this.layout.cell * d;
+    const m = TURN_GLOW_MARGIN * s;
+    const px = Math.max(1, Math.round(BOARD_SIZE * s + m * 2));
+    const cvs = document.createElement('canvas');
+    cvs.width = px;
+    cvs.height = px;
+    const g = cvs.getContext('2d');
+    if (!g) return null;
+    paintTurnGlow(g, s, m, m, [1, 1, 1]);
+    g.globalCompositeOperation = 'source-in';
+    g.fillStyle = TEAM_COLORS[team].glow;
+    g.fillRect(0, 0, px, px);
+    this.glowSprites[team] = cvs;
+    return cvs;
+  }
+
   /** Optional extra (not part of IBoardView): the side to move changed; sweeps its zone line. */
   setTurn(player: 0 | 1): void {
     if (this.disposed) return;
@@ -566,6 +638,8 @@ export class Board2DView implements IBoardView {
     this.layout = { x0: (w - size) / 2, y0: (h - (BOARD_SIZE + topE + botE) * cell) / 2 + topE * cell, cell, pad };
     this.sprites.clear();
     this.wasteSprites.clear();
+    this.glowSprites[0] = null;
+    this.glowSprites[1] = null;
     this.buildBoardLayer();
     this.requestRender();
   }
@@ -588,6 +662,9 @@ export class Board2DView implements IBoardView {
     this.canvas.width = 0;
     this.canvas.height = 0;
     this.boardLayer = null;
+    this.overlayLayer = null;
+    this.glowSprites[0] = null;
+    this.glowSprites[1] = null;
     this.sprites.clear();
     this.wasteSprites.clear();
     this.canvas.remove();
@@ -598,19 +675,20 @@ export class Board2DView implements IBoardView {
   // ---------------------------------------------------------------- render loop
 
   /**
-   * Paint the static arena once per size (arena.ts): iron frame + field well, the 144 raised slate
-   * tiles in their base colours (home tints included) and the field overlay (frame AO).
-   * Per frame only highlight / storm / wasteland tints are drawn over it.
+   * Paint the static arena once per size (arena.ts): the bezel + field well and the 144 flat cells
+   * in their base colours (home tints included) into the board layer, and the hologram overlay into
+   * its own field-sized layer. Per frame only highlight / storm / wasteland tints are drawn between
+   * the two.
    */
   private buildBoardLayer(): void {
     const cvs = this.boardLayer ?? document.createElement('canvas');
     const d = this.dpr;
     cvs.width = Math.max(1, Math.round(this.cssW * d));
     cvs.height = Math.max(1, Math.round(this.cssH * d));
+    const { x0, y0, cell } = this.layout;
+    const s = cell * d;
     const g = cvs.getContext('2d');
     if (g) {
-      const { x0, y0, cell } = this.layout;
-      const s = cell * d;
       const ox = x0 * d;
       const oy = y0 * d;
       g.clearRect(0, 0, cvs.width, cvs.height);
@@ -619,9 +697,18 @@ export class Board2DView implements IBoardView {
       for (let r = 0; r < BOARD_SIZE; r++) {
         for (let c = 0; c < BOARD_SIZE; c++) paintTile(g, ox + c * s, oy + (BOARD_SIZE - 1 - r) * s, s, tileRgb(r, c, base));
       }
-      paintFieldOverlay(g, s, ox, oy);
     }
     this.boardLayer = cvs;
+    const ov = this.overlayLayer ?? document.createElement('canvas');
+    const m = FIELD_OVERLAY_MARGIN * s;
+    ov.width = Math.max(1, Math.round(BOARD_SIZE * s + m * 2));
+    ov.height = ov.width;
+    const og = ov.getContext('2d');
+    if (og) {
+      og.clearRect(0, 0, ov.width, ov.height);
+      paintFieldOverlay(og, s, m, m);
+    }
+    this.overlayLayer = ov;
   }
 
   private requestRender(): void {
@@ -641,6 +728,7 @@ export class Board2DView implements IBoardView {
       (this.tShake >= 0 && now - this.tShake < this.shakeMs) ||
       (this.tGlint >= 0 && now - this.tGlint < 320) ||
       (this.tTurn >= 0 && now - this.tTurn < ANIM.turn) ||
+      this.tGlow >= 0 ||
       this.trail.length > 0 ||
       this.fading.length > 0 ||
       (this.tSkillHit >= 0 && now - this.tSkillHit < 520) ||
@@ -655,6 +743,7 @@ export class Board2DView implements IBoardView {
     if (this.disposed) return;
     if (this.anim) this.tickAnim(now);
     this.tickSkill(now);
+    this.tickGlow(now);
     const busy = !!this.anim || !!this.skill || this.fxActive(now);
     const ringLoop = this.hasLegendary && !this.reducedMotion && !document.hidden;
     // Wasteland glow / bubbles and the targeting ghost breathe at <= ~30 fps (static if reduced motion).
@@ -763,7 +852,7 @@ export class Board2DView implements IBoardView {
     }
     ctx.translate(sx, sy);
 
-    // Static arena (frame, slate tiles, field overlay), then only the tiles whose tint differs.
+    // Static arena (bezel, cells), then only the cells whose tint differs, then the hologram overlay.
     if (this.boardLayer) ctx.drawImage(this.boardLayer, 0, 0, this.cssW, this.cssH);
     const hi = this.hi;
     const zone = hi.zone;
@@ -788,6 +877,24 @@ export class Board2DView implements IBoardView {
           ctx.fillStyle = hexAlpha(WASTE_COLORS.tile, 0.85 * wk);
           ctx.fill();
         }
+      }
+    }
+
+    if (this.overlayLayer) {
+      const m = FIELD_OVERLAY_MARGIN * cell;
+      const sz = BOARD_SIZE * cell + m * 2;
+      ctx.drawImage(this.overlayLayer, x0 - m, y0 - m, sz, sz);
+    }
+    if (this.glowLevel > 0.002) {
+      const spr = this.glowSprite(this.glowColor);
+      if (spr) {
+        const m = TURN_GLOW_MARGIN * cell;
+        const sz = BOARD_SIZE * cell + m * 2;
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = this.glowLevel * TURN_GLOW_OPACITY;
+        ctx.drawImage(spr, x0 - m, y0 - m, sz, sz);
+        ctx.restore();
       }
     }
 
@@ -1462,20 +1569,20 @@ export class Board2DView implements IBoardView {
       const y = y0 + (BOARD_SIZE - rowEdge) * cell;
       const active = id === this.turn;
       const boost = active && sweepK >= 0 && sweepK < 1 ? Math.sin(Math.PI * sweepK) : 0;
-      // Thin glowing team line + a soft halo band (as the WebGL zone line / halo), additive.
+      // Bright thin team line (light tone) over a soft halo band (as the WebGL line / halo), additive.
       const col = TEAM_COLORS[id].glow;
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      const hh = cell * 0.5 * (1 + boost * 0.7);
+      const hh = cell * 0.4 * (1 + boost * 0.7);
       const hg = ctx.createLinearGradient(0, y - hh, 0, y + hh);
-      const ha = Math.min(1, (active ? 0.36 : 0.16) + boost * 0.55);
+      const ha = Math.min(1, (active ? 0.2 : 0.1) + boost * 0.55);
       hg.addColorStop(0, hexAlpha(col, 0));
       hg.addColorStop(0.5, hexAlpha(col, ha));
       hg.addColorStop(1, hexAlpha(col, 0));
       ctx.fillStyle = hg;
       ctx.fillRect(x0 + cell * 0.05, y - hh, size - cell * 0.1, hh * 2);
-      ctx.strokeStyle = hexAlpha(col, Math.min(1, (active ? 0.9 : 0.5) + boost * 0.5));
-      ctx.lineWidth = Math.max(1.2, cell * (0.055 + 0.04 * boost));
+      ctx.strokeStyle = hexAlpha(TEAM_COLORS[id].light, Math.min(1, (active ? 0.95 : 0.6) + boost * 0.5));
+      ctx.lineWidth = Math.max(1, cell * (0.04 + 0.04 * boost));
       ctx.beginPath();
       ctx.moveTo(x0 + cell * 0.05, y);
       ctx.lineTo(x0 + size - cell * 0.05, y);

@@ -144,25 +144,50 @@ export const CHARACTER_RARITY: Record<CharacterId, Rarity> = {
 };
 
 /**
- * "Dark Arena" board surfaces (doc palette): iron frame, gold trim, the dark field bed.
+ * Board surfaces (doc palette). v6 "tactical hologram" (docs/design/v6-clean-tactical.md): a slim
+ * dark bezel with HUD corner brackets and thin gold accents around a deep-navy field of flat,
+ * low-contrast cells, split by thin glowing cyan grid lines over a faint hex micro-texture.
  * The canvas itself is transparent: the page paints its dark backdrop behind the board.
  */
 export const ARENA = {
   /** night-0 / night-1 (doc): deepest background and the app base. */
   night0: '#070A12',
   night1: '#0D1322',
-  /** Iron frame: panel (doc) body, panel-top light edge, panel-lip bottom lip / shadow. */
+  /** Bezel: panel (doc) body, panel-top light edge, panel-lip bottom lip / shadow. */
   iron: '#1B2338',
   ironTop: '#28324D',
   ironLip: '#090D17',
+  /** Bezel face (darker than a UI panel so the field reads as a lit screen inside it). */
+  bezel: '#0A1020',
   /** Hairline (doc line). */
   line: '#33405F',
-  /** Field bed seen between the tiles. */
-  bed: '#090D16',
+  /** Field bed seen between the cells (under the grid lines). */
+  bed: '#060B17',
+  /** Hologram grid / HUD line cyan and its bright core tone. */
+  grid: '#5FD0FF',
+  gridCore: '#BDEFFF',
   /** Gold trim (doc gold / gold-deep / gold-lip). */
   gold: '#F2C14E',
   goldDeep: '#C8891E',
   goldLip: '#6E4510',
+} as const;
+
+/**
+ * Hologram field overlay strengths (alpha, 0..1), shared by both views (arena.ts paintFieldOverlay):
+ * grid line core / glow, hex micro-texture, the centre projection glow and the home-zone wash.
+ */
+export const HOLO = {
+  gridCore: 0.3,
+  gridGlow: 0.075,
+  /** Major lines (zone edges are drawn separately; this is the centre line). */
+  gridMajor: 0.42,
+  hex: 0.05,
+  centreGlow: 0.055,
+  /** Team wash in the home zone: strongest at the zone edge line, fading toward the back rank. */
+  zoneWashEdge: 0.13,
+  zoneWashBack: 0.02,
+  /** Ambient scanline shimmer (WebGL only, off with reduced motion): peak additive alpha. */
+  scan: 0.055,
 } as const;
 
 export const BOARD_COLORS = {
@@ -172,9 +197,9 @@ export const BOARD_COLORS = {
   slab: '#121A2E',
   slabEdge: '#3A4B78',
   gap: ARENA.bed,
-  /** Two-tone dark slate / obsidian tiles (doc: about #222b40 / #1b2336). */
-  tileLight: '#242D43',
-  tileDark: '#1C2437',
+  /** Two-tone deep-navy hologram cells, very low contrast (v6: about #0d1830 / #0b1428). */
+  tileLight: '#0E1A33',
+  tileDark: '#0B1529',
   /** Own move target: luminous ice-cyan dot (additive glow, white-hot core). */
   moveDot: '#9BEBFF',
   /** Enemy reach preview (tone 'enemy'): red glowing dots, selection frame and tile tints. */
@@ -197,8 +222,11 @@ export const BOARD_COLORS = {
   shadow: ARENA.night0,
 } as const;
 
-/** Strength (0..1) of the always-on home-zone team-deep tint on the tiles. */
-export const HOME_TINT_STRENGTH = 0.42;
+/**
+ * Strength (0..1) of the always-on home-zone team-deep tint on the cells (v6: a soft tint, not a
+ * slab; the glow wash, the team-tinted grid and the bright edge line carry the zone).
+ */
+export const HOME_TINT_STRENGTH = 0.15;
 /** Strength (0..1) of the highlighted zoneRows tint. */
 export const ZONE_TINT_STRENGTH = 0.5;
 /** Strength (0..1) of the last-move tint. */

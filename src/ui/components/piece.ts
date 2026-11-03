@@ -136,6 +136,12 @@ function computePattern(character: CharacterId, level: Level): Pattern | null {
   return result;
 }
 
+/** Rows x columns of a character's movement diagram (to size it into a fixed box). */
+export function movementSpan(character: CharacterId, level: Level): { rows: number; cols: number } {
+  const p = computePattern(character, level);
+  return p ? { rows: p.rows, cols: p.cols } : { rows: 1, cols: 1 };
+}
+
 /** Tiny CSS grid showing where a character can go from the center square. Forward is up. */
 export function movementDiagram(character: CharacterId, level: Level, opts: { cell?: number; owner?: PlayerId } = {}): HTMLElement {
   const p = computePattern(character, level);

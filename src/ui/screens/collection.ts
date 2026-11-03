@@ -5,7 +5,8 @@
 import { haptic, sfx } from '../../audio/sfx';
 import { CHARACTERS, CHARACTER_IDS, type CharacterId, type Level } from '../../engine';
 import { getProfile, setGrade, subscribeProfile, updateProfile } from '../../meta/profile';
-import { appBar } from '../components/appbar';
+import { appBar, settingsButton } from '../components/appbar';
+import { showSettings } from '../components/settingsSheet';
 import { movementDiagram, rarityChip, starsOf, unitArt } from '../components/piece';
 import { Disposables, h, replaceChildren } from '../dom';
 import { icon } from '../icons';
@@ -40,10 +41,10 @@ function unitPreview(id: CharacterId, lv: Level, size = 84) {
   return unitArt(id, lv, { size, cls: 'grade-pick__art' });
 }
 
-export function collectionScreen(router: Router): Screen {
+export function collectionScreen(_router: Router): Screen {
   const bag = new Disposables();
   const list = h('div', { class: 'scroll-body collection__body' });
-  const el = h('div', { class: 'collection' }, appBar('캐릭터', { onBack: () => router.home() }), list);
+  const el = h('div', { class: 'collection' }, appBar('캐릭터', { trailing: settingsButton(() => showSettings()) }), list);
   let justPicked: CharacterId | null = null;
 
   const pickGrade = (id: CharacterId, grade: Level) => {
@@ -149,7 +150,7 @@ export function collectionScreen(router: Router): Screen {
   const render = () => {
     replaceChildren(
       list,
-      h('p', { class: 'hint hint--pad' }, icon('info', 16), '모든 캐릭터를 1성 · 2성 · 3성 중 원하는 성급으로 출전시킬 수 있어요. 다이어그램의 위쪽이 앞(적 방향)입니다.'),
+      h('p', { class: 'hint hint--pad hint--line' }, icon('star', 16), '출전 성급을 골라요', h('span', { class: 'hint__sep', 'aria-hidden': 'true' }, '·'), icon('up', 16), '위쪽이 적 방향'),
       CHARACTER_IDS.map(card),
     );
     for (const id of CHARACTER_IDS) shown.set(id, getProfile().grades[id]);

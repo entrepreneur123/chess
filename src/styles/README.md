@@ -19,6 +19,7 @@ in `tokens.css`.
 | `lobby.css` · `collection.css` · `formation.css` · `matchmaking.css` | Screens |
 | `overlays.css` | Tutorial carousel, settings sheet, result dialog |
 | `game.css` | Match layout: bars, timer ring, turn strip (turn count + turn chip), notes line, board area, action-dock row |
+| `nav.css` | Bottom tab bar (router chrome) and the tab-switch cross-fade |
 | `../ui/game/hud.css` | Match effects and panels: banners, flashes, float text, urgency, dock contents, selection chip, cut-in, ≡ drawer |
 
 ## Backdrops
@@ -74,16 +75,28 @@ Outlined display type: `text-shadow: var(--ink-outline-s | -m | -l)` (ink face, 
 | Inputs / rows | `.switch[aria-checked]`, `.set-group > .set-row` (`--link`) |
 | Overlays | `.scrim` (`--sheet`, `--drawer`), `.dialog`, `.sheet`, `.toast--neutral/warn/success` |
 
+## Navigation (v6)
+
+Top-level screens (캐릭터 `collection` · 대전 `lobby` · 진형 `formation`) share a persistent bottom
+tab bar (`nav.css`, `src/ui/components/tabBar.ts`, tab list in `src/ui/nav.ts`). The router appends
+the single bar instance under tab screens only and adds `.has-tabbar` (and `.screen--tab` for a
+tab-to-tab cross-fade) to the screen. Tabs carry `data-nav`; the active one has
+`aria-current="page"`; the centre Battle tab is raised (`.tab--main`). Tab screens have no back
+arrow; hardware back from any tab returns to the lobby, and from the lobby leaves the app.
+
 ## Match screen layout
 
-Rows, each with a fixed height so the board never resizes: opponent bar · `.hud-strip` (turn count
-`.turn-count` + turn chip `.turn-pill`) · `.hud-notes` (storm chip, auto-pass chip, first-match coach;
-also carries the legacy `.board-overlay` hook) · `.board-wrap` (canvas) · `.info-host` (action dock:
-selection chip, chain skip / Brutile skill / targeting) · player bar. Short phones (`max-height:
-720px`) tighten the chrome. In a match, toasts drop in under the notes line. The turn timer ring
-glows in the team colour, turns gold at 10 s and pulses red in the last 5 s (`.is-critical`; a
-timeout is a forfeit), as does the player bar. Landscape ≥ 700px wide moves the strip and notes left
-and the dock right of the board.
+Rows (top to bottom): opponent bar · `.hud-strip` (turn count `.turn-count` + turn chip `.turn-pill`) ·
+`.hud-notes` (storm chip, auto-pass chip, first-match coach; also the legacy `.board-overlay` hook) ·
+`.board-wrap` · `.info-host` (selection chip + action dock: chain skip / Brutile skill / targeting) ·
+`.pbar--hand` (my hand: three `.hand-card`s from `src/ui/game/hand.ts`, then the timer ring above
+resign). Every row has a fixed height so the board never resizes. The board row is sized to the
+board (`--board-h`, width-bound on phones), the hand takes what is left between `--hand-min` and
+`--hand-max`, and any remainder is split above the board and above the hand, so there are no dead
+bands. Short phones (`max-height: 720px`) tighten the chrome. Landscape ≥ 700px wide puts the strip,
+notes and dock left of the board and the hand right of it. The turn timer ring glows in the team
+colour, turns gold at 10 s and pulses red in the last 5 s (`.is-critical`; a timeout is a forfeit),
+as does the hand bar.
 
 ## Motion
 

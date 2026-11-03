@@ -5,22 +5,20 @@ import { BOARD_COLORS, TEAM_COLORS } from './palette';
 import { hexToRgb, makeRng, rgbToCss } from './common';
 import type { RGB } from './common';
 import {
+  FIELD_OVERLAY_MARGIN,
   FRAME_EXTENT,
   MARKER_QUAD,
-  TILE_BEVEL,
-  TILE_EDGE_SHADE,
   TILE_FACE_GRAD,
   TILE_HIGHLIGHT,
   TILE_INSET,
-  TILE_LIP,
-  TILE_LIP_SHADE,
-  TILE_LIP_X,
   TILE_RADIUS,
+  TILE_RIM,
   paintCaptureRing,
   paintFieldOverlay,
   paintFrame,
   paintGlowDot,
   paintSelectGlow,
+  paintTurnGlow,
 } from './arena';
 
 function canvas(w: number, h: number): { cvs: HTMLCanvasElement; ctx: CanvasRenderingContext2D | null } {
@@ -254,11 +252,36 @@ export function makeFrameTexture(): { tex: THREE.CanvasTexture; width: number; d
   return { tex, width, depth, offsetZ };
 }
 
-/** Field overlay (ambient occlusion along the frame), exactly the 12x12 field. */
-export function makeFieldOverlayTexture(): THREE.CanvasTexture {
-  const s = 512;
-  const { cvs, ctx } = canvas(s, s);
-  if (ctx) paintFieldOverlay(ctx, s / BOARD_SIZE, 0, 0);
+/**
+ * Hologram field overlay (team washes, centre glow, hex texture, glowing grid, edge shadow) over
+ * the 12x12 field plus FIELD_OVERLAY_MARGIN on every side; `size` = plane size in cells.
+ * 1024 px keeps the thin grid lines crisp on phones (the field is ~700-850 device px wide there).
+ */
+export function makeFieldOverlayTexture(): { tex: THREE.CanvasTexture; size: number } {
+  const px = 1024;
+  const size = BOARD_SIZE + FIELD_OVERLAY_MARGIN * 2;
+  const s = px / size;
+  const { cvs, ctx } = canvas(px, px);
+  if (ctx) paintFieldOverlay(ctx, s, FIELD_OVERLAY_MARGIN * s, FIELD_OVERLAY_MARGIN * s);
+  const tex = toTexture(cvs);
+  tex.generateMipmaps = false;
+  tex.minFilter = THREE.LinearFilter;
+  return { tex, size };
+}
+
+/** Cells -> texture pixels of the turn glow texture (a soft glow: low resolution is enough). */
+const GLOW_PX = 40;
+
+/**
+ * Turn glow (setTurnGlow) painted white over the frame plane's extents (same size / offset as
+ * makeFrameTexture); tinted by the material colour and blended additively.
+ */
+export function makeTurnGlowTexture(): THREE.CanvasTexture {
+  const E = FRAME_EXTENT;
+  const w = Math.round((BOARD_SIZE + E.side * 2) * GLOW_PX);
+  const h = Math.round((BOARD_SIZE + E.top + E.bottom) * GLOW_PX);
+  const { cvs, ctx } = canvas(w, h);
+  if (ctx) paintTurnGlow(ctx, GLOW_PX, E.side * GLOW_PX, E.top * GLOW_PX, [1, 1, 1]);
   const tex = toTexture(cvs);
   tex.generateMipmaps = false;
   tex.minFilter = THREE.LinearFilter;
@@ -298,7 +321,7 @@ void main() {
 
 const f = (x: number): string => x.toFixed(4);
 
-/** Raised slate tile (mirrors arena.ts paintTile); output is sRGB, written as-is (no tone mapping). */
+/** Flat hologram cell (mirrors arena.ts paintTile); output is sRGB, written as-is (no tone mapping). */
 const TILE_FS = /* glsl */ `
 varying vec2 vP;
 varying vec3 vC;
@@ -312,29 +335,21 @@ vec3 toSRGB(vec3 l) {
 void main() {
   vec2 p = vP;
   float aa = max(fwidth(p.x), fwidth(p.y)) * 0.8;
-  float dOut = sdRR(p, vec2(0.5), vec2(${f(0.5 - TILE_INSET)}), ${f(TILE_RADIUS)});
-  float a = 1.0 - smoothstep(-aa, aa, dOut);
+  float d = sdRR(p, vec2(0.5), vec2(${f(0.5 - TILE_INSET)}), ${f(TILE_RADIUS)});
+  float a = 1.0 - smoothstep(-aa, aa, d);
   if (a <= 0.0) discard;
-  vec2 tMin = vec2(${f(TILE_INSET)});
-  vec2 tMax = vec2(${f(1 - TILE_INSET - TILE_LIP_X)}, ${f(1 - TILE_INSET - TILE_LIP)});
-  vec2 tc = (tMin + tMax) * 0.5;
-  vec2 th = (tMax - tMin) * 0.5;
-  float rt = ${f(TILE_RADIUS * 0.92)};
-  float inTop = 1.0 - smoothstep(-aa, aa, sdRR(p, tc, th, rt));
-  float inHl = 1.0 - smoothstep(-aa, aa, sdRR(p, tc + vec2(${f(TILE_BEVEL)}), th, rt));
-  float inDk = 1.0 - smoothstep(-aa, aa, sdRR(p, tc - vec2(${f(TILE_BEVEL * 0.8)}), th, rt));
   vec3 c = toSRGB(vC);
-  vec3 lip = c * ${f(TILE_LIP_SHADE)};
-  // Top face: lighter toward the top-left (diagonal gradient across the face, as paintTile).
-  vec2 fq = clamp((p - tMin) / (tMax - tMin), 0.0, 1.0);
-  float fk = 1.0 + ${f(TILE_FACE_GRAD)} - ${f(2 * TILE_FACE_GRAD)} * (fq.x + fq.y) * 0.5;
+  // Top-lit face: brighter at the top, darker at the bottom (as paintTile's gradient).
+  float fy = clamp((p.y - ${f(TILE_INSET)}) / ${f(1 - 2 * TILE_INSET)}, 0.0, 1.0);
+  float fk = 1.0 + ${f(TILE_FACE_GRAD)} - ${f(2 * TILE_FACE_GRAD)} * fy;
   vec3 face = fk > 1.0 ? mix(c, vec3(1.0), fk - 1.0) : c * fk;
-  vec3 top = mix(face, vec3(1.0), ${f(TILE_HIGHLIGHT)} * (1.0 - inHl));
-  top *= mix(${f(TILE_EDGE_SHADE)}, 1.0, inDk);
-  gl_FragColor = vec4(mix(lip, top, inTop), a);
+  // Thin glass rim inside the edge, brightest along the top.
+  float rim = 1.0 - smoothstep(${f(TILE_RIM)} - aa, ${f(TILE_RIM)} + aa, -d);
+  face = mix(face, vec3(1.0), ${f(TILE_HIGHLIGHT)} * mix(1.0, 0.35, fy) * rim);
+  gl_FragColor = vec4(face, a);
 }`;
 
-/** Instanced raised-tile material (per-instance colour = InstancedMesh.setColorAt). */
+/** Instanced flat-cell material (per-instance colour = InstancedMesh.setColorAt). */
 export function makeTileMaterial(): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     vertexShader: TILE_VS,

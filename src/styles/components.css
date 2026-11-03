@@ -397,6 +397,20 @@
 .hint--pad {
   padding: 0 var(--s-1);
 }
+/* One-line, icon-led hint (v6: no helper paragraphs). */
+.hint--line {
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  font-weight: var(--fw-semibold);
+}
+.hint--line .icon {
+  margin-top: 0;
+  color: var(--gold);
+}
+.hint__sep {
+  color: var(--text-3);
+}
 .errors {
   margin: 0;
   padding: var(--s-3) var(--s-4) var(--s-3) var(--s-6);

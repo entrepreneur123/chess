@@ -17,6 +17,15 @@ export interface Screen {
   dispose?(): void;
   /** Hardware back. Default: go to the root (lobby). */
   onBack?(): void;
+  /** Asked before a tab switch leaves this screen (e.g. unsaved edits). Resolve false to stay. */
+  beforeLeave?(): boolean | Promise<boolean>;
+}
+
+/** The persistent bottom tab bar (see components/tabBar.ts), shown under the tab screens only. */
+export interface TabChrome {
+  el: HTMLElement;
+  tabs: readonly ScreenName[];
+  setActive(name: ScreenName): void;
 }
 
 export interface ScreenParams {
@@ -53,6 +62,8 @@ export class Router {
   private guard = false;
   private suppressPops = 0;
   private factories: { [N in ScreenName]?: ScreenFactory<N> } = {};
+  private tabBar: TabChrome | null = null;
+  private switching = false;
 
   constructor(private readonly outlet: HTMLElement) {
     history.replaceState({ t12: 'root' }, '');
@@ -70,6 +81,29 @@ export class Router {
     return this.current?.name ?? null;
   }
 
+  /** Install the bottom tab bar; it is attached under every screen listed in `bar.tabs`. */
+  useTabBar(bar: TabChrome): this {
+    this.tabBar = bar;
+    return this;
+  }
+
+  /**
+   * Tab bar navigation: asks the current screen first (`beforeLeave`), then swaps screens in
+   * place. Tabs are siblings, so this never stacks history: back from any tab returns to the
+   * lobby (the root), and back from the lobby leaves the app.
+   */
+  async switchTab(name: ScreenName): Promise<void> {
+    const cur = this.current;
+    if (this.switching || cur?.name === name) return;
+    this.switching = true;
+    try {
+      const ok = cur?.screen.beforeLeave ? await cur.screen.beforeLeave() : true;
+      if (ok && this.current === cur) this.navigate(name as never);
+    } finally {
+      this.switching = false;
+    }
+  }
+
   navigate<N extends ScreenName>(name: N, ...params: ScreenParams[N] extends undefined ? [] : [ScreenParams[N]]): void {
     const factory = this.factories[name] as ScreenFactory<N> | undefined;
     if (!factory) throw new Error(`Unknown screen ${name}`);
@@ -84,6 +118,7 @@ export class Router {
         console.error(e);
       }
     }
+    const fromTab = !!this.current && !!this.tabBar?.tabs.includes(this.current.name);
     clear(this.outlet);
     const screen = factory(this, params[0] as ScreenParams[N]);
     this.current = { name, screen };
@@ -91,6 +126,14 @@ export class Router {
     screen.el.dataset.screen = name;
     if (first) screen.el.classList.add('screen--first');
     this.outlet.appendChild(screen.el);
+    const bar = this.tabBar;
+    if (bar && bar.tabs.includes(name)) {
+      screen.el.classList.add('has-tabbar');
+      // Tab to tab: a quick cross-fade instead of the full screen entrance.
+      if (fromTab) screen.el.classList.add('screen--tab');
+      bar.setActive(name);
+      this.outlet.appendChild(bar.el);
+    }
     this.outlet.scrollTop = 0;
     screen.mount?.();
     this.syncGuard();

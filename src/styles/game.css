@@ -1,24 +1,35 @@
 /* ==========================================================================
    Match screen layout: opponent bar · turn strip · notes line · board ·
-   action dock · player bar, over the dark arena floor (#app backdrop). The
-   board canvas (src/render) is transparent around its frame. In-match
-   effects, the dock contents, the drawer and the cut-ins live in
-   src/ui/game/hud.css.
+   action dock · my hand (piece cards + timer + resign), over the dark arena
+   floor (#app backdrop). The board canvas (src/render) is transparent around
+   its frame. In-match effects, the dock contents, the hand cards, the drawer
+   and the cut-ins live in src/ui/game/hud.css.
    Every row has a fixed height so the board never resizes when a note, the
-   storm status or a dock control appears.
+   storm status or a dock control appears. The board row is sized to the
+   board itself (no dead bands); the hand row takes the rest, and on very
+   tall screens the leftover is split above the board and above the hand.
    ========================================================================== */
 body.in-game,
 .game {
   overscroll-behavior: none;
 }
 .game {
-  --bar-h: 60px;
-  --strip-h: 42px;
-  --notes-h: 32px;
-  --dock-row-h: 66px;
+  --bar-h: 58px;
+  --strip-h: 40px;
+  --notes-h: 30px;
+  --dock-row-h: 58px;
+  --hand-min: 104px;
+  --hand-max: 188px;
+  --hand-mb: calc(8px + var(--sab));
+  --vh: 100vh;
+  /* Everything but the board, with the hand at its minimum. */
+  --chrome: calc(var(--bar-h) + 12px + var(--sat) + var(--strip-h) + var(--notes-h) + var(--dock-row-h) + var(--hand-min) + var(--hand-mb));
+  --board-h: max(160px, min(100vw - 4px, 640px, var(--vh) - var(--chrome)));
+  /* The hand grows into what is left, up to its max. */
+  --hand-h: clamp(var(--hand-min), var(--vh) - var(--chrome) + var(--hand-min) - var(--board-h), var(--hand-max));
   display: grid;
-  grid-template-rows: auto var(--strip-h) var(--notes-h) minmax(0, 1fr) var(--dock-row-h) auto;
-  grid-template-areas: 'top' 'strip' 'notes' 'board' 'dock' 'bot';
+  grid-template-rows: auto var(--strip-h) var(--notes-h) minmax(0, 1fr) var(--board-h) var(--dock-row-h) minmax(0, 1fr) calc(var(--hand-h) + var(--hand-mb));
+  grid-template-areas: 'top' 'strip' 'notes' '.' 'board' 'dock' '.' 'hand';
   gap: 0;
   background: transparent;
   -webkit-touch-callout: none;
@@ -56,8 +67,28 @@ body.in-game,
   margin: calc(var(--s-2) + var(--sat)) var(--s-2) 4px;
 }
 .pbar--bottom {
-  grid-area: bot;
-  margin: 0 var(--s-2) calc(var(--s-2) + 4px + var(--sab));
+  grid-area: hand;
+  margin: 0 var(--s-2) var(--hand-mb);
+}
+/* My side is the hand: three piece cards, then the timer ring above resign. */
+.pbar--hand {
+  align-items: stretch;
+  gap: 8px;
+  padding: 6px;
+  min-height: 0;
+}
+.pbar__side {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-evenly;
+  gap: 6px;
+  width: 50px;
+}
+.pbar__side .icon-btn {
+  width: 48px;
+  height: 48px;
 }
 .pbar.is-turn {
   background:
@@ -519,12 +550,28 @@ body.in-game,
 }
 
 /* ---- Short phones (~360x640): tighter chrome so the board keeps its size ----------- */
+@supports (height: 100dvh) {
+  .game {
+    --vh: 100dvh;
+  }
+}
 @media (max-height: 720px) {
   .game {
-    --bar-h: 54px;
-    --strip-h: 38px;
-    --notes-h: 30px;
-    --dock-row-h: 58px;
+    --bar-h: 56px;
+    --strip-h: 36px;
+    --notes-h: 28px;
+    --dock-row-h: 52px;
+    --hand-min: 100px;
+  }
+  .pbar--hand {
+    padding: 4px;
+  }
+  .pbar__side {
+    gap: 4px;
+  }
+  .pbar__side .ring {
+    width: 40px;
+    height: 40px;
   }
   .pbar {
     padding: 4px 6px 4px 10px;
@@ -532,8 +579,9 @@ body.in-game,
   .pbar--top {
     margin-top: calc(6px + var(--sat));
   }
-  .pbar--bottom {
-    margin-bottom: calc(8px + var(--sab));
+  .game .action-bar,
+  .skill-btn {
+    min-height: 48px;
   }
   .pbar .unit-art {
     --art-size: 38px !important;
@@ -541,10 +589,10 @@ body.in-game,
   .pbar__name {
     font-size: 16px;
   }
-  .pbar .icon-btn {
-    width: 42px;
-    height: 42px;
-    margin-bottom: 4px;
+  .pbar--top .icon-btn {
+    width: 48px;
+    height: 48px;
+    margin-bottom: 3px;
   }
   .ring {
     width: 42px;
@@ -610,13 +658,48 @@ body.in-game,
    strip and notes dock to the left of the board and the action dock to the right. */
 @media (orientation: landscape) and (min-width: 700px) {
   .game {
-    grid-template-columns: minmax(0, 1fr) minmax(0, calc(100vh - 170px)) minmax(0, 1fr);
-    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) minmax(0, calc(var(--vh) - 96px)) minmax(0, 1fr);
+    grid-template-rows: auto auto auto minmax(0, 1fr);
     grid-template-areas:
       'top top top'
-      'strip board dock'
-      'notes board dock'
-      'bot bot bot';
+      'strip board hand'
+      'notes board hand'
+      'dock board hand';
+  }
+  .pbar--hand {
+    width: auto;
+    max-width: 300px;
+    align-self: center;
+    justify-self: start;
+    margin: var(--s-3);
+    flex-direction: column;
+  }
+  .pbar--hand .hand {
+    flex-direction: column;
+  }
+  .pbar--hand .hand-card {
+    flex: none;
+    width: 180px;
+    height: calc((var(--vh) - 260px) / 3);
+    max-height: 150px;
+  }
+  .pbar--hand .pbar__side {
+    flex-direction: row;
+    width: auto;
+  }
+  /* The side column is narrow: the coach line wraps instead of running off-screen. */
+  .hud-notes {
+    min-width: 0;
+    align-items: stretch;
+  }
+  .coach {
+    height: auto;
+    min-height: 30px;
+    padding: 4px 12px 4px 3px;
+    border-radius: var(--r-m);
+  }
+  .coach__text {
+    white-space: normal;
   }
   .hud-strip {
     flex-direction: column;

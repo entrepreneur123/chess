@@ -20,6 +20,7 @@ import {
   type GameState,
   type Move,
   type Piece,
+  type PlayerId,
   type Pos,
   type SkillAction,
   type SkillBlock,
@@ -40,6 +41,7 @@ import type { Router, Screen } from '../router';
 import { BOT, GameController, HUMAN, type ControllerSnapshot, type Phase } from '../game/GameController';
 import { CRITICAL_MS, endReasonText, rosterChips, setText, TimerRing, turnPillContent } from '../game/hud';
 import { createFieldPanel } from '../game/fieldPanel';
+import { createHand, handModel, selectFromHand } from '../game/hand';
 import { CUTIN_MS, cutInEl, preloadCutIns } from '../game/cutin';
 import type { GameParams } from './gameParams';
 import '../game/hud.css';
@@ -57,7 +59,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   const topRing = new TimerRing(BOT);
   const botRing = new TimerRing(HUMAN);
   const topRoster = h('div', { class: 'pbar__roster-host' });
-  const bottomRoster = h('div', { class: 'pbar__roster-host' });
+  // My hand: one card per fielded piece; a tap selects it like tapping it on the board.
+  const hand = createHand(params.playerFormation, HUMAN, (pieceId) => onHandTap(pieceId));
   // The pill is built once; only its text/class change so screen readers announce real changes.
   const pillText = h('span', { class: 'turn-pill__text' });
   const pill = h(
@@ -176,14 +179,12 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     { class: 'icon-btn', type: 'button', 'aria-label': '기권', 'data-action': 'resign', onclick: () => void askResign() },
     icon('flag', 20),
   );
+  // My side: the hand of piece cards, with the turn timer and resign on the right.
   const bottomBar = h(
     'footer',
-    { class: 'pbar pbar--bottom' },
-    h('span', { class: 'pbar__avatar pbar__avatar--blue' }, unitArt(params.playerFormation[0]?.character ?? 'sad', params.playerFormation[0]?.level ?? 1, { size: 44, owner: HUMAN })),
-    h('div', { class: 'pbar__info' }, h('div', { class: 'pbar__name' }, '나'), h('div', { class: 'pbar__meta' }, '블루 · 아래쪽')),
-    bottomRoster,
-    botRing.el,
-    resignBtn,
+    { class: 'pbar pbar--bottom pbar--hand', 'aria-label': '나 · 블루' },
+    hand.el,
+    h('div', { class: 'pbar__side' }, botRing.el, resignBtn),
   );
   // Layout (top to bottom): opponent bar, turn strip (whose turn + turn count), a fixed-height notes
   // line (storm status, auto pass, first-match coach), board, action dock, player bar. Every row
@@ -239,7 +240,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     else if (sel?.actionable && sel.moves.length > 0) setCoach('빛나는 칸을 탭하거나 말을 끌어다 놓아 이동하세요');
     else if (sel?.actionable) setCoach('이 말은 지금 못 움직여요. 다른 말을 탭해 보세요');
     else if (sel) setCoach('상대 말이에요. 아래쪽 파란 말을 탭해 보세요');
-    else setCoach('내 말(파랑)을 탭해 이동 가능한 칸을 보세요');
+    else setCoach('내 말(파랑)이나 아래 카드를 탭해 보세요');
   };
 
   const finishCoach = () => {
@@ -302,6 +303,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     else sfx('land');
   };
   let lastTurnShown: number | null = null;
+  let lastGlow: PlayerId | null | undefined;
   const askResign = async () => {
     if (!ctrl || ctrl.phase === 'ended') return;
     const ok = await confirmDialog({
@@ -322,6 +324,20 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     used: '이번 판에 이미 사용',
     storm: '자기장 이후 사용 불가',
     ended: '',
+  };
+
+  /** Hand card tap: the same controller path as tapping the piece on the board. */
+  const onHandTap = (pieceId: string) => {
+    const c = ctrl;
+    if (!c) return;
+    if (targeting) {
+      stopTargeting();
+      renderSnapshot(c.snapshot());
+    }
+    if (!selectFromHand(c, pieceId)) {
+      sfx('tap');
+      haptic('light');
+    }
   };
 
   const stopTargeting = () => {
@@ -511,8 +527,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     if (s.pieces.length !== rosterKey) {
       rosterKey = s.pieces.length;
       replaceChildren(topRoster, rosterChips(params.botFormation, BOT, s));
-      replaceChildren(bottomRoster, rosterChips(params.playerFormation, HUMAN, s));
     }
+    hand.update(handModel(params.playerFormation, HUMAN, snap));
     const tp = turnPillContent(snap);
     if (tp.cls !== pillCls) {
       pillCls = tp.cls;
@@ -540,6 +556,11 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     const activeTurn = snap.phase === 'ended' ? null : s.turn;
     topBar.classList.toggle('is-turn', activeTurn === BOT);
     bottomBar.classList.toggle('is-turn', activeTurn === HUMAN);
+    if (activeTurn !== lastGlow) {
+      lastGlow = activeTurn;
+      // Optional board API (a subtle board-edge glow in the mover's team colour).
+      (board as { setTurnGlow?: (owner: PlayerId | null) => void } | null)?.setTurnGlow?.(activeTurn);
+    }
     resignBtn.toggleAttribute('disabled', snap.phase === 'ended');
 
     const selKey = snap.selection ? `${snap.selection.pieceId}|${snap.selection.actionable}` : null;
@@ -610,7 +631,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       { class: 'result__body' },
       hero,
       h('p', { class: 'result__reason', 'data-reason': s.endReason ?? '' }, endReasonText(s.endReason, outcome, s.endReason === 'storm' && s.pieces.length === 0)),
-      outcome === 'loss' ? h('p', { class: 'result__cheer' }, '아쉬워요! 진형이나 성급을 바꿔 다시 도전해 보세요.') : null,
+      outcome === 'loss' ? h('p', { class: 'result__cheer' }, '진형·성급을 바꿔 다시 도전해 보세요') : null,
       adjudicated && s.pieces.length > 0 ? h('p', { class: 'result__score' }, `전력  나 ${materialScore(s, HUMAN)} : ${materialScore(s, BOT)} 상대`) : null,
       h('p', { class: 'result__total', 'data-record': '' }, icon('trophy', 16), `통산 ${after.stats.wins}승 ${after.stats.losses}패 ${after.stats.draws}무`),
     );
