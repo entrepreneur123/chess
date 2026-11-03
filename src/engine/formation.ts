@@ -6,6 +6,14 @@ function isLevel(x: unknown): x is Level {
   return x === 1 || x === 2 || x === 3;
 }
 
+/**
+ * Own-property check: `CHARACTERS[x]` alone is truthy for inherited keys such as "constructor",
+ * "toString" or "__proto__", which corrupted or hostile saved data could contain.
+ */
+export function isCharacterId(x: unknown): x is CharacterId {
+  return typeof x === 'string' && Object.prototype.hasOwnProperty.call(CHARACTERS, x);
+}
+
 /** The characters of a formation, in slot order. */
 export function squadOf(f: Formation): CharacterId[] {
   return f.map((s) => s.character);
@@ -28,7 +36,7 @@ export function validateFormation(f: Formation): { ok: boolean; errors: string[]
       errors.push('배치 정보가 올바르지 않습니다.');
       continue;
     }
-    const def = CHARACTERS[slot.character as CharacterId];
+    const def = isCharacterId(slot.character) ? CHARACTERS[slot.character] : undefined;
     const name = def ? def.nameKo : String(slot.character);
     if (!def) {
       errors.push(`알 수 없는 캐릭터입니다: ${String(slot.character)}`);
@@ -72,7 +80,7 @@ const DEFAULT_SLOT: Record<CharacterId, { row: number; col: number }> = {
 /** Normalise a squad: distinct known characters, exactly PIECES_PER_SIDE of them (starters fill in). */
 export function normalizeSquad(squad: readonly CharacterId[] | undefined): CharacterId[] {
   const out: CharacterId[] = [];
-  for (const id of squad ?? []) if (CHARACTERS[id] && !out.includes(id) && out.length < PIECES_PER_SIDE) out.push(id);
+  for (const id of squad ?? []) if (isCharacterId(id) && !out.includes(id) && out.length < PIECES_PER_SIDE) out.push(id);
   for (const id of STARTER_IDS) if (out.length < PIECES_PER_SIDE && !out.includes(id)) out.push(id);
   return out;
 }

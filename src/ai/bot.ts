@@ -39,7 +39,7 @@ export interface ChooseMoveOptions {
  * TURN_TIME_1_MS (20 s) and a timeout forfeits, so the bot stays far below it even on slow phones
  * (the deadline is checked every 1024 nodes and no new iteration starts past 55% of the budget).
  */
-const HARD_CAP_MS = 1500;
+const HARD_CAP_MS = 1400;
 /**
  * Strength per difficulty:
  *  - easy:   mostly a heuristic picker (free captures, otherwise a random non-suicidal move, often

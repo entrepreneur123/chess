@@ -308,10 +308,10 @@ export function paintTile(g: CanvasRenderingContext2D, x: number, y: number, s: 
  * Luminous move-target dot: a white-hot core fading into a soft halo of `color` (sRGB 0..1).
  * Blend additively. (x, y) = centre, R = halo radius (px). Mirrors the pre-v4 dot texture.
  */
-export function paintGlowDot(g: CanvasRenderingContext2D, x: number, y: number, R: number, color: RGB): void {
-  const core = mixRgb(color, WHITE, 0.55);
+export function paintGlowDot(g: CanvasRenderingContext2D, x: number, y: number, R: number, color: RGB, whiten = 0.55): void {
+  const core = mixRgb(color, WHITE, whiten);
   const gr = g.createRadialGradient(x, y, 0, x, y, R);
-  gr.addColorStop(0, rgbToCss(mixRgb(core, WHITE, 0.4), 1));
+  gr.addColorStop(0, rgbToCss(mixRgb(core, WHITE, whiten * 0.7), 1));
   gr.addColorStop(0.22, rgbToCss(core, 0.98));
   gr.addColorStop(0.31, rgbToCss(color, 0.88));
   gr.addColorStop(0.4, rgbToCss(color, 0.42));
@@ -326,24 +326,29 @@ export function paintGlowDot(g: CanvasRenderingContext2D, x: number, y: number, 
  * core). Blend additively. Centred at (x, y), cell size s (px). Needs about 0.2 s of margin.
  */
 export function paintSelectGlow(g: CanvasRenderingContext2D, x: number, y: number, s: number, color: RGB): void {
-  const half = s * 0.455;
-  const r = s * 0.15;
+  const half = s * 0.48;
+  const r = s * 0.16;
   const path = (): void => roundRectPath(g, x - half, y - half, half * 2, half * 2, r);
   g.save();
   g.lineJoin = 'round';
-  g.strokeStyle = rgbToCss(color, 0.22);
-  g.lineWidth = s * 0.17;
+  // Wide soft glow spilling over the gap onto the neighbours, then the bright line + hot core.
+  g.strokeStyle = rgbToCss(color, 0.2);
+  g.lineWidth = s * 0.2;
+  path();
+  g.stroke();
+  g.strokeStyle = rgbToCss(color, 0.35);
+  g.lineWidth = s * 0.11;
   path();
   g.stroke();
   g.shadowColor = rgbToCss(color, 1);
-  g.shadowBlur = s * 0.12;
-  g.strokeStyle = rgbToCss(color, 0.95);
-  g.lineWidth = s * 0.055;
+  g.shadowBlur = s * 0.1;
+  g.strokeStyle = rgbToCss(color, 1);
+  g.lineWidth = s * 0.06;
   path();
   g.stroke();
   g.shadowBlur = 0;
-  g.strokeStyle = rgbToCss(mixRgb(color, WHITE, 0.6), 0.95);
-  g.lineWidth = s * 0.02;
+  g.strokeStyle = rgbToCss(mixRgb(color, WHITE, 0.65), 1);
+  g.lineWidth = s * 0.024;
   path();
   g.stroke();
   g.restore();
@@ -374,4 +379,7 @@ export function paintCaptureRing(g: CanvasRenderingContext2D, x: number, y: numb
 }
 
 /** Marker sprite sizes (fractions of a cell): the canvas each painter above needs. */
-export const MARKER_QUAD = { dot: 0.95, select: 1.3, capture: 1.3 } as const;
+export const MARKER_QUAD = { dot: 0.95, select: 1.36, capture: 1.3 } as const;
+
+/** How much the glow-dot core whitens: own reach glows ice-white, enemy reach keeps its red. */
+export const DOT_WHITEN = { own: 0.55, enemy: 0.3 } as const;

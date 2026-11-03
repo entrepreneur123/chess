@@ -1,7 +1,7 @@
 /* ==========================================================================
-   Character screen — cream unit cards: a framed illustration banner, the
-   trait / skill notes, the reach bar, the 1성 · 2성 · 3성 grade picker and
-   the per-grade ability table.
+   Character screen — obsidian unit cards: a framed illustration banner, the
+   trait / passive / skill notes, the reach bar, the 1성 · 2성 · 3성 grade
+   picker and the per-grade ability table.
    ========================================================================== */
 .collection__body {
   gap: var(--s-5);
@@ -9,9 +9,9 @@
 .collection__body > .hint {
   padding: var(--s-2) var(--s-3);
   border-radius: var(--r-m);
-  background: rgba(16, 30, 72, 0.28);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
-  color: #fff;
+  background: rgba(7, 10, 18, 0.62);
+  box-shadow: inset 0 0 0 1px rgba(72, 88, 128, 0.7);
+  color: var(--ink);
   font-weight: var(--fw-semibold);
 }
 .collection__body > .hint .icon {
@@ -25,10 +25,7 @@
   border-radius: var(--r-xl);
   background: var(--panel-fill);
   color: var(--text-1);
-  box-shadow:
-    var(--panel-shadow),
-    0 0 0 2.5px var(--navy-ink),
-    0 var(--lip) 0 2.5px var(--navy-ink);
+  box-shadow: var(--panel-shadow);
   animation: enter-rise var(--dur-4) var(--ease-emph) both;
 }
 .unit-card:nth-child(3) {
@@ -38,20 +35,18 @@
   animation-delay: 160ms;
 }
 
-/* Banner: illustration on the right, title block on the left (dark-blue window). */
+/* Banner: illustration on the right, title block on the left (a dark window). */
 .unit-card__banner {
-  --text-1: #fff;
-  --text-2: #d5e2ff;
   position: relative;
   height: 212px;
   overflow: hidden;
   border-radius: 15px;
   background:
     radial-gradient(80% 90% at 75% 40%, var(--rar-soft), transparent 70%),
-    linear-gradient(180deg, #3a62b2, var(--panel-dark-edge));
+    linear-gradient(180deg, #1f2a48, #0b1020);
   box-shadow:
-    inset 0 0 0 2px rgba(27, 36, 69, 0.55),
-    0 3px 0 rgba(27, 36, 69, 0.18);
+    inset 0 0 0 1px rgba(170, 190, 255, 0.12),
+    0 2px 0 rgba(0, 0, 0, 0.4);
 }
 .unit-card__art {
   position: absolute;
@@ -69,8 +64,8 @@
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(90deg, rgba(29, 49, 102, 0.92) 0%, rgba(29, 49, 102, 0.5) 42%, transparent 70%),
-    linear-gradient(180deg, transparent 55%, rgba(29, 49, 102, 0.85) 100%);
+    linear-gradient(90deg, rgba(11, 16, 32, 0.94) 0%, rgba(11, 16, 32, 0.55) 42%, transparent 70%),
+    linear-gradient(180deg, transparent 55%, rgba(11, 16, 32, 0.9) 100%);
   pointer-events: none;
 }
 .unit-card__title {
@@ -87,7 +82,7 @@
   color: var(--text-2);
   font-size: var(--fs-caption);
   font-weight: var(--fw-bold);
-  text-shadow: 0 1px 0 rgba(27, 36, 69, 0.8);
+  text-shadow: 0 1px 0 var(--outline);
 }
 .unit-card__role b {
   color: var(--gold);
@@ -99,7 +94,7 @@
   font-family: var(--font-display);
   font-size: 38px;
   line-height: 1;
-  color: #fff;
+  color: var(--ink);
   text-shadow: var(--ink-outline-l);
 }
 .unit-card__en {
@@ -126,18 +121,19 @@
   gap: 1px;
   padding: 4px 8px;
   border-radius: var(--r-full);
-  background: rgba(27, 36, 69, 0.6);
-  color: rgba(255, 255, 255, 0.25);
+  background: rgba(7, 10, 18, 0.65);
+  box-shadow: inset 0 0 0 1px rgba(72, 88, 128, 0.7);
+  color: rgba(170, 190, 255, 0.22);
 }
 .unit-card__stars .is-on {
   color: var(--gold);
-  filter: drop-shadow(0 1.5px 0 var(--navy-ink));
+  filter: drop-shadow(0 0 3px rgba(242, 193, 78, 0.6));
 }
 .unit-card__shine {
   position: absolute;
   inset: 0;
   z-index: 1;
-  background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.16) 48%, transparent 60%);
+  background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.1) 48%, transparent 60%);
   transform: translateX(-100%);
   animation: card-shine 6s var(--ease-in-out) 1s infinite;
   pointer-events: none;
@@ -164,20 +160,21 @@
   gap: 4px;
   padding: 6px 8px;
   border-radius: var(--r-full);
-  background: rgba(27, 36, 69, 0.6);
+  background: rgba(7, 10, 18, 0.65);
+  box-shadow: inset 0 0 0 1px rgba(72, 88, 128, 0.7);
 }
 .unit-card__tier i {
   width: 16px;
   height: 6px;
   border-radius: 3px;
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(170, 190, 255, 0.16);
 }
 .unit-card__tier i.is-on {
   background: var(--tier);
-  box-shadow: 0 1px 0 rgba(27, 36, 69, 0.8);
+  box-shadow: 0 0 6px var(--tier);
 }
 .unit-card.tier-1 {
-  --tier: #ffffff;
+  --tier: #e9eefb;
 }
 .unit-card.tier-2 {
   --tier: var(--team-blue-light);
@@ -187,20 +184,17 @@
 }
 .unit-card.tier-2 .unit-card__banner {
   background:
-    radial-gradient(80% 90% at 75% 40%, rgba(140, 194, 255, 0.4), transparent 70%),
-    linear-gradient(180deg, #3d6ccc, var(--panel-dark-edge));
+    radial-gradient(80% 90% at 75% 40%, rgba(95, 176, 255, 0.32), transparent 70%),
+    linear-gradient(180deg, #1d2c55, #0b1020);
 }
 .unit-card.tier-3 .unit-card__banner {
   background:
-    radial-gradient(80% 90% at 75% 40%, rgba(255, 207, 58, 0.45), transparent 70%),
-    linear-gradient(180deg, #4b5fae, #2a2f6e);
+    radial-gradient(80% 90% at 75% 40%, rgba(242, 193, 78, 0.34), transparent 70%),
+    linear-gradient(180deg, #2a2440, #0e0d1c);
 }
+/* 3성: the gold trim marks the premium grade. */
 .unit-card.tier-3 {
-  box-shadow:
-    var(--panel-shadow),
-    0 0 0 2.5px var(--navy-ink),
-    0 var(--lip) 0 2.5px var(--navy-ink),
-    0 0 0 6px rgba(255, 207, 58, 0.55);
+  box-shadow: var(--panel-shadow-gold);
 }
 .unit-card.tier-3 .unit-card__name {
   color: var(--gold-100);
@@ -209,7 +203,7 @@
   position: absolute;
   inset: -20% -10%;
   z-index: 1;
-  background: conic-gradient(from 0deg, transparent 0 8%, rgba(255, 214, 86, 0.16) 8% 12%, transparent 12% 30%, rgba(255, 214, 86, 0.14) 30% 34%, transparent 34% 58%, rgba(255, 214, 86, 0.16) 58% 62%, transparent 62% 84%, rgba(255, 214, 86, 0.14) 84% 88%, transparent 88%);
+  background: conic-gradient(from 0deg, transparent 0 8%, rgba(242, 193, 78, 0.14) 8% 12%, transparent 12% 30%, rgba(242, 193, 78, 0.12) 30% 34%, transparent 34% 58%, rgba(242, 193, 78, 0.14) 58% 62%, transparent 62% 84%, rgba(242, 193, 78, 0.12) 84% 88%, transparent 88%);
   animation: aura-spin 18s linear infinite;
   pointer-events: none;
 }
@@ -219,7 +213,7 @@
   }
 }
 
-/* ---- Body (on cream) ---------------------------------------------------------- */
+/* ---- Body ----------------------------------------------------------------------- */
 .unit-card > :not(.unit-card__banner) {
   margin-left: var(--s-3);
   margin-right: var(--s-3);
@@ -231,17 +225,16 @@
   margin-top: var(--s-3);
   padding: var(--s-2) var(--s-3);
   border-radius: var(--r-s);
-  background: #fff;
-  box-shadow:
-    inset 0 0 0 1px var(--panel-line),
-    0 2px 0 var(--panel-line);
+  background: rgba(7, 10, 18, 0.4);
+  box-shadow: inset 0 0 0 1px rgba(51, 64, 95, 0.85);
   color: var(--text-2);
   font-size: var(--fs-label);
   font-weight: var(--fw-semibold);
 }
 .unit-card__trait .icon {
-  color: var(--team-blue-deep);
+  color: var(--team-blue-light);
 }
+/* Passive (arcane) and skill (toxic) notes. */
 .unit-card__passive {
   display: flex;
   align-items: flex-start;
@@ -249,34 +242,30 @@
   margin-top: var(--s-2);
   padding: 10px 12px;
   border-radius: var(--r-s);
-  background: #f2eaff;
-  box-shadow:
-    inset 0 0 0 1px #d9c4ff,
-    0 2px 0 #d9c4ff;
-  color: #3d2a6b;
+  background: linear-gradient(90deg, rgba(91, 63, 209, 0.28), rgba(46, 29, 120, 0.16));
+  box-shadow: inset 0 0 0 1px rgba(139, 108, 255, 0.5);
+  color: #ddd5ff;
   font-size: var(--fs-label);
   line-height: var(--lh-snug);
 }
 .unit-card__passive svg {
   flex: none;
   margin-top: 2px;
-  color: var(--violet-deep);
+  color: var(--arcane-text);
 }
 .unit-card__passive b {
-  color: #5a22b8;
+  color: var(--arcane-text);
 }
 .unit-card__skill {
-  background: #eaf8e4;
-  box-shadow:
-    inset 0 0 0 1px #b8e3a8,
-    0 2px 0 #b8e3a8;
-  color: #1f4a17;
+  background: linear-gradient(90deg, rgba(48, 110, 30, 0.3), rgba(20, 50, 16, 0.2));
+  box-shadow: inset 0 0 0 1px rgba(124, 255, 90, 0.42);
+  color: #dcf9d2;
 }
 .unit-card__skill svg {
-  color: var(--green-deep);
+  color: var(--toxic);
 }
 .unit-card__skill b {
-  color: var(--green-text);
+  color: var(--toxic-text);
 }
 .unit-card__stats {
   display: flex;
@@ -297,10 +286,10 @@
 }
 .stat__bar {
   position: relative;
-  height: 14px;
+  height: 12px;
   border-radius: var(--r-full);
   background: var(--panel-well);
-  box-shadow: inset 0 2px 3px rgba(27, 36, 69, 0.22);
+  box-shadow: var(--well-shadow);
   overflow: hidden;
 }
 .stat__fill {
@@ -309,15 +298,15 @@
   border-radius: inherit;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.3) 0 45%, transparent 45%),
-    linear-gradient(180deg, #6aa9ff, var(--team-blue));
-  box-shadow: inset 0 -2px 0 var(--team-blue-deep);
+    linear-gradient(90deg, var(--team-blue-deep), var(--team-blue-glow));
+  box-shadow: 0 0 10px rgba(95, 176, 255, 0.6);
 }
 .stat__value {
   min-width: 24px;
   font-family: var(--font-num);
   font-size: 20px;
   text-align: right;
-  color: var(--navy-ink);
+  color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
 
@@ -346,11 +335,11 @@
   padding: 12px 6px 10px;
   border: 0;
   border-radius: var(--r-m);
-  background: linear-gradient(180deg, #ffffff, #eef2fa);
+  background: linear-gradient(180deg, #252e48, #1a2136);
   box-shadow:
-    inset 0 2px 0 #fff,
-    inset 0 0 0 1px var(--panel-line),
-    0 4px 0 var(--panel-edge);
+    inset 0 1px 0 var(--panel-hi),
+    inset 0 0 0 1px rgba(51, 64, 95, 0.85),
+    0 4px 0 var(--panel-lip);
   color: var(--text-1);
   cursor: pointer;
   transition:
@@ -360,36 +349,37 @@
 .grade-pick__btn:active {
   transform: translateY(3px);
   box-shadow:
-    inset 0 2px 0 #fff,
-    inset 0 0 0 1px var(--panel-line),
-    0 1px 0 var(--panel-edge);
+    inset 0 1px 0 var(--panel-hi),
+    inset 0 0 0 1px rgba(51, 64, 95, 0.85),
+    0 1px 0 var(--panel-lip);
 }
 .grade-pick__btn.is-active {
   background:
-    radial-gradient(90% 60% at 50% 0%, rgba(255, 255, 255, 0.9), transparent 70%),
-    linear-gradient(180deg, #fff6cf, #ffe27a);
+    radial-gradient(90% 60% at 50% 0%, rgba(242, 193, 78, 0.3), transparent 70%),
+    linear-gradient(180deg, #2c2a3e, #1c1d2e);
   box-shadow:
-    inset 0 2px 0 #fff,
-    0 0 0 2.5px var(--navy-ink),
-    0 4px 0 2.5px var(--navy-ink),
-    0 10px 14px -6px rgba(184, 101, 10, 0.55);
+    inset 0 1px 0 rgba(255, 231, 163, 0.45),
+    inset 0 0 0 1.5px rgba(242, 193, 78, 0.85),
+    0 4px 0 var(--panel-lip),
+    0 0 20px -6px rgba(242, 193, 78, 0.6);
   transform: translateY(-2px);
 }
 .grade-pick__stars {
-  color: var(--gold-deep);
+  color: var(--gold);
   letter-spacing: -0.08em;
   font-size: 14px;
   line-height: 1;
-  text-shadow: 0 1px 0 rgba(27, 36, 69, 0.35);
+  text-shadow: 0 0 6px rgba(242, 193, 78, 0.45);
 }
 .grade-pick__name {
   font-family: var(--font-display);
   font-size: 18px;
   line-height: 1.1;
-  color: var(--text-3);
+  color: var(--text-2);
 }
 .grade-pick__btn.is-active .grade-pick__name {
-  color: var(--navy-ink);
+  color: var(--gold-100);
+  text-shadow: var(--ink-outline-s);
 }
 .grade-pick__btn .move-diagram {
   margin-top: 4px;
@@ -398,9 +388,9 @@
   margin: 10px 2px 0;
   padding: var(--s-2) var(--s-3);
   border-radius: var(--r-s);
-  background: var(--gold-soft);
-  box-shadow: inset 0 0 0 1px #f3d27a;
-  color: #4a2f00;
+  background: linear-gradient(90deg, rgba(110, 69, 16, 0.38), rgba(110, 69, 16, 0.16));
+  box-shadow: inset 0 0 0 1px rgba(242, 193, 78, 0.45);
+  color: var(--gold-100);
   font-size: var(--fs-label);
   font-weight: var(--fw-semibold);
   line-height: 1.4;
@@ -426,13 +416,11 @@
   margin-top: var(--s-4);
   border-radius: var(--r-m);
   overflow: hidden;
-  background: #fff;
-  box-shadow:
-    inset 0 0 0 1px var(--panel-line),
-    0 3px 0 var(--panel-line);
+  background: rgba(7, 10, 18, 0.4);
+  box-shadow: inset 0 0 0 1px rgba(51, 64, 95, 0.85);
 }
 .ability-table tr + tr {
-  border-top: 1px solid var(--panel-line);
+  border-top: 1px solid rgba(51, 64, 95, 0.7);
 }
 .ability-table th {
   width: 52px;
@@ -455,13 +443,14 @@
   padding: var(--s-2) var(--s-3) var(--s-2) 0;
 }
 .ability-table tr.is-current {
-  background: linear-gradient(90deg, #fff1c2, #fffaf0);
+  background: linear-gradient(90deg, rgba(242, 193, 78, 0.18), rgba(242, 193, 78, 0.04));
+  box-shadow: inset 3px 0 0 var(--gold);
 }
 .ability-table tr.is-current th {
-  color: #8a4a00;
+  color: var(--gold-text);
 }
 .ability-table tr.is-current .ability-table__desc {
-  color: var(--navy-ink);
+  color: var(--ink);
   font-weight: var(--fw-bold);
 }
 

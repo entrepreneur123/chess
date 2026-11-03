@@ -1,5 +1,5 @@
 /**
- * Tunable meta numbers (match pacing, bot squad). There is no economy: no coins, boxes or costs.
+ * Tunable meta numbers (match pacing; the bot squad lives in opponent.ts). There is no economy: no coins, boxes or costs.
  */
 export const APP_NAME = 'GRID CLASH';
 export const APP_TAGLINE = '12×12 전술 아레나';

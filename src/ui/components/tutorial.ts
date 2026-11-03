@@ -3,7 +3,7 @@
  * Re-playable from the lobby. Resolves when closed (completed or skipped).
  */
 import { sfx } from '../../audio/sfx';
-import { CHARACTERS, CHARACTER_IDS, STARTER_IDS, TURN_TIME_MS, type CharacterId } from '../../engine';
+import { CHARACTERS, CHARACTER_IDS, STARTER_IDS, TURN_TIME_1_MS, TURN_TIME_2_MS, TURN_TIME_MS, type CharacterId } from '../../engine';
 import { getProfile, updateProfile } from '../../meta/profile';
 import { h, prefersReducedMotion, type Child } from '../dom';
 import { icon } from '../icons';
@@ -111,7 +111,9 @@ function timerArt(): Child {
     h(
       'div',
       { class: 'tut-strikes' },
-      [1, 2, 3].map((n) => h('span', { class: `tut-strike${n === 3 ? ' is-out' : ''}` }, n === 3 ? '기권' : `${n}회`)),
+      // The limit per move as the squad shrinks, then what running out costs.
+      [`${secs}초`, `${Math.round(TURN_TIME_2_MS / 1000)}초`, `${Math.round(TURN_TIME_1_MS / 1000)}초`].map((t) => h('span', { class: 'tut-strike' }, t)),
+      h('span', { class: 'tut-strike is-out' }, '초과 시 몰수패'),
     ),
   );
 }
@@ -133,7 +135,7 @@ const SLIDES: Slide[] = [
   { key: 'chars', art: charactersArt, title: '다섯 캐릭터, 분대는 3명', body: '파란 칸이 갈 수 있는 곳이에요. 마르키·월크는 앞으로만 가다가 끝줄에 닿으면 뒤돌아요. 전설 인세이너는 잡은 적의 능력을 흡수하고, 전설 브루타일은 닿으면 소멸하는 불모지를 깔아요.' },
   { key: 'tap', art: tapArt, title: '탭하고, 한 번 더 탭!', body: '내 말을 탭하면 갈 수 있는 칸이 빛나요. 빛나는 칸을 탭하면 이동해요.' },
   { key: 'zone', art: zoneArt, title: '진형은 아래 3줄에서', body: '대전 전에 내 구역(3×12) 안에 말을 자유롭게 배치해 작전을 짜세요.' },
-  { key: 'timer', art: timerArt, title: '한 턴 45초, 한 판 최대 10분', body: '말이 줄면 40초 → 20초. 한쪽이 1개만 남거나 40수가 지나면(서든데스) 6턴마다 좌우 바깥 줄이 자기장으로 변해 닿은 말은 소멸해요. 3번 연속 시간 초과는 기권패!' },
+  { key: 'timer', art: timerArt, title: '한 수 45초, 넘기면 몰수패', body: '말이 줄면 제한시간이 40초 → 20초로 줄고, 시간을 넘기면 즉시 몰수패! 한쪽 말이 1개만 남거나 40턴이 지나면 자기장이 발동해 3턴마다 좌우 바깥 줄이 좁혀오고, 닿은 말은 소멸해요.' },
   { key: 'grow', art: growArt, title: '성급은 내 마음대로', body: '모든 캐릭터를 1성 · 2성 · 3성 중 원하는 성급으로 출전시킬 수 있어요. 캐릭터 화면에서 골라 보세요.' },
 ];
 

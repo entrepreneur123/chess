@@ -1104,13 +1104,27 @@
     transform: scale(1.04);
   }
 }
-/* In a match toasts float over the bottom of the board, above the dock and player bar. */
+/* In a match toasts drop in just under the notes line: in the gap above the board on tall
+   phones, over the opponent's back rows on short ones — never over the player's own pieces
+   or the action dock. */
 body.in-game .toast-host {
-  bottom: calc(160px + var(--sab));
+  top: calc(150px + var(--sat));
+  bottom: auto;
+}
+body.in-game .toast {
+  transform: translateY(-10px) scale(0.96);
+}
+body.in-game .toast.is-in {
+  transform: none;
 }
 @media (max-height: 720px) {
   body.in-game .toast-host {
-    bottom: calc(140px + var(--sab));
+    top: calc(134px + var(--sat));
+  }
+}
+@media (orientation: landscape) and (min-width: 700px) {
+  body.in-game .toast-host {
+    top: calc(96px + var(--sat));
   }
 }
 
@@ -1151,4 +1165,11 @@ body.in-game .toast-host {
   .chip--rarity.rarity-legendary::after {
     animation: none !important;
   }
+}
+
+/* Gold buttons take a light focus ring so it never merges with their own gold face. */
+.btn--primary:focus-visible,
+.btn--filled:focus-visible,
+.btn--play:focus-visible {
+  outline-color: var(--ink);
 }

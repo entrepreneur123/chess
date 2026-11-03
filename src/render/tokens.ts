@@ -48,7 +48,7 @@ void main() {
   float aa = fwidth(r) * 1.2;
   float band = 1.0 - smoothstep(${RING_HALF.toFixed(3)} - aa, ${RING_HALF.toFixed(3)} + aa, d);
   // Soft glow around the band (the inner half is mostly under the coin) on the dark tiles.
-  float glow = exp(-pow(max(0.0, d - ${RING_HALF.toFixed(3)}) / 0.065, 2.0)) * uGlowAmt;
+  float glow = exp(-pow(max(0.0, d - ${RING_HALF.toFixed(3)}) / 0.05, 2.0)) * uGlowAmt * 0.85;
   // Thin dark keyline just inside the band (separates it from the coin's edge).
   float key = (1.0 - smoothstep(0.006, 0.006 + aa, abs(r - ${(RING_RADIUS - RING_HALF - 0.006).toFixed(3)}))) * 0.6;
   vec3 core = uCore;

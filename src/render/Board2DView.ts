@@ -48,6 +48,7 @@ import {
 } from './common';
 import type { HighlightIndex } from './common';
 import {
+  DOT_WHITEN,
   FRAME_FIT,
   MARKER_QUAD,
   paintCaptureRing,
@@ -78,7 +79,7 @@ const FX_MS = 620;
 const TOKEN_SPRITE = 0.92;
 const RING_R = 0.452;
 /** Storm tile tint strength (matches the WebGL board). */
-const STORM_TILE_ALPHA = 0.5;
+const STORM_TILE_ALPHA = 0.55;
 /** Wasted move: the mover's toxic dissolve (ms). */
 const WASTE_DIE_MS = 560;
 /** Brutile's cast timeline (ms): bolt launch / travel, first crack, crack-open length, rune life. */
@@ -971,15 +972,16 @@ export class Board2DView implements IBoardView {
         const bx = side < 0 ? x0 : xIn;
         const bw = this.storm * cell;
         const g = ctx.createLinearGradient(side < 0 ? x0 : x0 + size, 0, xIn, 0);
-        // Purple haze over the grass (as the WebGL storm floor), brighter toward the boundary.
-        g.addColorStop(0, hexAlpha(STORM_COLORS.field, 0.42));
-        g.addColorStop(1, hexAlpha(STORM_COLORS.field, 0.55));
+        // Violet haze added over the dark tiles (as the WebGL storm floor), brighter toward the
+        // boundary.
+        ctx.globalCompositeOperation = 'lighter';
+        g.addColorStop(0, hexAlpha(STORM_COLORS.field, 0.2));
+        g.addColorStop(1, hexAlpha(STORM_COLORS.field, 0.36));
         ctx.fillStyle = g;
         ctx.fillRect(bx, y0, bw, size);
         // Drifting veins.
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.strokeStyle = hexAlpha(STORM_COLORS.edge, 0.35);
-        ctx.lineWidth = Math.max(1, cell * 0.04);
+        ctx.strokeStyle = hexAlpha(STORM_COLORS.edge, 0.3);
+        ctx.lineWidth = Math.max(1, cell * 0.035);
         for (let k = 0; k < this.storm * 2; k++) {
           const ph = t * 0.6 + k * 1.7;
           ctx.beginPath();
@@ -1018,7 +1020,7 @@ export class Board2DView implements IBoardView {
       if (warn) {
         const pulse = 0.5 + 0.5 * Math.sin(t * 7);
         const wx = side < 0 ? xIn : xIn - cell;
-        ctx.fillStyle = hexAlpha(STORM_COLORS.edge, 0.1 + 0.18 * pulse);
+        ctx.fillStyle = hexAlpha(STORM_COLORS.edge, 0.06 + 0.12 * pulse);
         ctx.fillRect(wx, y0, cell, size);
         ctx.strokeStyle = hexAlpha(STORM_COLORS.edge, 0.55 + 0.45 * pulse);
         ctx.lineWidth = Math.max(1.5, cell * 0.06);
@@ -1149,23 +1151,26 @@ export class Board2DView implements IBoardView {
     const at = (sq: number): { x: number; y: number } => ({ x: x0 + (sq % BOARD_SIZE) * cell, y: y0 + (BOARD_SIZE - 1 - Math.floor(sq / BOARD_SIZE)) * cell });
     ctx.save();
     const inset = cell * 0.1;
+    // Anchors: a faint additive green hint (as the WebGL anchor decal).
+    ctx.globalCompositeOperation = 'lighter';
     for (const sq of this.anchors) {
       if (this.previewSet.has(sq)) continue;
       const { x, y } = at(sq);
-      ctx.fillStyle = hexAlpha(WASTE_COLORS.anchor, 0.07);
+      ctx.fillStyle = hexAlpha(WASTE_COLORS.anchor, 0.05);
       ctx.fillRect(x + inset, y + inset, cell - inset * 2, cell - inset * 2);
-      ctx.strokeStyle = hexAlpha(WASTE_COLORS.anchor, 0.32 + 0.14 * pulse);
-      ctx.lineWidth = Math.max(1, cell * 0.04);
+      ctx.strokeStyle = hexAlpha(WASTE_COLORS.anchor, 0.2 + 0.1 * pulse);
+      ctx.lineWidth = Math.max(1, cell * 0.035);
       roundRect(ctx, x + inset, y + inset, cell - inset * 2, cell - inset * 2, cell * 0.12);
       ctx.stroke();
     }
+    ctx.globalCompositeOperation = 'source-over';
     const pv = this.preview;
     if (pv) {
       const col = pv.valid ? WASTE_COLORS.ghost : WASTE_COLORS.invalid;
       const S = Math.max(8, Math.round(cell * this.dpr));
       for (const sq of this.previewSet) {
         const { x, y } = at(sq);
-        // Dark cursed-earth ghost (reads on the grass), cracks / hatching on top.
+        // Dark cursed-earth ghost, glowing cracks / hatching on top.
         ctx.fillStyle = hexAlpha(WASTE_COLORS.ground, 0.5 + 0.1 * pulse);
         ctx.fillRect(x, y, cell, cell);
         if (pv.valid) {
@@ -1764,7 +1769,7 @@ export class Board2DView implements IBoardView {
     if (look.rainbow) {
       const rot = this.reducedMotion ? 0 : (now / 1000) * 1.4;
       ctx.shadowColor = `hsl(${Math.round((rot * 57.3) % 360)},100%,70%)`;
-      ctx.shadowBlur = cell * 0.26;
+      ctx.shadowBlur = cell * 0.3;
       const cg = (ctx as CanvasRenderingContext2D & { createConicGradient?: (a: number, x: number, y: number) => CanvasGradient }).createConicGradient;
       if (cg) {
         const g = cg.call(ctx, rot, x, y);
@@ -1816,7 +1821,7 @@ export class Board2DView implements IBoardView {
       const g = c.getContext('2d');
       if (g) {
         const rgb = hexToRgb(color);
-        if (kind === 'dot') paintGlowDot(g, S / 2, S / 2, S / 2, rgb);
+        if (kind === 'dot') paintGlowDot(g, S / 2, S / 2, S / 2, rgb, color === BOARD_COLORS.moveDot ? DOT_WHITEN.own : DOT_WHITEN.enemy);
         else if (kind === 'select') paintSelectGlow(g, S / 2, S / 2, S / q, rgb);
         else paintCaptureRing(g, S / 2, S / 2, S / q, rgb);
       }
@@ -1877,7 +1882,7 @@ export class Board2DView implements IBoardView {
 
 /**
  * Paint a chunky illustrated coin into an S x S sprite covering TOKEN_SPRITE of a cell (mirrors the
- * WebGL token shader in tokens.ts): navy keyline, team-deep milled edge below the top face, team rim
+ * WebGL token shader in tokens.ts): ink keyline, team-deep milled edge below the top face, team rim
  * lit from the top-left with a specular arc, inset bevel ring, face art, gold star pips.
  */
 function paintToken(g: CanvasRenderingContext2D, S: number, img: HTMLImageElement | null, level: Level, owner: PlayerId): void {

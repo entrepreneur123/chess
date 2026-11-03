@@ -1,3 +1,5 @@
+import { App } from '@capacitor/app';
+import { Capacitor, type PluginListenerHandle } from '@capacitor/core';
 import { BotClient } from '../../ai/botClient';
 import { haptic, sfx } from '../../audio/sfx';
 import { playCharSfx, playVoice, playWasteDeath, preloadCharacterAudio, stopVoice } from '../../audio/voice';
@@ -63,7 +65,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     h('span', { class: 'turn-pill__dot', 'aria-hidden': 'true' }),
     pillText,
   );
-  // Turn counter (per player: both first moves are turn 1). Storm sudden death starts after turn 60.
+  // Turn counter (per player: both first moves are turn 1). Storm sudden death starts at SUDDEN_DEATH_PLY.
   const turnNum = h('span', { class: 'turn-count__num t-num' }, '1');
   const turnCount = h('div', { class: 'turn-count', role: 'status', 'aria-label': '턴 1' }, h('span', { class: 'turn-count__label' }, '턴'), turnNum);
   let lastTurnNum = 1;
@@ -742,6 +744,23 @@ export function gameScreen(router: Router, params: GameParams): Screen {
         if (document.hidden) c.pause();
         else c.resume();
       });
+      // Running out of time forfeits, so the native app pauses the clock whenever it is
+      // backgrounded too (the WebView does not always fire visibilitychange there).
+      if (Capacitor.isNativePlatform()) {
+        let handle: PluginListenerHandle | null = null;
+        let closed = false;
+        void App.addListener('appStateChange', ({ isActive }) => {
+          if (isActive) c.resume();
+          else c.pause();
+        }).then((hd) => {
+          if (closed) void hd.remove();
+          else handle = hd;
+        });
+        bag.add(() => {
+          closed = true;
+          void handle?.remove();
+        });
+      }
       bag.listen(window, 'resize', () => board?.resize());
       bag.listen(window, 'orientationchange', () => board?.resize());
 

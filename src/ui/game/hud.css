@@ -1,6 +1,7 @@
 /* In-match feedback and panels: turn banners, hit flashes, floating text, urgency, the action
    dock contents (chain move · Brutile's skill · targeting), the selection chip, the illustration
-   cut-in and the ≡ "현재 진형" drawer. Layout lives in src/styles/game.css; tokens are global. */
+   cut-in and the ≡ "현재 진형" drawer. Layout lives in src/styles/game.css; tokens are global.
+   Dark Arena: light comes from the action (team glows, gold, arcane, toxic); surfaces stay obsidian. */
 .fx-layer {
   position: absolute;
   inset: 0;
@@ -9,85 +10,84 @@
   z-index: 3;
 }
 
-/* ---- Turn banner: a chunky ribbon ------------------------------------------- */
+/* ---- Turn banner: a cinematic band with glowing team edges ------------------- */
 .turn-banner {
-  --rb-top: #6aa9ff;
-  --rb-bot: var(--team-blue);
-  --rb-lip: var(--team-blue-deep);
+  --rb: 95, 176, 255;
+  --rb-deep: 26, 79, 184;
   position: absolute;
   left: 50%;
-  top: 40%;
+  top: 42%;
   transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  min-width: min(84%, 340px);
-  padding: 10px 44px 14px;
+  gap: 3px;
+  width: 100%;
+  padding: 12px 24px 14px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0 46%, transparent 46%),
-    linear-gradient(180deg, var(--rb-top), var(--rb-bot));
-  clip-path: polygon(0 0, 100% 0, calc(100% - 18px) 50%, 100% 100%, 0 100%, 18px 50%);
+    linear-gradient(90deg, transparent, rgba(var(--rb-deep), 0.55) 18%, rgba(var(--rb-deep), 0.55) 82%, transparent),
+    linear-gradient(90deg, transparent, rgba(7, 10, 18, 0.88) 12%, rgba(7, 10, 18, 0.88) 88%, transparent);
   box-shadow:
-    inset 0 3px 0 rgba(255, 255, 255, 0.4),
-    inset 0 -6px 0 var(--rb-lip);
-  color: #fff;
+    0 -1.5px 0 rgba(var(--rb), 0.85),
+    0 1.5px 0 rgba(var(--rb), 0.85),
+    0 0 40px -6px rgba(var(--rb), 0.55);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+  color: var(--ink);
   font-family: var(--font-display);
   font-weight: 400;
   font-size: 36px;
   line-height: 1.1;
   white-space: nowrap;
-  text-shadow: var(--ink-outline-l);
+  text-shadow:
+    var(--ink-outline-m),
+    0 0 22px rgba(var(--rb), 0.85);
   animation: banner-in 900ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 .turn-banner--bot {
-  --rb-top: #ff7a82;
-  --rb-bot: var(--team-red);
-  --rb-lip: var(--team-red-deep);
-  font-size: 26px;
+  --rb: 255, 106, 90;
+  --rb-deep: 158, 28, 39;
+  font-size: 28px;
 }
 .turn-banner--bonus {
-  --rb-top: #ffe066;
-  --rb-bot: var(--gold-deep);
-  --rb-lip: var(--gold-lip);
+  --rb: 242, 193, 78;
+  --rb-deep: 110, 69, 16;
+  color: var(--gold-100);
 }
-.turn-banner--bot.turn-banner--bonus {
-  --rb-top: #c08bff;
-  --rb-bot: var(--violet-deep);
-  --rb-lip: var(--violet-lip);
-}
+.turn-banner--bot.turn-banner--bonus,
 .turn-banner--storm {
-  --rb-top: #b47dff;
-  --rb-bot: var(--storm);
-  --rb-lip: var(--storm-deep);
+  --rb: 139, 108, 255;
+  --rb-deep: 46, 29, 120;
+  color: var(--ink);
 }
 .turn-banner__sub {
   font-family: var(--font-body);
   font-size: 12px;
   font-weight: var(--fw-bold);
-  letter-spacing: 0.28em;
-  text-indent: 0.28em;
-  text-shadow: 0 1px 0 var(--navy-ink);
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
+  color: rgb(var(--rb));
+  text-shadow: 0 1px 0 var(--outline);
 }
 @keyframes banner-in {
   0% {
     opacity: 0;
-    transform: translate(-50%, -50%) scale(0.6);
+    transform: translate(-50%, -50%) scaleY(0.2);
   }
-  16% {
+  14% {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1.08);
+    transform: translate(-50%, -50%) scaleY(1.06);
   }
-  28% {
-    transform: translate(-50%, -50%) scale(1);
+  24% {
+    transform: translate(-50%, -50%) scaleY(1);
   }
   78% {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
+    transform: translate(-50%, -50%);
   }
   100% {
     opacity: 0;
-    transform: translate(-50%, -64%) scale(1);
+    transform: translate(-50%, -62%);
   }
 }
 
@@ -96,10 +96,10 @@
   position: absolute;
   inset: 0;
   animation: hit-flash 520ms ease-out both;
-  background: radial-gradient(90% 70% at 50% 50%, transparent 55%, rgba(255, 77, 87, 0.5));
+  background: radial-gradient(90% 70% at 50% 50%, transparent 55%, rgba(255, 70, 85, 0.5));
 }
 .hit-flash--gain {
-  background: radial-gradient(90% 70% at 50% 50%, transparent 60%, rgba(255, 207, 58, 0.45));
+  background: radial-gradient(90% 70% at 50% 50%, transparent 60%, rgba(242, 193, 78, 0.4));
   animation-duration: 420ms;
 }
 @keyframes hit-flash {
@@ -117,7 +117,7 @@
   position: absolute;
   inset: 0;
   animation: hit-flash 700ms ease-out both;
-  background: radial-gradient(90% 70% at 50% 50%, transparent 40%, rgba(155, 92, 240, 0.5));
+  background: radial-gradient(90% 70% at 50% 50%, transparent 40%, rgba(139, 108, 255, 0.5));
 }
 .board-wrap.is-shake {
   animation: hud-shake 240ms linear both;
@@ -137,7 +137,7 @@
   }
 }
 
-/* ---- Floating combat text: outlined display type -------------------------------- */
+/* ---- Floating combat text: outlined display type with a glow ------------------- */
 .float-text {
   position: absolute;
   left: 50%;
@@ -149,19 +149,30 @@
   line-height: 1.1;
   white-space: nowrap;
   color: var(--gold);
-  text-shadow: var(--ink-outline-l);
+  text-shadow:
+    var(--ink-outline-l),
+    0 0 24px rgba(242, 193, 78, 0.6);
   animation: float-up 1100ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 .float-text--hurt {
   color: var(--team-red-light);
+  text-shadow:
+    var(--ink-outline-l),
+    0 0 24px rgba(255, 70, 85, 0.6);
 }
 .float-text--storm {
-  color: #e9d6ff;
+  color: var(--arcane-text);
   font-size: 26px;
+  text-shadow:
+    var(--ink-outline-l),
+    0 0 24px rgba(139, 108, 255, 0.7);
 }
 .float-text--waste {
-  color: #b8ff8f;
+  color: var(--toxic-text);
   font-size: 28px;
+  text-shadow:
+    var(--ink-outline-l),
+    0 0 24px rgba(124, 255, 90, 0.55);
 }
 @keyframes float-up {
   0% {
@@ -181,18 +192,35 @@
   }
 }
 
-/* ---- Urgency: last seconds of my turn ---------------------------------------- */
+/* ---- Urgency: last seconds of my turn (running out = forfeit) ------------------- */
 .pbar--bottom.is-urgent {
-  --bar-top: #ff7a82;
-  --bar-bot: #e8414c;
-  --bar-lip: var(--team-red-deep);
+  box-shadow:
+    inset 0 1px 0 rgba(242, 193, 78, 0.45),
+    inset 0 0 0 1.5px rgba(242, 193, 78, 0.8),
+    0 4px 0 var(--panel-lip),
+    0 0 24px -6px rgba(242, 193, 78, 0.6),
+    var(--drop);
 }
-.pbar--bottom.is-urgent .ring {
-  animation: ring-pulse 1s ease-in-out infinite;
+.pbar--bottom.is-critical {
+  background:
+    radial-gradient(90% 140% at 100% 50%, rgba(255, 70, 85, 0.3), transparent 62%),
+    linear-gradient(180deg, rgba(37, 47, 74, 0.97), rgba(22, 29, 48, 0.97));
+  animation: bar-critical 0.5s ease-in-out infinite alternate;
 }
-@keyframes ring-pulse {
-  50% {
-    transform: scale(1.1);
+@keyframes bar-critical {
+  from {
+    box-shadow:
+      inset 0 0 0 1.5px rgba(255, 70, 85, 0.6),
+      0 4px 0 var(--panel-lip),
+      0 0 14px -6px rgba(255, 70, 85, 0.5),
+      var(--drop);
+  }
+  to {
+    box-shadow:
+      inset 0 0 0 2px rgba(255, 70, 85, 1),
+      0 4px 0 var(--panel-lip),
+      0 0 30px -2px rgba(255, 70, 85, 0.85),
+      var(--drop);
   }
 }
 .roster-chip.is-captured {
@@ -211,18 +239,12 @@
     filter: grayscale(1) brightness(0.8);
   }
 }
-.ply-counter.is-warn {
-  animation: counter-pulse 1.2s ease-in-out infinite;
-}
-@keyframes counter-pulse {
-  50% {
-    transform: scale(1.06);
-  }
-}
 
 /* ---- Action dock contents ----------------------------------------------------------
-   One row: [selection chip] [action bar]. Both are cream / colour chunky pieces. */
+   One row: [selection chip] [action bar]. Obsidian pieces; the tint names the action. */
 .game .action-bar {
+  --ab-rim: rgba(72, 88, 128, 0.9);
+  --ab-glow: transparent;
   flex: 1;
   min-width: 0;
   display: flex;
@@ -230,14 +252,14 @@
   gap: 8px;
   min-height: 54px;
   margin-bottom: 4px;
-  padding: 4px 6px 4px 12px;
+  padding: 4px 6px 4px 14px;
   border-radius: var(--r-l);
-  background: var(--panel-fill);
+  background: linear-gradient(180deg, rgba(37, 47, 74, 0.97), rgba(22, 29, 48, 0.97));
   box-shadow:
-    inset 0 2px 0 #fff,
-    0 4px 0 0 var(--panel-edge),
-    0 0 0 2px var(--navy-ink),
-    0 4px 0 2px var(--navy-ink),
+    inset 0 1px 0 var(--panel-hi),
+    inset 0 0 0 1px var(--ab-rim),
+    0 4px 0 var(--panel-lip),
+    0 0 22px -6px var(--ab-glow),
     var(--drop);
   pointer-events: auto;
   animation: dock-pop 240ms var(--ease-spring) both;
@@ -253,8 +275,8 @@
   min-width: 0;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  color: var(--navy-ink);
+  gap: 7px;
+  color: var(--ink);
   font-size: var(--fs-label);
   font-weight: var(--fw-bold);
   line-height: 1.3;
@@ -269,46 +291,35 @@
   min-height: 42px;
   padding: 0 14px;
 }
-/* Chain move: gold-tinted. */
+/* Chain move: gold rim. */
 .action-bar--chain {
-  background: linear-gradient(180deg, #fffbe8, #ffe9a0);
-  box-shadow:
-    inset 0 2px 0 #fff,
-    0 4px 0 0 var(--gold-deep),
-    0 0 0 2px var(--navy-ink),
-    0 4px 0 2px var(--navy-ink),
-    var(--drop);
+  --ab-rim: rgba(242, 193, 78, 0.75);
+  --ab-glow: rgba(242, 193, 78, 0.5);
 }
 .action-bar--chain .action-bar__text {
-  color: #4a2f00;
+  color: var(--gold-100);
 }
 .action-bar--chain .action-bar__text .icon {
-  color: var(--gold-lip);
+  color: var(--gold);
+  filter: drop-shadow(0 0 4px rgba(242, 193, 78, 0.7));
 }
-/* Skill targeting: green-tinted. */
+/* Skill targeting: toxic rim (Brutile's wasteland). */
 .action-bar--aim {
-  background: linear-gradient(180deg, #f3ffee, #d6f4c8);
-  box-shadow:
-    inset 0 2px 0 #fff,
-    0 4px 0 0 var(--green-deep),
-    0 0 0 2px var(--navy-ink),
-    0 4px 0 2px var(--navy-ink),
-    var(--drop);
-}
-.action-bar--aim .action-bar__text {
-  color: #1f4a17;
+  --ab-rim: rgba(124, 255, 90, 0.6);
+  --ab-glow: rgba(124, 255, 90, 0.35);
 }
 .action-bar--aim .action-bar__text .icon {
-  color: var(--green-deep);
+  color: var(--toxic);
+  filter: drop-shadow(0 0 4px rgba(124, 255, 90, 0.7));
 }
 .action-bar--aim .btn--text {
-  color: #1f4a17;
+  color: var(--text-2);
   font-size: var(--fs-body);
 }
 .action-bar__go {
   min-width: 76px;
 }
-/* Brutile's skill: the whole bar is one big green button. */
+/* Brutile's skill: the whole bar is one big obsidian button lit in toxic green. */
 .game .action-bar--skill {
   padding: 0;
   background: none;
@@ -325,15 +336,16 @@
   border: 0;
   border-radius: var(--r-l);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0 46%, transparent 46%),
-    linear-gradient(180deg, var(--green), var(--green-mid));
+    radial-gradient(80% 140% at 0% 50%, rgba(124, 255, 90, 0.2), transparent 60%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0 46%, transparent 46%),
+    linear-gradient(180deg, #24304a, #161d30);
   box-shadow:
-    inset 0 2px 0 rgba(235, 255, 220, 0.8),
-    0 4px 0 0 var(--green-deep),
-    0 0 0 2px var(--navy-ink),
-    0 4px 0 2px var(--navy-ink),
+    inset 0 1px 0 rgba(166, 255, 140, 0.35),
+    inset 0 0 0 1.5px rgba(124, 255, 90, 0.7),
+    0 4px 0 var(--panel-lip),
+    0 0 22px -6px rgba(124, 255, 90, 0.55),
     var(--drop);
-  color: #fff;
+  color: var(--ink);
   text-align: left;
   cursor: pointer;
   transition:
@@ -343,19 +355,17 @@
 .skill-btn:active:not([disabled]) {
   transform: translateY(3px);
   box-shadow:
-    inset 0 2px 0 rgba(235, 255, 220, 0.8),
-    0 1px 0 0 var(--green-deep),
-    0 0 0 2px var(--navy-ink),
-    0 1px 0 2px var(--navy-ink);
+    inset 0 1px 0 rgba(166, 255, 140, 0.35),
+    inset 0 0 0 1.5px rgba(124, 255, 90, 0.8),
+    0 1px 0 var(--panel-lip),
+    0 0 18px -6px rgba(124, 255, 90, 0.55);
 }
 .skill-btn.is-blocked {
-  background: linear-gradient(180deg, #e9edf5, #cfd8e8);
+  background: linear-gradient(180deg, #1f2639, #1a2032);
   box-shadow:
-    inset 0 2px 0 #fff,
-    0 4px 0 0 #9fadc8,
-    0 0 0 2px var(--navy-ink),
-    0 4px 0 2px var(--navy-ink);
-  color: var(--navy-ink);
+    inset 0 1px 0 rgba(170, 190, 255, 0.06),
+    inset 0 0 0 1px rgba(51, 64, 95, 0.8),
+    0 4px 0 var(--panel-lip);
   cursor: default;
 }
 .skill-btn__icon {
@@ -365,13 +375,16 @@
   width: 38px;
   height: 38px;
   border-radius: 50%;
-  background: var(--navy-ink);
-  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.18);
-  color: #b8ff8f;
+  background: radial-gradient(circle at 50% 35%, #233a1e, var(--night-0));
+  box-shadow:
+    inset 0 0 0 1.5px rgba(124, 255, 90, 0.7),
+    0 0 12px -2px rgba(124, 255, 90, 0.6);
+  color: var(--toxic);
 }
 .skill-btn.is-blocked .skill-btn__icon {
-  background: #8e9dbb;
-  color: #fff;
+  background: var(--night-0);
+  box-shadow: inset 0 0 0 1px rgba(72, 88, 128, 0.8);
+  color: var(--text-3);
 }
 .skill-btn__main {
   display: flex;
@@ -388,20 +401,21 @@
   text-overflow: ellipsis;
 }
 .skill-btn.is-blocked .skill-btn__name {
-  text-shadow: none;
+  color: var(--text-2);
 }
 .skill-btn__sub {
+  color: var(--toxic-text);
   font-size: var(--fs-caption);
   font-weight: var(--fw-bold);
-  text-shadow: 0 1px 0 rgba(27, 36, 69, 0.55);
+  text-shadow: 0 1px 0 var(--outline);
 }
 .skill-btn.is-blocked .skill-btn__sub {
-  color: #3b4a74;
-  text-shadow: none;
+  color: var(--text-3);
 }
 
 /* Selection chip: names the tapped piece without covering the board. */
 .sel-chip {
+  --sc: 95, 176, 255;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -410,27 +424,23 @@
   max-width: 100%;
   height: 40px;
   margin-bottom: 4px;
-  padding: 0 12px 0 5px;
+  padding: 0 14px 0 5px;
   border-radius: var(--r-full);
-  background: var(--panel-fill);
+  background:
+    radial-gradient(70% 140% at 0% 50%, rgba(var(--sc), 0.22), transparent 70%),
+    linear-gradient(180deg, rgba(37, 47, 74, 0.97), rgba(22, 29, 48, 0.97));
   box-shadow:
-    inset 0 2px 0 #fff,
-    0 3px 0 0 var(--panel-edge),
-    0 0 0 2px var(--navy-ink),
-    0 3px 0 2px var(--navy-ink);
-  color: var(--navy-ink);
+    inset 0 1px 0 var(--panel-hi),
+    inset 0 0 0 1px rgba(var(--sc), 0.6),
+    0 3px 0 var(--panel-lip);
+  color: var(--ink);
   font-size: var(--fs-caption);
   white-space: nowrap;
   overflow: hidden;
   pointer-events: none;
 }
 .sel-chip.owner-1 {
-  background: linear-gradient(180deg, #fff4f5, #ffdfe2);
-  box-shadow:
-    inset 0 2px 0 #fff,
-    0 3px 0 0 #f0a5ab,
-    0 0 0 2px var(--navy-ink),
-    0 3px 0 2px var(--navy-ink);
+  --sc: 255, 106, 90;
 }
 .sel-chip__art {
   display: inline-grid;
@@ -444,17 +454,18 @@
   flex: none;
   font-family: var(--font-display);
   font-size: 15px;
+  text-shadow: 0 1px 0 var(--outline);
 }
 .sel-chip__stars {
   flex: none;
-  color: var(--gold-deep);
+  color: var(--gold);
   letter-spacing: -0.08em;
 }
 .sel-chip__hint {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: #3b4a74;
+  color: var(--text-2);
   font-weight: var(--fw-bold);
 }
 .info-host .sel-chip {
@@ -474,16 +485,16 @@
   height: 21px;
   padding: 0 8px;
   border-radius: var(--r-full);
-  background: #efe4ff;
-  box-shadow: inset 0 0 0 1px #c9a8ff;
-  color: #4b1f9a;
+  background: rgba(46, 29, 120, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(139, 108, 255, 0.6);
+  color: var(--arcane-text);
   font-size: var(--fs-micro);
   font-weight: var(--fw-bold);
 }
 
 /* ---- Illustration cut-in (capture / skill) ------------------------------- */
 .cutin {
-  --team: 60, 141, 255;
+  --team: 59, 139, 255;
   position: absolute;
   left: 0;
   right: 0;
@@ -495,14 +506,14 @@
   animation: cutin-life 1250ms linear both;
 }
 .cutin.owner-1 {
-  --team: 255, 77, 87;
+  --team: 255, 70, 85;
 }
 .cutin__band {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0 46%, transparent 46%),
-    linear-gradient(90deg, rgba(var(--team), 0.98), rgba(29, 49, 102, 0.95) 46%, rgba(29, 49, 102, 0.95) 70%, rgba(var(--team), 0.8));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0 46%, transparent 46%),
+    linear-gradient(90deg, rgba(var(--team), 0.92), rgba(13, 19, 34, 0.96) 42%, rgba(13, 19, 34, 0.96) 72%, rgba(var(--team), 0.7));
   clip-path: polygon(0 14%, 100% 0, 100% 86%, 0 100%);
   animation: cutin-band 1250ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
 }
@@ -510,7 +521,7 @@
   position: absolute;
   inset: 0;
   clip-path: polygon(0 14%, 100% 0, 100% 86%, 0 100%);
-  background: repeating-linear-gradient(176deg, transparent 0 9px, rgba(255, 255, 255, 0.1) 9px 11px);
+  background: repeating-linear-gradient(176deg, transparent 0 9px, rgba(255, 255, 255, 0.07) 9px 11px);
   mix-blend-mode: screen;
   animation: cutin-lines 1250ms linear both;
 }
@@ -528,7 +539,7 @@
   height: 100%;
   object-fit: cover;
   object-position: 50% 20%;
-  filter: saturate(1.15) contrast(1.05);
+  filter: saturate(1.1) contrast(1.05);
 }
 .cutin__text {
   position: absolute;
@@ -561,23 +572,28 @@
 .cutin__tag {
   padding: 2px 9px;
   border-radius: 6px;
-  background: rgb(var(--team));
-  box-shadow: 0 0 0 1.5px var(--navy-ink), 0 2px 0 1.5px var(--navy-ink);
+  background: rgba(7, 10, 18, 0.7);
+  box-shadow:
+    inset 0 0 0 1px rgb(var(--team)),
+    0 0 12px -2px rgba(var(--team), 0.7);
   color: #fff;
   font-family: var(--font-display);
   font-size: 12px;
   letter-spacing: 0.1em;
-  text-shadow: 0 1px 0 var(--navy-ink);
+  text-shadow: 0 1px 0 var(--outline);
 }
 .cutin--skill .cutin__tag,
 .cutin--chain .cutin__tag {
-  background: linear-gradient(90deg, var(--violet), #ff5fae);
+  box-shadow:
+    inset 0 0 0 1px var(--arcane),
+    0 0 12px -2px rgba(139, 108, 255, 0.8);
+  color: var(--arcane-text);
 }
 .cutin__name {
   font-family: var(--font-display);
   font-size: clamp(28px, 8.4vw, 42px);
   line-height: 1.1;
-  color: #fff;
+  color: var(--ink);
   text-shadow: var(--ink-outline-l);
 }
 .cutin__stars {
@@ -592,7 +608,9 @@
   font-size: clamp(14px, 4.2vw, 19px);
   font-weight: var(--fw-bold);
   color: var(--gold-100);
-  text-shadow: 0 2px 0 var(--navy-ink), 0 0 2px var(--navy-ink);
+  text-shadow:
+    0 2px 0 var(--outline),
+    0 0 2px var(--outline);
 }
 @keyframes cutin-life {
   0%,
@@ -721,7 +739,7 @@
 .scrim--drawer {
   place-items: stretch end;
   padding: 0;
-  background: rgba(20, 34, 82, 0.45);
+  background: rgba(7, 10, 18, 0.6);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
@@ -730,11 +748,13 @@
   flex-direction: column;
   width: min(92vw, 420px);
   height: 100%;
-  background: var(--panel);
+  background:
+    radial-gradient(120% 40% at 100% 0%, rgba(139, 108, 255, 0.1), transparent 70%),
+    linear-gradient(180deg, var(--night-2), var(--night-1));
   color: var(--text-1);
   box-shadow:
-    -3px 0 0 var(--navy-ink),
-    -16px 0 32px rgba(14, 28, 72, 0.45);
+    inset 1px 0 0 rgba(242, 193, 78, 0.35),
+    -18px 0 40px rgba(0, 0, 0, 0.6);
   transform: translateX(100%);
   transition: transform var(--dur-3) var(--ease-emph);
 }
@@ -747,10 +767,10 @@
   justify-content: space-between;
   gap: 8px;
   padding: calc(10px + var(--sat)) 10px 8px 16px;
-  background: var(--dpanel-fill);
+  background: var(--bar-fill);
   box-shadow:
-    inset 0 -2px 0 rgba(255, 255, 255, 0.08),
-    0 4px 0 var(--panel-dark-edge);
+    inset 0 -1px 0 rgba(242, 193, 78, 0.25),
+    0 3px 0 var(--panel-lip);
 }
 .fpanel__header .icon-btn {
   margin-bottom: 3px;
@@ -763,11 +783,12 @@
   font-family: var(--font-display);
   font-weight: 400;
   font-size: 22px;
-  color: #fff;
+  color: var(--ink);
   text-shadow: var(--ink-outline-s);
 }
 .fpanel__heading .icon {
-  filter: drop-shadow(0 1px 0 var(--navy-ink));
+  color: var(--gold);
+  filter: drop-shadow(0 1px 0 var(--outline));
 }
 .fpanel__body {
   flex: 1;
@@ -776,18 +797,19 @@
   overscroll-behavior: contain;
   padding: 16px 14px calc(20px + var(--sab));
 }
-/* Mini map: grass tiles on a stone plinth, home rows tinted. */
+/* Mini map: obsidian tiles in an iron frame with a gold trim, home zones tinted. */
 .fmap {
   display: grid;
   grid-template-columns: repeat(12, 1fr);
   gap: 1.5px;
   padding: 5px;
   border-radius: 12px;
-  background: linear-gradient(180deg, var(--stone-light), var(--stone));
+  background: linear-gradient(180deg, #2a3350, #121829);
   box-shadow:
-    inset 0 2px 0 rgba(255, 255, 255, 0.55),
-    0 0 0 2px var(--navy-ink),
-    0 4px 0 2px var(--navy-ink);
+    inset 0 0 0 1px rgba(242, 193, 78, 0.45),
+    inset 0 0 0 4px #0b0f1a,
+    0 4px 0 var(--panel-lip),
+    var(--drop);
 }
 .fmap__cell {
   position: relative;
@@ -797,26 +819,28 @@
   padding: 0;
   border: 0;
   border-radius: 2.5px;
-  background-color: var(--grass-light);
-  box-shadow: inset -1px -1px 0 rgba(40, 90, 30, 0.3);
+  background-color: #222b40;
+  box-shadow:
+    inset 1px 1px 0 rgba(170, 190, 255, 0.08),
+    inset -1px -1px 0 rgba(0, 0, 0, 0.35);
 }
 .fmap__cell.is-dark {
-  background-color: var(--grass-dark);
+  background-color: #1b2336;
 }
 .fmap__cell.is-home-0 {
-  background-image: linear-gradient(rgba(111, 179, 255, 0.24), rgba(111, 179, 255, 0.24));
+  background-image: linear-gradient(rgba(26, 79, 184, 0.38), rgba(26, 79, 184, 0.38));
 }
 .fmap__cell.is-home-1 {
-  background-image: linear-gradient(rgba(255, 122, 122, 0.24), rgba(255, 122, 122, 0.24));
+  background-image: linear-gradient(rgba(158, 28, 39, 0.38), rgba(158, 28, 39, 0.38));
 }
 .fmap__cell.is-storm {
-  background: repeating-linear-gradient(135deg, rgba(155, 92, 240, 0.85) 0 3px, rgba(93, 42, 168, 0.9) 3px 6px);
+  background: repeating-linear-gradient(135deg, rgba(139, 108, 255, 0.55) 0 3px, rgba(46, 29, 120, 0.85) 3px 6px);
 }
 .fmap__cell.is-waste {
   background:
-    radial-gradient(circle at 50% 50%, rgba(160, 230, 90, 0.5), transparent 70%),
-    #4a3d56;
-  box-shadow: inset 0 0 0 1px rgba(120, 220, 80, 0.6);
+    radial-gradient(circle at 50% 50%, rgba(124, 255, 90, 0.45), transparent 70%),
+    #12180f;
+  box-shadow: inset 0 0 0 1px rgba(124, 255, 90, 0.6);
 }
 .fmap__cell.has-piece {
   cursor: pointer;
@@ -828,7 +852,7 @@
 .fmap__art img {
   box-shadow:
     0 0 0 1.5px var(--team-ring),
-    0 0 0 2.5px var(--navy-ink);
+    0 0 0 2.5px var(--outline);
 }
 .fmap__art::before,
 .fmap__art::after,
@@ -839,7 +863,7 @@
   z-index: 1;
   box-shadow:
     0 0 0 2px var(--gold),
-    0 0 0 3.5px var(--navy-ink);
+    0 0 10px 1px rgba(242, 193, 78, 0.7);
 }
 .fpanel__storm {
   display: flex;
@@ -848,9 +872,9 @@
   margin: 12px 0 0;
   padding: 6px 10px;
   border-radius: var(--r-s);
-  background: #efe4ff;
-  box-shadow: inset 0 0 0 1px #c9a8ff;
-  color: #4b1f9a;
+  background: rgba(46, 29, 120, 0.5);
+  box-shadow: inset 0 0 0 1px rgba(139, 108, 255, 0.6);
+  color: var(--arcane-text);
   font-size: var(--fs-caption);
   font-weight: var(--fw-bold);
 }
@@ -862,28 +886,31 @@
   align-items: center;
   gap: 8px;
   margin: 0 0 10px;
-  color: var(--navy-ink);
+  color: var(--ink);
   font-family: var(--font-display);
   font-weight: 400;
   font-size: 17px;
+  text-shadow: 0 1px 0 var(--outline);
 }
 .fpanel__dot {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   transform: rotate(45deg);
-  border-radius: 3px;
+  border-radius: 2px;
   background: var(--team-blue);
-  box-shadow: 0 0 0 1.5px var(--navy-ink);
+  box-shadow: 0 0 8px var(--team-blue-glow);
 }
 .fpanel__dot.owner-1 {
   background: var(--team-red);
+  box-shadow: 0 0 8px var(--team-red-glow);
 }
 .fpanel__count {
   margin-left: auto;
   padding: 1px 10px;
   border-radius: var(--r-full);
-  background: var(--navy-ink);
-  color: #fff;
+  background: rgba(7, 10, 18, 0.6);
+  box-shadow: inset 0 0 0 1px rgba(72, 88, 128, 0.8);
+  color: var(--ink);
   font-size: var(--fs-label);
   font-variant-numeric: tabular-nums;
 }
@@ -893,14 +920,14 @@
   grid-template-columns: auto 1fr auto;
   gap: 10px;
   align-items: start;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
   padding: 12px 10px 12px 16px;
   border-radius: var(--r-m);
   overflow: hidden;
-  background: #fff;
+  background: var(--panel-fill);
   box-shadow:
-    inset 0 0 0 1px var(--panel-line),
-    0 3px 0 var(--panel-edge);
+    var(--panel-rim),
+    0 3px 0 var(--panel-lip);
 }
 .fcard::before {
   content: '';
@@ -908,20 +935,23 @@
   left: 0;
   top: 0;
   bottom: 0;
-  width: 5px;
+  width: 4px;
   background: var(--team-blue);
+  box-shadow: 0 0 10px var(--team-blue-glow);
 }
 .fcard.owner-1::before {
   background: var(--team-red);
+  box-shadow: 0 0 10px var(--team-red-glow);
 }
 .fcard.is-focus {
-  background: #fffaf0;
   box-shadow:
-    inset 0 0 0 2px var(--gold-deep),
-    0 3px 0 var(--gold-lip);
+    inset 0 1px 0 rgba(255, 231, 163, 0.3),
+    inset 0 0 0 1.5px rgba(242, 193, 78, 0.8),
+    0 3px 0 var(--panel-lip),
+    0 0 18px -6px rgba(242, 193, 78, 0.5);
 }
 .fcard.is-dead {
-  opacity: 0.55;
+  opacity: 0.5;
   filter: grayscale(0.9);
 }
 .fcard__art {
@@ -939,26 +969,27 @@
 .fcard__name {
   font-family: var(--font-display);
   font-size: 17px;
-  color: var(--navy-ink);
+  color: var(--ink);
+  text-shadow: 0 1px 0 var(--outline);
 }
 .fcard__stars {
-  color: var(--gold-deep);
+  color: var(--gold);
   letter-spacing: -0.08em;
   font-size: 13px;
 }
 .fcard__status {
   margin-top: 3px;
-  color: var(--navy-ink);
+  color: var(--ink);
   font-size: var(--fs-caption);
   font-weight: var(--fw-bold);
   font-variant-numeric: tabular-nums;
 }
 .fcard__status.is-dead {
-  color: var(--team-red-deep);
+  color: var(--team-red-light);
 }
 .fcard__desc {
   margin-top: 3px;
-  color: #3b4a74;
+  color: var(--text-2);
   font-size: var(--fs-caption);
   line-height: 1.4;
 }
@@ -975,10 +1006,10 @@
 }
 .fcard__absorbed,
 .fcard__passive {
-  color: #4b1f9a;
+  color: var(--arcane-text);
 }
 .fcard__skill {
-  color: #1f4a17;
+  color: var(--toxic-text);
 }
 /* A piece heading down the board (the opponent, or a turned-around runner) shows its diagram turned. */
 .fcard__diagram.is-flipped .move-diagram {
@@ -991,9 +1022,7 @@
   .storm-flash,
   .float-text,
   .board-wrap.is-shake,
-  .pbar--bottom.is-urgent .ring,
   .roster-chip.is-captured,
-  .ply-counter.is-warn,
   .game .action-bar {
     animation: none;
   }
@@ -1001,6 +1030,15 @@
   .float-text,
   .storm-flash {
     display: none;
+  }
+  /* Forfeit urgency without motion: a steady red rim. */
+  .pbar--bottom.is-critical {
+    animation: none;
+    box-shadow:
+      inset 0 0 0 2px rgba(255, 70, 85, 0.95),
+      0 4px 0 var(--panel-lip),
+      0 0 24px -4px rgba(255, 70, 85, 0.7),
+      var(--drop);
   }
   .cutin,
   .cutin__band,

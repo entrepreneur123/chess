@@ -19,12 +19,14 @@
   overflow: hidden;
   padding: 0 var(--s-5) var(--s-4);
   border-radius: var(--r-xl);
-  background: var(--panel-fill);
+  background:
+    radial-gradient(120% 50% at 50% 0%, rgba(139, 108, 255, 0.12), transparent 70%),
+    var(--panel-fill);
   color: var(--text-1);
   box-shadow:
-    inset 0 2px 0 #fff,
-    0 0 0 3px var(--navy-ink),
-    0 calc(var(--lip) + 3px) 0 0 var(--navy-ink),
+    inset 0 1px 0 rgba(255, 231, 163, 0.3),
+    inset 0 0 0 1px rgba(242, 193, 78, 0.45),
+    0 var(--lip) 0 var(--panel-lip),
     var(--drop-l);
   transform: translateY(16px) scale(0.94);
   transition: transform var(--dur-3) var(--ease-spring);
@@ -32,7 +34,7 @@
 .scrim.is-in .tut {
   transform: none;
 }
-/* Header band: dark blue ribbon across the top of the card. */
+/* Header band: an iron ribbon across the top of the card. */
 .tut__top {
   display: flex;
   align-items: center;
@@ -40,10 +42,10 @@
   min-height: 52px;
   margin: 0 calc(var(--s-5) * -1);
   padding: 0 var(--s-2) 0 var(--s-5);
-  background: var(--dpanel-fill);
+  background: var(--bar-fill);
   box-shadow:
-    inset 0 -2px 0 rgba(255, 255, 255, 0.08),
-    0 3px 0 var(--panel-dark-edge);
+    inset 0 -1px 0 rgba(242, 193, 78, 0.3),
+    0 2px 0 var(--panel-lip);
 }
 .tut__eyebrow {
   display: inline-flex;
@@ -51,26 +53,26 @@
   gap: 8px;
   font-family: var(--font-display);
   font-size: 20px;
-  color: #fff;
+  color: var(--ink);
   text-shadow: var(--ink-outline-s);
 }
 .tut__eyebrow::before {
   content: '';
-  width: 11px;
-  height: 11px;
+  width: 10px;
+  height: 10px;
   transform: rotate(45deg);
-  border-radius: 3px;
-  background: linear-gradient(135deg, #fff3b8, var(--gold) 45%, var(--gold-deep));
-  box-shadow: 0 0 0 1.5px var(--navy-ink);
+  border-radius: 2px;
+  background: linear-gradient(135deg, var(--gold-hi), var(--gold) 45%, var(--gold-deep));
+  box-shadow: 0 0 10px rgba(242, 193, 78, 0.5);
 }
 .tut-skip {
   min-height: 44px;
   padding: 0 var(--s-3);
-  color: #fff;
+  color: var(--text-2);
   font-size: var(--fs-label);
 }
 .tut-skip:active:not([disabled]) {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(170, 190, 255, 0.1);
 }
 .tut-track {
   display: flex;
@@ -106,7 +108,8 @@
   font-weight: 400;
   font-size: 23px;
   line-height: 1.25;
-  color: var(--navy-ink);
+  color: var(--ink);
+  text-shadow: var(--ink-outline-s);
 }
 .tut-slide__body {
   margin: var(--s-2) 0 0;
@@ -114,7 +117,7 @@
   font-size: var(--fs-body);
   line-height: 1.55;
 }
-/* Art window: a little sky scene with its own lip. */
+/* Art window: a little night arena with an arcane glow and its own lip. */
 .tut-art {
   position: relative;
   display: flex;
@@ -124,10 +127,14 @@
   min-height: 184px;
   border-radius: var(--r-l);
   overflow: hidden;
-  background: var(--bg-pattern) center / 96px 96px, var(--bg-sky);
+  background:
+    var(--bg-rings) center / 420px no-repeat,
+    radial-gradient(80% 70% at 50% 45%, rgba(139, 108, 255, 0.22), transparent 75%),
+    linear-gradient(180deg, #151d33, var(--night-0));
   box-shadow:
-    inset 0 0 0 2px rgba(27, 36, 69, 0.25),
-    0 4px 0 var(--panel-edge);
+    inset 0 0 0 1px rgba(51, 64, 95, 0.9),
+    inset 0 -20px 30px -20px rgba(0, 0, 0, 0.6),
+    0 3px 0 var(--panel-lip);
 }
 .tut__dots {
   display: flex;
@@ -142,7 +149,7 @@
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: var(--panel-edge);
+  background: var(--line);
   cursor: pointer;
   transition:
     width var(--dur-2) var(--ease-emph),
@@ -157,18 +164,13 @@
 .tut-dot.is-active {
   width: 28px;
   border-radius: 5px;
-  background: var(--gold-deep);
-  box-shadow: 0 2px 0 var(--gold-lip);
+  background: var(--gold);
+  box-shadow: 0 0 10px rgba(242, 193, 78, 0.6);
 }
 .tut-next .icon {
   margin: 0 -6px 0 0;
 }
-.tut-next.is-last {
-  --b-top: var(--green);
-  --b-bot: var(--green-mid);
-  --b-lip: var(--green-deep);
-  --b-hi: rgba(235, 255, 220, 0.8);
-}
+/* The last card's CTA stays gold ("시작하기"): the primary action of the whole carousel. */
 
 /* slide 1: goal */
 .tut-goal__row {
@@ -189,10 +191,10 @@
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: linear-gradient(180deg, #ff7a82, var(--team-red));
+  background: linear-gradient(180deg, #ff6b77, #c92636);
   box-shadow:
-    0 0 0 2px #fff,
-    0 0 0 3.5px var(--navy-ink);
+    0 0 0 2px var(--outline),
+    0 0 12px rgba(255, 70, 85, 0.7);
   color: #fff;
 }
 .tut-goal__trophy {
@@ -200,7 +202,7 @@
   right: 14px;
   bottom: 10px;
   color: var(--gold);
-  filter: drop-shadow(0 3px 0 var(--navy-ink));
+  filter: drop-shadow(0 2px 0 var(--outline)) drop-shadow(0 0 10px rgba(242, 193, 78, 0.6));
 }
 @keyframes tut-pop {
   0%,
@@ -222,8 +224,6 @@
   padding: 10px 8px 12px;
 }
 .tut-char {
-  --text-1: var(--navy-ink);
-  --text-2: #3b4a74;
   flex: 1;
   min-width: 0;
   display: flex;
@@ -234,8 +234,8 @@
   border-radius: var(--r-m);
   background: var(--panel-fill);
   box-shadow:
-    inset 0 2px 0 #fff,
-    0 3px 0 var(--panel-edge);
+    var(--panel-rim),
+    0 3px 0 var(--panel-lip);
 }
 .tut-char__diagram {
   display: flex;
@@ -246,10 +246,10 @@
 .tut-char__name {
   font-family: var(--font-display);
   font-size: var(--fs-label);
-  color: var(--navy-ink);
+  color: var(--ink);
 }
 .tut-char__concept {
-  color: #8a4a00;
+  color: var(--gold-text);
   font-size: var(--fs-micro);
   font-weight: var(--fw-bold);
 }
@@ -259,18 +259,18 @@
   line-height: 1.3;
 }
 
-/* slide 3: tap — a grass mini board */
+/* slide 3: tap — an obsidian mini board */
 .tut-board {
   display: grid;
   grid-template-columns: repeat(5, 30px);
   gap: 2px;
   padding: 6px;
   border-radius: var(--r-s);
-  background: linear-gradient(180deg, var(--stone-light), var(--stone));
+  background: linear-gradient(180deg, #2a3350, #121829);
   box-shadow:
-    inset 0 2px 0 rgba(255, 255, 255, 0.5),
-    0 0 0 2px var(--navy-ink),
-    0 4px 0 2px var(--navy-ink);
+    inset 0 0 0 1px rgba(242, 193, 78, 0.45),
+    0 4px 0 var(--panel-lip),
+    0 10px 20px -8px rgba(0, 0, 0, 0.8);
 }
 .tut-board__cell {
   display: grid;
@@ -278,26 +278,26 @@
   width: 30px;
   height: 30px;
   border-radius: 4px;
-  background: var(--grass-light);
+  background: #222b40;
   box-shadow:
-    inset 1px 1px 0 rgba(255, 255, 255, 0.3),
-    inset -1px -2px 0 rgba(40, 90, 30, 0.35);
+    inset 1px 1px 0 rgba(170, 190, 255, 0.1),
+    inset -1px -1px 0 rgba(0, 0, 0, 0.4);
 }
 .tut-board__cell.is-dark {
-  background: var(--grass-dark);
+  background: #1b2336;
 }
 .tut-board__cell.is-target::after {
   content: '';
-  width: 11px;
-  height: 11px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 2px 0 rgba(27, 36, 69, 0.4);
+  background: radial-gradient(circle, #ffffff 0 35%, #bfeaff 60%, rgba(140, 220, 255, 0.4) 100%);
+  box-shadow: 0 0 7px 1px rgba(140, 220, 255, 0.75);
 }
 .tut-board__cell.is-capture {
   box-shadow:
-    inset 0 0 0 3px var(--team-red),
-    inset 1px 1px 0 rgba(255, 255, 255, 0.3);
+    inset 0 0 0 2px var(--team-red),
+    0 0 10px rgba(255, 70, 85, 0.7);
 }
 .tut-finger {
   position: absolute;
@@ -306,9 +306,9 @@
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  border: 3px solid #fff;
-  background: rgba(255, 207, 58, 0.55);
-  box-shadow: 0 0 0 2px var(--navy-ink);
+  border: 2.5px solid #fff;
+  background: rgba(242, 193, 78, 0.45);
+  box-shadow: 0 0 14px rgba(242, 193, 78, 0.7);
   animation: tut-finger 2.6s var(--ease-out) infinite;
 }
 @keyframes tut-finger {
@@ -349,25 +349,26 @@
   gap: 4px;
   padding: 2px 10px 2px 8px;
   border-radius: var(--r-full);
-  background: linear-gradient(180deg, #ff7a82, var(--team-red));
-  box-shadow: 0 2px 0 var(--team-red-deep);
-  color: #fff;
+  background: rgba(158, 28, 39, 0.45);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 70, 85, 0.65),
+    0 0 12px -3px rgba(255, 70, 85, 0.5);
+  color: var(--team-red-light);
   font-size: var(--fs-caption);
   font-weight: var(--fw-bold);
-  text-shadow: 0 1px 0 rgba(27, 36, 69, 0.6);
+  text-shadow: 0 1px 0 var(--outline);
 }
 .tut-zone__grid {
   width: 92%;
   padding: 6px;
   border-radius: var(--r-s);
-  background: linear-gradient(180deg, var(--stone-light), var(--stone));
+  background: linear-gradient(180deg, #2a3350, #121829);
   box-shadow:
-    inset 0 2px 0 rgba(255, 255, 255, 0.5),
-    0 0 0 2px var(--navy-ink),
-    0 4px 0 2px var(--navy-ink);
+    inset 0 0 0 1px rgba(242, 193, 78, 0.45),
+    0 4px 0 var(--panel-lip);
 }
 .tut-zone__label {
-  color: #fff;
+  color: var(--team-blue-light);
   font-family: var(--font-display);
   font-size: var(--fs-label);
   text-shadow: var(--ink-outline-s);
@@ -385,16 +386,17 @@
   width: 100px;
   height: 100px;
   border-radius: 50%;
-  background: var(--dpanel-fill);
+  background: radial-gradient(circle at 50% 35%, #1f2842, var(--night-0));
   box-shadow:
-    0 0 0 3px var(--navy-ink),
-    0 5px 0 3px var(--navy-ink);
+    inset 0 0 0 1px rgba(72, 88, 128, 0.9),
+    0 4px 0 var(--panel-lip),
+    0 0 28px -6px rgba(242, 193, 78, 0.45);
 }
 .tut-timer__ring {
   position: absolute;
   inset: 5px;
   border-radius: 50%;
-  background: conic-gradient(var(--gold) var(--p, 100%), rgba(255, 255, 255, 0.16) 0);
+  background: conic-gradient(var(--gold) var(--p, 100%), rgba(150, 170, 230, 0.14) 0);
   -webkit-mask: radial-gradient(circle, transparent 36px, #000 37px);
   mask: radial-gradient(circle, transparent 36px, #000 37px);
   animation: tut-ring 4s linear infinite;
@@ -416,7 +418,7 @@
   font-family: var(--font-num);
   font-size: 36px;
   line-height: 1;
-  color: #fff;
+  color: var(--ink);
   text-shadow: var(--ink-outline-m);
 }
 .tut-timer__unit {
@@ -428,22 +430,28 @@
 }
 .tut-strikes {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 6px;
+  padding: 0 8px;
 }
 .tut-strike {
-  padding: 3px 12px;
+  padding: 3px 11px;
   border-radius: var(--r-full);
-  background: linear-gradient(180deg, #ffffff, #e3e9f6);
-  box-shadow: 0 2px 0 var(--panel-edge);
-  color: var(--navy-ink);
+  background: rgba(7, 10, 18, 0.6);
+  box-shadow: inset 0 0 0 1px rgba(72, 88, 128, 0.85);
+  color: var(--ink);
   font-size: var(--fs-caption);
   font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
 }
 .tut-strike.is-out {
-  background: linear-gradient(180deg, #ff7a82, var(--team-red));
-  box-shadow: 0 2px 0 var(--team-red-deep);
+  background: linear-gradient(180deg, #ff6b77, #c92636);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 210, 214, 0.5),
+    0 0 12px -2px rgba(255, 70, 85, 0.7);
   color: #fff;
-  text-shadow: 0 1px 0 rgba(27, 36, 69, 0.6);
+  text-shadow: 0 1px 0 var(--outline);
 }
 
 /* slide 6: grade */
@@ -457,11 +465,11 @@
   gap: 6px;
 }
 .tut-grow__arrow {
-  color: #fff;
-  filter: drop-shadow(0 2px 0 var(--navy-ink));
+  color: var(--text-2);
+  filter: drop-shadow(0 1px 0 var(--outline));
 }
 .tut-grow__cap {
-  color: #fff;
+  color: var(--ink);
   font-family: var(--font-display);
   font-size: var(--fs-label);
   text-shadow: var(--ink-outline-s);
@@ -481,15 +489,16 @@
   font-family: var(--font-display);
   font-weight: 400;
   font-size: 26px;
-  color: var(--navy-ink);
+  color: var(--ink);
+  text-shadow: var(--ink-outline-s);
 }
 .set-group {
   margin-bottom: 3px;
   border-radius: var(--r-l);
-  background: #fff;
+  background: var(--panel-fill);
   box-shadow:
-    inset 0 0 0 1px var(--panel-line),
-    0 3px 0 var(--panel-line);
+    var(--panel-rim),
+    0 3px 0 var(--panel-lip);
   overflow: hidden;
 }
 .set-row {
@@ -505,13 +514,13 @@
   text-align: left;
 }
 .set-row + .set-row {
-  border-top: 1px solid var(--panel-line);
+  border-top: 1px solid rgba(51, 64, 95, 0.75);
 }
 .set-row--link {
   cursor: pointer;
 }
 .set-row--link:active {
-  background: var(--panel);
+  background: rgba(170, 190, 255, 0.06);
 }
 .set-row__icon {
   display: grid;
@@ -521,16 +530,15 @@
   height: 42px;
   margin-bottom: 3px;
   border-radius: 12px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0 46%, transparent 46%),
-    linear-gradient(180deg, #6aa9ff, var(--team-blue));
+  background: radial-gradient(circle at 50% 30%, rgba(59, 139, 255, 0.4), rgba(26, 79, 184, 0.25) 60%, rgba(7, 10, 18, 0.6));
   box-shadow:
-    inset 0 2px 0 rgba(255, 255, 255, 0.45),
-    0 3px 0 var(--team-blue-deep);
-  color: #fff;
+    inset 0 1px 0 rgba(140, 194, 255, 0.4),
+    inset 0 0 0 1px rgba(95, 176, 255, 0.5),
+    0 2px 0 var(--panel-lip);
+  color: var(--team-blue-light);
 }
 .set-row__icon .icon {
-  filter: drop-shadow(0 1.5px 0 var(--navy-ink));
+  filter: drop-shadow(0 0 4px rgba(95, 176, 255, 0.6));
 }
 .set-row__main {
   flex: 1;
@@ -543,7 +551,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  color: var(--navy-ink);
+  color: var(--ink);
   font-size: var(--fs-body-l);
   font-weight: var(--fw-bold);
 }
@@ -565,24 +573,34 @@
   text-align: center;
 }
 
-/* ---- Result dialog: a ribbon banner on a cream card --------------------------------- */
+/* ---- Result dialog: a ribbon banner on an obsidian card ------------------------------ */
 .dialog.result {
-  --ribbon-top: #7ab4ff;
-  --ribbon-bot: var(--team-blue);
-  --ribbon-lip: var(--team-blue-deep);
+  --ribbon-top: #6aa9ff;
+  --ribbon-bot: var(--team-blue-deep);
+  --ribbon-lip: #0d2a66;
+  --ribbon-glow: 95, 176, 255;
   width: min(100%, 380px);
   padding-top: var(--s-4);
   overflow: visible;
 }
 .dialog.result--win {
-  --ribbon-top: var(--gold);
+  --ribbon-top: #f7cf63;
   --ribbon-bot: var(--gold-deep);
   --ribbon-lip: var(--gold-lip);
+  --ribbon-glow: 242, 193, 78;
 }
 .dialog.result--loss {
-  --ribbon-top: #ff7a82;
-  --ribbon-bot: var(--team-red);
-  --ribbon-lip: var(--team-red-deep);
+  --ribbon-top: #e8475a;
+  --ribbon-bot: var(--team-red-deep);
+  --ribbon-lip: #4d0d14;
+  --ribbon-glow: 255, 70, 85;
+}
+.dialog.result--loss {
+  box-shadow:
+    inset 0 1px 0 rgba(170, 190, 255, 0.16),
+    inset 0 0 0 1px rgba(72, 88, 128, 0.85),
+    0 var(--lip) 0 var(--panel-lip),
+    var(--drop-l);
 }
 .result .dialog__icon {
   margin: calc(var(--s-10) * -1 - 26px) 0 0;
@@ -600,13 +618,14 @@
     linear-gradient(180deg, rgba(255, 255, 255, 0.25) 0 46%, transparent 46%),
     linear-gradient(180deg, var(--ribbon-top), var(--ribbon-bot));
   box-shadow:
-    inset 0 3px 0 rgba(255, 255, 255, 0.5),
-    0 0 0 4px #fff,
-    0 0 0 6.5px var(--navy-ink),
-    0 6px 0 6.5px var(--navy-ink);
+    inset 0 2px 0 rgba(255, 255, 255, 0.5),
+    0 0 0 3px var(--night-2),
+    0 0 0 4.5px rgba(var(--ribbon-glow), 0.8),
+    0 5px 0 4.5px var(--panel-lip),
+    0 0 36px 4px rgba(var(--ribbon-glow), 0.45);
 }
 .result__icon .icon {
-  filter: drop-shadow(0 3px 0 var(--navy-ink));
+  filter: drop-shadow(0 2px 0 var(--outline));
 }
 .result__icon--win {
   animation: trophy-pop 700ms var(--ease-pop) 120ms both;
@@ -626,6 +645,7 @@
     linear-gradient(180deg, var(--ribbon-top), var(--ribbon-bot));
   clip-path: polygon(0 0, 100% 0, calc(100% - 12px) 50%, 100% 100%, 0 100%, 12px 50%);
   box-shadow: inset 0 -5px 0 var(--ribbon-lip);
+  filter: drop-shadow(0 0 18px rgba(var(--ribbon-glow), 0.45));
   font-size: 44px;
   line-height: 1.05;
   color: #fff;
@@ -664,7 +684,7 @@
   }
 }
 .result__reason {
-  color: var(--navy-ink);
+  color: var(--ink);
   font-size: var(--fs-body);
   font-weight: var(--fw-semibold);
 }
@@ -672,8 +692,9 @@
   margin-top: var(--s-2);
   padding: 4px 14px;
   border-radius: var(--r-full);
-  background: var(--navy-ink);
-  color: #fff;
+  background: rgba(7, 10, 18, 0.6);
+  box-shadow: inset 0 0 0 1px rgba(72, 88, 128, 0.85);
+  color: var(--ink);
   font-family: var(--font-num);
   font-size: var(--fs-body);
   font-variant-numeric: tabular-nums;
@@ -691,17 +712,15 @@
   margin-top: var(--s-3);
   padding: 5px 14px 5px 8px;
   border-radius: var(--r-full);
-  background: #fff;
-  box-shadow:
-    inset 0 0 0 1px var(--panel-line),
-    0 2px 0 var(--panel-line);
-  color: var(--navy-ink);
+  background: rgba(7, 10, 18, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(242, 193, 78, 0.35);
+  color: var(--ink);
   font-size: var(--fs-label);
   font-weight: var(--fw-bold);
   font-variant-numeric: tabular-nums;
 }
 .result__total[data-record] .icon {
-  color: var(--gold-deep);
+  color: var(--gold);
 }
 
 @media (max-height: 700px) {

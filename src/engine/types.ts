@@ -31,11 +31,11 @@ export const MAX_CONSECUTIVE_TIMEOUTS = 1;
 export const STORM_INTERVAL_PLIES = 6;
 /**
  * Sudden death: the storm activates when either side is down to its last piece, or on its own once
- * this many plies were played (60 turns each, see `turnNumber`: turn 61 starts at ply 120).
+ * this many plies were played (40 turns each, see `turnNumber`: turn 41 starts at ply 80).
  * Together with STORM_INTERVAL_PLIES this bounds a match to SUDDEN_DEATH_PLY + 6 *
- * STORM_INTERVAL_PLIES = 156 plies (after 6 shrinks the storm has swallowed the whole board).
+ * STORM_INTERVAL_PLIES = 116 plies (after 6 shrinks the storm has swallowed the whole board).
  */
-export const SUDDEN_DEATH_PLY = 120;
+export const SUDDEN_DEATH_PLY = 80;
 /**
  * Brutile's skill "불모지" (wasteland) unlocks once both players have taken 3 turns (ply 6: turn 4 as
  * `turnNumber` counts it) and is forbidden once the storm has started to close in (storm >= 1).

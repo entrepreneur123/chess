@@ -180,14 +180,14 @@ export const BOARD_COLORS = {
   /** Enemy reach preview (tone 'enemy'): red glowing dots, selection frame and tile tints. */
   enemyMoveDot: '#FF5363',
   enemySelected: '#FF4655',
-  enemySelectedTint: '#6E1F2E',
+  enemySelectedTint: '#8E2436',
   enemyMoveTint: '#4A1C2C',
   /** Capture target ring (glowing red) + tile tint. */
   capture: '#FF4655',
   captureTint: '#6A1E2C',
   /** Selected square: ice-cyan glowing frame + a cool blue tile tint. */
   selected: '#7FE3FF',
-  selectedTint: '#2C5590',
+  selectedTint: '#3C83C8',
   /** Last move from/to tint (candle gold). */
   lastMove: '#F2C14E',
   /** Dark metal puck under every piece (legacy tilted view). */
@@ -202,7 +202,7 @@ export const HOME_TINT_STRENGTH = 0.42;
 /** Strength (0..1) of the highlighted zoneRows tint. */
 export const ZONE_TINT_STRENGTH = 0.5;
 /** Strength (0..1) of the last-move tint. */
-export const LAST_MOVE_TINT_STRENGTH = 0.3;
+export const LAST_MOVE_TINT_STRENGTH = 0.62;
 
 /** Animation timings (ms) shared by both views. All effects stay <= ~450 ms. */
 export const ANIM = {

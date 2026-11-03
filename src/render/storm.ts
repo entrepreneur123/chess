@@ -1,7 +1,8 @@
 /**
  * Storm ("자기장") overlay for the 3D board: the outermost LEFT and RIGHT columns that the storm has
- * consumed get an animated purple haze with soft magenta energy veins, ONE premultiplied draw call
- * (the floor haze tints / darkens the bright grass, veins / wall / warning frame add light):
+ * consumed get an animated violet haze with magenta energy veins, ONE premultiplied draw call
+ * (the floor haze slightly darkens the tiles and adds violet light; veins / wall / warning frame
+ * are purely additive, alpha 0):
  *  - a floor sheet over the consumed tiles (scrolling noise + bright veins, brighter at the
  *    inner boundary),
  *  - a vertical energy wall at the boundary between consumed and safe columns (rising noise,
@@ -20,8 +21,8 @@ export const STORM_COLORS = {
   edge: '#FF3DF0',
   /** Hot core (floor line, vein cores). */
   core: '#FFC8FB',
-  /** Tile tint inside the storm (muted purple under the haze). */
-  tile: '#4A2A78',
+  /** Tile tint inside the storm (deep purple-black under the haze). */
+  tile: '#2A1244',
 } as const;
 
 const VS = /* glsl */ `
@@ -80,9 +81,10 @@ void main() {
     float inner = pow(vUv.x, 2.2);
     float sw = (fract(vUv.y * 0.5 - uTime * 0.12) - 0.5) * 7.0; // pow() of a negative base is undefined
     float sweep = exp(-sw * sw) * 0.3;
-    // Purple haze (alpha darkens / tints the grass) + soft veins and a brighter inner boundary.
-    float a = 0.4 + 0.16 * n + 0.12 * inner;
-    col = uField * a * (0.9 + 0.3 * n) + uEdge * vein * 0.4 + uEdge * inner * 0.22 + uCore * sweep * (0.2 + 0.5 * n);
+    // Violet haze over the dark tiles (a light veil darkens, the field colour adds light) + veins
+    // and a brighter inner boundary.
+    float a = 0.22 + 0.1 * n + 0.08 * inner;
+    col = uField * (0.16 + 0.26 * n) + uEdge * vein * 0.3 + uEdge * inner * 0.24 + uCore * sweep * (0.25 + 0.6 * n);
     gl_FragColor = vec4(col, a);
     return;
   } else if (kind < 1.5) {
@@ -101,7 +103,7 @@ void main() {
     float ex = max(smoothstep(0.12, 0.0, vUv.x), smoothstep(0.88, 1.0, vUv.x));
     float ez = max(smoothstep(0.012, 0.0, vUv.y), smoothstep(0.988, 1.0, vUv.y));
     float ticks = step(0.5, fract(vUv.y * 18.0 - uTime * 1.5)) * smoothstep(0.75, 1.0, vUv.x);
-    col = (uEdge * (0.1 + 0.2 * pulse) + uEdge * max(ex, ez) * (0.55 + 0.6 * pulse) + uCore * ticks * 0.2 * pulse) * uWarn;
+    col = (uEdge * (0.06 + 0.12 * pulse) + uEdge * max(ex, ez) * (0.55 + 0.6 * pulse) + uCore * ticks * 0.2 * pulse) * uWarn;
   }
   gl_FragColor = vec4(col, 0.0);
 }`;

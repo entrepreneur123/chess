@@ -56,10 +56,10 @@ export function makeGlowTexture(): THREE.CanvasTexture {
  * Luminous move-target dot in its own colour (white-hot core, soft halo; arena.ts paintGlowDot).
  * Additive blending; the plane is MARKER_QUAD.dot cells wide.
  */
-export function makeDotTexture(color: RGB): THREE.CanvasTexture {
+export function makeDotTexture(color: RGB, whiten: number): THREE.CanvasTexture {
   const s = 128;
   const { cvs, ctx } = canvas(s, s);
-  if (ctx) paintGlowDot(ctx, s / 2, s / 2, s / 2, color);
+  if (ctx) paintGlowDot(ctx, s / 2, s / 2, s / 2, color, whiten);
   return toTexture(cvs);
 }
 

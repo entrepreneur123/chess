@@ -1,7 +1,7 @@
 export * from './types';
 export { CHARACTERS, CHARACTER_IDS, STARTER_IDS, WASTE_SIZE, pieceValue, effectiveValue, absorbMaskOf, abilityBit } from './characters';
 export { forwardDir, formationToAbsolute, isInZone, isOnBoard, sqOf, posOf, genTargets, inStorm, N_SQUARES } from './board';
-export { validateFormation, defaultFormation, randomFormation, normalizeSquad, squadOf } from './formation';
+export { validateFormation, isCharacterId, defaultFormation, randomFormation, normalizeSquad, squadOf } from './formation';
 export {
   createGame,
   getPieceAt,

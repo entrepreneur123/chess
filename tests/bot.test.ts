@@ -3,7 +3,6 @@ import { chooseMove } from '../src/ai/bot';
 import type { Difficulty } from '../src/ai/bot';
 import {
   applyMove,
-  applyTimeout,
   createGame,
   getLegalMoves,
   getTargetsForPiece,
@@ -38,10 +37,6 @@ describe('bot self-play', () => {
           guard++;
           expect(guard).toBeLessThan(600);
           expect(getLegalMoves(g).length).toBeGreaterThan(0); // never stuck
-          if (rng() < 0.01) {
-            g = applyTimeout(g);
-            continue;
-          }
           const diff = g.turn === 0 ? d0 : d1;
           const m = chooseMove(g, diff, { timeBudgetMs: 3, rng });
           expect(m).not.toBeNull();

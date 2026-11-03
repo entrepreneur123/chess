@@ -308,9 +308,9 @@ describe('GameController without a match clock', () => {
     // 16 rounds of 55 s each (> 14 minutes) with the human always moving just in time.
     for (let i = 0; i < 16; i++) {
       await h.advance(55_000);
-      const me = h.ctrl.state.pieces.find((p) => p.id === 'p0-walk')!;
-      const to = { r: me.pos.r === 0 ? 1 : 0, c: me.pos.r === 0 ? 10 : 11 };
-      const m = { pieceId: 'p0-walk', from: { ...me.pos }, to };
+      const me = h.ctrl.state.pieces.find((p) => p.id === 'p0-sad')!;
+      const to = { r: 2, c: me.pos.c === 5 ? 4 : 5 };
+      const m = { pieceId: 'p0-sad', from: { ...me.pos }, to };
       expect(h.ctrl.tryHumanMove(m)).toBe(true);
       await h.finishAnims();
       await h.advance(0);

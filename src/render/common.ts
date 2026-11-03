@@ -77,7 +77,7 @@ const RGB_TEAM_GLOW: Record<PlayerId, RGB> = {
 /** Highlight tint strengths over the dark tiles (the glowing markers carry the meaning). */
 const ENEMY_MOVE_TINT = 0.4;
 const CAPTURE_TINT = 0.75;
-const SELECTED_TINT = 0.7;
+const SELECTED_TINT = 0.78;
 /** Edge darkening of the field (fraction of brightness lost at the corner tiles). */
 const FIELD_VIGNETTE = 0.16;
 
@@ -114,6 +114,11 @@ export function indexHighlights(h: BoardHighlights): HighlightIndex {
   };
 }
 
+/** Perceived brightness (sRGB, Rec. 601 weights). */
+function luma(c: RGB): number {
+  return 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
+}
+
 /** Team whose tint is used for a highlighted zone range (falls back to Blue). */
 function zoneTeam(zone: [number, number]): PlayerId {
   return zone[0] >= BOARD_SIZE / 2 ? 1 : 0;
@@ -139,7 +144,12 @@ export function tileRgb(r: number, c: number, hi: HighlightIndex): RGB {
     col = mixRgb(col, mixRgb(RGB_TEAM_GLOW[t], RGB_TEAM_ZONE[t], 0.5), ZONE_TINT_STRENGTH);
   }
   const sq = r * BOARD_SIZE + c;
-  if (hi.last.has(sq)) col = mixRgb(col, RGB_LAST, LAST_MOVE_TINT_STRENGTH);
+  if (hi.last.has(sq)) {
+    // Warm candle-gold at the tile's own brightness (a plain mix with the blue / red zone tints
+    // would cancel out to grey).
+    const k = 0.22 + luma(col) * 1.25;
+    col = mixRgb(col, [RGB_LAST[0] * k, RGB_LAST[1] * k, RGB_LAST[2] * k], LAST_MOVE_TINT_STRENGTH);
+  }
   if (hi.enemy && hi.moves.has(sq)) col = mixRgb(col, RGB_ENEMY_MOVE, ENEMY_MOVE_TINT);
   if (hi.captures.has(sq)) col = mixRgb(col, RGB_CAP, CAPTURE_TINT);
   if (hi.selected === sq) col = mixRgb(col, hi.enemy ? RGB_ENEMY_SEL : RGB_SEL, SELECTED_TINT);

@@ -168,7 +168,7 @@ export function createFieldPanel(opts: FieldPanelOptions): FieldPanel {
         render(s, true);
         body?.querySelector(`[data-piece="${id}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       }),
-      s.stormIn !== null ? h('p', { class: 'fpanel__storm' }, icon('bolt', 14), s.storm > 0 ? `자기장: 좌우 ${s.storm}줄 소멸 · ${s.stormIn}턴 후 축소` : `자기장 활성 · ${s.stormIn}턴 후 축소`) : null,
+      s.stormIn !== null ? h('p', { class: 'fpanel__storm' }, icon('bolt', 14), s.storm > 0 ? `자기장: 좌우 ${s.storm}줄 소멸 · ${Math.ceil(s.stormIn / 2)}턴 후 축소` : `자기장 활성 · ${Math.ceil(s.stormIn / 2)}턴 후 축소`) : null,
       list(1),
       list(0),
     );

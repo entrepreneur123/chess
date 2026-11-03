@@ -1,63 +1,75 @@
 /* ==========================================================================
-   Match screen layout: opponent bar · turn strip · board · action dock ·
-   player bar, on the daylight sky. The board canvas (src/render) sits on
-   this background. In-match effects, the drawer and the cut-ins live in
+   Match screen layout: opponent bar · turn strip · notes line · board ·
+   action dock · player bar, over the dark arena floor (#app backdrop). The
+   board canvas (src/render) is transparent around its frame. In-match
+   effects, the dock contents, the drawer and the cut-ins live in
    src/ui/game/hud.css.
+   Every row has a fixed height so the board never resizes when a note, the
+   storm status or a dock control appears.
    ========================================================================== */
 body.in-game,
 .game {
   overscroll-behavior: none;
 }
 .game {
+  --bar-h: 60px;
+  --strip-h: 42px;
+  --notes-h: 32px;
+  --dock-row-h: 66px;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
-  grid-template-areas: 'top' 'strip' 'board' 'dock' 'bot';
+  grid-template-rows: auto var(--strip-h) var(--notes-h) minmax(0, 1fr) var(--dock-row-h) auto;
+  grid-template-areas: 'top' 'strip' 'notes' 'board' 'dock' 'bot';
   gap: 0;
-  background: var(--bg-pattern) center top / 132px 132px repeat, var(--bg-sky);
+  background: transparent;
   -webkit-touch-callout: none;
   user-select: none;
 }
 
-/* ---- Player bars: dark-blue chunky panels; the side to move takes its team colour ---- */
+/* ---- Player bars: obsidian panels; the side to move lights up in its team colour ---- */
 .pbar {
-  --bar-top: var(--panel-dark-hi);
-  --bar-bot: var(--panel-dark);
-  --bar-lip: var(--panel-dark-edge);
+  --team: var(--team-blue);
+  --team-glow: 95, 176, 255;
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
   min-width: 0;
-  min-height: 62px;
-  padding: 7px 8px 7px 12px;
+  min-height: var(--bar-h);
+  padding: 6px 8px 6px 12px;
   border-radius: var(--r-l);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0 48%, transparent 48%),
-    linear-gradient(180deg, var(--bar-top), var(--bar-bot));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0 48%, transparent 48%),
+    linear-gradient(180deg, rgba(37, 47, 74, 0.96), rgba(22, 29, 48, 0.96));
   box-shadow:
-    inset 0 2px 0 rgba(255, 255, 255, 0.22),
-    0 4px 0 0 var(--bar-lip),
-    0 0 0 2px var(--navy-ink),
-    0 4px 0 2px var(--navy-ink),
+    inset 0 1px 0 var(--panel-hi),
+    inset 0 0 0 1px rgba(51, 64, 95, 0.9),
+    0 4px 0 var(--panel-lip),
     var(--drop);
-  transition: background var(--dur-2) var(--ease-out);
+  transition:
+    box-shadow var(--dur-2) var(--ease-out),
+    background var(--dur-2) var(--ease-out);
 }
 .pbar--top {
+  --team: var(--team-red);
+  --team-glow: 255, 106, 90;
   grid-area: top;
-  margin: calc(var(--s-2) + var(--sat)) var(--s-2) 6px;
+  margin: calc(var(--s-2) + var(--sat)) var(--s-2) 4px;
 }
 .pbar--bottom {
   grid-area: bot;
-  margin: 2px var(--s-2) calc(var(--s-2) + 6px + var(--sab));
+  margin: 0 var(--s-2) calc(var(--s-2) + 4px + var(--sab));
 }
-.pbar--top.is-turn {
-  --bar-top: #ff7a82;
-  --bar-bot: #e8414c;
-  --bar-lip: var(--team-red-deep);
-}
-.pbar--bottom.is-turn {
-  --bar-top: #66a6ff;
-  --bar-bot: #2f78ee;
-  --bar-lip: var(--team-blue-deep);
+.pbar.is-turn {
+  background:
+    radial-gradient(90% 140% at 0% 50%, rgba(var(--team-glow), 0.26), transparent 62%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0 48%, transparent 48%),
+    linear-gradient(180deg, rgba(37, 47, 74, 0.97), rgba(22, 29, 48, 0.97));
+  box-shadow:
+    inset 0 1px 0 rgba(var(--team-glow), 0.45),
+    inset 0 0 0 1.5px rgba(var(--team-glow), 0.75),
+    0 4px 0 var(--panel-lip),
+    0 0 24px -6px rgba(var(--team-glow), 0.6),
+    var(--drop);
 }
 .pbar__avatar {
   display: inline-flex;
@@ -67,6 +79,13 @@ body.in-game,
 .pbar__avatar .unit-art__lv {
   display: none;
 }
+.pbar.is-turn .pbar__avatar .unit-art img {
+  box-shadow:
+    0 0 0 2px var(--rar),
+    0 0 0 4.5px var(--team-ring),
+    0 0 0 6px var(--outline),
+    0 0 16px 4px rgba(var(--team-glow), 0.55);
+}
 .pbar__info {
   flex: 1;
   min-width: 0;
@@ -75,7 +94,7 @@ body.in-game,
   font-family: var(--font-display);
   font-size: 18px;
   line-height: 1.2;
-  color: #fff;
+  color: var(--ink);
   text-shadow: var(--ink-outline-s);
   white-space: nowrap;
   overflow: hidden;
@@ -90,17 +109,13 @@ body.in-game,
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.pbar.is-turn .pbar__meta {
-  color: #fff;
-  text-shadow: 0 1px 0 rgba(27, 36, 69, 0.55);
-}
 .pbar__roster {
   display: flex;
   gap: 5px;
   padding: 6px 8px;
   border-radius: var(--r-full);
-  background: var(--well-dark);
-  box-shadow: var(--well-dark-shadow);
+  background: rgba(7, 10, 18, 0.55);
+  box-shadow: var(--well-shadow);
 }
 .roster-chip {
   display: inline-grid;
@@ -112,15 +127,17 @@ body.in-game,
   --tk: 18px;
 }
 .roster-chip.is-captured {
-  opacity: 0.35;
+  opacity: 0.3;
   filter: grayscale(1);
 }
 .menu-btn {
   flex: none;
 }
 
-/* ---- Turn timer: a dark gauge disc with a gold arc ------------------------------- */
+/* ---- Turn timer: an obsidian gauge; the arc glows in the team colour on its turn ---- */
 .ring {
+  --ring-c: var(--team-blue-glow);
+  --ring-glow: 95, 176, 255;
   position: relative;
   width: 46px;
   height: 46px;
@@ -128,15 +145,25 @@ body.in-game,
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: var(--panel-dark-edge);
+  background: radial-gradient(circle at 50% 35%, #1b2338, var(--night-0));
   box-shadow:
-    0 0 0 2px var(--navy-ink),
-    0 3px 0 2px var(--navy-ink);
-  opacity: 0.55;
-  transition: opacity var(--dur-2) var(--ease-out);
+    inset 0 0 0 1px rgba(51, 64, 95, 0.9),
+    0 2px 0 var(--panel-lip);
+  opacity: 0.6;
+  transition:
+    opacity var(--dur-2) var(--ease-out),
+    box-shadow var(--dur-2) var(--ease-out);
+}
+.ring.owner-1 {
+  --ring-c: var(--team-red-glow);
+  --ring-glow: 255, 106, 90;
 }
 .ring.is-active {
   opacity: 1;
+  box-shadow:
+    inset 0 0 0 1px rgba(51, 64, 95, 0.9),
+    0 2px 0 var(--panel-lip),
+    0 0 16px -2px rgba(var(--ring-glow), 0.55);
 }
 .ring__svg {
   position: absolute;
@@ -145,24 +172,45 @@ body.in-game,
 }
 .ring__track {
   fill: none;
-  stroke: rgba(255, 255, 255, 0.14);
-  stroke-width: 5;
+  stroke: rgba(150, 170, 230, 0.14);
+  stroke-width: 4;
 }
 .ring__arc {
   fill: none;
-  stroke: var(--gold);
-  stroke-width: 5;
+  stroke: var(--ring-c);
+  stroke-width: 4;
   stroke-linecap: round;
+  filter: drop-shadow(0 0 2px var(--ring-c));
 }
 .ring:not(.is-active) .ring__arc {
-  stroke: rgba(255, 255, 255, 0.28);
+  stroke: rgba(150, 170, 230, 0.25);
+  filter: none;
 }
-.ring.is-warn .ring__arc {
-  stroke: var(--team-red);
+.ring.is-warn {
+  --ring-c: var(--gold);
+  --ring-glow: 242, 193, 78;
+}
+/* Last 5 seconds: running out forfeits the match, so the ring turns red and pulses. */
+.ring.is-critical {
+  --ring-c: var(--team-red);
+  --ring-glow: 255, 70, 85;
+  animation: ring-critical 0.5s ease-in-out infinite alternate;
+}
+@keyframes ring-critical {
+  from {
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 70, 85, 0.6),
+      0 0 10px -2px rgba(255, 70, 85, 0.5);
+  }
+  to {
+    box-shadow:
+      inset 0 0 0 1.5px rgba(255, 70, 85, 0.95),
+      0 0 22px 2px rgba(255, 70, 85, 0.75);
+  }
 }
 .ring__label {
   position: relative;
-  color: #fff;
+  color: var(--ink);
   font-family: var(--font-num);
   font-size: 17px;
   line-height: 1;
@@ -170,116 +218,273 @@ body.in-game,
   text-shadow: var(--ink-outline-s);
 }
 .ring.is-warn .ring__label {
+  color: var(--gold-hi);
+}
+.ring.is-critical .ring__label {
   color: var(--team-red-light);
 }
 .ring.is-paused {
-  opacity: 0.55;
+  opacity: 0.6;
 }
 
-/* ---- Turn strip: whose turn + the match clock ------------------------------------ */
+/* ---- Turn strip: the turn count + whose turn ---------------------------------- */
 .hud-strip {
   grid-area: strip;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 8px var(--s-2);
-  min-height: 46px;
-  padding: 4px var(--s-3) 6px;
+  gap: 10px;
+  min-width: 0;
+  padding: 0 var(--s-3);
   pointer-events: none;
 }
+.turn-count {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  height: 34px;
+  padding: 0 14px 0 12px;
+  border-radius: var(--r-full);
+  background: linear-gradient(180deg, rgba(27, 35, 56, 0.92), rgba(9, 13, 23, 0.92));
+  box-shadow:
+    inset 0 1px 0 var(--panel-hi),
+    inset 0 0 0 1px rgba(72, 88, 128, 0.85),
+    0 3px 0 var(--panel-lip);
+  line-height: 34px;
+  white-space: nowrap;
+  transition: box-shadow var(--dur-2) var(--ease-out);
+}
+.turn-count__label {
+  color: var(--text-2);
+  font-family: var(--font-display);
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+.turn-count__num {
+  min-width: 1.3em;
+  color: var(--ink);
+  font-size: 24px;
+  text-align: center;
+  text-shadow: var(--ink-outline-s);
+}
+.turn-count.is-tick .turn-count__num {
+  display: inline-block;
+  animation: turn-tick 420ms var(--ease-pop);
+}
+@keyframes turn-tick {
+  from {
+    transform: scale(1.35);
+    color: var(--gold-hi);
+  }
+}
+/* Sudden death is near / the storm is on: the count takes the arcane storm colour. */
+.turn-count.is-late {
+  box-shadow:
+    inset 0 1px 0 rgba(198, 184, 255, 0.35),
+    inset 0 0 0 1px rgba(139, 108, 255, 0.85),
+    0 3px 0 var(--panel-lip),
+    0 0 16px -4px rgba(139, 108, 255, 0.65);
+}
+.turn-count.is-late .turn-count__label {
+  color: var(--arcane-text);
+}
+
+/* Whose turn: candle gold on mine, muted obsidian while the opponent moves. */
 .turn-pill {
-  --pill-top: #66a6ff;
-  --pill-bot: var(--team-blue);
-  --pill-lip: var(--team-blue-deep);
+  --pill-dot: var(--gold-ink);
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 36px;
-  padding: 0 18px 0 12px;
+  height: 34px;
+  padding: 0 18px 0 13px;
   border-radius: var(--r-full);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0 46%, transparent 46%),
-    linear-gradient(180deg, var(--pill-top), var(--pill-bot));
+    linear-gradient(180deg, rgba(255, 250, 225, 0.22) 0 46%, transparent 46%),
+    linear-gradient(180deg, #f7cf63, var(--gold) 45%, var(--gold-deep));
   box-shadow:
-    inset 0 2px 0 rgba(255, 255, 255, 0.45),
-    0 3px 0 0 var(--pill-lip),
-    0 0 0 2px var(--navy-ink),
-    0 3px 0 2px var(--navy-ink);
-  color: #fff;
+    inset 0 1.5px 0 rgba(255, 240, 196, 0.85),
+    0 3px 0 var(--gold-lip),
+    0 0 20px -4px rgba(242, 193, 78, 0.55);
+  color: var(--gold-ink);
   font-family: var(--font-display);
   font-size: 18px;
   line-height: 1;
   white-space: nowrap;
-  text-shadow: var(--ink-outline-s);
-  transition: background var(--dur-2) var(--ease-out);
+  text-shadow: 0 1px 0 rgba(255, 236, 180, 0.55);
+  transition:
+    background var(--dur-2) var(--ease-out),
+    box-shadow var(--dur-2) var(--ease-out),
+    color var(--dur-2) var(--ease-out);
 }
-.turn-pill.is-bot {
-  --pill-top: #ff7a82;
-  --pill-bot: var(--team-red);
-  --pill-lip: var(--team-red-deep);
-}
-.turn-pill.is-bonus {
-  --pill-top: #ffe066;
-  --pill-bot: var(--gold-deep);
-  --pill-lip: var(--gold-lip);
+.turn-pill.is-bot,
+.turn-pill.is-ended,
+.turn-pill.is-paused {
+  --pill-dot: var(--team-red);
+  background: linear-gradient(180deg, rgba(37, 47, 74, 0.95), rgba(22, 29, 48, 0.95));
+  box-shadow:
+    inset 0 1px 0 var(--panel-hi),
+    inset 0 0 0 1px rgba(72, 88, 128, 0.85),
+    0 3px 0 var(--panel-lip);
+  color: var(--text-2);
+  text-shadow: 0 1px 0 var(--outline);
 }
 .turn-pill.is-bot.is-bonus {
-  --pill-top: #c08bff;
-  --pill-bot: var(--violet-deep);
-  --pill-lip: var(--violet-lip);
+  --pill-dot: var(--arcane);
+  color: var(--arcane-text);
+  box-shadow:
+    inset 0 1px 0 var(--panel-hi),
+    inset 0 0 0 1px rgba(139, 108, 255, 0.7),
+    0 3px 0 var(--panel-lip);
 }
 .turn-pill.is-ended,
 .turn-pill.is-paused {
-  --pill-top: #b8c4dc;
-  --pill-bot: #8e9dbb;
-  --pill-lip: #66769a;
+  --pill-dot: var(--text-3);
+}
+.turn-pill.is-me.is-bonus {
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 240, 196, 0.85),
+    0 3px 0 var(--gold-lip),
+    0 0 26px -2px rgba(242, 193, 78, 0.75);
 }
 .turn-pill__dot {
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 0 0 2px var(--navy-ink);
+  background: var(--pill-dot);
+  box-shadow: 0 0 0 2px rgba(7, 10, 18, 0.25);
+}
+.turn-pill.is-bot .turn-pill__dot {
+  box-shadow: 0 0 8px var(--pill-dot);
 }
 .turn-pill.is-thinking .turn-pill__dot {
   animation: hud-blink 0.9s ease-in-out infinite;
 }
-/* Match clock */
-.ply-counter {
+
+/* ---- Notes line: storm status, auto pass, first-match coach (fixed height) -------- */
+.hud-notes {
+  grid-area: notes;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 var(--s-2);
+  pointer-events: none;
+}
+/* The coach mark only shows before the first move; it takes the whole line. */
+.hud-notes:has(> .coach:not([hidden])) > :not(.coach) {
+  display: none;
+}
+.storm-chip {
+  flex: 0 1 auto;
   display: inline-flex;
   align-items: center;
-  min-width: 72px;
-  height: 30px;
-  padding: 0 12px 0 10px;
+  gap: 7px;
+  min-width: 0;
+  max-width: 100%;
+  max-height: 30px;
+  padding: 3px 12px 3px 4px;
   border-radius: var(--r-full);
-  background: var(--panel-dark-edge);
+  background: linear-gradient(180deg, rgba(74, 47, 168, 0.88), rgba(38, 22, 92, 0.92));
   box-shadow:
-    inset 0 2px 3px rgba(10, 20, 55, 0.4),
-    0 0 0 2px var(--navy-ink);
-  color: #fff;
-  font-family: var(--font-num);
-  font-size: 15px;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  text-shadow: 0 1px 0 var(--navy-ink);
+    inset 0 1px 0 rgba(198, 184, 255, 0.35),
+    inset 0 0 0 1px rgba(139, 108, 255, 0.75),
+    0 0 18px -4px rgba(139, 108, 255, 0.7);
+  color: var(--ink);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-bold);
+  line-height: 1.2;
+  text-shadow: 0 1px 0 var(--outline);
 }
-.ply-counter::before {
-  content: '';
+.storm-chip__text {
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+.storm-chip__icon {
+  display: grid;
+  place-items: center;
   flex: none;
-  width: 12px;
-  height: 12px;
-  margin-right: 6px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  border: 2.5px solid var(--gold);
-  border-top-color: transparent;
+  background: var(--night-0);
+  box-shadow: inset 0 0 0 1px rgba(139, 108, 255, 0.6);
+  color: var(--arcane-text);
 }
-.ply-counter.is-warn {
-  background: var(--team-red-deep);
+.storm-chip.is-soon {
+  animation: storm-pulse 0.9s ease-in-out infinite alternate;
 }
-.ply-counter.is-warn::before {
-  border-color: #fff;
-  border-top-color: transparent;
+@keyframes storm-pulse {
+  to {
+    box-shadow:
+      inset 0 1px 0 rgba(198, 184, 255, 0.45),
+      inset 0 0 0 1.5px rgba(169, 147, 255, 1),
+      0 0 26px 0 rgba(139, 108, 255, 0.9);
+  }
+}
+.pass-chip {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 5px 14px;
+  border-radius: var(--r-full);
+  background: rgba(7, 10, 18, 0.78);
+  box-shadow: inset 0 0 0 1px rgba(72, 88, 128, 0.85);
+  color: var(--text-2);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-bold);
+}
+/* First-match coach mark: a gold-rimmed obsidian bubble. */
+.coach {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  height: 30px;
+  padding: 0 14px 0 3px;
+  border-radius: var(--r-full);
+  background: linear-gradient(180deg, rgba(40, 50, 77, 0.97), rgba(23, 30, 49, 0.97));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 231, 163, 0.3),
+    inset 0 0 0 1px rgba(242, 193, 78, 0.7),
+    0 0 18px -4px rgba(242, 193, 78, 0.45);
+  color: var(--ink);
+  font-size: var(--fs-label);
+  font-weight: var(--fw-bold);
+  line-height: 1.15;
+  word-break: keep-all;
+}
+.coach__text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.coach__icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #f7cf63, var(--gold-deep));
+  box-shadow: inset 0 1px 0 rgba(255, 240, 196, 0.8);
+  color: var(--gold-ink);
+  animation: hud-coach-tap 1.6s var(--ease-out) infinite;
+}
+.coach__icon .icon {
+  width: 16px;
+  height: 16px;
+}
+.coach.is-entering {
+  animation: hud-coach-in var(--dur-2) var(--ease-emph) both;
 }
 
 /* ---- Board area ----------------------------------------------------------------- */
@@ -298,112 +503,8 @@ body.in-game,
   display: grid;
   place-items: center;
   height: 100%;
-  color: #fff;
+  color: var(--ink);
   font-weight: var(--fw-bold);
-}
-/* Transient notes over the board's top edge (never take input). */
-.board-overlay {
-  position: absolute;
-  top: 2px;
-  left: 0;
-  right: 0;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 0 var(--s-3);
-  pointer-events: none;
-}
-/* Storm (자기장) status: its own line in the strip once the storm is near. */
-.storm-chip {
-  flex: 0 1 auto;
-  order: 1;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 100%;
-  min-height: 30px;
-  padding: 4px 12px 4px 6px;
-  border-radius: var(--r-full);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0 46%, transparent 46%),
-    linear-gradient(180deg, #b47dff, var(--storm));
-  box-shadow:
-    inset 0 2px 0 rgba(255, 255, 255, 0.35),
-    0 3px 0 0 var(--storm-deep),
-    0 0 0 2px var(--navy-ink),
-    0 3px 0 2px var(--navy-ink);
-  color: #fff;
-  font-size: var(--fs-caption);
-  font-weight: var(--fw-bold);
-  line-height: 1.25;
-  text-shadow: 0 1px 0 var(--navy-ink);
-}
-.storm-chip__icon {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--navy-ink);
-  color: var(--gold);
-}
-.storm-chip.is-soon {
-  animation: storm-pulse 0.9s ease-in-out infinite;
-}
-@keyframes storm-pulse {
-  50% {
-    transform: scale(1.05);
-  }
-}
-.pass-chip {
-  padding: 5px 14px;
-  border-radius: var(--r-full);
-  background: var(--navy-ink);
-  box-shadow: 0 3px 0 rgba(10, 16, 40, 0.5);
-  color: #fff;
-  font-size: var(--fs-caption);
-  font-weight: var(--fw-bold);
-}
-/* First-match coach mark: a cream speech bubble. */
-.coach {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  max-width: 100%;
-  padding: 8px 14px 8px 8px;
-  border-radius: var(--r-m);
-  background: var(--panel-fill);
-  box-shadow:
-    inset 0 2px 0 #fff,
-    0 3px 0 0 var(--panel-edge),
-    0 0 0 2px var(--navy-ink),
-    0 3px 0 2px var(--navy-ink),
-    var(--drop);
-  color: var(--navy-ink);
-  font-size: var(--fs-label);
-  font-weight: var(--fw-bold);
-  word-break: keep-all;
-}
-.coach__icon {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: linear-gradient(180deg, var(--gold), var(--gold-deep));
-  box-shadow: 0 2px 0 var(--gold-lip);
-  color: #fff;
-  animation: hud-coach-tap 1.6s var(--ease-out) infinite;
-}
-.coach__icon .icon {
-  filter: drop-shadow(0 1.5px 0 var(--navy-ink));
-}
-.coach.is-entering {
-  animation: hud-coach-in var(--dur-2) var(--ease-emph) both;
 }
 
 /* ---- Action dock row (below the board) ------------------------------------------- */
@@ -413,20 +514,60 @@ body.in-game,
   align-items: center;
   gap: var(--s-2);
   min-width: 0;
-  min-height: 64px;
-  padding: 2px var(--s-2) 6px;
+  padding: 0 var(--s-2) 4px;
   pointer-events: none;
 }
 
-/* Short phones: the board has no spare room above it, so the coach mark is kept compact. */
+/* ---- Short phones (~360x640): tighter chrome so the board keeps its size ----------- */
 @media (max-height: 720px) {
+  .game {
+    --bar-h: 54px;
+    --strip-h: 38px;
+    --notes-h: 30px;
+    --dock-row-h: 58px;
+  }
+  .pbar {
+    padding: 4px 6px 4px 10px;
+  }
+  .pbar--top {
+    margin-top: calc(6px + var(--sat));
+  }
+  .pbar--bottom {
+    margin-bottom: calc(8px + var(--sab));
+  }
+  .pbar .unit-art {
+    --art-size: 38px !important;
+  }
+  .pbar__name {
+    font-size: 16px;
+  }
+  .pbar .icon-btn {
+    width: 42px;
+    height: 42px;
+    margin-bottom: 4px;
+  }
+  .ring {
+    width: 42px;
+    height: 42px;
+  }
+  .turn-count,
+  .turn-pill {
+    height: 30px;
+    line-height: 30px;
+  }
+  .turn-pill {
+    font-size: 16px;
+  }
+  .turn-count__num {
+    font-size: 21px;
+  }
   .coach {
-    padding: 4px 10px 4px 5px;
+    height: 28px;
     font-size: var(--fs-caption);
   }
   .coach__icon {
-    width: 24px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
   }
 }
 
@@ -441,7 +582,7 @@ body.in-game,
     transform: translateY(0);
   }
   50% {
-    transform: translateY(3px);
+    transform: translateY(2px);
   }
 }
 @keyframes hud-coach-in {
@@ -454,7 +595,8 @@ body.in-game,
 /* ---- Wide screens: bars stay a comfortable width ------------------------------------ */
 @media (min-width: 600px) {
   .pbar,
-  .info-host {
+  .info-host,
+  .hud-notes {
     width: min(640px, calc(100% - 16px));
     justify-self: center;
   }
@@ -465,14 +607,15 @@ body.in-game,
   }
 }
 /* Landscape (tablets, phones on their side): the board is height-bound and centred, so the
-   strip docks to the left of the board and the action dock to the right. */
+   strip and notes dock to the left of the board and the action dock to the right. */
 @media (orientation: landscape) and (min-width: 700px) {
   .game {
     grid-template-columns: minmax(0, 1fr) minmax(0, calc(100vh - 170px)) minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
     grid-template-areas:
       'top top top'
       'strip board dock'
+      'notes board dock'
       'bot bot bot';
   }
   .hud-strip {
@@ -480,6 +623,13 @@ body.in-game,
     align-items: flex-end;
     justify-content: flex-start;
     padding: var(--s-3);
+  }
+  .hud-notes {
+    width: auto;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: flex-start;
+    padding: 0 var(--s-3);
   }
   .info-host {
     width: auto;
@@ -494,7 +644,15 @@ body.in-game,
   .coach__icon,
   .coach.is-entering,
   .storm-chip.is-soon,
+  .turn-count.is-tick .turn-count__num,
   .turn-pill.is-thinking .turn-pill__dot {
     animation: none;
+  }
+  /* Urgency stays visible without motion: a steady red glow. */
+  .ring.is-critical {
+    animation: none;
+    box-shadow:
+      inset 0 0 0 1.5px rgba(255, 70, 85, 0.95),
+      0 0 18px 0 rgba(255, 70, 85, 0.7);
   }
 }

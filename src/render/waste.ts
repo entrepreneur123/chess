@@ -184,13 +184,13 @@ void main() {
   vec2 p = vUv - 0.5;
   float pulse = 0.5 + 0.5 * sin(uTime * 4.2);
   if (vB < 0.5) {
-    // Anchor: a soft plum rounded-square inner frame + a faint darkening (reads on the grass
-    // without washing it out).
+    // Anchor: faint toxic-green light + a soft rounded-square inner frame (additive on the dark
+    // tiles, a hint, not a grid of neon squares).
     vec2 ap = abs(p);
     float d = length(max(ap - vec2(0.3), 0.0)) - 0.1;
     float frame = smoothstep(0.03, 0.012, abs(d + 0.02));
-    float a = 0.035 + frame * (0.3 + 0.12 * pulse);
-    gl_FragColor = vec4(uAnchor * a, a);
+    vec3 col = uAnchor * (0.012 + frame * (0.05 + 0.03 * pulse));
+    gl_FragColor = vec4(col, 0.04);
   } else {
     float dEdge = openEdge(p, vA);
     float line = smoothstep(0.045, 0.02, dEdge);
@@ -199,7 +199,7 @@ void main() {
     vec2 v = voronoi(q);
     float crack = 1.0 - smoothstep(0.01, 0.05, v.x);
     float pat = mix(crack, step(0.55, fract((vW.x + vW.y) * 3.2 - uTime * 0.6)) * 0.55, uInvalid);
-    // Dark cursed-earth ghost (darkens the grass) with bright cracks and a glowing outline.
+    // Dark cursed-earth ghost (darkens the tiles) with bright cracks and a glowing outline.
     float a = 0.5 + 0.1 * pulse;
     vec3 col = uCurseDark * a + uPreview * (pat * (0.6 + 0.35 * pulse) + inner * 0.12 + line * (0.95 + 0.4 * pulse));
     gl_FragColor = vec4(col, a);

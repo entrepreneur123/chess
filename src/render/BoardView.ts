@@ -101,7 +101,7 @@ import {
   makeTileMaterial,
   makeTileTexture,
 } from './textures';
-import { FRAME_FIT, MARKER_QUAD } from './arena';
+import { DOT_WHITEN, FRAME_FIT, MARKER_QUAD } from './arena';
 
 const HALF = (BOARD_SIZE - 1) / 2; // 5.5
 const TILE_SIZE = 0.93;
@@ -269,7 +269,7 @@ const SPAWN_MS = 380;
 const STORM_MS = 520;
 const STORM_DUST = 0x9a4bff;
 const STORM_TILE = hexToRgb(STORM_COLORS.tile);
-const STORM_TILE_STRENGTH = 0.45;
+const STORM_TILE_STRENGTH = 0.55;
 /** Wasteland: tile tint under the decal, toxic smoke colours (dust pool), mover dissolve (ms). */
 const WASTE_TILE = hexToRgb(WASTE_COLORS.tile);
 const SMOKE_GREEN = 0x1f4a14;
@@ -999,7 +999,7 @@ export class BoardView implements IBoardView {
     // applyMarkers swaps the maps on a tone change.
     const own = hexToRgb(BOARD_COLORS.moveDot);
     const foe = hexToRgb(BOARD_COLORS.enemyMoveDot);
-    this.dotTex = [makeDotTexture(own), makeDotTexture(foe)];
+    this.dotTex = [makeDotTexture(own, DOT_WHITEN.own), makeDotTexture(foe, DOT_WHITEN.enemy)];
     this.selTex = [makeSelectGlowTexture(hexToRgb(BOARD_COLORS.selected)), makeSelectGlowTexture(hexToRgb(BOARD_COLORS.enemySelected))];
     const capTex = makeCaptureRingTexture(hexToRgb(BOARD_COLORS.capture));
     this.ownTextures.push(...this.dotTex, ...this.selTex, capTex);

@@ -104,7 +104,8 @@ describe('turn counter', () => {
     expect(turnNumber({ ply: 1 })).toBe(1);
     expect(turnNumber({ ply: 2 })).toBe(2);
     expect(turnNumber({ ply: 119 })).toBe(60);
-    expect(turnNumber({ ply: SUDDEN_DEATH_PLY })).toBe(61);
+    expect(turnNumber({ ply: 79 })).toBe(40);
+    expect(turnNumber({ ply: SUDDEN_DEATH_PLY })).toBe(41);
     let g = createGame(defaultFormation(), defaultFormation());
     g = applyMove(g, getLegalMoves(g)[0]);
     expect(turnNumber(g)).toBe(1);
@@ -231,7 +232,7 @@ describe('no moves / stalemate / sudden death', () => {
       s = applyMove(s, (moves.length ? moves : legal)[guard % (moves.length || legal.length)]);
     }
     expect(s.status).toBe('ended');
-    expect(SUDDEN_DEATH_PLY + 6 * STORM_INTERVAL_PLIES).toBe(156);
+    expect(SUDDEN_DEATH_PLY + 6 * STORM_INTERVAL_PLIES).toBe(116);
     expect(s.ply).toBeLessThanOrEqual(SUDDEN_DEATH_PLY + 6 * STORM_INTERVAL_PLIES);
   });
 });

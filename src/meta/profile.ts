@@ -81,7 +81,7 @@ export function createDefaultProfile(): Profile {
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const nonNegInt = (v: unknown, fallback: number): number =>
-  typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : fallback;
+  typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.min(Number.MAX_SAFE_INTEGER, Math.floor(v)) : fallback;
 const asLevel = (v: unknown): Level => (v === 2 || v === 3 ? v : 1);
 const asBool = (v: unknown, fallback: boolean): boolean => (typeof v === 'boolean' ? v : fallback);
 
@@ -125,7 +125,12 @@ function migrate(raw: Record<string, unknown>): Record<string, unknown> {
 export function sanitizeProfile(input: unknown): Profile {
   const def = createDefaultProfile();
   if (!isObj(input)) return def;
-  const raw = migrate(input);
+  let raw: Record<string, unknown>;
+  try {
+    raw = migrate(input);
+  } catch {
+    return def;
+  }
 
   const grades = {} as Record<CharacterId, Level>;
   const rawGrades = isObj(raw.grades) ? raw.grades : {};
@@ -237,8 +242,10 @@ export function loadProfile(storage: KeyValueStorage | null = browserStorage()):
   try {
     const raw: unknown = JSON.parse(text);
     const p = sanitizeProfile(raw);
-    // Persist migrations right away so old fields (coins, boxes...) leave storage for good.
-    if (isObj(raw) && raw.version !== PROFILE_VERSION) persistProfile(p, storage);
+    // Persist migrations right away so old fields (coins, boxes...) leave storage for good. Data
+    // from a NEWER build (an app downgrade) is used as far as it is understood but not overwritten,
+    // so upgrading again does not lose what this build cannot read.
+    if (isObj(raw) && !(typeof raw.version === 'number' && raw.version >= PROFILE_VERSION)) persistProfile(p, storage);
     return p;
   } catch {
     return createDefaultProfile();
