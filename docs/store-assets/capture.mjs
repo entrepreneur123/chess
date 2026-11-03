@@ -1,102 +1,182 @@
-// Captures Google Play store screenshots from the built app and composes framed promo images.
-//   npm run build && node docs/store-assets/capture.mjs
-// Output: docs/store-assets/out/raw-*.png (1080x1920) and docs/store-assets/out/promo-*.png (1080x1920 framed, captioned).
-import { createRequire } from 'node:module';
+// Google Play screenshots: real in-app screens composed into framed, captioned 1080x1920 images.
+//
+//   node docs/store-assets/capture.mjs
+//
+// Starts its own Vite DEV server (the DEV-only window.__router / window.__game hooks only exist
+// there), plays the scripted demo match from lib/director.mjs and captures each screen at
+// 390x780 CSS px, deviceScaleFactor 2 (780x1560). Then docs/store-assets/frame.html composes them.
+// Output (docs/store-assets/out/):
+//   raw/raw-<key>.png   the untouched in-app captures (780x1560)
+//   shot-<n>-<key>.png  the store images (1080x1920), in listing order
 import { mkdirSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { spawn } from 'node:child_process';
+import { resolve } from 'node:path';
+import * as D from './lib/director.mjs';
 
-const require = createRequire(import.meta.url);
-const { chromium } = require('playwright');
+const RAW = resolve(D.STORE_OUT, 'raw');
+mkdirSync(RAW, { recursive: true });
 
-const here = dirname(fileURLToPath(import.meta.url));
-const root = resolve(here, '../..');
-const out = resolve(here, 'out');
-mkdirSync(out, { recursive: true });
-
-const PORT = 5191;
-const server = spawn('npx', ['vite', 'preview', '--port', String(PORT), '--strictPort'], { cwd: root, stdio: 'ignore' });
-const BASE = `http://localhost:${PORT}`;
-await new Promise((r) => setTimeout(r, 2500));
-
+/** Listing order. `title` may hold <br> and <em> (gold). Keep the sub to one line. */
 const SHOTS = [
-  { key: 'lobby', title: '말 3개, 144칸, 60초', sub: '12×12 전술 아레나에서 1:1 대전' },
-  { key: 'game', title: '탭 한 번으로 이동', sub: '경로 위 첫 번째 적을 잡아라' },
-  { key: 'formation', title: '진형이 곧 전략', sub: '내 구역 3×12에 자유롭게 배치' },
-  { key: 'collection', title: '보석으로 Lv.3까지 강화', sub: '강화 전후 이동 범위를 한눈에' },
-  { key: 'shop', title: '상자를 열고 카드를 모으세요', sub: '하루 1회 무료 상자' },
+  {
+    key: 'lobby',
+    eyebrow: '1:1 전술 보드게임',
+    title: '말 <em>3</em>개, <em>144</em>칸<br>한 수의 심리전',
+    sub: '12×12 아레나에서 펼치는 1:1 대전',
+    art: '/docs/brand/illust/illust-insaner-lv3.jpg',
+    accent: 'arcane',
+    bg: '/docs/brand/bg/lobby.png',
+  },
+  {
+    key: 'versus',
+    eyebrow: 'AI 1:1 대결',
+    title: '다섯 캐릭터 중<br><em>셋</em>을 골라 출전',
+    sub: '쉬움 · 보통 · 어려움, 원하는 난이도로',
+    art: '/docs/brand/illust/illust-brutile-lv3.jpg',
+    accent: 'red',
+    bg: '/docs/brand/bg/matchmaking.png',
+  },
+  {
+    key: 'board',
+    eyebrow: '탭하거나 끌어서 이동',
+    title: '탭 한 번으로 이동<br>경로의 <em>적을 잡아라</em>',
+    sub: '말마다 다른 이동 범위가 빛나요',
+    art: null,
+    accent: 'blue',
+    bg: '/docs/brand/bg/match.png',
+  },
+  {
+    key: 'walk',
+    eyebrow: '월크 · 영웅',
+    title: '뛰어넘고 잡는<br><em>기습 점프</em>',
+    sub: '사이의 말을 넘어 앞줄 어디든 착지',
+    art: '/docs/brand/illust/illust-walk-lv3.jpg',
+    accent: 'arcane',
+    bg: '/docs/brand/bg/match.png',
+  },
+  {
+    key: 'brutile',
+    eyebrow: '브루타일 · 전설',
+    title: '닿으면 소멸<br><em>땅을 저주하라</em>',
+    sub: '스킬 불모지 · 아군이든 적이든 소멸',
+    art: '/docs/brand/illust/illust-brutile-lv3.jpg',
+    accent: 'toxic',
+    bg: '/docs/brand/bg/match.png',
+  },
+  {
+    key: 'formation',
+    eyebrow: '진형 편성',
+    title: '<em>진형</em>이 곧 전략',
+    sub: '내 구역 3×12 어디든 끌어다 배치',
+    art: null,
+    accent: 'blue',
+    bg: '/docs/brand/bg/lobby.png',
+  },
+  {
+    key: 'collection',
+    eyebrow: '상자도 재화도 없음',
+    title: '<em>성급</em>은<br>내 마음대로',
+    sub: '1성 · 2성 · 3성 모두 처음부터 선택',
+    art: '/docs/brand/illust/illust-sad-lv3.jpg',
+    accent: 'gold',
+    bg: '/docs/brand/bg/lobby.png',
+  },
+  {
+    key: 'victory',
+    eyebrow: '승리 조건',
+    title: '상대 말 <em>3</em>개를<br>모두 잡으면 <em>승리</em>',
+    sub: '40턴이 지나면 자기장이 좁혀와요',
+    art: '/docs/brand/illust/illust-marki-lv3.jpg',
+    accent: 'gold',
+    bg: '/docs/brand/bg/matchmaking.png',
+  },
 ];
 
-const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 360, height: 640 }, deviceScaleFactor: 3 });
-const raw = {};
-const shot = async (key) => {
-  const file = resolve(out, `raw-${key}.png`);
-  await page.screenshot({ path: file });
-  raw[key] = file;
-  console.log('captured', file);
-};
+const server = await D.startDevServer(5191);
+const browser = await D.chromium.launch();
+try {
+  // ---------------------------------------------------------------- 1. in-app captures
+  const ctx = await D.newPhoneContext(browser);
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  const shot = async (key) => {
+    await page.screenshot({ path: resolve(RAW, `raw-${key}.png`) });
+    console.log('captured', key);
+  };
+  const settle = async () => {
+    // Let entrance animations finish; no toast may sit on top of a store screen.
+    await D.sleep(1400);
+    await page.waitForFunction((t) => !document.querySelector(t), D.SEL.toast, { timeout: 8000 }).catch(() => {});
+  };
 
-await page.goto(BASE + '/');
-await page.waitForTimeout(1500);
-const skip = await page.$('[data-action="tut-skip"]');
-if (skip) {
-  await skip.click();
-  await page.waitForTimeout(500);
-}
-await shot('lobby');
-await page.click('[data-nav="formation"]');
-await page.waitForTimeout(700);
-await shot('formation');
-await page.goBack();
-await page.waitForTimeout(500);
-await page.click('[data-nav="collection"]');
-await page.waitForTimeout(700);
-await shot('collection');
-await page.goBack();
-await page.waitForTimeout(500);
-await page.click('[data-nav="shop"]');
-await page.waitForTimeout(700);
-await shot('shop');
-await page.goBack();
-await page.waitForTimeout(500);
-await page.click('[data-action="start-match"]');
-await page.waitForTimeout(4800);
-// Select the first own piece found by scanning the lower board so the shot shows move highlights.
-const bb = await (await page.$('canvas')).boundingBox();
-outer: for (let fy = 0.84; fy >= 0.5; fy -= 0.025) {
-  for (let fx = 0.08; fx <= 0.92; fx += 0.04) {
-    await page.mouse.click(bb.x + bb.width * fx, bb.y + bb.height * fy);
-    await page.waitForTimeout(60);
-    const t = await page.$eval('.coach', (e) => (e.hidden ? '' : e.textContent)).catch(() => '');
-    if (t.includes('빛나는')) break outer;
+  await D.openApp(page, server.base);
+  await settle();
+  await shot('lobby');
+
+  await D.navigate(page, D.SCREENS.formation);
+  await settle();
+  // Pick up the placed 인세이너 (tap) so its legal drop squares light up, as a player would see it.
+  await page.locator(D.SEL.formationCell(1, 6)).first().click();
+  await D.sleep(500);
+  await shot('formation');
+
+  await D.navigate(page, D.SCREENS.collection);
+  await settle();
+  await page.evaluate((s) => document.querySelector(s).scrollIntoView({ block: 'start' }), D.SEL.collectionCard('brutile'));
+  await D.sleep(600);
+  await shot('collection');
+
+  await D.navigate(page, D.SCREENS.matchmaking, { difficulty: 'normal' });
+  await page.waitForSelector(D.SEL.versusFound, { timeout: 10000 });
+  await D.sleep(800);
+  await shot('versus');
+
+  await D.waitForMatch(page);
+  await D.scriptBot(page, D.BOT_SCRIPT, 600);
+  const [s0, s1, s2, s3, s4, s5] = D.PLAYER_SCRIPT;
+  await D.playStep(page, s0);
+  await D.playStep(page, s1, { hooks: { selected: () => shot('board') } });
+  await D.playStep(page, s2, {
+    hooks: {
+      played: async () => {
+        await D.freezeCutIn(page, 600);
+        await shot('walk');
+      },
+    },
+  });
+  await D.playStep(page, s3, {
+    holdMs: 700,
+    hooks: {
+      aiming: async () => {
+        await page.waitForFunction((t) => !document.querySelector(t), D.SEL.toast, { timeout: 8000 }).catch(() => {});
+        await D.sleep(300);
+        await shot('brutile');
+      },
+    },
+  });
+  await D.playStep(page, s4);
+  await D.playStep(page, s5);
+  await page.waitForSelector(D.SEL.result, { timeout: 10000 });
+  await D.sleep(1600);
+  await shot('victory');
+  await D.assertBotOk(page);
+  await D.expectPiece(page, 'p1-walk', null);
+  await D.expectPiece(page, 'p1-insaner', null);
+  await D.expectPiece(page, 'p1-sad', null);
+  if (errors.length) throw new Error('page errors: ' + errors.join('; '));
+  await ctx.close();
+
+  // ---------------------------------------------------------------- 2. compose
+  const frame = await browser.newPage({ viewport: { width: 1080, height: 1920 }, deviceScaleFactor: 1 });
+  await frame.goto(server.base + '/docs/store-assets/frame.html');
+  for (const [i, s] of SHOTS.entries()) {
+    const copyBottom = await frame.evaluate((spec) => window.renderShot(spec), { ...s, screen: `/docs/store-assets/out/raw/raw-${s.key}.png?${Date.now()}` });
+    if (copyBottom > 470) throw new Error(`caption of ${s.key} runs into the phone (bottom ${copyBottom}px)`);
+    const file = resolve(D.STORE_OUT, `shot-${i + 1}-${s.key}.png`);
+    await frame.screenshot({ path: file });
+    console.log('composed', file, `caption bottom ${Math.round(copyBottom)}px`);
   }
+} finally {
+  await browser.close();
+  server.stop();
 }
-await page.waitForTimeout(400);
-await shot('game');
-
-// Compose framed promo images.
-const promo = await browser.newPage({ viewport: { width: 1080, height: 1920 } });
-for (const s of SHOTS) {
-  const html = `<!doctype html><html><head><meta charset="utf-8"><style>
-    body{margin:0;width:1080px;height:1920px;overflow:hidden;font-family:Roboto,'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#fff;
-      background:radial-gradient(80% 50% at 50% 0%,rgba(61,139,255,.35),transparent 60%),radial-gradient(70% 40% at 50% 110%,rgba(255,77,79,.25),transparent 60%),linear-gradient(180deg,#0b1020,#121b33 50%,#0b1020)}
-    .grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.04) 2px,transparent 2px),linear-gradient(90deg,rgba(255,255,255,.04) 2px,transparent 2px);background-size:72px 72px}
-    .copy{position:relative;padding:120px 80px 0;text-align:center}
-    h1{margin:0;font-size:72px;font-weight:900;letter-spacing:-1px;line-height:1.15}
-    h1 em{font-style:normal;color:#ffc247}
-    p{margin:18px 0 0;font-size:36px;color:#aab6d6;font-weight:600}
-    .phone{position:absolute;left:50%;top:430px;width:780px;height:1560px;transform:translateX(-50%);border-radius:72px;background:#05070f;padding:22px;box-shadow:0 60px 120px rgba(0,0,0,.7),inset 0 0 0 3px rgba(255,255,255,.12)}
-    .phone img{width:100%;height:100%;object-fit:cover;object-position:top;border-radius:52px;display:block}
-  </style></head><body><div class="grid"></div>
-  <div class="copy"><h1>${s.title.replace(/(\d+)/g, '<em>$1</em>')}</h1><p>${s.sub}</p></div>
-  <div class="phone"><img src="file://${raw[s.key]}" /></div></body></html>`;
-  await promo.setContent(html);
-  await promo.waitForTimeout(300);
-  const file = resolve(out, `promo-${s.key}.png`);
-  await promo.screenshot({ path: file });
-  console.log('composed', file);
-}
-await browser.close();
-server.kill();

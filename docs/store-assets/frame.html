@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<!--
+  Store screenshot frame (1080x1920), Dark Arena v5. Served by the Vite DEV server so the app's own
+  bundled fonts and tokens load; docs/store-assets/capture.mjs opens it and calls window.renderShot().
+  The phone screen is a real in-app capture (raw-*.png); only the frame, backdrop and caption are drawn here.
+-->
+<link rel="stylesheet" href="/src/styles/fonts.css" />
+<link rel="stylesheet" href="/src/styles/tokens.css" />
+<link rel="stylesheet" href="/src/styles/lobby.css" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1080px; height: 1920px; overflow: hidden; }
+  body {
+    position: relative;
+    font-family: var(--font-body);
+    color: #eef2ff;
+    background: linear-gradient(180deg, #0d1322 0%, #070a12 100%);
+  }
+  .bg {
+    position: absolute; inset: 0;
+    background-size: cover; background-position: center;
+    opacity: 0.55;
+  }
+  .glow {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(60% 34% at 50% 62%, rgba(var(--accent), 0.26), transparent 70%),
+      radial-gradient(70% 30% at 85% 4%, rgba(var(--accent), 0.18), transparent 70%);
+  }
+  .vignette {
+    position: absolute; inset: 0;
+    background: radial-gradient(120% 80% at 50% 50%, transparent 55%, rgba(7, 10, 18, 0.85) 100%);
+  }
+  /* Character illustration behind the caption: fades out toward the text and the phone. */
+  .art {
+    position: absolute; top: -40px; width: 600px; height: 800px;
+    background-size: cover; background-position: 50% 18%;
+    -webkit-mask-image: radial-gradient(62% 52% at 50% 36%, #000 30%, transparent 78%);
+            mask-image: radial-gradient(62% 52% at 50% 36%, #000 30%, transparent 78%);
+    opacity: 0.95;
+  }
+  .art--right { right: -150px; }
+  .art--left { left: -150px; }
+  /* Darkening wash so the caption always sits on a calm, dark field (contrast >= 4.5:1). */
+  .wash {
+    position: absolute; left: 0; right: 0; top: 0; height: 520px;
+    background: linear-gradient(90deg, rgba(7, 10, 18, 0.92) 0%, rgba(7, 10, 18, 0.72) 55%, rgba(7, 10, 18, 0) 100%);
+  }
+  .wash--center { background: linear-gradient(180deg, rgba(7, 10, 18, 0.7), rgba(7, 10, 18, 0.35) 70%, rgba(7, 10, 18, 0)); }
+  .copy { position: absolute; left: 76px; right: 76px; top: 76px; }
+  .copy--center { text-align: center; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 12px;
+    padding: 10px 22px 10px 18px; border-radius: 999px;
+    font: 800 28px/1 var(--font-body); letter-spacing: 0.02em; color: #f2c14e;
+    background: rgba(27, 35, 56, 0.9);
+    box-shadow: inset 0 0 0 2px rgba(242, 193, 78, 0.55), inset 0 2px 0 rgba(255, 255, 255, 0.06);
+  }
+  .eyebrow i {
+    width: 12px; height: 12px; transform: rotate(45deg); border-radius: 2px;
+    background: linear-gradient(135deg, #ffe7a3, #f2c14e 50%, #c8891e);
+  }
+  h1 {
+    margin-top: 26px;
+    font: 400 96px/1.12 var(--font-display);
+    letter-spacing: -0.01em;
+    color: #eef2ff;
+    -webkit-text-stroke: 0;
+    text-shadow:
+      -3px -3px 0 #05070d, 3px -3px 0 #05070d, -3px 3px 0 #05070d, 3px 3px 0 #05070d,
+      0 -3px 0 #05070d, -3px 0 0 #05070d, 3px 0 0 #05070d, 0 7px 0 #05070d,
+      0 10px 26px rgba(0, 0, 0, 0.6);
+    word-break: keep-all;
+  }
+  h1 em { font-style: normal; color: #f2c14e; }
+  .sub {
+    margin-top: 22px;
+    font: 800 38px/1.35 var(--font-body);
+    color: #c3cdea;
+    word-break: keep-all;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
+  }
+  /* Phone: dark iron body, thin gold trim, soft shadow (same language as the board frame). */
+  .phone {
+    position: absolute; left: 50%; top: 476px;
+    width: 724px; height: 1424px; margin-left: -362px;
+    padding: 12px; border-radius: 64px;
+    background: linear-gradient(180deg, #28324d, #151d31 40%, #090d17);
+    box-shadow:
+      inset 0 0 0 2px rgba(242, 193, 78, 0.75),
+      inset 0 0 0 5px #090d17,
+      inset 0 3px 0 6px rgba(255, 255, 255, 0.08),
+      0 0 0 2px rgba(7, 10, 18, 0.9),
+      0 40px 90px rgba(0, 0, 0, 0.75),
+      0 0 120px rgba(var(--accent), 0.25);
+  }
+  .phone img {
+    display: block; width: 700px; height: 1400px; border-radius: 52px;
+    object-fit: cover; object-position: top;
+  }
+</style>
+</head>
+<body>
+  <div class="bg" id="bg"></div>
+  <div class="glow"></div>
+  <div class="art" id="art" hidden></div>
+  <div class="vignette"></div>
+  <div class="wash" id="wash"></div>
+  <div class="copy" id="copy">
+    <span class="eyebrow"><i></i><span id="eyebrow"></span></span>
+    <h1 id="title"></h1>
+    <p class="sub" id="sub"></p>
+  </div>
+  <div class="phone"><img id="screen" alt="" /></div>
+<script>
+  const ACCENT = { blue: '59, 139, 255', red: '255, 70, 85', toxic: '124, 255, 90', arcane: '139, 108, 255', gold: '242, 193, 78' };
+  /** Fill the frame. Resolves once every image and font is ready. */
+  window.renderShot = async (s) => {
+    document.body.style.setProperty('--accent', ACCENT[s.accent ?? 'arcane']);
+    document.getElementById('bg').style.backgroundImage = `url(${s.bg})`;
+    const art = document.getElementById('art');
+    art.hidden = !s.art;
+    if (s.art) {
+      art.style.backgroundImage = `url(${s.art})`;
+      art.className = `art art--${s.artSide ?? 'right'}`;
+    }
+    const center = !s.art;
+    document.getElementById('copy').className = center ? 'copy copy--center' : 'copy';
+    document.getElementById('wash').className = center ? 'wash wash--center' : 'wash';
+    document.getElementById('eyebrow').textContent = s.eyebrow;
+    document.getElementById('title').innerHTML = s.title;
+    document.getElementById('sub').innerHTML = s.sub;
+    const img = document.getElementById('screen');
+    img.src = s.screen;
+    const urls = [s.bg, s.art, s.screen].filter(Boolean);
+    await Promise.all(urls.map((u) => new Promise((ok, bad) => { const i = new Image(); i.onload = ok; i.onerror = () => bad(new Error('image ' + u)); i.src = u; })));
+    await img.decode();
+    await document.fonts.load('96px "Black Han Sans"', '가A');
+    await document.fonts.load('800 38px Pretendard', '가A');
+    await document.fonts.ready;
+    // Report the caption block size so the script can assert it never runs into the phone.
+    return document.getElementById('copy').getBoundingClientRect().bottom;
+  };
+</script>
+</body>
+</html>
