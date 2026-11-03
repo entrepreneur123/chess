@@ -16,6 +16,7 @@ Measurements (all on the decoded file, 24 kHz mono):
                means the clip has decayed, near 0 means it is cut off mid-sound
   end_db       peak of the final 10 ms relative to the clip peak (dB); abrupt cut if > about -30
   lead_ms / trail_ms   silence (below -45 dBFS) before the first and after the last sample
+  hf_flat, hiss_db, jitter, warble, shimmer, hnr_db   artefact proxies, see artifacts()
   female_p     P(female) from an optional wav2vec2 gender classifier (QA only, never shipped)
 """
 import argparse
@@ -108,6 +109,68 @@ def band_stats(x: np.ndarray, sr: int = SR):
     return harsh, sib, float(np.median(cen))
 
 
+def artifacts(x: np.ndarray, f0: np.ndarray, sr: int = SR) -> dict:
+    """Objective proxies for typical TTS / vocoder artefacts.
+      hf_flat   median spectral flatness 3-8 kHz over loud frames (0..1). Natural fricatives and
+                breath are noise-like (about 0.25-0.5); vocoder "metallic" ringing makes the band
+                tonal (low values).
+      hiss_db   4-11 kHz level of the quietest 20 % of frames inside the speech span, relative to the
+                loudest frame's full-band level: a steady hiss / noise floor raises it.
+      jitter    median |d log F0| between consecutive 5 ms voiced frames (%), roughness / warble.
+      warble    median |second difference| of the semitone contour (st) - fast pitch wobble that
+                pitch shifting and vocoders add, independent of the intended intonation.
+      shimmer   median |d level| between consecutive voiced 5 ms frames (dB).
+      hnr_db    median harmonics-to-noise ratio of voiced frames (normalised autocorrelation at the
+                best lag within +-5 % of the pitch period, 3-period windows): low = breathy /
+                noisy / hoarse, high = clean phonation.
+    """
+    out = {}
+    f, _, Z = signal.stft(x, sr, nperseg=1024, noverlap=768)
+    p = np.abs(Z) ** 2 + 1e-20
+    e = p.sum(axis=0)
+    loud = e > e.max() * 0.03
+    band = (f >= 3000) & (f < 8000)
+    fl = np.exp(np.mean(np.log(p[band][:, loud]), axis=0)) / np.mean(p[band][:, loud], axis=0)
+    out["hf_flat"] = round(float(np.median(fl)), 3)
+    act = np.where(e > e.max() * 1e-4)[0]
+    if len(act) > 10:
+        span = slice(act[0], act[-1] + 1)
+        hb = p[(f >= 4000) & (f < 11000)][:, span].sum(axis=0)
+        q = np.percentile(hb, 20)
+        out["hiss_db"] = round(float(10 * np.log10(q / e.max())), 1)
+    else:
+        out["hiss_db"] = 0.0
+    hop = int(0.005 * sr)
+    v = f0 > 0
+    lf = np.log(np.where(v, f0, 1.0))
+    pair = v[1:] & v[:-1]
+    out["jitter"] = round(float(np.median(np.abs(np.diff(lf))[pair]) * 100), 2) if pair.sum() > 5 else 0.0
+    st = 12 * lf / np.log(2)
+    tri = v[2:] & v[1:-1] & v[:-2]
+    out["warble"] = round(float(np.median(np.abs(st[2:] - 2 * st[1:-1] + st[:-2])[tri])), 3) if tri.sum() > 5 else 0.0
+    n = min(len(f0), len(x) // hop)
+    lv = 20 * np.log10(np.sqrt((x[: n * hop].reshape(n, hop) ** 2).mean(axis=1)) + 1e-9)
+    pv = v[1:n] & v[: n - 1]
+    out["shimmer"] = round(float(np.median(np.abs(np.diff(lv))[pv])), 2) if pv.sum() > 5 else 0.0
+    hn = []
+    for i in np.where(v)[0][::2]:
+        a = i * hop
+        lag0 = sr / f0[i]
+        w = int(3 * lag0)  # three periods: short enough that intonation does not decorrelate it
+        best = -1.0
+        for lag in range(max(2, int(lag0 * 0.95)), int(lag0 * 1.05) + 2):
+            if a + w + lag > len(x):
+                break
+            s0, s1 = x[a:a + w], x[a + lag:a + lag + w]
+            best = max(best, float(np.dot(s0, s1) / (np.sqrt(np.dot(s0, s0) * np.dot(s1, s1)) + 1e-12)))
+        if best < 0:
+            continue
+        r = min(max(best, 1e-4), 0.9999)
+        hn.append(10 * math.log10(r / (1 - r)))
+    out["hnr_db"] = round(float(np.median(hn)), 1) if len(hn) > 3 else 0.0
+    return out
+
+
 def ending(x: np.ndarray, sr: int = SR):
     w = int(0.05 * sr)
     if len(x) < 3 * w:
@@ -160,7 +223,8 @@ def measure(x: np.ndarray, sr: int = SR, gender: "Gender | None" = None) -> dict
                f0_p90=round(float(np.percentile(v, 90)), 1) if len(v) else 0.0,
                voiced=round(len(v) / max(1, len(f0)), 2), f1=round(f1), f2=round(f2), f3=round(f3),
                centroid=round(cen), harsh_db=round(harsh, 1), sib_db=round(sib, 1),
-               tail_db=round(tail, 1), end_db=round(end, 1), lead_ms=round(lead), trail_ms=round(trail))
+               tail_db=round(tail, 1), end_db=round(end, 1), lead_ms=round(lead), trail_ms=round(trail),
+               **artifacts(x, f0, sr))
     if gender is not None:
         rec["female_p"] = round(gender(x, sr), 3)
     return rec

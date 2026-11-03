@@ -1,8 +1,15 @@
 {
-  "_note": "Voice script for GRID CLASH. 'voice' is the Qwen3-TTS VoiceDesign timbre description shared by every line of a character; 'style' is appended per line. Characters with 'clone' are instead voiced by Qwen3-TTS Base voice cloning of the reference clip (itself a VoiceDesign take), so 'voice'/'style' only document how that reference was made. 'asr' (optional) is the reference text for the character-error-rate check when the spoken text contains non-lexical sounds.",
+  "_note": "Voice script for GRID CLASH. Every character is voiced by Qwen3-TTS Base voice cloning of a reference clip in refs/ that is itself a Qwen3-TTS VoiceDesign take (a designed voice, no real person). 'voice' + 'clone.style' document the VoiceDesign prompt that made the reference; 'concept' is the target derived from the character art (public/chars/*-lv*.jpg); 'gender': 'female' makes post_voice.py gate takes on a gender classifier (QA only). 'asr' (optional) is the reference text for the character-error-rate check when the spoken text has non-lexical sounds.",
   "characters": {
     "sad": {
-      "voice": "An adult male paladin knight, about 35 years old. Deep warm baritone, noble, heroic and confident, resonant chest voice, low register, clear pronunciation.",
+      "concept": "Young-adult paladin in gold armour and winged helm, stoic and focused: a warm, clear, confident baritone, heroic but natural, never shouted or shrill.",
+      "voice": "A brave adult man in his thirties, a holy paladin knight. Warm, natural and confident baritone with a heroic, noble tone, relaxed full chest voice, clear pronunciation. Strong but never shouting and never shrill.",
+      "clone": {
+        "ref": "refs/sad-ref.flac",
+        "text": "명을 받들겠습니다. 나를 따르라!",
+        "style": "Confident, warm and heroic, steady.",
+        "_from": "VoiceDesign take (seed 11, take 2) of the prompt in 'voice' + 'style', trimmed; chosen for CER 0, F0 163 Hz, the warmest spectrum and the lowest warble of 12 takes"
+      },
       "lines": [
         {
           "id": "select-1",
@@ -67,6 +74,7 @@
       ]
     },
     "marki": {
+      "concept": "A massive armoured bull with lava-cracked hide, snorting steam: a thick, deep, guttural bass with a growl underneath, still intelligible.",
       "voice": "A gigantic minotaur warrior, a male beast with a massive chest. Extremely deep, low-pitched bass voice, rough, raspy and gravelly. He never yells in a high voice: even when furious he growls and roars from deep in the chest, low register throughout, heavy and intimidating.",
       "clone": {
         "ref": "refs/marki-ref.flac",
@@ -137,7 +145,14 @@
       ]
     },
     "walk": {
-      "voice": "A disciplined adult male soldier in his late twenties, a shield guardian. Calm, firm, steady mid-low voice, clear crisp military diction, short and decisive delivery.",
+      "concept": "A scrappy shield fighter in leather and chainmail (rune armour at lv3), shouting as he charges: a brave man like sad but rougher, darker and lower, steady and terse.",
+      "voice": "A grizzled veteran soldier in his fifties, a shield guardian. Rough, gravelly, husky low baritone, weathered but unshakable, calm and steady, short clipped decisive words, quiet authority, never shouting.",
+      "clone": {
+        "ref": "refs/walk-ref.flac",
+        "text": "준비 완료. 명령을.",
+        "style": "Calm, steady and ready.",
+        "_from": "VoiceDesign take (seed 11, take 0); the 'young soldier' prompt matched the art better but its takes shouted (F0 150-330 Hz, CER up to 0.57), so the steadier, rougher veteran take (F0 100 Hz) was kept"
+      },
       "lines": [
         {
           "id": "select-1",
@@ -202,11 +217,13 @@
       ]
     },
     "insaner": {
-      "voice": "A small mischievous devil imp. Very high-pitched, squeaky, nasal, bratty childish voice, playful, cheeky and a little crazy. Talks very fast in short quick bursts, giggles are short and sharp.",
+      "concept": "A small purple imp with horns, tail and a manic fanged grin: a sly, wicked creature voice (not a child) under real demonic modulation.",
+      "voice": "A small evil demon imp, a wicked little goblin creature. Raspy, nasal, scratchy and sly voice with a hissing edge, sneaky and malicious, with a nasty snicker. Sounds like a wicked creature, not like a child or a baby: mid pitch with a gritty, crackly texture.",
       "clone": {
         "ref": "refs/insaner-ref.flac",
-        "text": "그 힘, 내 거야!",
-        "_from": "VoiceDesign take of insaner skill-1 (voice + style below), trimmed"
+        "text": "이번엔 누굴 괴롭힐까?",
+        "style": "Wicked and scheming, a nasty whispery tone.",
+        "_from": "VoiceDesign take (seed 11, take 1); a sly male creature voice at 153 Hz, CER 0, no pauses. The demon layer is added by post_voice.py"
       },
       "lines": [
         {
@@ -281,11 +298,14 @@
       ]
     },
     "brutile": {
-      "voice": "An adult woman in her thirties, a wicked villainess witch queen. Sly, haughty, seductive and menacing mid-range female voice with a slight rasp, theatrical and mocking, savoring every word. Mature, not a child, not squeaky, not shrill.",
+      "concept": "A green-skinned, fanged, sneering witch in a horned crown hat: an unmistakably female, aged, raspy, cackling villainess voice with energy.",
+      "gender": "female",
+      "voice": "A wicked old witch, an elderly woman in her seventies. Old female voice: thin, dry, crackly and raspy with age, slightly shaky, sneering and mocking, with a wicked cackle. Speaks slowly and theatrically, savoring each word. Clearly an old grandmother's voice, not a young woman and not a man.",
       "clone": {
         "ref": "refs/brutile-ref.flac",
-        "text": "내 저주를 받아라!",
-        "_from": "VoiceDesign take of brutile capture-2 (voice + style below), trimmed"
+        "text": "이… 늙은이를 불렀느냐…",
+        "style": "Sly, sneering and condescending, slow.",
+        "_from": "VoiceDesign take (seed 11, take 1), trimmed and a 1.9 s mid-line pause shortened to 0.3 s; F0 167 Hz (low, aged), raspy (WORLD aperiodicity 0.31), P(female) 0.996 / 0.95 on two classifiers, CER 0"
       },
       "lines": [
         {

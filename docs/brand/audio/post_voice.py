@@ -188,6 +188,7 @@ def fx_marki(x):
     y = 0.7 * y + 0.3 * np.tanh(1.8 * y / pk) * pk
     y = biquad(y, "lowshelf", 150, 2.5)
     y = biquad(y, "highshelf", 5000, -2.5)
+    y = biquad(y, "lp", 8000)
     y = compress(y, -20, 3.0, attack=0.006, release=0.1)
     return hall(y, 0.8, 0.10, predelay=0.012, lp=3000)
 
@@ -241,27 +242,33 @@ HARSH_TARGET = {"sad": -9.0, "marki": -11.0, "walk": -9.0, "insaner": -8.0, "bru
 # Loudness / true peak / encoding
 # ------------------------------------------------------------------------------------------------
 
-def tp_limit(x: np.ndarray, ceil_db: float = TP_LIMIT, release: float = 0.05) -> np.ndarray:
-    """Look-ahead gain limiter driven by the 4x-oversampled (true) peak envelope."""
+def tp_limit(x: np.ndarray, ceil_db: float = TP_LIMIT, look_ms: float = 3.0, release: float = 0.08) -> np.ndarray:
+    """Look-ahead limiter on the 4x-oversampled (true) peak. The required gain is min-held over
+    the look-ahead window and then averaged over the same window, so gain reduction ramps in
+    smoothly before each peak (no gain steps, which would splatter and make AAC overshoot)."""
     thr = 10 ** (ceil_db / 20)
-    up = np.abs(signal.resample_poly(x, 4, 1)).reshape(-1, 4).max(axis=1)[: len(x)]
-    up = np.pad(up, (0, len(x) - len(up)))
+    up = np.abs(signal.resample_poly(x, 4, 1))[: 4 * len(x)]
+    up = np.pad(up, (0, 4 * len(x) - len(up))).reshape(-1, 4).max(axis=1)
     g = np.minimum(1.0, thr / (up + 1e-12))
-    look = int(0.002 * SR)
-    g = np.minimum.reduce([np.roll(g, -k) for k in range(look + 1)])
+    L = max(1, int(look_ms / 1000 * SR))
+    gp = np.concatenate([g, np.ones(L)])
+    gmin = np.minimum.reduce([gp[k:k + len(g)] for k in range(L + 1)])  # min over [i, i+L]
+    gs = np.convolve(np.concatenate([np.ones(L), gmin]), np.ones(L + 1) / (L + 1), "valid")  # mean over [i-L, i]
     a = math.exp(-1 / (release * SR))
-    out = np.empty_like(g)
+    out = np.empty_like(gs)
     prev = 1.0
-    for i, v in enumerate(g):
+    for i, v in enumerate(gs):
         prev = v if v < prev else a * prev + (1 - a) * v
         out[i] = prev
     return x * out
 
 
 def normalise(x: np.ndarray) -> np.ndarray:
-    for _ in range(3):
+    """Gain to -16 LUFS + true-peak limiting, repeated until the limiter no longer pulls the
+    loudness more than 0.15 LU below target (peaky lines need a few rounds)."""
+    for _ in range(10):
         L = lufs(x)
-        if not math.isfinite(L):
+        if not math.isfinite(L) or abs(L - TARGET_LUFS) < 0.15:
             break
         x = tp_limit(x * 10 ** ((TARGET_LUFS - L) / 20))
     return x
@@ -279,14 +286,53 @@ def encode_tp(y: np.ndarray, path: str):
     return y, z
 
 
+def shorten_pauses(x: np.ndarray, max_gap: float = 0.4, keep: float = 0.3, rel_db: float = -40.0) -> np.ndarray:
+    """TTS takes often stall mid-line; internal silences longer than max_gap are cut to `keep`
+    seconds (the middle is removed with 15 ms crossfades), so barks stay tight."""
+    hop = int(0.01 * SR)
+    r = frame_rms(x, hop)
+    act = np.where(r > r.max() * 10 ** (rel_db / 20))[0]
+    if len(act) < 2:
+        return x
+    cuts = []
+    for a, b in zip(act[:-1], act[1:]):
+        if (b - a) * hop / SR > max_gap:
+            mid0 = (a + 1) * hop + int(keep / 2 * SR)
+            mid1 = b * hop - int(keep / 2 * SR)
+            if mid1 > mid0:
+                cuts.append((mid0, mid1))
+    if not cuts:
+        return x
+    xf = int(0.015 * SR)
+    ramp = np.linspace(0, 1, xf)
+    out, pos = [], 0
+    for a, b in cuts:
+        seg = x[pos:a + xf].copy()
+        if out:
+            seg[:xf] *= ramp
+        seg[-xf:] *= ramp[::-1]
+        out.append(seg)
+        pos = b
+    seg = x[pos:].copy()
+    seg[:xf] *= ramp
+    out.append(seg)
+    y = out[0]
+    for seg in out[1:]:  # overlap-add the crossfades
+        y = np.concatenate([y[:-xf], y[-xf:] + seg[:xf], seg[xf:]])
+    return y
+
+
 def render(x: np.ndarray, char: str) -> np.ndarray:
     x = trim_lead(x)
     end = speech_end(x)
     x = x[: min(len(x), end + int(0.35 * SR))]  # keep the natural decay after the last word
+    x = shorten_pauses(x)
+    end = speech_end(x)
     x = x / (np.abs(x).max() + 1e-9) * 0.7
     x = deess(x)
     x = deharsh(x, HARSH_TARGET[char])
     y = FX[char](x)
+    y = deharsh(y, HARSH_TARGET[char])  # saturation / layers can re-add brightness
     y = finish_tail(y, end)
     return normalise(y)
 
