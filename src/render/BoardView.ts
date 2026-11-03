@@ -38,12 +38,13 @@
  * Top-only boards (BoardViewOptions.topOnly, the game's board while the 3D arena is disabled):
  * start in the top-down view and never leave it, never load the glTF units (no mixers, no idle
  * loop), no shadow pass. The 3D path stays intact for topOnly = false.
- * Their look is the "Bright Arena" of docs/design/arena-style.md (arena.ts): a transparent canvas
- * over the page's sky gradient, a painted stone plinth (lip + drop shadow) under 144 raised grass
- * tiles drawn by one unlit instanced tile shader (exact palette colours, bevel + front lip), a field
- * overlay (frame AO + centre path), chunky coins (tokens.ts) with navy keylines, normal-blended
- * markers (white dots with shadows, gold selection frame, red capture brackets) and a lifted
- * selection shown as a screen-up offset with a spreading shadow (applyTopLift).
+ * Their look is the "Dark Arena" of docs/design/dark-arena.md (arena.ts): a transparent canvas
+ * over the page's dark backdrop, a painted iron frame (gold trim, lip, soft outer shadow) under 144
+ * raised slate tiles drawn by one unlit instanced tile shader (exact palette colours, bevel + front
+ * lip), a field overlay (frame AO), glowing team zone-edge lines, chunky coins (tokens.ts) with
+ * glowing rarity rings, luminous additive markers (ice-cyan / red glow dots, glowing selection
+ * frame) under a glowing red capture ring, and a lifted selection shown as a screen-up offset with
+ * a spreading shadow (applyTopLift).
  *
  * Performance notes: tiles are one InstancedMesh, overlays are InstancedMeshes, effects reuse
  * pre-allocated meshes (no per-frame / per-move allocations), one 1024 shadow map (none when
@@ -89,19 +90,18 @@ import type { HighlightIndex } from './common';
 import {
   makeBandTexture,
   makeBlobTexture,
+  makeCaptureRingTexture,
   makeCometTexture,
   makeDotTexture,
   makeFieldOverlayTexture,
+  makeFrameTexture,
   makeGlowTexture,
-  makePlinthTexture,
-  makeCaptureMarkTexture,
-  makeSelectFrameTexture,
+  makeSelectGlowTexture,
   makeSlabTexture,
-  SELECT_QUAD,
   makeTileMaterial,
   makeTileTexture,
 } from './textures';
-import { PLINTH_EXTENT } from './arena';
+import { FRAME_FIT, MARKER_QUAD } from './arena';
 
 const HALF = (BOARD_SIZE - 1) / 2; // 5.5
 const TILE_SIZE = 0.93;
@@ -312,12 +312,12 @@ function makeGroundDecalMaterial(blob: THREE.Texture, glow: THREE.Texture, color
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: `uniform sampler2D uBlob; uniform sampler2D uGlow; uniform vec3 uColor; uniform float uGlowAmt; varying vec2 vUv;
       void main(){
-        // Soft navy contact shadow: 1.12 wide, offset (+0.04, +0.06) (down-right, light from the
-        // top-left) inside the 1.5-wide decal.
+        // Soft contact shadow (night-0): 1.12 wide, offset (+0.04, +0.06) (down-right, light from
+        // the top-left) inside the 1.5-wide decal.
         vec2 bu = (vUv - 0.5) * (1.5 / 1.12) + 0.5 - vec2(0.04, -0.06) / 1.12;
-        float sh = texture2D(uBlob, clamp(bu, 0.0, 1.0)).a * 0.6 * step(0.0, bu.x) * step(bu.x, 1.0) * step(0.0, bu.y) * step(bu.y, 1.0);
+        float sh = texture2D(uBlob, clamp(bu, 0.0, 1.0)).a * 0.7 * step(0.0, bu.x) * step(bu.x, 1.0) * step(0.0, bu.y) * step(bu.y, 1.0);
         float g = texture2D(uGlow, vUv).a * uGlowAmt;
-        gl_FragColor = vec4(vec3(0.0128, 0.0176, 0.0595) * sh + uColor * g, sh);
+        gl_FragColor = vec4(vec3(0.0021, 0.0030, 0.0060) * sh + uColor * g, sh);
       }`,
     transparent: true,
     depthWrite: false,
@@ -407,8 +407,9 @@ class PieceKit {
   private decalMat(r: Rarity): THREE.ShaderMaterial {
     let mat = this.decal.get(r);
     if (!mat) {
-      // The rarity ring carries the rarity now: keep only a soft floor glow under it.
-      mat = makeGroundDecalMaterial(this.blobTex, this.glowTex, RARITY_COLORS[r], 0.02 + 0.12 * RARITY_GLOW[r]);
+      // The rarity ring carries the rarity: keep only a soft floor glow under it (reads on the
+      // dark tiles as a faint pool of the rarity colour).
+      mat = makeGroundDecalMaterial(this.blobTex, this.glowTex, RARITY_COLORS[r], 0.04 + 0.24 * RARITY_GLOW[r]);
       this.materials.push(mat);
       this.decal.set(r, mat);
     }
@@ -566,6 +567,9 @@ export class BoardView implements IBoardView {
   private readonly captureGlow: THREE.InstancedMesh;
   private readonly selectRing: THREE.Mesh;
   private readonly selectGlow: THREE.Mesh;
+  /** Own / enemy tone textures of the move dots and the selection frame (index 0 = own). */
+  private dotTex: THREE.Texture[] = [];
+  private selTex: THREE.Texture[] = [];
   private readonly pieceLayer = new THREE.Group();
   private readonly fxLayer = new THREE.Group();
 
@@ -692,7 +696,7 @@ export class BoardView implements IBoardView {
       this.viewTo = 1;
     }
     // Throws if WebGL is unavailable -> createBoardView falls back to 2D.
-    // Transparent canvas (premultiplied): the page's sky gradient shows around the plinth.
+    // Transparent canvas (premultiplied): the page's dark backdrop (UI) shows around the frame.
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, premultipliedAlpha: true, powerPreference: 'low-power' });
     const gl = this.renderer.getContext();
     if (!gl) throw new Error('WebGL context unavailable');
@@ -891,16 +895,16 @@ export class BoardView implements IBoardView {
   }
 
   /**
-   * Top-down "Bright Arena": the stone plinth + field bed as one painted plane (arena.ts) under the
-   * tiles, and the field overlay (frame ambient occlusion + centre path) right above them. Unlit
-   * (exact palette colours), two draws, two small textures.
+   * Top-down "Dark Arena": the iron frame + field well as one painted plane (arena.ts) under the
+   * tiles, and the field overlay (frame ambient occlusion) right above them. Unlit (exact palette
+   * colours), two draws, two small textures.
    */
   private buildArena(): void {
-    const plinth = makePlinthTexture();
-    const pGeo = new THREE.PlaneGeometry(plinth.width, plinth.depth).rotateX(-Math.PI / 2);
-    const pMat = new THREE.MeshBasicMaterial({ map: plinth.tex, transparent: true, depthWrite: false });
+    const frame = makeFrameTexture();
+    const pGeo = new THREE.PlaneGeometry(frame.width, frame.depth).rotateX(-Math.PI / 2);
+    const pMat = new THREE.MeshBasicMaterial({ map: frame.tex, transparent: true, depthWrite: false });
     const pMesh = new THREE.Mesh(pGeo, pMat);
-    pMesh.position.set(0, TILE_TOP - 0.02, plinth.offsetZ);
+    pMesh.position.set(0, TILE_TOP - 0.02, frame.offsetZ);
     pMesh.renderOrder = -3;
     pMesh.raycast = noRaycast;
     const oTex = makeFieldOverlayTexture();
@@ -913,7 +917,7 @@ export class BoardView implements IBoardView {
     this.scene.add(pMesh, oMesh);
     this.ownGeometries.push(pGeo, oGeo);
     this.ownMaterials.push(pMat, oMat);
-    this.ownTextures.push(plinth.tex, oTex);
+    this.ownTextures.push(frame.tex, oTex);
   }
 
   private buildTiles(): THREE.InstancedMesh {
@@ -989,42 +993,45 @@ export class BoardView implements IBoardView {
       return mm;
     };
 
-    // On the bright grass every marker is normal-blended with a navy keyline / dark shadow baked
-    // into its texture (additive glows would wash out to pale yellow-green).
-    const dotTex = makeDotTexture();
-    this.ownTextures.push(dotTex);
-    const dotGeo = new THREE.PlaneGeometry(0.95, 0.95).rotateX(-Math.PI / 2);
-    const dots = new THREE.InstancedMesh(dotGeo, mat(BOARD_COLORS.moveDot, BOARD_COLORS.moveDotAlpha, false, dotTex), n);
+    // Luminous markers on the dark tiles: additive glow dots (own reach ice-cyan, enemy reach red)
+    // and an additive selection frame; the capture ring is normal-blended (it sits over a coin).
+    // Each comes as an own / enemy texture pair baked in its colour (white-hot core, tinted halo);
+    // applyMarkers swaps the maps on a tone change.
+    const own = hexToRgb(BOARD_COLORS.moveDot);
+    const foe = hexToRgb(BOARD_COLORS.enemyMoveDot);
+    this.dotTex = [makeDotTexture(own), makeDotTexture(foe)];
+    this.selTex = [makeSelectGlowTexture(hexToRgb(BOARD_COLORS.selected)), makeSelectGlowTexture(hexToRgb(BOARD_COLORS.enemySelected))];
+    const capTex = makeCaptureRingTexture(hexToRgb(BOARD_COLORS.capture));
+    this.ownTextures.push(...this.dotTex, ...this.selTex, capTex);
+    const dotGeo = new THREE.PlaneGeometry(MARKER_QUAD.dot, MARKER_QUAD.dot).rotateX(-Math.PI / 2);
+    const dots = new THREE.InstancedMesh(dotGeo, mat('#ffffff', 0.95, true, this.dotTex[0]), n);
     dots.count = 0;
     dots.renderOrder = 2;
     dots.frustumCulled = false;
 
-    // Capture targets: red "lock-on" corner brackets around the tile (read around any coin).
-    const capTex = makeCaptureMarkTexture();
-    this.ownTextures.push(capTex);
-    const ringGeo = new THREE.PlaneGeometry(SELECT_QUAD, SELECT_QUAD).rotateX(-Math.PI / 2);
-    const rings = new THREE.InstancedMesh(ringGeo, mat(BOARD_COLORS.capture, 1, false, capTex), n);
+    // Capture targets: a glowing red ring over the threatened coin + a soft additive glow under it.
+    const ringGeo = new THREE.PlaneGeometry(MARKER_QUAD.capture, MARKER_QUAD.capture).rotateX(-Math.PI / 2);
+    const rings = new THREE.InstancedMesh(ringGeo, mat('#ffffff', 1, false, capTex), n);
     rings.count = 0;
     rings.renderOrder = 5;
     rings.frustumCulled = false;
 
     const glowGeo = new THREE.PlaneGeometry(1.3, 1.3).rotateX(-Math.PI / 2);
-    const ringGlow = new THREE.InstancedMesh(glowGeo, mat(BOARD_COLORS.capture, 0.4, false, glowTex), n);
+    const ringGlow = new THREE.InstancedMesh(glowGeo, mat(BOARD_COLORS.capture, 0.6, true, glowTex), n);
     ringGlow.count = 0;
     ringGlow.renderOrder = 2;
     ringGlow.frustumCulled = false;
 
-    // Selection: a gold (enemy: red) frame hugging the tile, so it reads around any token.
-    const selTex = makeSelectFrameTexture();
-    this.ownTextures.push(selTex);
-    const select = new THREE.Mesh(ringGeo, mat(BOARD_COLORS.selected, 1, false, selTex));
+    // Selection: an ice-cyan (enemy: red) glowing frame hugging the tile + a soft halo under the coin.
+    const selGeo = new THREE.PlaneGeometry(MARKER_QUAD.select, MARKER_QUAD.select).rotateX(-Math.PI / 2);
+    const select = new THREE.Mesh(selGeo, mat('#ffffff', 1, true, this.selTex[0]));
     select.visible = false;
     select.renderOrder = 1; // under the rarity ring (2) and the coin (4)
-    const selectGlow = new THREE.Mesh(glowGeo, mat(BOARD_COLORS.selected, 0.45, false, glowTex));
+    const selectGlow = new THREE.Mesh(glowGeo, mat(BOARD_COLORS.selected, 0.5, true, glowTex));
     selectGlow.visible = false;
     selectGlow.renderOrder = 1;
 
-    this.ownGeometries.push(dotGeo, ringGeo, glowGeo);
+    this.ownGeometries.push(dotGeo, ringGeo, glowGeo, selGeo);
     this.scene.add(dots, rings, ringGlow, select, selectGlow);
     return { dots, rings, ringGlow, select, selectGlow };
   }
@@ -1034,17 +1041,16 @@ export class BoardView implements IBoardView {
     const bandTex = makeBandTexture();
     const cometTex = makeCometTexture();
     this.ownTextures.push(bandTex, cometTex);
-    const lineGeo = new THREE.PlaneGeometry(BOARD_SIZE - 0.1, this.topOnly ? 0.05 : 0.09).rotateX(-Math.PI / 2);
+    const lineGeo = new THREE.PlaneGeometry(BOARD_SIZE - 0.1, this.topOnly ? 0.055 : 0.09).rotateX(-Math.PI / 2);
     const haloGeo = new THREE.PlaneGeometry(BOARD_SIZE + 0.1, 1.0).rotateX(-Math.PI / 2);
     const cometGeo = new THREE.PlaneGeometry(3.2, 0.34).rotateX(-Math.PI / 2);
     this.ownGeometries.push(lineGeo, haloGeo, cometGeo);
     const add = (id: PlayerId): void => {
-      // Top-down arena: soft team-tinted chalk lines (normal blend, no neon) on the grass.
-      const color = this.topOnly ? TEAM_COLORS[id].light : TEAM_COLORS[id].glow;
+      // Thin glowing team line + a soft halo band where the home zone meets the neutral field.
       const base = {
-        color,
+        color: TEAM_COLORS[id].glow,
         transparent: true,
-        blending: this.topOnly ? THREE.NormalBlending : THREE.AdditiveBlending,
+        blending: THREE.AdditiveBlending,
         depthWrite: false,
         polygonOffset: true,
         polygonOffsetFactor: -3,
@@ -1888,11 +1894,15 @@ export class BoardView implements IBoardView {
     this.placeInstances(this.captureRings, this.placedCaps, 1);
     this.placeInstances(this.captureGlow, this.placedCaps, 1);
 
-    // Own reach = white/cyan markers; an enemy's reach preview = red dots + red selection ring.
-    const enemy = this.hi.enemy;
-    (this.moveDots.material as THREE.MeshBasicMaterial).color.set(enemy ? BOARD_COLORS.enemyMoveDot : BOARD_COLORS.moveDot);
-    (this.selectRing.material as THREE.MeshBasicMaterial).color.set(enemy ? BOARD_COLORS.enemySelected : BOARD_COLORS.selected);
-    (this.selectGlow.material as THREE.MeshBasicMaterial).color.set(enemy ? BOARD_COLORS.enemySelected : BOARD_COLORS.selected);
+    // Own reach = ice-cyan markers; an enemy's reach preview = red dots + red selection frame.
+    const tone = this.hi.enemy ? 1 : 0;
+    const dotMat = this.moveDots.material as THREE.MeshBasicMaterial;
+    const selMat = this.selectRing.material as THREE.MeshBasicMaterial;
+    if (dotMat.map !== this.dotTex[tone]) {
+      dotMat.map = this.dotTex[tone];
+      selMat.map = this.selTex[tone];
+    }
+    (this.selectGlow.material as THREE.MeshBasicMaterial).color.set(tone ? BOARD_COLORS.enemySelected : BOARD_COLORS.selected);
     const sel = this.highlights.selected;
     this.selectRing.visible = !!sel;
     this.selectGlow.visible = !!sel;
@@ -1922,16 +1932,19 @@ export class BoardView implements IBoardView {
     if (this.selectRing.visible) {
       const k = 1 + 0.03 * s;
       this.selectRing.scale.set(k, 1, k);
+      (this.selectRing.material as THREE.MeshBasicMaterial).opacity = 0.75 + 0.25 * s;
       this.selectGlow.scale.set(0.9 + 0.2 * s, 1, 0.9 + 0.2 * s);
-      (this.selectGlow.material as THREE.MeshBasicMaterial).opacity = 0.3 + 0.25 * s;
+      (this.selectGlow.material as THREE.MeshBasicMaterial).opacity = 0.3 + 0.3 * s;
     }
     if (this.placedMoves.length > 0) {
-      this.placeInstances(this.moveDots, this.placedMoves, 0.9 + 0.14 * s);
+      // Soft breathing glow (pre-v4 timing).
+      (this.moveDots.material as THREE.MeshBasicMaterial).opacity = 0.72 + 0.28 * s;
+      this.placeInstances(this.moveDots, this.placedMoves, 0.9 + 0.16 * s);
     }
     if (this.placedCaps.length > 0) {
       const sc = pulse01(now, 700);
-      (this.captureGlow.material as THREE.MeshBasicMaterial).opacity = 0.25 + 0.25 * sc;
-      this.placeInstances(this.captureRings, this.placedCaps, 0.96 + 0.08 * sc);
+      (this.captureGlow.material as THREE.MeshBasicMaterial).opacity = 0.4 + 0.35 * sc;
+      this.placeInstances(this.captureRings, this.placedCaps, 0.96 + 0.07 * sc);
       this.placeInstances(this.captureGlow, this.placedCaps, 0.85 + 0.25 * sc);
     }
     if (this.selVisual && !this.anim) {
@@ -1962,9 +1975,8 @@ export class BoardView implements IBoardView {
     for (const id of [0, 1] as const) {
       const active = id === this.turn;
       const b = active && id === this.turnFxPlayer ? boost : 0;
-      const soft = this.topOnly ? 0.6 : 1;
-      this.zoneLineMat[id].opacity = Math.min(1, ((active ? 0.9 : 0.42) + b * 0.5) * soft);
-      this.zoneHaloMat[id].opacity = Math.min(1, ((active ? 0.42 : 0.16) + b * 0.55) * (this.topOnly ? 0.35 : 1));
+      this.zoneLineMat[id].opacity = Math.min(1, (active ? 0.9 : 0.5) + b * 0.5);
+      this.zoneHaloMat[id].opacity = Math.min(1, (active ? 0.36 : 0.16) + b * 0.55);
       this.zoneHalo[id].scale.set(1, 1, 1 + b * 0.7);
       this.zoneLine[id].scale.set(1, 1, 1 + b * 1.4);
     }
@@ -1993,10 +2005,10 @@ export class BoardView implements IBoardView {
     const e = SLAB_SIZE / 2;
     const pts: THREE.Vector3[] = [];
     if (this.topOnly) {
-      // Plinth frame + its front lip and the start of its drop shadow (the rest may fade off-canvas).
-      const ex = HALF + 0.5 + PLINTH_EXTENT.side - 0.12;
-      const zTop = -(HALF + 0.5 + PLINTH_EXTENT.top - 0.12);
-      const zBottom = HALF + 0.5 + PLINTH_EXTENT.bottom - 0.45;
+      // Iron frame + its lip and the start of its outer shadow (the rest fades on the backdrop).
+      const ex = HALF + 0.5 + FRAME_FIT.side;
+      const zTop = -(HALF + 0.5 + FRAME_FIT.top);
+      const zBottom = HALF + 0.5 + FRAME_FIT.bottom;
       for (const x of [-ex, ex]) for (const z of [zTop, zBottom]) pts.push(new THREE.Vector3(x, 0, z));
     } else {
       for (const x of [-e, e]) {
@@ -2555,8 +2567,8 @@ export class BoardView implements IBoardView {
         const kk = Math.max(0, kf);
         const s = 0.5 + 1.9 * easeOutCubic(kk);
         this.flash.scale.set(s, s, 1);
-        // Additive white on the bright grass saturates fast: a lighter flash keeps the FX colours.
-        this.flashMat.opacity = (1 - kk) * (this.topOnly ? 0.6 : 1);
+        // A slightly softer white flash in the top-down view keeps the character FX colours.
+        this.flashMat.opacity = (1 - kk) * (this.topOnly ? 0.8 : 1);
       }
       const ks = el / (ANIM.capture + 90);
       if (ks >= 1) {

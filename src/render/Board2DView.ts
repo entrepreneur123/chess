@@ -1,9 +1,10 @@
 /**
  * Lightweight Canvas2D fallback board (flat, top-down) used when WebGL is unavailable.
  * Same palette, highlights, pieces, animations and API as the WebGL BoardView, and the same
- * "Bright Arena" look (arena.ts): the plinth, the raised grass tiles and the field overlay are
+ * "Dark Arena" look (arena.ts): the iron frame, the raised slate tiles and the field overlay are
  * painted once per size into a static layer; each frame draws that layer plus only the tiles whose
- * tint differs (highlights, storm, wasteland), markers, tokens and effects. Transparent canvas.
+ * tint differs (highlights, storm, wasteland), markers (luminous sprites cached per size, blended
+ * with 'lighter' like the WebGL additive markers), tokens and effects. Transparent canvas.
  * Player 0 (row 0) is at the bottom of the screen; col 0 at the left.
  *
  * Pieces are illustrated tokens: the character's face art (public/chars/<id>-lv<n>-face.jpg,
@@ -46,7 +47,17 @@ import {
   tileRgb,
 } from './common';
 import type { HighlightIndex } from './common';
-import { PLINTH_EXTENT, PLINTH_FRAME, paintCaptureMark, paintFieldOverlay, paintPlinth, paintSelectFrame, paintTile, tileOuterPath } from './arena';
+import {
+  FRAME_FIT,
+  MARKER_QUAD,
+  paintCaptureRing,
+  paintFieldOverlay,
+  paintFrame,
+  paintGlowDot,
+  paintSelectGlow,
+  paintTile,
+  tileOuterPath,
+} from './arena';
 
 const TAP_SLOP_PX = 14;
 const MAX_PIXEL_RATIO = 2;
@@ -67,7 +78,7 @@ const FX_MS = 620;
 const TOKEN_SPRITE = 0.92;
 const RING_R = 0.452;
 /** Storm tile tint strength (matches the WebGL board). */
-const STORM_TILE_ALPHA = 0.45;
+const STORM_TILE_ALPHA = 0.5;
 /** Wasted move: the mover's toxic dissolve (ms). */
 const WASTE_DIE_MS = 560;
 /** Brutile's cast timeline (ms): bolt launch / travel, first crack, crack-open length, rune life. */
@@ -166,7 +177,7 @@ export class Board2DView implements IBoardView {
   private disposing = false;
   private resizeObserver: ResizeObserver | null = null;
   private down: { id: number; x: number; y: number } | null = null;
-  /** Static board layer (plinth, base grass tiles, field overlay) at device pixels, rebuilt on resize. */
+  /** Static board layer (frame, base slate tiles, field overlay) at device pixels, rebuilt on resize. */
   private boardLayer: HTMLCanvasElement | null = null;
   private turn: PlayerId = 0;
   private tLand = -1;
@@ -512,14 +523,14 @@ export class Board2DView implements IBoardView {
     this.dpr = Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO);
     this.canvas.width = Math.round(w * this.dpr);
     this.canvas.height = Math.round(h * this.dpr);
-    // Same framing as the WebGL board: the plinth frame (+ its lip) fills the limiting side.
-    const E = PLINTH_EXTENT;
-    const spanX = BOARD_SIZE + (PLINTH_FRAME + 0.1) * 2;
-    const topE = PLINTH_FRAME + 0.08;
-    const botE = E.bottom - 0.45;
+    // Same framing as the WebGL board: the iron frame (+ its lip) fills the limiting side.
+    const F = FRAME_FIT;
+    const spanX = BOARD_SIZE + F.side * 2;
+    const topE = F.top;
+    const botE = F.bottom;
     const cell = Math.max(1, Math.min((w * 0.985) / spanX, (h * 0.975) / (BOARD_SIZE + topE + botE)));
     const size = cell * BOARD_SIZE;
-    const pad = PLINTH_FRAME * cell;
+    const pad = F.side * cell;
     this.layout = { x0: (w - size) / 2, y0: (h - (BOARD_SIZE + topE + botE) * cell) / 2 + topE * cell, cell, pad };
     this.sprites.clear();
     this.wasteSprites.clear();
@@ -555,8 +566,8 @@ export class Board2DView implements IBoardView {
   // ---------------------------------------------------------------- render loop
 
   /**
-   * Paint the static arena once per size (arena.ts): plinth + field bed, the 144 raised grass tiles
-   * in their base colours (home tints included) and the field overlay (frame AO + centre path).
+   * Paint the static arena once per size (arena.ts): iron frame + field well, the 144 raised slate
+   * tiles in their base colours (home tints included) and the field overlay (frame AO).
    * Per frame only highlight / storm / wasteland tints are drawn over it.
    */
   private buildBoardLayer(): void {
@@ -571,7 +582,7 @@ export class Board2DView implements IBoardView {
       const ox = x0 * d;
       const oy = y0 * d;
       g.clearRect(0, 0, cvs.width, cvs.height);
-      paintPlinth(g, s, ox, oy);
+      paintFrame(g, s, ox, oy);
       const base = indexHighlights({});
       for (let r = 0; r < BOARD_SIZE; r++) {
         for (let c = 0; c < BOARD_SIZE; c++) paintTile(g, ox + c * s, oy + (BOARD_SIZE - 1 - r) * s, s, tileRgb(r, c, base));
@@ -708,7 +719,7 @@ export class Board2DView implements IBoardView {
     const ctx = this.ctx;
     const { x0, y0, cell } = this.layout;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    // Transparent canvas: the page's sky gradient shows around the plinth.
+    // Transparent canvas: the page's dark backdrop shows around the frame.
     ctx.clearRect(0, 0, this.cssW, this.cssH);
     // Camera micro-shake.
     let sx = 0;
@@ -720,7 +731,7 @@ export class Board2DView implements IBoardView {
     }
     ctx.translate(sx, sy);
 
-    // Static arena (plinth, grass tiles, field overlay), then only the tiles whose tint differs.
+    // Static arena (frame, slate tiles, field overlay), then only the tiles whose tint differs.
     if (this.boardLayer) ctx.drawImage(this.boardLayer, 0, 0, this.cssW, this.cssH);
     const hi = this.hi;
     const zone = hi.zone;
@@ -753,7 +764,7 @@ export class Board2DView implements IBoardView {
     this.drawStorm(now);
     this.drawSkillPreview(now);
 
-    // Overlays: own reach = white/cyan, an enemy's reach preview = red.
+    // Overlays: own reach = ice-cyan glow, an enemy's reach preview = red glow (additive sprites).
     const h = this.highlights;
     const enemy = this.hi.enemy;
     const selCol = enemy ? BOARD_COLORS.enemySelected : BOARD_COLORS.selected;
@@ -762,14 +773,20 @@ export class Board2DView implements IBoardView {
     if (h.selected) {
       const x = this.cx(h.selected.c);
       const y = this.cy(h.selected.r);
-      const g = ctx.createRadialGradient(x, y, cell * 0.3, x, y, cell * (0.62 + 0.08 * sp));
-      g.addColorStop(0, hexAlpha(selCol, 0.4 + 0.2 * sp));
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      // Soft halo under the coin + the glowing frame hugging the tile.
+      const gr = cell * (0.585 + 0.13 * sp);
+      const g = ctx.createRadialGradient(x, y, 0, x, y, gr);
+      g.addColorStop(0, hexAlpha(selCol, 0.3 + 0.3 * sp));
+      g.addColorStop(0.2, hexAlpha(selCol, 0.19 + 0.19 * sp));
+      g.addColorStop(0.5, hexAlpha(selCol, 0.05 + 0.05 * sp));
       g.addColorStop(1, hexAlpha(selCol, 0));
       ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(x, y, cell * (0.62 + 0.08 * sp), 0, Math.PI * 2);
-      ctx.fill();
-      paintSelectFrame(ctx, x, y, cell * (1 + 0.03 * sp), selCol);
+      ctx.fillRect(x - gr, y - gr, gr * 2, gr * 2);
+      ctx.globalAlpha = 0.75 + 0.25 * sp;
+      this.drawMarker('select', selCol, x, y, cell * (1 + 0.03 * sp));
+      ctx.restore();
     }
     const deadly = new Set((h.deadly ?? []).map(posKey));
     for (const p of h.deadly ?? []) {
@@ -780,28 +797,17 @@ export class Board2DView implements IBoardView {
       ctx.drawImage(this.wasteSprites.skullMark(S), this.cx(p.c) - d / 2, this.cy(p.r) - d / 2, d, d);
       ctx.globalAlpha = 1;
     }
-    // Move targets: soft white (enemy reach: red) dots with a navy keyline and a drop shadow.
-    const dr = cell * (0.17 + 0.02 * sp);
-    for (const p of h.moves ?? []) {
-      if (deadly.has(posKey(p))) continue;
-      const x = this.cx(p.c);
-      const y = this.cy(p.r);
-      ctx.fillStyle = 'rgba(15,22,48,0.4)';
-      ctx.beginPath();
-      ctx.arc(x, y + cell * 0.04, dr + cell * 0.02, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = 'rgba(27,36,69,0.9)';
-      ctx.beginPath();
-      ctx.arc(x, y, dr + cell * 0.015, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = dotCol;
-      ctx.beginPath();
-      ctx.arc(x, y, dr, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,0.75)';
-      ctx.beginPath();
-      ctx.ellipse(x - dr * 0.3, y - dr * 0.38, dr * 0.34, dr * 0.22, -0.6, 0, Math.PI * 2);
-      ctx.fill();
+    // Move targets: luminous glow dots (white-hot core, soft halo), breathing like the WebGL ones.
+    if ((h.moves?.length ?? 0) > 0) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.95 * (0.72 + 0.28 * sp);
+      const ds = cell * (0.9 + 0.16 * sp);
+      for (const p of h.moves ?? []) {
+        if (deadly.has(posKey(p))) continue;
+        this.drawMarker('dot', dotCol, this.cx(p.c), this.cy(p.r), ds);
+      }
+      ctx.restore();
     }
 
     const sk = this.skill;
@@ -875,7 +881,7 @@ export class Board2DView implements IBoardView {
     }
     // Capture targets sit on top of the threatened tokens.
     const cp = pulse01(now, 700);
-    for (const p of h.captures ?? []) paintCaptureMark(ctx, this.cx(p.c), this.cy(p.r), cell * (0.96 + 0.08 * cp) * 0.94, BOARD_COLORS.capture);
+    for (const p of h.captures ?? []) this.drawMarker('capture', BOARD_COLORS.capture, this.cx(p.c), this.cy(p.r), cell * (0.96 + 0.07 * cp));
     this.drawTrail(now);
     if (moverDraw) moverDraw();
     this.drawStormGhosts(now);
@@ -1420,14 +1426,23 @@ export class Board2DView implements IBoardView {
       const y = y0 + (BOARD_SIZE - rowEdge) * cell;
       const active = id === this.turn;
       const boost = active && sweepK >= 0 && sweepK < 1 ? Math.sin(Math.PI * sweepK) : 0;
-      // Soft team-tinted chalk line (no neon glow) on the grass.
-      const col = TEAM_COLORS[id].light;
+      // Thin glowing team line + a soft halo band (as the WebGL zone line / halo), additive.
+      const col = TEAM_COLORS[id].glow;
       ctx.save();
-      ctx.strokeStyle = hexAlpha(col, Math.min(1, ((active ? 0.9 : 0.42) + boost * 0.5) * 0.6));
-      ctx.lineWidth = Math.max(1.5, cell * (0.05 + 0.03 * boost));
+      ctx.globalCompositeOperation = 'lighter';
+      const hh = cell * 0.5 * (1 + boost * 0.7);
+      const hg = ctx.createLinearGradient(0, y - hh, 0, y + hh);
+      const ha = Math.min(1, (active ? 0.36 : 0.16) + boost * 0.55);
+      hg.addColorStop(0, hexAlpha(col, 0));
+      hg.addColorStop(0.5, hexAlpha(col, ha));
+      hg.addColorStop(1, hexAlpha(col, 0));
+      ctx.fillStyle = hg;
+      ctx.fillRect(x0 + cell * 0.05, y - hh, size - cell * 0.1, hh * 2);
+      ctx.strokeStyle = hexAlpha(col, Math.min(1, (active ? 0.9 : 0.5) + boost * 0.5));
+      ctx.lineWidth = Math.max(1.2, cell * (0.055 + 0.04 * boost));
       ctx.beginPath();
-      ctx.moveTo(x0, y);
-      ctx.lineTo(x0 + size, y);
+      ctx.moveTo(x0 + cell * 0.05, y);
+      ctx.lineTo(x0 + size - cell * 0.05, y);
       ctx.stroke();
       if (active && sweepK >= 0 && sweepK < 1) {
         const e = easeInOutCubic(sweepK);
@@ -1712,9 +1727,9 @@ export class Board2DView implements IBoardView {
     const u = cell * sx;
     ctx.save();
     ctx.globalAlpha = alpha;
-    // Soft navy contact shadow (stays on the ground and spreads while the piece lifts).
+    // Soft contact shadow (stays on the ground and spreads while the piece lifts).
     const sg = 1 + lift * 0.12;
-    ctx.fillStyle = `rgba(27,36,69,${(0.4 - lift * 0.08) * alpha})`;
+    ctx.fillStyle = `rgba(4,6,12,${(0.55 - lift * 0.1) * alpha})`;
     ctx.beginPath();
     ctx.ellipse(x + u * 0.04, y + u * 0.07, u * 0.42 * sg, u * 0.4 * sg, 0, 0, Math.PI * 2);
     ctx.fill();
@@ -1739,9 +1754,9 @@ export class Board2DView implements IBoardView {
     const look = RARITY_RING[CHARACTER_RARITY[ch]];
     const lw = cell * 0.052;
     ctx.save();
-    // Navy keylines on both sides of the band so every ring (even white) reads on the grass.
-    ctx.strokeStyle = 'rgba(27,36,69,0.8)';
-    ctx.lineWidth = lw + Math.max(1.5, cell * 0.03);
+    // Thin dark keyline under the band (separates it from the coin edge and the tile).
+    ctx.strokeStyle = 'rgba(4,6,12,0.55)';
+    ctx.lineWidth = lw + Math.max(1, cell * 0.022);
     ctx.beginPath();
     ctx.arc(x, y, rr, 0, Math.PI * 2);
     ctx.stroke();
@@ -1749,7 +1764,7 @@ export class Board2DView implements IBoardView {
     if (look.rainbow) {
       const rot = this.reducedMotion ? 0 : (now / 1000) * 1.4;
       ctx.shadowColor = `hsl(${Math.round((rot * 57.3) % 360)},100%,70%)`;
-      ctx.shadowBlur = cell * 0.18;
+      ctx.shadowBlur = cell * 0.26;
       const cg = (ctx as CanvasRenderingContext2D & { createConicGradient?: (a: number, x: number, y: number) => CanvasGradient }).createConicGradient;
       if (cg) {
         const g = cg.call(ctx, rot, x, y);
@@ -1775,13 +1790,40 @@ export class Board2DView implements IBoardView {
       ctx.stroke();
     } else {
       ctx.shadowColor = look.glow;
-      ctx.shadowBlur = cell * 0.3 * look.glowAmt;
+      ctx.shadowBlur = cell * (0.05 + 0.3 * look.glowAmt);
       ctx.strokeStyle = look.core;
       ctx.beginPath();
       ctx.arc(x, y, rr, 0, Math.PI * 2);
       ctx.stroke();
     }
     ctx.restore();
+  }
+
+  /**
+   * Draw a marker sprite (arena.ts painters, cached per kind / colour / cell size) centred at
+   * (x, y) for a cell of `size` px. Blending is the caller's (dots / selection: 'lighter').
+   */
+  private drawMarker(kind: keyof typeof MARKER_QUAD, color: string, x: number, y: number, size: number): void {
+    const q = MARKER_QUAD[kind];
+    const cellPx = Math.max(4, Math.round(this.layout.cell * this.dpr));
+    const key = `m:${kind}:${color}:${cellPx}`;
+    let c = this.sprites.get(key);
+    if (!c) {
+      const S = Math.max(8, Math.ceil(cellPx * q));
+      c = document.createElement('canvas');
+      c.width = S;
+      c.height = S;
+      const g = c.getContext('2d');
+      if (g) {
+        const rgb = hexToRgb(color);
+        if (kind === 'dot') paintGlowDot(g, S / 2, S / 2, S / 2, rgb);
+        else if (kind === 'select') paintSelectGlow(g, S / 2, S / 2, S / q, rgb);
+        else paintCaptureRing(g, S / 2, S / 2, S / q, rgb);
+      }
+      this.sprites.set(key, c);
+    }
+    const d = size * q;
+    this.ctx.drawImage(c, x - d / 2, y - d / 2, d, d);
   }
 
   /** Illustrated coin for a look, pre-rendered at the current cell size (cached). */
@@ -1855,7 +1897,7 @@ function paintToken(g: CanvasRenderingContext2D, S: number, img: HTMLImageElemen
     g.closePath();
   };
   // Keyline + coin edge (thickness), darker toward the bottom.
-  g.fillStyle = '#1B2445';
+  g.fillStyle = '#090D17';
   capsule(R + key);
   g.fill();
   const eg = g.createLinearGradient(0, ty, 0, ey + R);
@@ -1920,7 +1962,7 @@ function paintToken(g: CanvasRenderingContext2D, S: number, img: HTMLImageElemen
     starPath(g, sx, sy, R * 0.15, R * 0.07);
     g.lineJoin = 'round';
     g.lineWidth = R * 0.08;
-    g.strokeStyle = '#1B2445';
+    g.strokeStyle = '#090D17';
     g.stroke();
     const sg = g.createLinearGradient(sx, sy - R * 0.15, sx, sy + R * 0.15);
     sg.addColorStop(0, '#FFF6D2');

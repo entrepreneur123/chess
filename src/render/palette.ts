@@ -1,8 +1,9 @@
 /**
  * Design tokens shared by the 3D board and the 2D fallback.
- * "Bright Arena" (docs/design/arena-style.md): a daylight grass field of chunky raised tiles on a
- * warm stone plinth, sitting on the app's sky-blue background. Values marked (doc) are the shared
- * palette of that document, so the board matches the UI exactly.
+ * "Dark Arena" (docs/design/dark-arena.md): dark slate / obsidian bevelled tiles in a dark iron
+ * frame with a thin gold trim, floating on the app's dark backdrop; team zones, markers and FX are
+ * the light sources. Values marked (doc) are the shared palette of that document, so the board
+ * matches the UI exactly.
  * All values are sRGB hex strings so they can be used directly in CSS.
  */
 import type { CharacterId, PlayerId, Rarity } from '../engine/types';
@@ -20,30 +21,30 @@ export interface TeamColors {
   onMain: string;
   /** Bright tone used for FX glows (landing rings, dissolve edges). */
   glow: string;
-  /** Home-zone tint colour (blended at ~22-30 % over the grass tiles). */
+  /** Deep tone the home-zone tiles are tinted towards (doc: team deep). */
   zone: string;
 }
 
 export const TEAM_COLORS: Record<PlayerId, TeamColors> = {
-  // team-blue (doc): #3c8dff, light #8cc2ff, deep #1f56c4; blue-zone #6fb3ff.
+  // team-blue (doc): #3b8bff, light #8cc2ff, glow #5fb0ff, deep #1a4fb8.
   0: {
-    main: '#3C8DFF',
+    main: '#3B8BFF',
     light: '#8CC2FF',
-    dark: '#1F56C4',
+    dark: '#1A4FB8',
     container: '#D6E8FF',
     onMain: '#FFFFFF',
-    glow: '#5AA8FF',
-    zone: '#6FB3FF',
+    glow: '#5FB0FF',
+    zone: '#1A4FB8',
   },
-  // team-red (doc): #ff4d57, light #ff9aa0, deep #c4212c; red-zone #ff7a7a.
+  // team-red (doc): #ff4655, light #ff9aa0, glow #ff6a5a, deep #9e1c27.
   1: {
-    main: '#FF4D57',
+    main: '#FF4655',
     light: '#FF9AA0',
-    dark: '#C4212C',
+    dark: '#9E1C27',
     container: '#FFD9DB',
     onMain: '#FFFFFF',
-    glow: '#FF6670',
-    zone: '#FF7A7A',
+    glow: '#FF6A5A',
+    zone: '#9E1C27',
   },
 };
 
@@ -68,11 +69,11 @@ export const RARITY_COLORS: Record<Rarity, string> = {
  * and glow strength. `rainbow` rings sweep the hue around the ring and rotate slowly.
  */
 export const RARITY_RING: Record<Rarity, { core: string; glow: string; glowAmt: number; rainbow: boolean }> = {
-  // On the bright grass the rings are solid bands with navy keylines; glow only for real emphasis.
-  common: { core: '#FFFFFF', glow: '#FFFFFF', glowAmt: 0.0, rainbow: false },
-  rare: { core: '#FF9A2E', glow: '#FFB24A', glowAmt: 0.35, rainbow: false },
-  epic: { core: '#B65CFF', glow: '#C98BFF', glowAmt: 0.4, rainbow: false },
-  legendary: { core: '#FFFFFF', glow: '#FFFFFF', glowAmt: 0.55, rainbow: true },
+  // On the dark tiles the rings glow softly (doc rarity colours); common stays a clean white band.
+  common: { core: '#EEF2FF', glow: '#FFFFFF', glowAmt: 0.22, rainbow: false },
+  rare: { core: '#FF9A2E', glow: '#FF8A1C', glowAmt: 0.8, rainbow: false },
+  epic: { core: '#B65CFF', glow: '#A040FF', glowAmt: 0.9, rainbow: false },
+  legendary: { core: '#FFFFFF', glow: '#FFFFFF', glowAmt: 0.95, rainbow: true },
 };
 
 /**
@@ -89,15 +90,15 @@ export const CHARACTER_FX: Record<CharacterId, { primary: string; secondary: str
 };
 
 /**
- * Brutile's wasteland ("불모지"): cracked dark purple-green earth split by sickly green glowing
- * cracks, bubbling poison and a faint green miasma — a dark patch that reads clearly on the bright
- * grass. Kept clear of the storm's purple haze and of the white / red move and capture markers.
+ * Brutile's wasteland ("불모지"): cracked black-green earth split by sickly toxic-green glowing
+ * cracks, bubbling poison and a faint green miasma; on the dark tiles the glow carries it. Kept
+ * clear of the storm's violet haze and of the ice-cyan / red move and capture markers.
  * `invalid` = red ghost of a forbidden skill placement.
  */
 export const WASTE_COLORS = {
-  /** Cursed earth: dark plum mottled with dark moss green. */
-  ground: '#3A2648',
-  groundEdge: '#2F4224',
+  /** Cursed earth: black-green, mottled with dark moss. */
+  ground: '#0E130B',
+  groundEdge: '#26341A',
   /** Glowing crack / poison colour and its hot core. */
   glow: '#62FF2E',
   core: '#E4FFB0',
@@ -105,14 +106,14 @@ export const WASTE_COLORS = {
   miasma: '#2FAE1E',
   /** Black-purple curse tone (cast rune, dissolve smoke). */
   curse: '#5B1F86',
-  /** Skill targeting: anchor frame (deep plum, reads on grass), valid ghost, invalid ghost. */
-  anchor: '#3D1A5C',
+  /** Skill targeting: anchor frame (toxic green glow), valid ghost, invalid ghost. */
+  anchor: '#7CFF5A',
   ghost: '#8CFF4A',
   invalid: '#FF3B4E',
   /** Danger mark on deadly move targets. */
   danger: '#FF4A4A',
   /** Tile tint under the wasteland. */
-  tile: '#2E2236',
+  tile: '#121A10',
 } as const;
 
 export const RARITY_LABELS: Record<Rarity, { en: string; ko: string }> = {
@@ -143,68 +144,65 @@ export const CHARACTER_RARITY: Record<CharacterId, Rarity> = {
 };
 
 /**
- * "Bright Arena" board surfaces (doc palette): grass tiles, stone plinth, sky background.
- * The canvas itself is transparent: the page paints the sky gradient behind the board.
+ * "Dark Arena" board surfaces (doc palette): iron frame, gold trim, the dark field bed.
+ * The canvas itself is transparent: the page paints its dark backdrop behind the board.
  */
 export const ARENA = {
-  skyTop: '#4F8EE8',
-  skyBottom: '#2A59B8',
-  navy: '#1B2445',
-  grassLight: '#8FD16A',
-  grassDark: '#79BF57',
-  /** Field bed seen between the tiles (a deeper grass) and its shaded tone. */
-  bed: '#4F963A',
-  bedDeep: '#3B7A2C',
-  stone: '#C9B48E',
-  stoneLight: '#E3D3B0',
-  stoneDeep: '#8F7A57',
-  /** Darkest stone (bottom of the plinth lip). */
-  stoneShadow: '#6B5A3E',
-  /** Soft cream of the centre path. */
-  path: '#FFF6D8',
-  gold: '#FFCF3A',
-  goldDeep: '#F29A16',
+  /** night-0 / night-1 (doc): deepest background and the app base. */
+  night0: '#070A12',
+  night1: '#0D1322',
+  /** Iron frame: panel (doc) body, panel-top light edge, panel-lip bottom lip / shadow. */
+  iron: '#1B2338',
+  ironTop: '#28324D',
+  ironLip: '#090D17',
+  /** Hairline (doc line). */
+  line: '#33405F',
+  /** Field bed seen between the tiles. */
+  bed: '#090D16',
+  /** Gold trim (doc gold / gold-deep / gold-lip). */
+  gold: '#F2C14E',
+  goldDeep: '#C8891E',
+  goldLip: '#6E4510',
 } as const;
 
 export const BOARD_COLORS = {
   /** Opaque fallback behind the board (only used where a transparent clear is impossible). */
-  background: ARENA.skyBottom,
-  /** Plinth stone (legacy tilted 3D slab). */
-  slab: ARENA.stone,
-  slabEdge: ARENA.stoneDeep,
+  background: ARENA.night1,
+  /** Dark stone slab (legacy tilted 3D view) and its inlaid frame. */
+  slab: '#121A2E',
+  slabEdge: '#3A4B78',
   gap: ARENA.bed,
-  /** Two-tone grass tiles (doc grass-light / grass-dark). */
-  tileLight: ARENA.grassLight,
-  tileDark: ARENA.grassDark,
-  /** Own move target: soft white dot with a dark drop shadow. */
-  moveDot: '#FFFFFF',
-  moveDotAlpha: 1,
-  /** Enemy reach preview (tone 'enemy'): red move markers, selection ring and tile tints. */
-  enemyMoveDot: '#FF4D57',
-  enemySelected: '#FF4D57',
-  enemySelectedTint: '#FF9AA0',
-  enemyMoveTint: '#FF9AA0',
-  /** Capture target ring + tile tint. */
-  capture: '#FF3B47',
-  captureTint: '#FF6B6B',
-  /** Selected square ring (gold) + tile tint (pale gold). */
-  selected: '#FFD23F',
-  selectedTint: '#FFF0A0',
-  /** Last move from/to tint (warm gold). */
-  lastMove: '#FFCF3A',
+  /** Two-tone dark slate / obsidian tiles (doc: about #222b40 / #1b2336). */
+  tileLight: '#242D43',
+  tileDark: '#1C2437',
+  /** Own move target: luminous ice-cyan dot (additive glow, white-hot core). */
+  moveDot: '#9BEBFF',
+  /** Enemy reach preview (tone 'enemy'): red glowing dots, selection frame and tile tints. */
+  enemyMoveDot: '#FF5363',
+  enemySelected: '#FF4655',
+  enemySelectedTint: '#6E1F2E',
+  enemyMoveTint: '#4A1C2C',
+  /** Capture target ring (glowing red) + tile tint. */
+  capture: '#FF4655',
+  captureTint: '#6A1E2C',
+  /** Selected square: ice-cyan glowing frame + a cool blue tile tint. */
+  selected: '#7FE3FF',
+  selectedTint: '#2C5590',
+  /** Last move from/to tint (candle gold). */
+  lastMove: '#F2C14E',
   /** Dark metal puck under every piece (legacy tilted view). */
   pieceBase: '#3B4A72',
   /** Level pips (gold). */
-  pip: '#FFCF3A',
-  shadow: ARENA.navy,
+  pip: '#F2C14E',
+  shadow: ARENA.night0,
 } as const;
 
-/** Strength (0..1) of the always-on home-zone team tint on the tiles (doc: ~22 %). */
-export const HOME_TINT_STRENGTH = 0.22;
+/** Strength (0..1) of the always-on home-zone team-deep tint on the tiles. */
+export const HOME_TINT_STRENGTH = 0.42;
 /** Strength (0..1) of the highlighted zoneRows tint. */
-export const ZONE_TINT_STRENGTH = 0.45;
+export const ZONE_TINT_STRENGTH = 0.5;
 /** Strength (0..1) of the last-move tint. */
-export const LAST_MOVE_TINT_STRENGTH = 0.34;
+export const LAST_MOVE_TINT_STRENGTH = 0.3;
 
 /** Animation timings (ms) shared by both views. All effects stay <= ~450 ms. */
 export const ANIM = {

@@ -19,7 +19,7 @@ export {
   pieceDir,
   turnTimeMsFor,
   suddenDeathIn,
-  applyTimeUp,
+  turnNumber,
   wasteArea,
   skillBlock,
   skillAnchors,

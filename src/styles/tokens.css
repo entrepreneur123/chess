@@ -1,98 +1,97 @@
 /* ==========================================================================
-   GRID CLASH design tokens — v4 "Bright Arena" (docs/design/arena-style.md).
+   GRID CLASH design tokens — v5 "Dark Arena" (docs/design/dark-arena.md).
    One source of truth for colour, type, spacing, shape, depth and motion.
-   The arena palette below is shared with the board renderer: keep the hex
-   values in sync with the design doc. See src/styles/README.md for usage.
+   The palette block uses the design doc's exact hex values; the board
+   renderer and the illustrated backdrops share them. See README.md.
    ========================================================================== */
 :root {
-  /* ---- Arena palette (exact values from the design doc) ----------------- */
-  --sky-top: #4f8ee8;
-  --sky-bottom: #2a59b8;
-  --navy-ink: #1b2445;
-  --panel: #e9eef8;
-  --panel-hi: #f8faff; /* light panel top highlight */
-  --panel-edge: #b9c6e0;
-  --panel-well: #d7e0f0; /* inset wells on light panels */
-  --panel-line: #c9d4ea;
-  --panel-dark: #2d4b8f;
-  --panel-dark-hi: #3d63b0;
-  --panel-dark-edge: #1d3166;
-  --gold: #ffcf3a;
-  --gold-deep: #f29a16;
-  --gold-lip: #b8650a;
-  --gold-soft: #fff1c2;
-  --green: #63d34a;
-  --green-mid: #45b836;
-  --green-deep: #2f9a2a;
-  --green-text: #1f7a1c; /* green text on light panels (4.6:1) */
-  --team-blue: #3c8dff;
+  /* ---- Dark Arena palette (exact values from the design doc) ------------- */
+  --night-0: #070a12;
+  --night-1: #0d1322;
+  --night-2: #151d31;
+  --panel: #1b2338;
+  --panel-top: #28324d;
+  --panel-lip: #090d17;
+  --line: #33405f;
+  --ink: #eef2ff;
+  --ink-muted: #9aa6c4;
+  --gold: #f2c14e;
+  --gold-deep: #c8891e;
+  --gold-lip: #6e4510;
+  --arcane: #8b6cff;
+  --toxic: #7cff5a;
+  --team-blue: #3b8bff;
   --team-blue-light: #8cc2ff;
-  --team-blue-deep: #1f56c4;
-  --team-red: #ff4d57;
+  --team-blue-glow: #5fb0ff;
+  --team-blue-deep: #1a4fb8;
+  --team-red: #ff4655;
   --team-red-light: #ff9aa0;
-  --team-red-deep: #c4212c;
-  --violet: #a46bff;
-  --violet-deep: #7a3fe0;
-  --violet-lip: #4f2399;
-  --grass-light: #8fd16a;
-  --grass-dark: #79bf57;
-  --stone: #c9b48e;
-  --stone-light: #e3d3b0;
-  --stone-deep: #8f7a57;
-  --storm: #9b5cf0;
-  --storm-deep: #5d2aa8;
+  --team-red-glow: #ff6a5a;
+  --team-red-deep: #9e1c27;
+  --danger: #ff4655;
+  --positive: #3ccf7a;
+  --positive-lip: #1d7a45;
 
-  /* ---- Text --------------------------------------------------------------
-     Default context = blue surfaces (sky / dark panels): white text.
-     Light panels (.on-light and the panel components) flip these to navy.
-     Contrast: text-1 8.3:1, text-2 6.4:1, text-3 4.6:1 on --panel-dark;
-     on --panel: 13:1 / 7.4:1 / 4.7:1. */
-  --text-1: #ffffff;
-  --text-2: #d5e2ff;
-  --text-3: #a9c0ec;
-  --text-off: #8ea3cc;
-  --text-on-gold: #4a2600;
+  /* ---- Derived shades (same hues, extra steps for two-tone surfaces) ----- */
+  --panel-raised: #222b44; /* upper half of a raised panel */
+  --panel-well: #10172a; /* inset wells inside panels */
+  --panel-hi: rgba(170, 190, 255, 0.16); /* 1px top highlight edge on dark surfaces */
+  --gold-hi: #ffe7a3; /* top highlight on gold */
+  --gold-text: #f2c14e; /* gold copy on dark panels (9:1 on --panel) */
+  --gold-ink: #2a1803; /* label on gold (11:1 on --gold) */
+  --positive-top: #5fe397;
+  --positive-deep: #27a862;
+  --positive-text: #6fe2a0; /* green copy on dark panels */
+  --arcane-top: #a993ff;
+  --arcane-deep: #5b3fd1;
+  --arcane-lip: #2e1d78;
+  --arcane-text: #c6b8ff;
+  --toxic-text: #a6ff8c;
+  --storm: #8b6cff;
+  --storm-deep: #4a2fa8;
 
-  /* Outlined display type (white/cream face, navy outline + drop). */
-  --ink-outline-s: -1px -1px 0 var(--navy-ink), 1px -1px 0 var(--navy-ink), -1px 1px 0 var(--navy-ink), 1px 1px 0 var(--navy-ink),
-    0 2px 0 var(--navy-ink);
-  --ink-outline-m: -1.5px -1.5px 0 var(--navy-ink), 1.5px -1.5px 0 var(--navy-ink), -1.5px 1.5px 0 var(--navy-ink),
-    1.5px 1.5px 0 var(--navy-ink), 0 -1.5px 0 var(--navy-ink), 0 3px 0 var(--navy-ink), 1.5px 3px 0 var(--navy-ink),
-    -1.5px 3px 0 var(--navy-ink);
-  --ink-outline-l: -2px -2px 0 var(--navy-ink), 2px -2px 0 var(--navy-ink), -2px 2px 0 var(--navy-ink), 2px 2px 0 var(--navy-ink),
-    0 -2px 0 var(--navy-ink), -2px 0 0 var(--navy-ink), 2px 0 0 var(--navy-ink), 0 4px 0 var(--navy-ink), 2px 4px 0 var(--navy-ink),
-    -2px 4px 0 var(--navy-ink), 0 6px 8px rgba(16, 26, 60, 0.35);
+  /* ---- Text (dark surfaces everywhere) ------------------------------------
+     On --panel: text-1 14.6:1, text-2 6.6:1, text-3 4.8:1. On --night-1 higher. */
+  --text-1: var(--ink);
+  --text-2: var(--ink-muted);
+  --text-3: #8692b3;
+  --text-off: #5d6886;
 
-  /* ---- Team scales (legacy step names still used by components) -------- */
+  /* Outlined display type: ink face, near-black outline + drop. */
+  --outline: #05070d;
+  --ink-outline-s: -1px -1px 0 var(--outline), 1px -1px 0 var(--outline), -1px 1px 0 var(--outline), 1px 1px 0 var(--outline),
+    0 2px 0 var(--outline);
+  --ink-outline-m: -1.5px -1.5px 0 var(--outline), 1.5px -1.5px 0 var(--outline), -1.5px 1.5px 0 var(--outline),
+    1.5px 1.5px 0 var(--outline), 0 -1.5px 0 var(--outline), 0 3px 0 var(--outline), 1.5px 3px 0 var(--outline),
+    -1.5px 3px 0 var(--outline);
+  --ink-outline-l: -2px -2px 0 var(--outline), 2px -2px 0 var(--outline), -2px 2px 0 var(--outline), 2px 2px 0 var(--outline),
+    0 -2px 0 var(--outline), -2px 0 0 var(--outline), 2px 0 0 var(--outline), 0 4px 0 var(--outline), 2px 4px 0 var(--outline),
+    -2px 4px 0 var(--outline), 0 6px 12px rgba(0, 0, 0, 0.55);
+
+  /* ---- Team / gold steps (legacy step names still used by components) ---- */
   --blue-200: #cfe3ff;
   --blue-300: var(--team-blue-light);
   --blue-400: var(--team-blue);
-  --blue-500: #2f74e6;
   --blue-600: var(--team-blue-deep);
-  --blue-700: #163f93;
-  --red-200: #ffd2d5;
   --red-300: var(--team-red-light);
   --red-400: var(--team-red);
-  --red-500: #ec3a45;
   --red-600: var(--team-red-deep);
-  --red-700: #8f1820;
-  --gold-100: #fff6d1;
-  --gold-200: #ffe58c;
+  --gold-100: #fff1c9;
   --gold-300: var(--gold);
   --gold-500: var(--gold-deep);
   --gold-700: var(--gold-lip);
 
   /* ---- Rarity: base, deep (frame shadow side) and glow ------------------ */
   /* common = white, rare = orange, epic = purple, legendary = rotating rainbow. */
-  --rar-common: #ffffff;
-  --rar-common-deep: #8fa0c2;
-  --rar-common-glow: rgba(255, 255, 255, 0.3);
-  --rar-rare: #ff9a3c;
-  --rar-rare-deep: #c4600e;
-  --rar-rare-glow: rgba(255, 154, 60, 0.5);
-  --rar-epic: #b46cff;
+  --rar-common: #e9eefb;
+  --rar-common-deep: #6f7c9c;
+  --rar-common-glow: rgba(233, 238, 251, 0.25);
+  --rar-rare: #ff9a2e;
+  --rar-rare-deep: #b85c0a;
+  --rar-rare-glow: rgba(255, 154, 46, 0.45);
+  --rar-epic: #b65cff;
   --rar-epic-deep: #6a2bc4;
-  --rar-epic-glow: rgba(180, 108, 255, 0.5);
+  --rar-epic-glow: rgba(182, 92, 255, 0.45);
   --rar-legendary: #7df2d0;
   --rar-legendary-deep: #6b2bd6;
   --rar-legendary-glow: rgba(160, 120, 255, 0.5);
@@ -153,26 +152,32 @@
   --r-xl: 20px;
   --r-full: 999px;
 
-  /* ---- Depth: chunky lip + soft drop (one light, top-left) ---------------- */
+  /* ---- Depth: chunky lip + soft drop (one light, from above) -------------- */
   --lip: 5px;
-  --drop: 0 10px 18px -8px rgba(14, 28, 72, 0.55);
-  --drop-l: 0 18px 34px -12px rgba(14, 28, 72, 0.6);
-  /* Light panel (cream-blue): highlight top edge, panel-edge lip, soft drop. */
-  --panel-fill: linear-gradient(180deg, var(--panel-hi) 0%, var(--panel) 46%, #e1e8f5 100%);
-  --panel-shadow: inset 0 2px 0 #ffffff, inset 0 -2px 0 rgba(150, 168, 205, 0.35), 0 var(--lip) 0 var(--panel-edge),
-    var(--drop);
-  /* Dark blue panel on the sky. */
-  --dpanel-fill: linear-gradient(180deg, var(--panel-dark-hi) 0%, var(--panel-dark) 55%, #294482 100%);
-  --dpanel-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.2), inset 0 0 0 1px rgba(255, 255, 255, 0.06),
-    0 var(--lip) 0 var(--panel-dark-edge), var(--drop);
-  /* Inset well (dark panels). */
-  --well-dark: rgba(16, 30, 72, 0.45);
-  --well-dark-shadow: inset 0 2px 3px rgba(10, 20, 55, 0.45), 0 1px 0 rgba(255, 255, 255, 0.12);
+  --drop: 0 12px 22px -10px rgba(0, 0, 0, 0.7);
+  --drop-l: 0 22px 44px -14px rgba(0, 0, 0, 0.8);
+  /* Panel: raised top half, panel body, hairline rim, top highlight edge, dark lip, soft drop. */
+  --panel-fill: linear-gradient(180deg, var(--panel-raised) 0%, var(--panel) 52%, #181f33 100%);
+  --panel-rim: inset 0 1px 0 var(--panel-hi), inset 0 0 0 1px rgba(51, 64, 95, 0.85);
+  --panel-shadow: var(--panel-rim), 0 var(--lip) 0 var(--panel-lip), var(--drop);
+  /* Gold-trimmed variant for premium / selected panels. */
+  --panel-shadow-gold: inset 0 1px 0 rgba(255, 231, 163, 0.35), inset 0 0 0 1.5px rgba(242, 193, 78, 0.75),
+    0 var(--lip) 0 var(--panel-lip), 0 0 22px -6px rgba(242, 193, 78, 0.35), var(--drop);
+  /* Sunken well inside a panel. */
+  --well-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(51, 64, 95, 0.55), 0 1px 0 rgba(170, 190, 255, 0.06);
+  /* Bars that sit on the backdrop (app bar, docks): night-2 with a lip. */
+  --bar-fill: linear-gradient(180deg, #1c2540, var(--night-2) 60%, #121a2c);
 
-  /* Background: sky gradient + a very large, very faint diamond lattice. */
-  --bg-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='132' height='132' viewBox='0 0 132 132'%3E%3Cpath d='M66 10 122 66 66 122 10 66Z' fill='%23fff' fill-opacity='.045'/%3E%3C/svg%3E");
-  --bg-sky: radial-gradient(120% 60% at 18% -8%, rgba(255, 255, 255, 0.22), transparent 55%),
-    linear-gradient(180deg, var(--sky-top) 0%, #3b75d4 52%, var(--sky-bottom) 100%);
+  /* ---- Backgrounds ----------------------------------------------------------
+     Base gradient night-1 -> night-0 with cool and violet light pools, a faint
+     arcane ring texture and a vignette. Illustrated backdrops (public/bg) are
+     layered in base.css over this, only once they have loaded. */
+  --bg-base:
+    radial-gradient(120% 60% at 50% -12%, rgba(139, 108, 255, 0.16), transparent 62%),
+    radial-gradient(110% 55% at 50% 112%, rgba(26, 79, 184, 0.2), transparent 64%),
+    linear-gradient(180deg, #111a2e 0%, var(--night-1) 44%, #0a0f1b 100%);
+  --bg-rings: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='900' height='900' viewBox='0 0 900 900' fill='none' stroke='%23a9b8ff'%3E%3Ccircle cx='450' cy='450' r='430' stroke-opacity='.05' stroke-width='2'/%3E%3Ccircle cx='450' cy='450' r='392' stroke-opacity='.035' stroke-width='14' stroke-dasharray='2 22'/%3E%3Ccircle cx='450' cy='450' r='340' stroke-opacity='.045'/%3E%3Ccircle cx='450' cy='450' r='250' stroke-opacity='.04' stroke-width='2'/%3E%3Cpath d='M450 60 787.7 645H112.3Z' stroke-opacity='.03'/%3E%3Cpath d='M450 840 112.3 255h675.4Z' stroke-opacity='.03'/%3E%3C/svg%3E");
+  --bg-vignette: radial-gradient(130% 85% at 50% 42%, transparent 52%, rgba(7, 10, 18, 0.72) 100%);
 
   /* ---- Motion ------------------------------------------------------------ */
   --dur-press: 90ms;
@@ -198,24 +203,7 @@
   --z-scrim: 80;
   --z-splash: 90;
 
-  color-scheme: light;
-}
-
-/* Light-panel text context: anything inside a cream panel reads navy. */
-.on-light,
-.card,
-.panel,
-.dialog,
-.sheet,
-.tut,
-.fpanel,
-.tray-card,
-.play-panel,
-.unit-card {
-  --text-1: var(--navy-ink);
-  --text-2: #3b4a74;
-  --text-3: #5a6992;
-  --text-off: #8793b3;
+  color-scheme: dark;
 }
 
 /* Animatable angle for the legendary rainbow ring (static rainbow where @property is unsupported). */
@@ -235,25 +223,25 @@
   --rar: var(--rar-common);
   --rar-deep: var(--rar-common-deep);
   --rar-glow: var(--rar-common-glow);
-  --rar-soft: rgba(143, 160, 194, 0.25);
+  --rar-soft: rgba(154, 166, 196, 0.2);
 }
 .rarity-rare {
   --rar: var(--rar-rare);
   --rar-deep: var(--rar-rare-deep);
   --rar-glow: var(--rar-rare-glow);
-  --rar-soft: rgba(255, 154, 60, 0.3);
+  --rar-soft: rgba(255, 154, 46, 0.28);
 }
 .rarity-epic {
   --rar: var(--rar-epic);
   --rar-deep: var(--rar-epic-deep);
   --rar-glow: var(--rar-epic-glow);
-  --rar-soft: rgba(180, 108, 255, 0.3);
+  --rar-soft: rgba(182, 92, 255, 0.3);
 }
 .rarity-legendary {
   --rar: var(--rar-legendary);
   --rar-deep: var(--rar-legendary-deep);
   --rar-glow: var(--rar-legendary-glow);
-  --rar-soft: rgba(125, 242, 208, 0.3);
+  --rar-soft: rgba(125, 242, 208, 0.26);
 }
 
 @media (prefers-reduced-motion: reduce) {

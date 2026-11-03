@@ -74,10 +74,12 @@ const RGB_TEAM_GLOW: Record<PlayerId, RGB> = {
   1: hexToRgb(TEAM_COLORS[1].glow),
 };
 
-/** Highlight tint strengths over the grass (soft: the markers carry the meaning). */
-const ENEMY_MOVE_TINT = 0.16;
-const CAPTURE_TINT = 0.5;
-const SELECTED_TINT = 0.62;
+/** Highlight tint strengths over the dark tiles (the glowing markers carry the meaning). */
+const ENEMY_MOVE_TINT = 0.4;
+const CAPTURE_TINT = 0.75;
+const SELECTED_TINT = 0.7;
+/** Edge darkening of the field (fraction of brightness lost at the corner tiles). */
+const FIELD_VIGNETTE = 0.16;
 
 /** Precomputed lookup sets for a highlight state. */
 export interface HighlightIndex {
@@ -112,14 +114,6 @@ export function indexHighlights(h: BoardHighlights): HighlightIndex {
   };
 }
 
-/** Saturation boost of the home-zone tiles after the team tint. */
-const HOME_SATURATION = 1.22;
-
-/** Perceived brightness (sRGB, Rec. 601 weights). */
-function luma(c: RGB): number {
-  return 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
-}
-
 /** Team whose tint is used for a highlighted zone range (falls back to Blue). */
 function zoneTeam(zone: [number, number]): PlayerId {
   return zone[0] >= BOARD_SIZE / 2 ? 1 : 0;
@@ -130,18 +124,16 @@ export function tileRgb(r: number, c: number, hi: HighlightIndex): RGB {
   let col: RGB = (r + c) % 2 === 0 ? RGB_DARK : RGB_LIGHT;
   const home = homeOwner(r);
   if (home !== null) {
-    // Slightly stronger at the back rank (~24 %), ~20 % at the zone edge line.
+    // Team-deep tint, strongest at the back rank and fading toward the zone edge line.
     const depth = home === 0 ? r : BOARD_SIZE - 1 - r;
-    // Keep the tile's brightness: the team colours are darker than the grass, and a plain mix
-    // would turn the red side into dull olive.
-    const lum0 = luma(col);
-    col = mixRgb(col, RGB_TEAM_ZONE[home], HOME_TINT_STRENGTH * (1.08 - 0.08 * depth));
-    const k = lum0 / Math.max(1e-4, luma(col));
-    col = [col[0] * k, col[1] * k, col[2] * k];
-    // ...and a little of the grass's lost saturation (mixing toward a complementary hue greys it).
-    const l = luma(col);
-    col = [clamp01(l + (col[0] - l) * HOME_SATURATION), clamp01(l + (col[1] - l) * HOME_SATURATION), clamp01(l + (col[2] - l) * HOME_SATURATION)];
+    col = mixRgb(col, RGB_TEAM_ZONE[home], HOME_TINT_STRENGTH * (1.12 - 0.14 * depth));
   }
+  // Soft field vignette (per tile, so both views and the highlight repaints agree): the centre of
+  // the arena is a touch brighter than its corners, never a flat colour over the whole field.
+  const dx = (c - (BOARD_SIZE - 1) / 2) / (BOARD_SIZE / 2);
+  const dy = (r - (BOARD_SIZE - 1) / 2) / (BOARD_SIZE / 2);
+  const v = 1 + FIELD_VIGNETTE * 0.35 - FIELD_VIGNETTE * Math.min(1, (dx * dx + dy * dy) * 0.6);
+  col = [clamp01(col[0] * v), clamp01(col[1] * v), clamp01(col[2] * v)];
   if (hi.zone && r >= hi.zone[0] && r <= hi.zone[1]) {
     const t = zoneTeam(hi.zone);
     col = mixRgb(col, mixRgb(RGB_TEAM_GLOW[t], RGB_TEAM_ZONE[t], 0.5), ZONE_TINT_STRENGTH);

@@ -1,5 +1,5 @@
-import { MAX_CONSECUTIVE_TIMEOUTS, SKILL_UNLOCK_PLY, SKILL_USES_PER_MATCH, STORM_INTERVAL_PLIES, SUDDEN_DEATH_PLY, TURN_TIME_1_MS, TURN_TIME_2_MS, TURN_TIME_MS } from './types';
-import type { AbsorbedAbility, Formation, GameState, HistoryEntry, Move, PassReason, Piece, PlayerId, Pos, SkillAction } from './types';
+import { SKILL_UNLOCK_PLY, SKILL_USES_PER_MATCH, STORM_INTERVAL_PLIES, SUDDEN_DEATH_PLY, TURN_TIME_1_MS, TURN_TIME_2_MS, TURN_TIME_MS } from './types';
+import type { AbsorbedAbility, EndReason, Formation, GameState, HistoryEntry, Move, Piece, PlayerId, Pos, SkillAction } from './types';
 import { BOARD_SIZE } from './types';
 import { CHARACTERS, CHAR_CODE, WASTE_SIZE, absorbMaskOf, effectiveValue } from './characters';
 import { N_SQUARES, atTurnRow, formationToAbsolute, forwardDir, genTargets, inStorm, isOnBoard, posOf, sqOf } from './board';
@@ -165,8 +165,8 @@ function countPieces(pieces: Piece[], player: PlayerId): number {
 }
 
 /**
- * Time allowed for the current turn: 60 s normally, 40 s once either side is down to two pieces,
- * 20 s once either side is down to one.
+ * Time allowed for the current turn: TURN_TIME_MS (45 s) normally, TURN_TIME_2_MS (40 s) once
+ * either side is down to two pieces, TURN_TIME_1_MS (20 s) once either side is down to one.
  */
 export function turnTimeMsFor(state: Pick<GameState, 'pieces'>): number {
   const m = Math.min(countPieces(state.pieces, 0), countPieces(state.pieces, 1));
@@ -190,7 +190,10 @@ function switchTurn(state: GameState, entry: HistoryEntry, pliesSinceCapture: nu
     bonusPieceId: null,
     history: [...state.history, entry],
   };
-  if (next.stormIn !== null) {
+  // A side that just lost its last piece decides the game (see `settle`): the storm does not tick.
+  const alive0 = countPieces(next.pieces, 0);
+  const alive1 = countPieces(next.pieces, 1);
+  if (next.stormIn !== null && alive0 > 0 && alive1 > 0) {
     const left = next.stormIn - 1;
     if (left > 0) next = { ...next, stormIn: left };
     else {
@@ -202,11 +205,14 @@ function switchTurn(state: GameState, entry: HistoryEntry, pliesSinceCapture: nu
         return false;
       });
       next = { ...next, storm, stormIn: STORM_INTERVAL_PLIES, pieces, history: [...next.history, { kind: 'storm', storm, killed }] };
+      const left0 = countPieces(pieces, 0);
+      const left1 = countPieces(pieces, 1);
       // The storm swallowed the last pieces of BOTH sides at once: decided by what was lost.
-      if (pieces.length === 0 && killed.length > 0) {
+      if (left0 === 0 && left1 === 0) {
         const gone = state.pieces.filter((p) => killed.includes(p.id));
         return end(next, adjudicate({ ...next, pieces: gone }), 'storm');
       }
+      if (left0 === 0 || left1 === 0) return end(next, left0 > 0 ? 0 : 1, 'storm');
     }
   }
   return next;
@@ -223,11 +229,7 @@ function settle(state: GameState): GameState {
   for (;;) {
     const n0 = countPieces(state.pieces, 0);
     const n1 = countPieces(state.pieces, 1);
-    if (n0 === 0 || n1 === 0) {
-      const last = state.history[state.history.length - 1];
-      const reason = last?.kind === 'storm' ? 'storm' : last?.kind === 'move' && last.move.wasted ? 'waste' : 'elimination';
-      return end(state, n0 > 0 ? 0 : n1 > 0 ? 1 : null, reason);
-    }
+    if (n0 === 0 || n1 === 0) return end(state, n0 > 0 ? 0 : n1 > 0 ? 1 : null, eliminationReason(state, n0 === 0 && n1 === 0 ? null : n0 === 0 ? 0 : 1));
     if (state.stormIn === null && (n0 <= 1 || n1 <= 1 || state.ply >= SUDDEN_DEATH_PLY)) state = { ...state, stormIn: STORM_INTERVAL_PLIES };
     if (state.bonusPieceId !== null) {
       if (hasAnyMove(state.pieces, state.turn, state.storm, state.waste, state.bonusPieceId)) return state;
@@ -242,16 +244,28 @@ function settle(state: GameState): GameState {
   }
 }
 
+/**
+ * Why a side has no pieces left after the last action (storm eliminations end the game inside
+ * `switchTurn`): its last piece stepped onto wasteland, or it was captured.
+ */
+function eliminationReason(state: GameState, loser: PlayerId | null): EndReason {
+  for (let i = state.history.length - 1; i >= 0; i--) {
+    const e = state.history[i];
+    if (e.kind === 'storm') continue;
+    return e.kind === 'move' && e.move.wasted && (loser === null || e.player === loser) ? 'waste' : 'elimination';
+  }
+  return 'elimination';
+}
+
+/** Current turn, counted per player: both players' first moves are turn 1, the next pair turn 2... */
+export function turnNumber(state: Pick<GameState, 'ply'>): number {
+  return Math.floor(state.ply / 2) + 1;
+}
+
 /** Plies left before sudden death starts the storm; null once the storm is active (or the game ended). */
 export function suddenDeathIn(state: Pick<GameState, 'ply' | 'stormIn' | 'status'>): number | null {
   if (state.status !== 'playing' || state.stormIn !== null) return null;
   return Math.max(0, SUDDEN_DEATH_PLY - state.ply);
-}
-
-/** The match clock (MATCH_TIME_MS) ran out: the game is decided by remaining material. */
-export function applyTimeUp(state: GameState): GameState {
-  if (state.status !== 'playing') return state;
-  return end({ ...state, bonusPieceId: null }, adjudicate(state), 'timeUp');
 }
 
 /** Union of absorbed abilities (deduplicated, never including the holder's own pattern). */
@@ -397,18 +411,18 @@ export function skipBonus(state: GameState): GameState {
   return settle(switchTurn(state, { kind: 'pass', player: state.turn, reason: 'bonusSkip' }, state.pliesSinceCapture + 1));
 }
 
-/** The side to move ran out of time: pass the turn, or forfeit after MAX_CONSECUTIVE_TIMEOUTS. */
+/**
+ * The side to move ran out of turn time: it forfeits at once ('timeoutForfeit'). Exception: letting
+ * a pending chain move lapse is not a forfeit (the player already moved this turn), it just skips it.
+ */
 export function applyTimeout(state: GameState): GameState {
   if (state.status !== 'playing') return state;
-  // Letting a chain move lapse is not a timeout strike: the player already moved this turn.
   if (state.bonusPieceId !== null) return skipBonus(state);
   const player = state.turn;
   const ct: [number, number] = [state.consecutiveTimeouts[0], state.consecutiveTimeouts[1]];
   ct[player] += 1;
-  const reason: PassReason = 'timeout';
-  const next = switchTurn({ ...state, consecutiveTimeouts: ct }, { kind: 'pass', player, reason }, state.pliesSinceCapture + 1);
-  if (ct[player] >= MAX_CONSECUTIVE_TIMEOUTS) return end(next, other(player), 'timeoutForfeit');
-  return settle(next);
+  const entry: HistoryEntry = { kind: 'pass', player, reason: 'timeout' };
+  return end({ ...state, consecutiveTimeouts: ct, history: [...state.history, entry] }, other(player), 'timeoutForfeit');
 }
 
 export function resign(state: GameState, player: PlayerId): GameState {

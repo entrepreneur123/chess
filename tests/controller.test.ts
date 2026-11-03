@@ -4,7 +4,7 @@ import { GameController, type ControllerPorts } from '../src/ui/game/GameControl
 import { makeState } from './helpers';
 
 /** Manual clock + timers so races can be driven deterministically. */
-function harness(initial: GameState, opts: { botMove?: (s: GameState) => Move | null; matchTimeMs?: number } = {}) {
+function harness(initial: GameState, opts: { botMove?: (s: GameState) => Move | null | Promise<Move | null> } = {}) {
   let t = 0;
   let nextId = 1;
   const timers = new Map<number, { at: number; fn: () => void }>();
@@ -13,14 +13,13 @@ function harness(initial: GameState, opts: { botMove?: (s: GameState) => Move | 
   const ports: ControllerPorts = {
     requestBotMove: (s) =>
       new Promise((resolve) => {
-        if (opts.botMove) resolve(opts.botMove(s));
+        if (opts.botMove) resolve(Promise.resolve(opts.botMove(s)));
         else botCalls.push({ state: s, resolve });
       }),
     animate: (move) => new Promise<void>((resolve) => anims.push({ move, resolve })),
     botThinkDelayMs: () => 0,
     now: () => t,
     turnTimeMs: 60_000,
-    matchTimeMs: opts.matchTimeMs,
     setTimer: (fn, ms) => {
       const id = nextId++;
       timers.set(id, { at: t + ms, fn });
@@ -112,19 +111,46 @@ describe('GameController selection after the opponent moves', () => {
 });
 
 describe('GameController races', () => {
-  it('timeout during the bot think delay discards the stale bot move', async () => {
+  it('the bot never times out: a hung bot plays a fallback move and its late reply is ignored', async () => {
     const h = harness(position());
     h.ctrl.start();
     h.ctrl.tapCell({ r: 0, c: 0 });
     h.ctrl.tapCell({ r: 1, c: 0 });
     await h.finishAnims();
-    await h.advance(60_000); // bot times out
+    await h.advance(60_000); // the bot's clock runs out: it must not forfeit
+    expect(h.ctrl.state.status).toBe('playing');
+    expect(h.anims.length).toBe(1); // the fallback move is being animated
+    await h.finishAnims();
+    expect(h.ctrl.state.status).toBe('playing');
     expect(h.ctrl.state.turn).toBe(0);
     expect(h.ctrl.phase).toBe('humanTurn');
+    const last = h.ctrl.state.history[h.ctrl.state.history.length - 1];
+    expect(last.kind === 'move' && last.player).toBe(1);
     h.botCalls[0].resolve({ pieceId: 'p1-sad', from: { r: 11, c: 11 }, to: { r: 10, c: 11 } });
     await h.flush();
     expect(h.ctrl.phase).toBe('humanTurn');
     expect(h.anims.length).toBe(0);
+  });
+
+  it('a bot failure (null, illegal move, rejection) falls back to a legal move, never a forfeit', async () => {
+    const answers: (() => Move | null | Promise<Move | null>)[] = [
+      () => null,
+      () => ({ pieceId: 'p1-sad', from: { r: 11, c: 11 }, to: { r: 0, c: 0 } }),
+      () => Promise.reject(new Error('worker crashed')),
+    ];
+    for (const answer of answers) {
+      const h = harness(position(), { botMove: answer });
+      h.ctrl.start();
+      h.ctrl.tapCell({ r: 0, c: 0 });
+      h.ctrl.tapCell({ r: 1, c: 0 });
+      await h.finishAnims();
+      await h.advance(0);
+      await h.finishAnims();
+      expect(h.ctrl.state.status).toBe('playing');
+      expect(h.ctrl.phase).toBe('humanTurn');
+      const last = h.ctrl.state.history[h.ctrl.state.history.length - 1];
+      expect(last.kind === 'move' && last.player).toBe(1);
+    }
   });
 
   it('resign while animating ends the game once and ignores the animation result', async () => {
@@ -163,7 +189,7 @@ describe('GameController races', () => {
     expect(h.ctrl.phase).toBe('humanTurn');
   });
 
-  it('three human timeouts forfeit exactly once, and dispose stops everything', async () => {
+  it('one human timeout forfeits exactly once, and dispose stops everything', async () => {
     const h = harness(position(), {
       botMove: (s) => (s.pieces.find((p) => p.id === 'p1-sad')!.pos.r === 11
         ? { pieceId: 'p1-sad', from: { r: 11, c: 11 }, to: { r: 10, c: 11 } }
@@ -172,10 +198,13 @@ describe('GameController races', () => {
     const ended: GameState[] = [];
     h.ctrl.on((e) => e.type === 'ended' && ended.push(e.state));
     h.ctrl.start();
-    for (let i = 0; i < 3; i++) {
-      await h.advance(60_000);
-      await h.finishAnims();
-    }
+    await h.advance(59_999);
+    expect(h.ctrl.state.status).toBe('playing');
+    await h.advance(1);
+    await h.finishAnims();
+    expect(h.ctrl.phase).toBe('ended');
+    expect(h.anims.length).toBe(0);
+    await h.advance(120_000);
     expect(ended.length).toBe(1);
     expect(ended[0].endReason).toBe('timeoutForfeit');
     expect(ended[0].winner).toBe(1);
@@ -267,35 +296,48 @@ describe('chain move, storm and timer scaling in the controller', () => {
   });
 });
 
-describe('GameController match clock', () => {
-  it('adjudicates by material when the match clock runs out during a turn', async () => {
-    const h = harness(position(), { matchTimeMs: 30_000 });
+describe('GameController without a match clock', () => {
+  it('has no match clock: a long game is never ended by wall-clock time', async () => {
+    const h = harness(position(), {
+      botMove: (s) => (s.pieces.find((p) => p.id === 'p1-sad')!.pos.r === 11
+        ? { pieceId: 'p1-sad', from: { r: 11, c: 11 }, to: { r: 10, c: 11 } }
+        : { pieceId: 'p1-sad', from: { r: 10, c: 11 }, to: { r: 11, c: 11 } }),
+    });
+    expect('matchRemainingMs' in h.ctrl).toBe(false);
     h.ctrl.start();
-    await h.advance(10_000);
-    h.ctrl.pause();
-    await h.advance(100_000); // paused time does not count
-    expect(h.ctrl.phase).toBe('humanTurn');
-    expect(h.ctrl.matchRemainingMs()).toBe(20_000);
-    h.ctrl.resume();
-    await h.advance(20_000);
-    expect(h.ctrl.phase).toBe('ended');
-    expect(h.ctrl.state.endReason).toBe('timeUp');
-    expect(h.ctrl.state.winner).toBe(1); // 3 + 3 + 4 vs Red marki L3 6 + 3 + 4
+    // 16 rounds of 55 s each (> 14 minutes) with the human always moving just in time.
+    for (let i = 0; i < 16; i++) {
+      await h.advance(55_000);
+      const me = h.ctrl.state.pieces.find((p) => p.id === 'p0-walk')!;
+      const to = { r: me.pos.r === 0 ? 1 : 0, c: me.pos.r === 0 ? 10 : 11 };
+      const m = { pieceId: 'p0-walk', from: { ...me.pos }, to };
+      expect(h.ctrl.tryHumanMove(m)).toBe(true);
+      await h.finishAnims();
+      await h.advance(0);
+      await h.finishAnims();
+      expect(h.ctrl.state.status).toBe('playing');
+      expect(h.ctrl.phase).toBe('humanTurn');
+    }
   });
 
-  it('lets a move in flight finish before ending on time', async () => {
-    const h = harness(position(), { matchTimeMs: 5_000 });
+  it('letting a chain move lapse on time is not a forfeit', async () => {
+    const h = harness(
+      makeState([
+        [0, 'insaner', 3, 5, 5],
+        [1, 'walk', 1, 5, 6],
+        [1, 'sad', 1, 11, 11],
+        [1, 'marki', 1, 11, 0],
+        [0, 'sad', 1, 0, 0],
+      ]),
+    );
     h.ctrl.start();
-    await h.advance(4_000);
-    const m = { pieceId: 'p0-sad', from: { r: 2, c: 5 }, to: { r: 3, c: 5 } };
-    expect(h.ctrl.tryHumanMove(m)).toBe(true);
-    await h.flush();
-    await h.advance(2_000);
-    expect(h.ctrl.phase).toBe('animating');
+    expect(h.ctrl.tryHumanMove({ pieceId: 'p0-insaner', from: { r: 5, c: 5 }, to: { r: 5, c: 6 } })).toBe(true);
     await h.finishAnims();
-    expect(h.ctrl.phase).toBe('ended');
-    expect(h.ctrl.state.endReason).toBe('timeUp');
-    expect(h.ctrl.state.pieces.find((p) => p.id === 'p0-sad')?.pos).toEqual({ r: 3, c: 5 });
-    expect(h.botCalls).toHaveLength(0);
+    expect(h.ctrl.state.bonusPieceId).toBe('p0-insaner');
+    await h.advance(60_000);
+    expect(h.ctrl.state.status).toBe('playing');
+    expect(h.ctrl.state.bonusPieceId).toBeNull();
+    expect(h.ctrl.state.turn).toBe(1);
+    expect(h.ctrl.phase).toBe('botThinking');
   });
 });

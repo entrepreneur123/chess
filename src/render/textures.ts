@@ -3,20 +3,24 @@ import * as THREE from 'three';
 import { BOARD_SIZE } from '../engine/types';
 import { BOARD_COLORS, TEAM_COLORS } from './palette';
 import { hexToRgb, makeRng, rgbToCss } from './common';
+import type { RGB } from './common';
 import {
-  PLINTH_EXTENT,
+  FRAME_EXTENT,
+  MARKER_QUAD,
   TILE_BEVEL,
   TILE_EDGE_SHADE,
+  TILE_FACE_GRAD,
   TILE_HIGHLIGHT,
   TILE_INSET,
   TILE_LIP,
   TILE_LIP_SHADE,
   TILE_LIP_X,
   TILE_RADIUS,
-  paintCaptureMark,
+  paintCaptureRing,
   paintFieldOverlay,
-  paintPlinth,
-  paintSelectFrame,
+  paintFrame,
+  paintGlowDot,
+  paintSelectGlow,
 } from './arena';
 
 function canvas(w: number, h: number): { cvs: HTMLCanvasElement; ctx: CanvasRenderingContext2D | null } {
@@ -49,42 +53,14 @@ export function makeGlowTexture(): THREE.CanvasTexture {
 }
 
 /**
- * Move target dot (tint via material colour): a soft white dot with a navy keyline and a dark drop
- * shadow below it, so it reads on the bright grass. Normal blending (the shadow stays dark when the
- * dot is tinted red for an enemy reach preview).
+ * Luminous move-target dot in its own colour (white-hot core, soft halo; arena.ts paintGlowDot).
+ * Additive blending; the plane is MARKER_QUAD.dot cells wide.
  */
-export function makeDotTexture(): THREE.CanvasTexture {
+export function makeDotTexture(color: RGB): THREE.CanvasTexture {
   const s = 128;
   const { cvs, ctx } = canvas(s, s);
-  if (ctx) {
-    const c = s / 2;
-    const r = s * 0.18;
-    // Drop shadow (offset down, soft).
-    ctx.save();
-    ctx.shadowColor = 'rgba(10,20,40,0.55)';
-    ctx.shadowBlur = s * 0.05;
-    ctx.shadowOffsetY = s * 0.035;
-    ctx.fillStyle = 'rgba(27,36,69,0.9)';
-    ctx.beginPath();
-    ctx.arc(c, c, r + s * 0.014, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-    // Soft white body, slightly cooler at the bottom, with a top-left catch light.
-    const g = ctx.createLinearGradient(0, c - r, 0, c + r);
-    g.addColorStop(0, 'rgba(255,255,255,1)');
-    g.addColorStop(1, 'rgba(226,234,246,1)');
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(c, c, r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.9)';
-    ctx.beginPath();
-    ctx.ellipse(c - r * 0.3, c - r * 0.38, r * 0.34, r * 0.22, -0.6, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  const tex = toTexture(cvs);
-  tex.anisotropy = 4;
-  return tex;
+  if (ctx) paintGlowDot(ctx, s / 2, s / 2, s / 2, color);
+  return toTexture(cvs);
 }
 
 /** Dark blob used as a contact shadow under each piece. */
@@ -254,21 +230,21 @@ export function makeSlabTexture(slabSize: number, margin: number): THREE.CanvasT
   return tex;
 }
 
-/** Cells -> texture pixels of the plinth texture (sharp on phones at DPR 2). */
-const PLINTH_PX = 72;
+/** Cells -> texture pixels of the frame texture (sharp on phones at DPR 2). */
+const FRAME_PX = 72;
 
 /**
- * The stone plinth + field bed as one texture, and its world-space plane size / centre offset
- * (the plinth is taller than wide: the lip and the drop shadow hang below the field).
+ * The iron frame + field well as one texture, and its world-space plane size / centre offset
+ * (the frame is taller than wide: the lip and the shadow hang below the field).
  */
-export function makePlinthTexture(): { tex: THREE.CanvasTexture; width: number; depth: number; offsetZ: number } {
-  const E = PLINTH_EXTENT;
+export function makeFrameTexture(): { tex: THREE.CanvasTexture; width: number; depth: number; offsetZ: number } {
+  const E = FRAME_EXTENT;
   const width = BOARD_SIZE + E.side * 2;
   const depth = BOARD_SIZE + E.top + E.bottom;
-  const w = Math.round(width * PLINTH_PX);
-  const h = Math.round(depth * PLINTH_PX);
+  const w = Math.round(width * FRAME_PX);
+  const h = Math.round(depth * FRAME_PX);
   const { cvs, ctx } = canvas(w, h);
-  if (ctx) paintPlinth(ctx, PLINTH_PX, E.side * PLINTH_PX, E.top * PLINTH_PX);
+  if (ctx) paintFrame(ctx, FRAME_PX, E.side * FRAME_PX, E.top * FRAME_PX);
   const tex = toTexture(cvs);
   tex.generateMipmaps = false;
   tex.minFilter = THREE.LinearFilter;
@@ -278,7 +254,7 @@ export function makePlinthTexture(): { tex: THREE.CanvasTexture; width: number; 
   return { tex, width, depth, offsetZ };
 }
 
-/** Field overlay (ambient occlusion along the frame + the centre path), exactly the 12x12 field. */
+/** Field overlay (ambient occlusion along the frame), exactly the 12x12 field. */
 export function makeFieldOverlayTexture(): THREE.CanvasTexture {
   const s = 512;
   const { cvs, ctx } = canvas(s, s);
@@ -289,22 +265,19 @@ export function makeFieldOverlayTexture(): THREE.CanvasTexture {
   return tex;
 }
 
-/** Selection frame around a tile (white band, tint via material colour); quad = SELECT_QUAD cells. */
-export const SELECT_QUAD = 1.25;
-export function makeSelectFrameTexture(): THREE.CanvasTexture {
+/** Glowing selection frame in its own colour (additive); quad = MARKER_QUAD.select cells. */
+export function makeSelectGlowTexture(color: RGB): THREE.CanvasTexture {
   const s = 160;
   const { cvs, ctx } = canvas(s, s);
-  if (ctx) paintSelectFrame(ctx, s / 2, s / 2, s / SELECT_QUAD, '#FFFFFF');
-  const tex = toTexture(cvs);
-  tex.anisotropy = 4;
-  return tex;
+  if (ctx) paintSelectGlow(ctx, s / 2, s / 2, s / MARKER_QUAD.select, color);
+  return toTexture(cvs);
 }
 
-/** Capture target brackets (white, tint via material colour); quad = SELECT_QUAD cells. */
-export function makeCaptureMarkTexture(): THREE.CanvasTexture {
+/** Glowing capture ring in its own colour (normal blend); quad = MARKER_QUAD.capture cells. */
+export function makeCaptureRingTexture(color: RGB): THREE.CanvasTexture {
   const s = 160;
   const { cvs, ctx } = canvas(s, s);
-  if (ctx) paintCaptureMark(ctx, s / 2, s / 2, (s / SELECT_QUAD) * 0.94, '#FFFFFF');
+  if (ctx) paintCaptureRing(ctx, s / 2, s / 2, s / MARKER_QUAD.capture, color);
   const tex = toTexture(cvs);
   tex.anisotropy = 4;
   return tex;
@@ -325,7 +298,7 @@ void main() {
 
 const f = (x: number): string => x.toFixed(4);
 
-/** Raised grass tile (mirrors arena.ts paintTile); output is sRGB, written as-is (no tone mapping). */
+/** Raised slate tile (mirrors arena.ts paintTile); output is sRGB, written as-is (no tone mapping). */
 const TILE_FS = /* glsl */ `
 varying vec2 vP;
 varying vec3 vC;
@@ -351,8 +324,12 @@ void main() {
   float inHl = 1.0 - smoothstep(-aa, aa, sdRR(p, tc + vec2(${f(TILE_BEVEL)}), th, rt));
   float inDk = 1.0 - smoothstep(-aa, aa, sdRR(p, tc - vec2(${f(TILE_BEVEL * 0.8)}), th, rt));
   vec3 c = toSRGB(vC);
-  vec3 lip = c * mix(${f(TILE_LIP_SHADE)}, ${f(TILE_LIP_SHADE * 0.88)}, smoothstep(0.8, 1.0, p.y));
-  vec3 top = mix(c, vec3(1.0), ${f(TILE_HIGHLIGHT)} * (1.0 - inHl));
+  vec3 lip = c * ${f(TILE_LIP_SHADE)};
+  // Top face: lighter toward the top-left (diagonal gradient across the face, as paintTile).
+  vec2 fq = clamp((p - tMin) / (tMax - tMin), 0.0, 1.0);
+  float fk = 1.0 + ${f(TILE_FACE_GRAD)} - ${f(2 * TILE_FACE_GRAD)} * (fq.x + fq.y) * 0.5;
+  vec3 face = fk > 1.0 ? mix(c, vec3(1.0), fk - 1.0) : c * fk;
+  vec3 top = mix(face, vec3(1.0), ${f(TILE_HIGHLIGHT)} * (1.0 - inHl));
   top *= mix(${f(TILE_EDGE_SHADE)}, 1.0, inDk);
   gl_FragColor = vec4(mix(lip, top, inTop), a);
 }`;

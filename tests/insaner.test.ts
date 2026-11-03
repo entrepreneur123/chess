@@ -259,15 +259,16 @@ describe('storm', () => {
     expect(s.winner).toBe(1); // Red lost 3 + 3 to Blue's 3
   });
 
-  it('ticks on timeouts and auto-passes too', () => {
+  it('a storm that swallows the last piece of one side ends the game as a storm win', () => {
     let s = makeState([
       [0, 'sad', 1, 5, 5],
       [1, 'sad', 1, 8, 0],
     ]);
     s = { ...s, stormIn: 1 };
-    s = applyTimeout(s);
+    s = applyMove(s, mv(s, 'p0-sad', 5, 6));
     expect(s.storm).toBe(1);
     expect(s.status).toBe('ended');
+    expect(s.endReason).toBe('storm');
     expect(s.winner).toBe(0);
   });
 });

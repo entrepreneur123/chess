@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-  MAX_CONSECUTIVE_TIMEOUTS,
   SUDDEN_DEATH_PLY,
   STORM_INTERVAL_PLIES,
-  applyTimeUp,
   suddenDeathIn,
+  turnNumber,
   applyMove,
   applyTimeout,
   createGame,
@@ -67,30 +66,50 @@ describe('applyMove', () => {
 });
 
 describe('timeouts', () => {
-  it('passes the turn, counts, and forfeits at the limit; moving resets', () => {
+  it('running out of time forfeits at once (no strikes)', () => {
+    const g = createGame(defaultFormation(), defaultFormation());
+    const t = applyTimeout(g);
+    expect(t.status).toBe('ended');
+    expect(t.winner).toBe(1);
+    expect(t.endReason).toBe('timeoutForfeit');
+    expect(t.history[t.history.length - 1]).toEqual({ kind: 'pass', player: 0, reason: 'timeout' });
+    expect(t.consecutiveTimeouts).toEqual([1, 0]);
+    expect(applyTimeout(t)).toBe(t);
+    // Also for the second player, later in the game.
+    const g2 = applyMove(g, getLegalMoves(g)[0]);
+    const t2 = applyTimeout(g2);
+    expect(t2.winner).toBe(0);
+    expect(t2.endReason).toBe('timeoutForfeit');
+  });
+  it('a forfeit is decided before the storm could tick', () => {
+    const s = makeState(
+      [
+        [0, 'sad', 1, 5, 5],
+        [1, 'sad', 1, 8, 0],
+      ],
+      1,
+      { stormIn: 1 },
+    );
+    const t = applyTimeout(s);
+    expect(t.endReason).toBe('timeoutForfeit');
+    expect(t.winner).toBe(0);
+    expect(t.storm).toBe(0);
+    expect(t.pieces).toHaveLength(2);
+  });
+});
+
+describe('turn counter', () => {
+  it('counts rounds: both players\' first moves are turn 1', () => {
+    expect(turnNumber({ ply: 0 })).toBe(1);
+    expect(turnNumber({ ply: 1 })).toBe(1);
+    expect(turnNumber({ ply: 2 })).toBe(2);
+    expect(turnNumber({ ply: 119 })).toBe(60);
+    expect(turnNumber({ ply: SUDDEN_DEATH_PLY })).toBe(61);
     let g = createGame(defaultFormation(), defaultFormation());
-    g = applyTimeout(g);
-    expect(g.turn).toBe(1);
-    expect(g.consecutiveTimeouts).toEqual([1, 0]);
-    expect(g.history[g.history.length - 1]).toEqual({ kind: 'pass', player: 0, reason: 'timeout' });
-    expect(g.ply).toBe(1);
     g = applyMove(g, getLegalMoves(g)[0]);
-    g = applyTimeout(g); // p0 #2
-    expect(g.consecutiveTimeouts[0]).toBe(2);
+    expect(turnNumber(g)).toBe(1);
     g = applyMove(g, getLegalMoves(g)[0]);
-    g = applyMove(g, getLegalMoves(g)[0]); // p0 moves -> reset
-    expect(g.consecutiveTimeouts[0]).toBe(0);
-    for (let i = 0; i < MAX_CONSECUTIVE_TIMEOUTS - 1; i++) {
-      g = applyTimeout(g); // p1
-      expect(g.status).toBe('playing');
-      g = applyMove(g, getLegalMoves(g)[0]); // p0
-    }
-    expect(g.consecutiveTimeouts[1]).toBe(MAX_CONSECUTIVE_TIMEOUTS - 1);
-    g = applyTimeout(g);
-    expect(g.status).toBe('ended');
-    expect(g.winner).toBe(0);
-    expect(g.endReason).toBe('timeoutForfeit');
-    expect(applyTimeout(g)).toBe(g);
+    expect(turnNumber(g)).toBe(2);
   });
 });
 
@@ -109,15 +128,6 @@ describe('no moves / stalemate / sudden death', () => {
     expect(s2.history[s2.history.length - 1]).toEqual({ kind: 'pass', player: 1, reason: 'noMoves' });
     expect(getLegalMoves(s2).length).toBeGreaterThan(0);
   });
-  it('timeout followed by a no-moves player also auto-passes', () => {
-    const s = makeState([
-      [0, 'sad', 1, 5, 5],
-      [1, 'walk', 1, 0, 0],
-    ]);
-    const s2 = applyTimeout(s);
-    expect(s2.turn).toBe(0);
-    expect(s2.history.map((h) => h.kind === 'pass' && h.reason)).toEqual(['timeout', 'noMoves']);
-  });
   it('reaching the last row no longer stalls the game: the mover turns around', () => {
     const s = makeState([
       [0, 'marki', 1, 10, 3],
@@ -132,22 +142,25 @@ describe('no moves / stalemate / sudden death', () => {
     expect(s2.turn).toBe(0);
   });
   it('stalemate when neither side can move (all pieces boxed in), adjudicated by material', () => {
-    // p0: sad boxed in the corner by its own pieces; marki blocked by the ally ahead; walk facing the edge.
-    // p1: a lone walk facing the edge. After p1 times out, nobody can move -> stalemate.
+    // p0: sad boxed in the corner by its own pieces; marki blocked by the ally ahead; walk facing
+    // the edge; brutile's only steps lead onto wasteland. p1: a lone walk facing the edge.
+    // Brutile steps onto wasteland (destroyed) -> nobody can move -> stalemate.
     const base = makeState(
       [
         [0, 'sad', 1, 0, 0],
         [0, 'marki', 1, 1, 0],
         [0, 'walk', 1, 0, 1],
+        [0, 'brutile', 1, 5, 5],
         [1, 'walk', 1, 11, 5],
       ],
-      1,
+      0,
+      { waste: [6 * 12 + 4, 6 * 12 + 6] },
     );
     const s = {
       ...base,
       pieces: base.pieces.map((p) => (p.id === 'p0-marki' || p.id === 'p0-walk' ? { ...p, dir: -1 as const } : p.id === 'p1-walk' ? { ...p, dir: 1 as const } : p)),
     };
-    const s2 = applyTimeout(s);
+    const s2 = applyMove(s, mv(s, 'p0-brutile', 6, 4));
     expect(s2.status).toBe('ended');
     expect(s2.endReason).toBe('stalemate');
     expect(s2.winner).toBe(0);
@@ -202,20 +215,6 @@ describe('no moves / stalemate / sudden death', () => {
     expect(d.endReason).toBe('storm');
     expect(d.winner).toBeNull();
   });
-  it('the match clock running out adjudicates by material', () => {
-    const s = makeState(
-      [
-        [0, 'sad', 1, 5, 5],
-        [1, 'sad', 2, 8, 8],
-      ],
-      0,
-    );
-    const t = applyTimeUp(s);
-    expect(t.status).toBe('ended');
-    expect(t.endReason).toBe('timeUp');
-    expect(t.winner).toBe(1);
-    expect(applyTimeUp(t)).toBe(t);
-  });
   it('a capture-free game is bounded by the storm', () => {
     // Shuffle back and forth without ever capturing: sudden death + storm must end it.
     let s = makeState(
@@ -226,11 +225,13 @@ describe('no moves / stalemate / sudden death', () => {
       0,
     );
     let guard = 0;
-    while (s.status === 'playing' && guard++ < 200) {
-      const moves = getLegalMoves(s).filter((m) => !m.captureId);
-      s = moves.length ? applyMove(s, moves[guard % moves.length]) : applyTimeout(s);
+    while (s.status === 'playing' && guard++ < 400) {
+      const legal = getLegalMoves(s);
+      const moves = legal.filter((m) => !m.captureId);
+      s = applyMove(s, (moves.length ? moves : legal)[guard % (moves.length || legal.length)]);
     }
     expect(s.status).toBe('ended');
+    expect(SUDDEN_DEATH_PLY + 6 * STORM_INTERVAL_PLIES).toBe(156);
     expect(s.ply).toBeLessThanOrEqual(SUDDEN_DEATH_PLY + 6 * STORM_INTERVAL_PLIES);
   });
 });

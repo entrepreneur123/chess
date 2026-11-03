@@ -7,7 +7,6 @@
 import {
   applyMove,
   applyTimeout,
-  applyTimeUp,
   applySkill,
   isLegalSkill,
   getLegalMoves,
@@ -26,8 +25,8 @@ import {
   type PlayerId,
   type Pos,
   type SkillAction,
-  MATCH_TIME_MS,
 } from '../../engine';
+import { fallbackAction } from '../../ai/bot';
 
 export type Phase = 'humanTurn' | 'animating' | 'botThinking' | 'ended';
 
@@ -74,8 +73,6 @@ export interface ControllerPorts {
   now?(): number;
   /** Fixed time per turn (tests). Defaults to the engine's `turnTimeMsFor` (45 / 40 / 20 s). */
   turnTimeMs?: number;
-  /** Match clock length (tests). Defaults to MATCH_TIME_MS. */
-  matchTimeMs?: number;
   setTimer?(fn: () => void, ms: number): unknown;
   clearTimer?(id: unknown): void;
 }
@@ -109,13 +106,6 @@ export class GameController {
   private timerHandle: unknown = null;
   private resumeWaiters: (() => void)[] = [];
 
-  // Match clock (whole game, pauses excluded). When it runs out the game is adjudicated.
-  private readonly matchTime: number;
-  private matchRemaining: number;
-  private matchStartedAt: number | null = null;
-  private matchHandle: unknown = null;
-  private matchUp = false;
-
   private readonly now: () => number;
   private readonly setTimer: (fn: () => void, ms: number) => unknown;
   private readonly clearTimer: (id: unknown) => void;
@@ -124,8 +114,6 @@ export class GameController {
     this._state = initial;
     this.turnTime = ports.turnTimeMs ?? turnTimeMsFor(initial);
     this.timerRemaining = this.turnTime;
-    this.matchTime = ports.matchTimeMs ?? MATCH_TIME_MS;
-    this.matchRemaining = this.matchTime;
     this.now = ports.now ?? (() => performance.now());
     this.setTimer = ports.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
     this.clearTimer = ports.clearTimer ?? ((id) => clearTimeout(id as number));
@@ -161,7 +149,6 @@ export class GameController {
   start(): void {
     if (this.started || this.disposed) return;
     this.started = true;
-    if (!this._paused) this.runMatchClock();
     this.enterTurn();
   }
 
@@ -172,15 +159,6 @@ export class GameController {
   }
   get turnTimeMs(): number {
     return this.turnTime;
-  }
-
-  /** Remaining match time in ms (frozen while paused; 0 once it ran out). */
-  matchRemainingMs(): number {
-    if (this.matchStartedAt === null) return this.matchRemaining;
-    return Math.max(0, this.matchRemaining - (this.now() - this.matchStartedAt));
-  }
-  get matchTimeMs(): number {
-    return this.matchTime;
   }
 
   /** Board tap at absolute coordinates. */
@@ -252,14 +230,12 @@ export class GameController {
     if (this._paused || this.disposed) return;
     this._paused = true;
     this.freezeTimer();
-    this.freezeMatchClock();
     this.emit({ type: 'change' });
   }
 
   resume(): void {
     if (!this._paused || this.disposed) return;
     this._paused = false;
-    if (this.started && this._phase !== 'ended') this.runMatchClock();
     if (this._phase === 'humanTurn' || this._phase === 'botThinking') this.runTimer();
     const waiters = this.resumeWaiters.splice(0);
     for (const w of waiters) w();
@@ -271,7 +247,6 @@ export class GameController {
     this.disposed = true;
     this.gen++;
     this.stopTimer();
-    this.freezeMatchClock();
     this.listeners.clear();
     this.resumeWaiters.splice(0).forEach((w) => w());
   }
@@ -311,10 +286,6 @@ export class GameController {
       this.checkEndOrContinue(false);
       return;
     }
-    if (this.matchUp) {
-      this.doTimeUp();
-      return;
-    }
     this.turnTime = this.ports.turnTimeMs ?? turnTimeMsFor(this._state);
     this.timerRemaining = this.turnTime;
     this.timerStartedAt = null;
@@ -351,15 +322,29 @@ export class GameController {
     if (wait > 0) await new Promise<void>((r) => this.setTimer(r, wait));
     await this.whenResumed();
     if (gen !== this.gen || this.disposed || this._phase !== 'botThinking') return;
-    if (move && 'kind' in move && move.kind === 'skill') {
-      if (isLegalSkill(this._state, move)) await this.playSkill(move);
-      else this.doTimeout();
-    } else if (move && isLegalMove(this._state, move as Move)) {
-      await this.playMove(move as Move);
-    } else {
-      // Bot couldn't produce a legal move: treat like a timeout so the game never stalls.
-      this.doTimeout();
+    if (move && 'kind' in move && move.kind === 'skill' && isLegalSkill(this._state, move)) await this.playSkill(move);
+    else if (move && !('kind' in move) && isLegalMove(this._state, move)) await this.playMove(move);
+    // The bot failed or answered nonsense: it never forfeits for that, it plays a safe fallback.
+    else await this.playBotFallback();
+  }
+
+  /**
+   * The bot's turn must never end in a timeout (that forfeits the match): play a cheap legal action
+   * instead. Only when there is nothing at all to play (a boxed-in chain move) is the turn timed out,
+   * which for a chain move just skips it.
+   */
+  private async playBotFallback(): Promise<void> {
+    if (this.disposed || this._phase !== 'botThinking') return;
+    let action: Move | SkillAction | null = null;
+    try {
+      action = fallbackAction(this._state);
+    } catch (e) {
+      console.warn('bot fallback failed', e);
     }
+    if (action && 'kind' in action) {
+      if (isLegalSkill(this._state, action)) return this.playSkill(action);
+    } else if (action && isLegalMove(this._state, action)) return this.playMove(action);
+    this.doTimeout();
   }
 
   private whenResumed(): Promise<void> {
@@ -431,9 +416,12 @@ export class GameController {
     const prev = this._state;
     const who = prev.turn;
     this.selection = null;
+    const chainLapse = prev.bonusPieceId !== null;
+    // Running out of time forfeits the match; only a pending chain move just lapses.
     this._state = applyTimeout(prev);
-    if (who === HUMAN) this.emit({ type: 'toast', message: '시간 초과! 턴이 넘어갑니다', tone: 'warn', kind: 'timeout', player: who });
-    else this.emit({ type: 'toast', message: '상대가 시간을 초과해 턴이 넘어옵니다', kind: 'timeout', player: who });
+    if (chainLapse) {
+      if (who === HUMAN) this.emit({ type: 'toast', message: '연속 이동 시간이 지나 턴이 넘어갑니다', kind: 'timeout', player: who });
+    } else if (who === HUMAN) this.emit({ type: 'toast', message: '시간 초과! 기권패 처리됩니다', tone: 'warn', kind: 'timeout', player: who });
     this.announce(prev, this._state, 1);
     this.checkEndOrContinue(true);
   }
@@ -469,22 +457,11 @@ export class GameController {
     }
   }
 
-  /** The match clock ran out: adjudicate now (an animation in flight finishes first, see enterTurn). */
-  private doTimeUp(): void {
-    if (this.disposed || this._phase === 'ended') return;
-    this.gen++;
-    this.stopTimer();
-    this.selection = null;
-    this._state = applyTimeUp(this._state);
-    this.checkEndOrContinue(false);
-  }
-
   private checkEndOrContinue(continueTurn: boolean): void {
     if (this._state.status === 'ended') {
       this._phase = 'ended';
       this.refreshSelection();
       this.stopTimer();
-      this.freezeMatchClock();
       this.emit({ type: 'change' });
       if (!this.endEmitted) {
         this.endEmitted = true;
@@ -504,7 +481,9 @@ export class GameController {
       this.timerHandle = null;
       this.timerStartedAt = null;
       this.timerRemaining = 0;
-      this.doTimeout();
+      // The human's clock ran out: forfeit. The bot never times out: it plays a fallback move.
+      if (this._phase === 'botThinking') void this.playBotFallback();
+      else this.doTimeout();
     }, Math.max(0, this.timerRemaining));
   }
 
@@ -518,25 +497,5 @@ export class GameController {
 
   private stopTimer(): void {
     this.freezeTimer();
-  }
-
-  private runMatchClock(): void {
-    if (this.matchHandle !== null || this.matchUp) return;
-    this.matchStartedAt = this.now();
-    this.matchHandle = this.setTimer(() => {
-      this.matchHandle = null;
-      this.matchStartedAt = null;
-      this.matchRemaining = 0;
-      this.matchUp = true;
-      if (this._phase === 'humanTurn' || this._phase === 'botThinking') this.doTimeUp();
-    }, Math.max(0, this.matchRemaining));
-  }
-
-  private freezeMatchClock(): void {
-    if (this.matchHandle === null) return;
-    this.clearTimer(this.matchHandle);
-    this.matchHandle = null;
-    if (this.matchStartedAt !== null) this.matchRemaining = Math.max(0, this.matchRemaining - (this.now() - this.matchStartedAt));
-    this.matchStartedAt = null;
   }
 }

@@ -173,7 +173,8 @@ function switchSide(b: FastBoard): void {
   b.turn = (1 - b.turn) as PlayerId;
   let killed = 0;
   const oldWipe = b.wipe;
-  if (b.stormIn > 0) {
+  // Like the engine: a side that just lost its last piece ends the game, the storm does not tick.
+  if (b.stormIn > 0 && b.alive[0] > 0 && b.alive[1] > 0) {
     b.stormIn--;
     if (b.stormIn === 0) {
       b.storm++;

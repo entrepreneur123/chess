@@ -6,6 +6,8 @@ import { h } from '../dom';
 import type { ControllerSnapshot } from './GameController';
 
 const RING_R = 18;
+/** Last seconds of a turn: running out is an immediate forfeit, so the ring pulses red. */
+export const CRITICAL_MS = 5_000;
 const RING_C = 2 * Math.PI * RING_R;
 
 export class TimerRing {
@@ -41,11 +43,13 @@ export class TimerRing {
   update(active: boolean, remainingMs: number, totalMs: number, paused: boolean): void {
     const secs = Math.ceil(remainingMs / 1000);
     const warn = active && remainingMs <= PACING.timerWarnMs;
-    const state = `${active}|${warn}|${paused}`;
+    const critical = warn && !paused && remainingMs <= CRITICAL_MS;
+    const state = `${active}|${warn}|${critical}|${paused}`;
     if (state !== this.lastState) {
       this.lastState = state;
       this.el.classList.toggle('is-active', active);
       this.el.classList.toggle('is-warn', warn);
+      this.el.classList.toggle('is-critical', critical);
       this.el.classList.toggle('is-paused', paused);
     }
     const frac = active ? Math.max(0, Math.min(1, remainingMs / totalMs)) : 1;
@@ -97,13 +101,11 @@ export function endReasonText(reason: EndReason | null, outcome: 'win' | 'loss' 
     case 'storm':
       return outcome === 'win' ? '상대의 마지막 말이 자기장에 휩쓸렸습니다.' : '내 마지막 말이 자기장에 휩쓸렸습니다.';
     case 'timeoutForfeit':
-      return outcome === 'win' ? '상대가 3회 연속 시간을 초과해 기권 처리되었습니다.' : '3회 연속 시간을 초과해 기권 처리되었습니다.';
+      return outcome === 'win' ? '상대 시간 초과 · 몰수승' : '시간 초과 · 몰수패';
     case 'resign':
       return outcome === 'win' ? '상대가 기권했습니다.' : '기권했습니다.';
     case 'waste':
       return outcome === 'win' ? '상대의 마지막 말이 불모지에 닿아 소멸했습니다.' : '내 마지막 말이 불모지에 닿아 소멸했습니다.';
-    case 'timeUp':
-      return `대전 시간 10분이 끝나 남은 전력으로 판정했습니다.${outcome === 'draw' ? ' 전력이 같습니다.' : ''}`;
     case 'stalemate':
       return `양쪽 모두 움직일 수 없어 남은 전력으로 판정했습니다.${outcome === 'draw' ? ' 전력이 같습니다.' : ''}`;
     default:

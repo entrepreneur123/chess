@@ -3,6 +3,7 @@
  * hardware/browser back button (Capacitor WebView fires popstate) through a single history
  * "guard" entry that is present whenever a non-root screen is shown.
  */
+import { installBackdrops } from './backdrops';
 import { closeAllOverlays, closeTopOverlay } from './components/overlay';
 import { installPressFx } from './components/press';
 import { clearToasts } from './components/toast';
@@ -57,6 +58,7 @@ export class Router {
     history.replaceState({ t12: 'root' }, '');
     window.addEventListener('popstate', this.onPopState);
     installPressFx();
+    installBackdrops();
   }
 
   register<N extends ScreenName>(name: N, factory: ScreenFactory<N>): this {

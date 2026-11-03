@@ -18,25 +18,27 @@ export const TURN_TIME_MS = 45_000;
 export const TURN_TIME_2_MS = 40_000;
 /** Time per turn once either side is down to 1 piece. */
 export const TURN_TIME_1_MS = 20_000;
-/** A player who times out this many turns in a row forfeits (anti-AFK). */
-export const MAX_CONSECUTIVE_TIMEOUTS = 3;
 /**
- * Storm ("자기장"): once either side is down to a single piece, every STORM_INTERVAL_PLIES turn
- * changes (3 moves each) the outermost left AND right columns become storm. A piece standing in a
- * storm column is removed at once; nothing may move into or through the storm.
+ * Running out of turn time forfeits the match at once (no strikes). Kept as a constant (= 1) so
+ * `consecutiveTimeouts` stays meaningful for consumers that still read it.
+ */
+export const MAX_CONSECUTIVE_TIMEOUTS = 1;
+/**
+ * Storm ("자기장"): once active, every STORM_INTERVAL_PLIES turn changes (3 moves each) the
+ * outermost left AND right columns become storm. A piece standing in a storm column is removed at
+ * once; nothing may move into or through the storm.
  */
 export const STORM_INTERVAL_PLIES = 6;
 /**
- * Sudden death: the storm also starts on its own once this many plies were played (20 moves
- * each), whatever the piece count. Together with STORM_INTERVAL_PLIES this bounds a match to
- * SUDDEN_DEATH_PLY + 6 * STORM_INTERVAL_PLIES plies (the storm swallows the whole board).
+ * Sudden death: the storm activates when either side is down to its last piece, or on its own once
+ * this many plies were played (60 turns each, see `turnNumber`: turn 61 starts at ply 120).
+ * Together with STORM_INTERVAL_PLIES this bounds a match to SUDDEN_DEATH_PLY + 6 *
+ * STORM_INTERVAL_PLIES = 156 plies (after 6 shrinks the storm has swallowed the whole board).
  */
-export const SUDDEN_DEATH_PLY = 40;
-/** Wall-clock cap for a match (pauses excluded): when it runs out the game is decided by material. */
-export const MATCH_TIME_MS = 10 * 60_000;
+export const SUDDEN_DEATH_PLY = 120;
 /**
- * Brutile's skill "불모지" (wasteland) unlocks once both players have taken 3 turns (ply 6, the 7th
- * turn of the match) and is forbidden once the storm has started to close in (storm >= 1).
+ * Brutile's skill "불모지" (wasteland) unlocks once both players have taken 3 turns (ply 6: turn 4 as
+ * `turnNumber` counts it) and is forbidden once the storm has started to close in (storm >= 1).
  */
 export const SKILL_UNLOCK_PLY = 6;
 /** How many times a side may use its skill per match. */
@@ -114,10 +116,11 @@ export interface SkillAction {
 export type EndReason =
   | 'elimination' // all enemy pieces captured
   | 'storm' // the last piece(s) of a side were swallowed by the storm (both at once: by material)
-  | 'timeoutForfeit' // MAX_CONSECUTIVE_TIMEOUTS reached
+  | 'timeoutForfeit' // the side to move ran out of turn time: it loses at once
   | 'resign'
   | 'stalemate' // neither side has any legal move -> adjudicated by material
-  | 'timeUp' // MATCH_TIME_MS ran out -> adjudicated by material
+  /** @deprecated The match clock was removed; the engine never produces this any more. */
+  | 'timeUp'
   | 'waste'; // the last piece of a side stepped onto wasteland
 
 export type PassReason =

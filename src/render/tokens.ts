@@ -6,10 +6,10 @@
  *    legendary = rainbow hue sweeping around the ring with a rotating shimmer (driven by the shared
  *    `time` uniform; the board only re-renders it at a light rate while a legendary is on screen).
  *  - Token: a thick, chunky board-game coin seen from above: its edge (team-deep, milled) shows
- *    below the top face, a navy keyline runs around the whole silhouette, the top face has a
+ *    below the top face, a dark ink keyline runs around the whole silhouette, the top face has a
  *    team-colour rim lit from the top-left (light top, deep bottom, a specular arc), an inset bevel
  *    ring, the character's face illustration (public/chars/<id>-lv<n>-face.jpg) and 1..3 gold star
- *    pips with navy outlines on the lower rim. One material per piece (it carries the per-piece
+ *    pips with ink outlines on the lower rim. One material per piece (it carries the per-piece
  *    cross-fade / hit flash / dissolve uniforms) over a face texture shared per (character, level)
  *    and loaded lazily (sRGB, mipmaps, anisotropy).
  */
@@ -47,10 +47,10 @@ void main() {
   float d = abs(r - ${RING_RADIUS.toFixed(3)});
   float aa = fwidth(r) * 1.2;
   float band = 1.0 - smoothstep(${RING_HALF.toFixed(3)} - aa, ${RING_HALF.toFixed(3)} + aa, d);
-  float glow = exp(-pow(max(0.0, r - ${(RING_RADIUS + RING_HALF).toFixed(3)}) / 0.05, 2.0)) * uGlowAmt * step(${RING_RADIUS.toFixed(3)}, r);
-  // Navy keylines on both sides of the band so every ring (even white) reads on the grass.
-  float kd = abs(d - ${RING_HALF.toFixed(3)} - 0.006);
-  float key = (1.0 - smoothstep(0.007, 0.007 + aa, kd)) * 0.8;
+  // Soft glow around the band (the inner half is mostly under the coin) on the dark tiles.
+  float glow = exp(-pow(max(0.0, d - ${RING_HALF.toFixed(3)}) / 0.065, 2.0)) * uGlowAmt;
+  // Thin dark keyline just inside the band (separates it from the coin's edge).
+  float key = (1.0 - smoothstep(0.006, 0.006 + aa, abs(r - ${(RING_RADIUS - RING_HALF - 0.006).toFixed(3)}))) * 0.6;
   vec3 core = uCore;
   vec3 g = uGlow;
   if (uRainbow > 0.5) {
@@ -63,10 +63,10 @@ void main() {
     glow *= 0.85 + 0.3 * sh;
   }
   float aCore = band;
-  // Keyline colour: navy-ink #1b2445 (linear).
-  vec3 navy = vec3(0.0110, 0.0176, 0.0595);
+  // Keyline colour: night-0 #070a12 (linear).
+  vec3 ink = vec3(0.0021, 0.0030, 0.0060);
   float aKey = key * (1.0 - band);
-  vec3 col = core * aCore + navy * aKey + g * glow * (1.0 - aCore) * (1.0 - aKey);
+  vec3 col = core * aCore + ink * aKey + g * glow * (1.0 - aCore) * (1.0 - aKey);
   float alpha = max(aCore, aKey);
   gl_FragColor = vec4(col, alpha);
   #include <colorspace_fragment>
@@ -167,7 +167,8 @@ void main() {
   vec2 pt = (q - vec2(0.0, ${g3(COIN_TOP_Y)})) / ${g3(COIN_R)};
   float r = length(pt);
   float ar = aa / ${g3(COIN_R)};
-  vec3 navy = vec3(0.0110, 0.0176, 0.0595);
+  // Ink keyline: panel-lip #090d17 (linear).
+  vec3 ink = vec3(0.0027, 0.0040, 0.0085);
   // Coin edge (thickness): deep team colour, darker toward the bottom, fine milling.
   float mill = 0.92 + 0.08 * sin(asin(clamp(q.x / ${g3(COIN_R)}, -1.0, 1.0)) * 34.0);
   float ey = clamp((q.y - ${g3(COIN_EDGE_Y - COIN_R)}) / ${g3(COIN_TOP_Y - COIN_EDGE_Y + 0.12)}, 0.0, 1.0);
@@ -188,7 +189,7 @@ void main() {
   face *= 1.0 - 0.45 * smoothstep(0.56, 0.78, r) * (0.35 + 0.65 * lit);
   vec3 top = face;
   // Inset bevel ring (dark where the light can't reach, light on the lower right).
-  vec3 bevel = mix(mix(uTeamLight, vec3(1.0), 0.25), navy * 2.0, lit);
+  vec3 bevel = mix(mix(uTeamLight, vec3(1.0), 0.25), ink * 2.0, lit);
   top = mix(top, bevel, smoothstep(0.775 - ar, 0.775 + ar, r));
   // Team rim, lit from the top-left: light top, main, deep bottom + a specular arc.
   vec3 rim = mix(uTeamDark, uTeam, smoothstep(0.1, 0.55, lit));
@@ -196,19 +197,19 @@ void main() {
   float arc = smoothstep(0.035, 0.0, abs(r - 0.915)) * smoothstep(0.8, 0.98, lit);
   rim += vec3(0.75) * arc;
   top = mix(top, rim, smoothstep(0.815 - ar, 0.815 + ar, r));
-  // Level stars on the lower rim (navy outline, gold with a light top).
+  // Level stars on the lower rim (ink outline, gold with a light top).
   for (int i = 0; i < 3; i++) {
     if (float(i) >= uLevel) break;
     float a = -1.5708 + (float(i) - (uLevel - 1.0) * 0.5) * 0.42;
     vec2 c = vec2(cos(a), sin(a)) * 0.895;
     float d = sdStar5(pt - c, 0.14, 0.5);
-    top = mix(top, navy, 1.0 - smoothstep(-ar, ar, d - 0.045));
+    top = mix(top, ink, 1.0 - smoothstep(-ar, ar, d - 0.045));
     vec3 gcol = mix(uGold * vec3(0.95, 0.62, 0.2), mix(uGold, vec3(1.0, 0.98, 0.85), 0.5), clamp((pt.y - c.y) * 5.0 + 0.5, 0.0, 1.0));
     top = mix(top, gcol, 1.0 - smoothstep(-ar, ar, d));
   }
   col = mix(col, top, inTop);
-  // Navy keyline around the whole coin (outside the silhouette).
-  col = mix(navy, col, 1.0 - smoothstep(-aa, aa, dSil));
+  // Ink keyline around the whole coin (outside the silhouette).
+  col = mix(ink, col, 1.0 - smoothstep(-aa, aa, dSil));
   col = mix(col, vec3(1.0), uFlash);
   float alpha = uOpacity * cover;
   if (uDissolve > 0.0) {

@@ -212,32 +212,32 @@
         {
           "id": "select-1",
           "event": "select",
-          "text": "키히히! 나 불렀어?",
+          "text": "키힉… 나를 불렀나?",
           "style": "Giggling mischievously, cheeky.",
-          "asr": "키히히 나 불렀어"
+          "asr": "키힉 나를 불렀나"
         },
         {
           "id": "select-2",
           "event": "select",
-          "text": "이번엔 뭐 할까?",
+          "text": "이번엔 누굴 괴롭힐까?",
           "style": "Playful and sing-song, bored and curious."
         },
         {
           "id": "move-1",
           "event": "move",
-          "text": "어디 가볼까~",
+          "text": "어디 숨었니~?",
           "style": "Playful sing-song, skipping along."
         },
         {
           "id": "move-2",
           "event": "move",
-          "text": "룰루랄라~",
+          "text": "그림자 속으로~",
           "style": "Humming a playful sing-song."
         },
         {
           "id": "capture-1",
           "event": "capture",
-          "text": "냠! 네 거 내 거!",
+          "text": "네 영혼, 맛있겠다!",
           "style": "Greedy and gleeful, snatching something."
         },
         {
@@ -256,7 +256,7 @@
         {
           "id": "skill-1",
           "event": "skill",
-          "text": "그 힘, 내 거야!",
+          "text": "네 힘, 이제 내 거야!",
           "style": "Greedy, excited and a little unhinged."
         },
         {
@@ -268,15 +268,15 @@
         {
           "id": "death-1",
           "event": "death",
-          "text": "에잇… 재미없어.",
+          "text": "크윽… 두고 보자…",
           "style": "Sulking and pouting, annoyed."
         },
         {
           "id": "victory-1",
           "event": "victory",
-          "text": "내가 최고야! 키히히!",
+          "text": "전부 내 장난감이야! 키히히!",
           "style": "Triumphant, bratty and cackling.",
-          "asr": "내가 최고야 키히히"
+          "asr": "전부 내 장난감이야 키히히"
         }
       ]
     },
@@ -291,26 +291,26 @@
         {
           "id": "select-1",
           "event": "select",
-          "text": "부르셨나, 애송이?",
+          "text": "이 늙은이를 불렀느냐?",
           "style": "Sly and condescending, a slow mocking purr."
         },
         {
           "id": "select-2",
           "event": "select",
-          "text": "후후, 저주가 필요해?",
+          "text": "흐흐흐… 저주가 필요하냐?",
           "style": "A soft wicked chuckle, then a seductive, teasing question.",
-          "asr": "후후 저주가 필요해"
+          "asr": "흐흐흐 저주가 필요하냐"
         },
         {
           "id": "move-1",
           "event": "move",
-          "text": "어디 한번 걸어볼까",
+          "text": "어디, 한번 걸어볼까…",
           "style": "Leisurely and amused, haughty."
         },
         {
           "id": "move-2",
           "event": "move",
-          "text": "흐흥~ 가볼까?",
+          "text": "흐흥… 가볼까?",
           "style": "A smug, sing-song hum, then a lazy question.",
           "asr": "흐흥 가볼까"
         },
@@ -329,9 +329,9 @@
         {
           "id": "capture-3",
           "event": "capture",
-          "text": "히히! 끝이야!",
+          "text": "이히히히! 끝이다!",
           "style": "A short wicked witch cackle, then gleeful and cruel.",
-          "asr": "히히 끝이야"
+          "asr": "이히히히 끝이다"
         },
         {
           "id": "skill-1",
@@ -354,9 +354,9 @@
         {
           "id": "victory-1",
           "event": "victory",
-          "text": "모두 썩어라! 히히히!",
+          "text": "모두 썩어라! 이히히히!",
           "style": "Triumphant and cruel, then a short wicked witch cackle.",
-          "asr": "모두 썩어라 히히히"
+          "asr": "모두 썩어라 이히히히"
         }
       ]
     }

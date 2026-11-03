@@ -1,6 +1,6 @@
 /* ==========================================================================
-   Base: reset, app shell (sky background), type primitives, screen layout,
-   app bar.
+   Base: reset, app shell (dark arena backdrop), type primitives, screen
+   layout, app bar.
    ========================================================================== */
 *,
 *::before,
@@ -11,7 +11,7 @@ html,
 body {
   margin: 0;
   height: 100%;
-  background: var(--sky-bottom);
+  background: var(--night-1);
   color: var(--text-1);
   font-family: var(--font-body);
   font-size: var(--fs-body);
@@ -68,21 +68,10 @@ img {
   flex: none;
   display: block;
 }
-/* Focus ring: white on blue surfaces, deep blue inside light panels (both >= 3:1). */
+/* Focus ring: gold on every dark surface (>= 3:1 against panels and the backdrop). */
 :focus-visible {
-  outline: 3px solid #ffffff;
+  outline: 3px solid var(--gold);
   outline-offset: 2px;
-}
-.on-light :focus-visible,
-.card :focus-visible,
-.dialog :focus-visible,
-.sheet :focus-visible,
-.tut :focus-visible,
-.fpanel__body :focus-visible,
-.play-panel :focus-visible,
-.unit-card :focus-visible,
-.tray-card:focus-visible {
-  outline-color: var(--team-blue-deep);
 }
 [hidden] {
   display: none !important;
@@ -109,7 +98,10 @@ img {
   color: var(--text-3);
 }
 
-/* ---- App shell: daylight sky with a faint large lattice ------------------ */
+/* ---- App shell -------------------------------------------------------------
+   Layers (bottom to top): base gradient + arcane rings on #app, the illustrated
+   backdrop on ::before (only once src/ui/backdrops.ts has preloaded it, then it
+   fades in), and the vignette on ::after. Screens draw on top, transparent. */
 #app {
   position: fixed;
   inset: 0;
@@ -119,7 +111,48 @@ img {
   flex-direction: column;
   overflow: hidden;
   isolation: isolate;
-  background: var(--bg-pattern) center top / 132px 132px repeat, var(--bg-sky);
+  background: var(--bg-rings) center 34% / min(900px, 180vw) no-repeat, var(--bg-base);
+  background-color: var(--night-1);
+}
+#app::before,
+#app::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+#app::before {
+  /* The art is dimmed toward the bottom, where the panels and docks sit. */
+  background:
+    linear-gradient(180deg, rgba(7, 10, 18, 0.35) 0%, rgba(7, 10, 18, 0.15) 30%, rgba(7, 10, 18, 0.55) 70%, rgba(7, 10, 18, 0.85) 100%),
+    var(--bg-lobby-img, none) center top / cover no-repeat;
+  opacity: 0;
+  transition: opacity 700ms var(--ease-out);
+}
+.has-bg-lobby #app::before {
+  opacity: 1;
+}
+/* Matchmaking / versus: red mist above, blue below (falls back to the lobby art). */
+#app:has(> [data-screen='matchmaking'])::before {
+  background:
+    linear-gradient(180deg, rgba(7, 10, 18, 0.2), transparent 40%, rgba(7, 10, 18, 0.4)),
+    var(--bg-matchmaking-img, var(--bg-lobby-img, none)) center / cover no-repeat;
+}
+/* In a match: the calm arena floor, darkest in the centre where the board sits. The top HUD
+   covers the crescent at the top of the art. */
+body.in-game #app::before {
+  background:
+    radial-gradient(70% 40% at 50% 47%, rgba(7, 10, 18, 0.35), transparent 100%),
+    linear-gradient(180deg, rgba(7, 10, 18, 0.25), transparent 30%, transparent 70%, rgba(7, 10, 18, 0.4)),
+    var(--bg-match-img, none) center 46% / cover no-repeat;
+  opacity: 0;
+}
+.has-bg-match body.in-game #app::before {
+  opacity: 1;
+}
+#app::after {
+  background: var(--bg-vignette);
 }
 
 .screen {
@@ -175,7 +208,7 @@ img {
   opacity: 0;
 }
 
-/* ---- App bar (sub-screens): a dark-blue ribbon with a lip ---------------- */
+/* ---- App bar (sub-screens): a dark iron ribbon with a gold hairline ----------- */
 .appbar {
   position: relative;
   z-index: 2;
@@ -185,12 +218,12 @@ img {
   gap: var(--s-2);
   min-height: calc(64px + var(--sat));
   padding: calc(var(--s-1) + var(--sat)) var(--s-3) var(--s-1);
-  background: var(--dpanel-fill);
+  background: var(--bar-fill);
   box-shadow:
-    inset 0 -2px 0 rgba(255, 255, 255, 0.08),
-    0 var(--lip) 0 var(--panel-dark-edge),
-    0 12px 20px -10px rgba(14, 28, 72, 0.6);
-  margin-bottom: var(--lip);
+    inset 0 -1px 0 rgba(242, 193, 78, 0.28),
+    0 3px 0 var(--panel-lip),
+    0 14px 24px -12px rgba(0, 0, 0, 0.75);
+  margin-bottom: 3px;
 }
 .appbar__title {
   flex: 1;
@@ -200,7 +233,7 @@ img {
   font-weight: 400;
   font-size: 26px;
   line-height: 1.1;
-  color: #fff;
+  color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

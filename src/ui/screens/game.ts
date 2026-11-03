@@ -13,6 +13,7 @@ import {
   skillBlock,
   skillUnlockIn,
   suddenDeathIn,
+  turnNumber,
   wasteArea,
   type GameState,
   type Move,
@@ -34,14 +35,16 @@ import { Disposables, h, replaceChildren } from '../dom';
 import { icon } from '../icons';
 import type { Router, Screen } from '../router';
 import { BOT, GameController, HUMAN, type ControllerSnapshot, type Phase } from '../game/GameController';
-import { endReasonText, rosterChips, setText, TimerRing, turnPillContent } from '../game/hud';
+import { CRITICAL_MS, endReasonText, rosterChips, setText, TimerRing, turnPillContent } from '../game/hud';
 import { createFieldPanel } from '../game/fieldPanel';
 import { CUTIN_MS, cutInEl, preloadCutIns } from '../game/cutin';
 import type { GameParams } from './gameParams';
 import '../game/hud.css';
 
-/** Show the sudden-death countdown this many plies before it starts. */
-const SUDDEN_DEATH_WARN_PLIES = 10;
+/** Show the sudden-death countdown this many turns (per player, see `turnNumber`) before it starts. */
+const SUDDEN_DEATH_WARN_TURNS = 10;
+/** Plies -> turns as the player counts them (one move each = one turn). */
+const pliesToTurns = (plies: number) => Math.ceil(plies / 2);
 
 export function gameScreen(router: Router, params: GameParams): Screen {
   const bag = new Disposables();
@@ -60,8 +63,10 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     h('span', { class: 'turn-pill__dot', 'aria-hidden': 'true' }),
     pillText,
   );
-  // Match clock (10 min cap): the game is decided by material when it runs out.
-  const counter = h('div', { class: 'ply-counter', role: 'timer', 'aria-label': '남은 대전 시간' });
+  // Turn counter (per player: both first moves are turn 1). Storm sudden death starts after turn 60.
+  const turnNum = h('span', { class: 'turn-count__num t-num' }, '1');
+  const turnCount = h('div', { class: 'turn-count', role: 'status', 'aria-label': '턴 1' }, h('span', { class: 'turn-count__label' }, '턴'), turnNum);
+  let lastTurnNum = 1;
   // Storm status: hidden until a side is down to one piece.
   const stormText = h('span', { class: 'storm-chip__text' });
   const stormChip = h('div', { class: 'storm-chip', role: 'status', 'aria-live': 'polite', hidden: true }, h('span', { class: 'storm-chip__icon', 'aria-hidden': 'true' }, icon('bolt', 14)), stormText);
@@ -177,12 +182,13 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     botRing.el,
     resignBtn,
   );
-  // Layout (top to bottom): opponent bar, turn strip (turn, clock, storm status), board, action
-  // dock, player bar. The strip and the dock have their own rows so neither ever covers the board;
-  // transient notes (auto pass, first-match coach) float over the board's top edge without taking input.
-  const hudStrip = h('div', { class: 'hud-strip' }, pill, counter, stormChip);
-  const boardWrap = h('div', { class: 'board-wrap' }, boardHost, fx, h('div', { class: 'board-overlay' }, passChip, coach));
-  const el = h('main', { class: 'game no-select' }, topBar, hudStrip, boardWrap, infoHost, bottomBar);
+  // Layout (top to bottom): opponent bar, turn strip (whose turn + turn count), a fixed-height notes
+  // line (storm status, auto pass, first-match coach), board, action dock, player bar. Every row
+  // keeps its height whatever it shows, so the board never resizes and nothing ever covers it.
+  const hudStrip = h('div', { class: 'hud-strip' }, turnCount, pill);
+  const notes = h('div', { class: 'hud-notes board-overlay' }, stormChip, passChip, coach);
+  const boardWrap = h('div', { class: 'board-wrap' }, boardHost, fx);
+  const el = h('main', { class: 'game no-select' }, topBar, hudStrip, notes, boardWrap, infoHost, bottomBar);
 
   // ---------- runtime objects (created on mount)
   let board: IBoardView | null = null;
@@ -202,7 +208,6 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   let targeting: { pieceId: string; level: 1 | 2 | 3; anchors: Set<number>; preview: Pos | null } | null = null;
   const notified = { unlock: false, storm: false };
   let stormStarted = initial.stormIn !== null;
-  let lastClockSec = -1;
   const passToastShown = [false, false];
   let coachOn = !getProfile().onboarding.firstMoveDone;
   let coachMsg = '';
@@ -423,7 +428,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     }
     if (!notified.storm && unused && s.stormIn !== null && s.storm === 0) {
       notified.storm = true;
-      toast(`자기장이 ${s.stormIn}턴 후 좁혀와요. 그 전에만 '불모지'를 쓸 수 있어요`, { tone: 'warn', duration: 3000 });
+      toast(`자기장이 ${pliesToTurns(s.stormIn)}턴 후 좁혀와요. 그 전에만 '불모지'를 쓸 수 있어요`, { tone: 'warn', duration: 3000 });
     }
   };
 
@@ -458,17 +463,30 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       }
     }
     // Storm chip (also counts down to sudden death) + chain-move bar
-    const sd = suddenDeathIn(s);
-    const sdSoon = sd !== null && sd <= SUDDEN_DEATH_WARN_PLIES;
+    const sdPlies = suddenDeathIn(s);
+    const sd = sdPlies === null ? null : pliesToTurns(sdPlies);
+    const sdSoon = sd !== null && sd <= SUDDEN_DEATH_WARN_TURNS;
     stormChip.hidden = snap.phase === 'ended' || (s.stormIn === null && !sdSoon);
     if (s.stormIn !== null) {
+      const inTurns = pliesToTurns(s.stormIn);
       const skillLeft = s.storm === 0 && s.pieces.some((p) => CHARACTERS[p.character].skill && s.skillsUsed[p.owner] === 0);
-      setText(stormText, s.storm > 0 ? `자기장 · 좌우 ${s.storm}줄 소멸 · ${s.stormIn}턴 후 축소` : `자기장 활성 · ${s.stormIn}턴 후 축소${skillLeft ? ' · 이후 스킬 금지' : ''}`);
-      stormChip.classList.toggle('is-soon', s.stormIn <= 2);
-    } else if (sdSoon) {
-      setText(stormText, `서든데스까지 ${sd}수 · 이후 자기장이 좁혀와요`);
-      stormChip.classList.toggle('is-soon', sd <= 2);
+      setText(stormText, s.storm > 0 ? `자기장 · 좌우 ${s.storm}줄 소멸 · ${inTurns}턴 후 축소` : `자기장 활성 · ${inTurns}턴 후 축소${skillLeft ? ' · 이후 스킬 금지' : ''}`);
+      stormChip.classList.toggle('is-soon', inTurns <= 1);
+    } else if (sd !== null && sdSoon) {
+      setText(stormText, sd > 0 ? `${sd}턴 후 자기장 발동 · 좌우부터 좁혀와요` : '이번 턴부터 자기장 발동');
+      stormChip.classList.toggle('is-soon', sd <= 1);
     }
+    // Turn counter
+    const tn = turnNumber(s);
+    if (tn !== lastTurnNum) {
+      lastTurnNum = tn;
+      setText(turnNum, String(tn));
+      turnCount.setAttribute('aria-label', `턴 ${tn}`);
+      turnCount.classList.remove('is-tick');
+      void turnCount.offsetWidth;
+      turnCount.classList.add('is-tick');
+    }
+    turnCount.classList.toggle('is-late', sd !== null ? sdSoon : s.stormIn !== null);
     if (s.stormIn !== null && !stormStarted) {
       stormStarted = true;
       // Started by the clock (both sides still have several pieces) rather than by a lone survivor.
@@ -571,7 +589,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     if (bag.isDisposed) return;
     clearToasts(); // nothing may sit on top of (or compete with) the result
     const title = outcome === 'win' ? '승리!' : outcome === 'loss' ? '패배' : '무승부';
-    const adjudicated = s.endReason === 'timeUp' || s.endReason === 'stalemate' || (s.endReason === 'storm' && s.pieces.length === 0);
+    const adjudicated = s.endReason === 'stalemate' || (s.endReason === 'storm' && s.pieces.length === 0);
     // Hero strip: the player's surviving units celebrate (win) or the opponent's units stand (loss).
     const heroOwner = outcome === 'loss' ? BOT : HUMAN;
     const heroPieces = s.pieces.filter((pc) => pc.owner === heroOwner);
@@ -729,15 +747,6 @@ export function gameScreen(router: Router, params: GameParams): Screen {
 
       bag.frameLoop(() => {
         const snap = c.state;
-        // Match clock: mm:ss, red in the last minute.
-        const mrem = c.matchRemainingMs();
-        const msec = Math.ceil(mrem / 1000);
-        if (msec !== lastClockSec) {
-          lastClockSec = msec;
-          setText(counter, `${Math.floor(msec / 60)}:${String(msec % 60).padStart(2, '0')}`);
-          counter.classList.toggle('is-warn', msec <= 60 && c.phase !== 'ended');
-          counter.setAttribute('aria-label', `남은 대전 시간 ${Math.floor(msec / 60)}분 ${msec % 60}초`);
-        }
         const active = c.phase === 'humanTurn' || c.phase === 'botThinking';
         const rem = c.turnRemainingMs();
         topRing.update(active && snap.turn === BOT, rem, c.turnTimeMs, c.paused);
@@ -745,6 +754,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
         // Countdown ticks for the last seconds of the player's own turn.
         if (c.phase === 'humanTurn' && !c.paused) {
           bottomBar.classList.toggle('is-urgent', rem <= PACING.timerWarnMs);
+          // Out of time is an immediate forfeit: the last seconds pulse red.
+          bottomBar.classList.toggle('is-critical', rem <= CRITICAL_MS);
           const sec = Math.ceil(rem / 1000);
           if (sec !== lastTickSec) {
             lastTickSec = sec;
@@ -755,7 +766,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
           }
         } else {
           lastTickSec = -1;
-          bottomBar.classList.remove('is-urgent');
+          bottomBar.classList.remove('is-urgent', 'is-critical');
         }
       });
 

@@ -8,8 +8,10 @@
     <base href="/" />
     <style>
       html, body { margin: 0; height: 100%; color: #eaf2ff; font: 12px system-ui, sans-serif; }
-      /* Same sky gradient the app paints behind the (transparent) board canvas. */
-      body { background: linear-gradient(180deg, #4f8ee8 0%, #2a59b8 100%) fixed; }
+      /* Dark backdrop like the app's match screen behind the (transparent) board canvas
+         (night-1 -> night-0 with a soft vignette; public/bg/match.webp may be layered on top). */
+      body { background: url(bg/match.webp) center / cover no-repeat fixed, radial-gradient(120% 80% at 50% 45%, #151d31 0%, #0d1322 55%, #070a12 100%) fixed; }
+      body.plain { background: radial-gradient(120% 80% at 50% 45%, #151d31 0%, #0d1322 55%, #070a12 100%) fixed; }
       #board { position: relative; width: 100vw; height: 470px; margin-top: 120px; }
       #log { position: fixed; left: 8px; top: 8px; right: 8px; white-space: pre-wrap; opacity: 0.8; }
     </style>

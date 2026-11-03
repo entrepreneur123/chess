@@ -34,9 +34,36 @@ export interface ChooseMoveOptions {
   rng?: () => number;
 }
 
-/** Absolute safety cap on thinking time, regardless of the requested budget. */
-const HARD_CAP_MS = 1200;
-const DEFAULT_BUDGET: Record<Difficulty, number> = { easy: 50, normal: 300, hard: 700 };
+/**
+ * Absolute safety cap on thinking time, regardless of the requested budget. The shortest turn is
+ * TURN_TIME_1_MS (20 s) and a timeout forfeits, so the bot stays far below it even on slow phones
+ * (the deadline is checked every 1024 nodes and no new iteration starts past 55% of the budget).
+ */
+const HARD_CAP_MS = 1500;
+/**
+ * Strength per difficulty:
+ *  - easy:   mostly a heuristic picker (free captures, otherwise a random non-suicidal move, often
+ *            leaving pieces hanging); sometimes a 1-ply search with a large random bias.
+ *  - normal: a 2-3 ply search with a moderate random bias and an occasional casual move.
+ *  - hard:   iterative deepening to the full budget, tiny random bias, no deliberate blunders.
+ */
+interface Strength {
+  budgetMs: number;
+  /** Max iterative-deepening depth (a random +1 with `extraDepthChance`). */
+  depth: number;
+  extraDepthChance: number;
+  /** Max random bonus per root move (score units: 100 = one material point). */
+  jitter: number;
+  /** Chance to play the heuristic easy move instead of searching. */
+  casualChance: number;
+  /** How many wasteland anchors are searched at the root. */
+  skillCands: number;
+}
+const STRENGTH: Record<Difficulty, Strength> = {
+  easy: { budgetMs: 60, depth: 1, extraDepthChance: 0, jitter: 90, casualChance: 0.65, skillCands: 2 },
+  normal: { budgetMs: 350, depth: 2, extraDepthChance: 0.5, jitter: 25, casualChance: 0.08, skillCands: 6 },
+  hard: { budgetMs: 1000, depth: 60 /* MAX_PLY - 4 */, extraDepthChance: 0, jitter: 4, casualChance: 0, skillCands: 10 },
+};
 
 const WIN = 1_000_000;
 const ADJ_WIN = 500_000; // won by adjudication (ply limit / stalemate)
@@ -438,15 +465,15 @@ function isAttackedBy(b: FastBoard, sq: number, attacker: number): boolean {
   for (let i = 0; i < b.n; i++) {
     const s = b.sq[i];
     if (s < 0 || b.owner[i] !== attacker) continue;
-    const n = genTargets(b.occ, b.owner, attacker, b.ch[i], b.lvl[i], s, attackBuf, 0, false, b.dir[i], b.storm, b.absorb[i]);
+    const n = genTargets(b.occ, b.owner, attacker, b.ch[i], b.lvl[i], s, attackBuf, 0, false, b.dir[i], b.storm, b.absorb[i], b.waste);
     for (let k = 0; k < n; k++) if (attackBuf[k] === sq) return true;
   }
   return false;
 }
 
-function chooseEasy(b: FastBoard, rng: () => number): number {
+function chooseEasy(b: FastBoard, rng: () => number, allowSkill = true): number {
   // Sometimes lay the wasteland at the most obvious spot.
-  const sk = skillCandidates(b, 1);
+  const sk = allowSkill ? skillCandidates(b, 1) : [];
   if (sk.length && rng() < 0.25) return sk[0];
   const side = b.turn;
   const buf = new Int32Array(MAX_MOVES);
@@ -499,32 +526,61 @@ export function chooseAction(state: GameState, difficulty: Difficulty, opts: Cho
     return best.length ? fastSkillToAction(b0, best[0]) : { kind: 'skill', pieceId: caster.id, anchor: skillAnchors(state, caster.id)[0] };
   }
   const rng = opts.rng ?? Math.random;
-  const budget = Math.max(1, Math.min(opts.timeBudgetMs ?? DEFAULT_BUDGET[difficulty], HARD_CAP_MS));
+  const st = STRENGTH[difficulty] ?? STRENGTH.normal;
+  const budget = Math.max(1, Math.min(opts.timeBudgetMs ?? st.budgetMs, HARD_CAP_MS));
   const start = now();
   const b = fastFromState(state);
-  const skills = opts.allowSkill === false ? [] : skillCandidates(b, difficulty === 'hard' ? 10 : 6);
+  const skills = opts.allowSkill === false ? [] : skillCandidates(b, st.skillCands);
   if (legal.length === 1 && skills.length === 0) return legal[0];
   let mv: number;
-  if (difficulty === 'easy') {
-    mv = chooseEasy(b, rng);
-  } else if (difficulty === 'normal') {
-    mv = searchRoot(b, skills, 2 + (rng() < 0.5 ? 1 : 0), start + budget, rng, 25).move;
+  if (st.casualChance > 0 && rng() < st.casualChance) {
+    mv = chooseEasy(b, rng, opts.allowSkill !== false);
   } else {
-    mv = searchRoot(b, skills, MAX_PLY - 4, start + budget, rng, 4).move;
+    const depth = st.depth + (st.extraDepthChance > 0 && rng() < st.extraDepthChance ? 1 : 0);
+    mv = searchRoot(b, skills, depth, start + budget, rng, st.jitter).move;
   }
   if (mv !== undefined && mv & SKILL_FLAG) {
     const action = fastSkillToAction(b, mv);
     if (isLegalSkill(state, action)) return action;
-    return legal[0];
+    return safeFirst(state, legal);
   }
+  if (mv === undefined) return safeFirst(state, legal);
   const move = fastMoveToMove(b, mv);
   // Safety net: always return something the engine accepts.
   const ok = legal.find((m) => m.pieceId === move.pieceId && m.to.r === move.to.r && m.to.c === move.to.c);
-  return ok ?? legal[0];
+  return ok ?? safeFirst(state, legal);
+}
+
+/** The first legal move that does not step onto wasteland (any move if all of them do). */
+function safeFirst(state: GameState, legal: Move[]): Move {
+  return legal.find((m) => !state.waste.includes(m.to.r * BOARD_SIZE + m.to.c)) ?? legal[0];
 }
 
 /** Pick a MOVE for `state.turn` (never the skill). Returns null only if there is no legal move. */
 export function chooseMove(state: GameState, difficulty: Difficulty, opts: ChooseMoveOptions = {}): Move | null {
   const a = chooseAction(state, difficulty, { ...opts, allowSkill: false });
   return a && !isSkillAction(a) ? a : null;
+}
+
+/**
+ * A cheap, always-legal action for the side to move, for when the real bot failed or ran late:
+ * a quick easy-level pick, else the first move that does not step onto wasteland, else any move,
+ * else the wasteland (the only thing left). Null only when nothing can be played at all.
+ */
+export function fallbackAction(state: GameState): BotAction | null {
+  if (state.status !== 'playing') return null;
+  try {
+    const a = chooseAction(state, 'easy', { timeBudgetMs: 20 });
+    if (a) return a;
+  } catch {
+    /* fall through to the plain picks */
+  }
+  const legal = getLegalMoves(state);
+  if (legal.length) return safeFirst(state, legal);
+  for (const p of state.pieces) {
+    if (p.owner !== state.turn) continue;
+    const anchors = skillAnchors(state, p.id);
+    if (anchors.length) return { kind: 'skill', pieceId: p.id, anchor: anchors[0] };
+  }
+  return null;
 }
