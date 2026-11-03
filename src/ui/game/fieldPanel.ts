@@ -203,7 +203,7 @@ export function createFieldPanel(opts: FieldPanelOptions): FieldPanel {
           'header',
           { class: 'fpanel__header' },
           h('h2', { class: 'fpanel__heading' }, icon('menu', 20), '현재 진형'),
-          h('button', { class: 'icon-btn icon-btn--sm', type: 'button', 'aria-label': '닫기', 'data-action': 'close-field', onclick: close }, icon('close', 22)),
+          h('button', { class: 'icon-btn icon-btn--sm icon-btn--light', type: 'button', 'aria-label': '닫기', 'data-action': 'close-field', onclick: close }, icon('close', 22)),
         ),
         body,
       );

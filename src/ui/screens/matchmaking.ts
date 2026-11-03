@@ -52,7 +52,7 @@ export function matchmakingScreen(router: Router, params: { difficulty: Difficul
   const el = h(
     'main',
     { class: 'mm' },
-    h('div', { class: 'mm__bg', 'aria-hidden': 'true' }, h('img', { src: `./chars/${myLead}-lv${levels[myLead]}.jpg`, alt: '', decoding: 'async' })),
+    h('div', { class: 'mm__bg', 'aria-hidden': 'true' }),
     stage,
     h(
       'div',

@@ -1,23 +1,24 @@
 /* ==========================================================================
-   Formation grid (shared: lobby mini preview, tutorial, formation editor)
-   and the formation editor screen.
+   Formation grid (shared: lobby mini preview, tutorial, formation editor) —
+   drawn like the match board: raised grass tiles on a stone plinth, the
+   player's home zone tinted blue — and the formation editor screen.
    ========================================================================== */
 .fgrid {
   display: grid;
-  grid-template-columns: 14px repeat(12, minmax(0, 1fr));
+  grid-template-columns: 16px repeat(12, minmax(0, 1fr));
   gap: 2px;
   width: 100%;
 }
 .fgrid--mini {
   grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: 2px;
+  gap: 1.5px;
 }
 .fgrid__label {
   display: grid;
   place-items: center;
-  color: var(--text-3);
+  color: #4d3d22;
+  font-family: var(--font-display);
   font-size: var(--fs-micro);
-  font-weight: var(--fw-bold);
 }
 .fgrid__cell {
   position: relative;
@@ -27,100 +28,91 @@
   padding: 0;
   border: 0;
   border-radius: 4px;
-  background: linear-gradient(180deg, #1b2a49, #15213b);
+  /* grass-dark under a 22% blue home-zone wash */
+  background:
+    linear-gradient(rgba(111, 179, 255, 0.22), rgba(111, 179, 255, 0.22)),
+    var(--grass-dark);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.35);
-  transition:
-    background-color var(--dur-1) var(--ease-out),
-    box-shadow var(--dur-1) var(--ease-out);
+    inset 1px 1px 0 rgba(255, 255, 255, 0.28),
+    inset -1px -2px 0 rgba(40, 90, 30, 0.35);
+  container-type: inline-size;
+  transition: box-shadow var(--dur-1) var(--ease-out);
 }
 .fgrid__cell.is-light {
-  background: linear-gradient(180deg, #22355a, #1b2b4a);
+  background:
+    linear-gradient(rgba(111, 179, 255, 0.22), rgba(111, 179, 255, 0.22)),
+    var(--grass-light);
 }
 button.fgrid__cell {
   cursor: pointer;
 }
 button.fgrid__cell:active {
-  background: #2c4472;
+  box-shadow: inset 0 2px 3px rgba(40, 90, 30, 0.5);
 }
 .fgrid__cell .token {
   transition: transform var(--dur-2) var(--ease-spring);
 }
-.fgrid__cell {
-  container-type: inline-size;
-}
 .fgrid:not(.fgrid--mini) .token--sm {
-  --tk: 80cqi;
+  --tk: 78cqi;
 }
 .fgrid:not(.fgrid--mini) .token--sm .token__lv {
   display: none;
 }
 .fgrid--mini .fgrid__cell {
-  border-radius: 3px;
+  border-radius: 2.5px;
+  box-shadow:
+    inset 1px 1px 0 rgba(255, 255, 255, 0.25),
+    inset -1px -1px 0 rgba(40, 90, 30, 0.3);
 }
 .fgrid--mini .token--xs {
-  --tk: 80cqi;
+  --tk: 78cqi;
 }
-/* Targets while a piece is held: pulsing blue dots */
+/* Targets while a piece is held: soft white dots (like move markers on the board). */
 .fgrid__cell.is-target::after {
   content: '';
-  width: 28%;
-  height: 28%;
+  width: 30%;
+  height: 30%;
   border-radius: 50%;
-  background: var(--blue-300);
-  box-shadow: 0 0 8px var(--blue-400);
-  opacity: 0.55;
+  background: #fff;
+  box-shadow: 0 2px 0 rgba(27, 36, 69, 0.35);
+  opacity: 0.85;
   animation: target-pulse 1.4s var(--ease-in-out) infinite;
-}
-.fgrid__cell.is-target {
-  box-shadow:
-    inset 0 0 0 1px rgba(77, 155, 255, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 @keyframes target-pulse {
   50% {
-    opacity: 1;
-    transform: scale(1.3);
+    transform: scale(1.25);
   }
 }
-/* Held piece: lifted with a gold ring */
+/* Held piece: lifted on a gold ring */
 .fgrid__cell.is-selected {
   z-index: 1;
-  background: radial-gradient(circle, rgba(255, 213, 86, 0.35), rgba(255, 213, 86, 0.08) 70%), #22355a;
+  background: linear-gradient(180deg, #fff3b0, var(--gold));
   box-shadow:
-    0 0 0 2px var(--gold-300),
-    0 0 14px rgba(255, 195, 40, 0.6);
-  animation: held-glow 1.2s var(--ease-in-out) infinite;
+    0 0 0 2px var(--navy-ink),
+    0 3px 0 2px var(--gold-lip);
 }
 .fgrid__cell.is-selected .token {
-  transform: translateY(-3px) scale(1.15);
-}
-@keyframes held-glow {
-  50% {
-    box-shadow:
-      0 0 0 2px var(--gold-200),
-      0 0 22px rgba(255, 195, 40, 0.85);
-  }
+  transform: translateY(-3px) scale(1.12);
 }
 
 /* ---- Formation editor screen ------------------------------------------------------ */
 .formation__body {
   gap: var(--s-3);
-  padding-bottom: calc(96px + var(--sab));
+  padding-bottom: calc(104px + var(--sab));
 }
+/* The zone plinth: stone frame, light top bevel, dark lip. */
 .zone-board {
   position: relative;
+  margin-bottom: var(--lip);
   padding: var(--s-3) var(--s-2) var(--s-3) var(--s-1);
   border-radius: var(--r-l);
-  background:
-    radial-gradient(120% 70% at 50% 110%, rgba(47, 125, 246, 0.25), transparent 60%),
-    linear-gradient(180deg, #0f1a30, #0b1424);
+  background: linear-gradient(180deg, var(--stone-light), var(--stone) 70%);
   box-shadow:
-    inset 0 0 0 1px rgba(77, 155, 255, 0.35),
-    inset 0 -3px 0 rgba(77, 155, 255, 0.5),
-    0 0 26px -6px rgba(47, 125, 246, 0.45),
-    var(--sh-2);
+    inset 0 2px 0 rgba(255, 255, 255, 0.6),
+    inset 0 -2px 0 rgba(143, 122, 87, 0.4),
+    0 0 0 2.5px var(--navy-ink),
+    0 var(--lip) 0 2.5px var(--navy-ink),
+    var(--drop);
 }
 .zone-board .enemy-hint {
   margin-bottom: var(--s-2);
@@ -136,7 +128,7 @@ button.fgrid__cell:active {
 }
 .enemy-hint__chev .icon:nth-child(2) {
   animation-delay: 0.15s;
-  opacity: 0.6;
+  opacity: 0.7;
 }
 @keyframes chev-up {
   50% {
@@ -149,9 +141,9 @@ button.fgrid__cell:active {
   justify-content: center;
   gap: var(--s-2);
   margin-top: var(--s-2);
-  color: var(--blue-200);
-  font-size: var(--fs-caption);
-  font-weight: var(--fw-bold);
+  color: #3f3018;
+  font-family: var(--font-display);
+  font-size: var(--fs-label);
   letter-spacing: 0.04em;
 }
 .zone-caption::before,
@@ -159,8 +151,9 @@ button.fgrid__cell:active {
   content: '';
   flex: 1;
   max-width: 56px;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(134, 186, 255, 0.6));
+  height: 2px;
+  border-radius: 1px;
+  background: linear-gradient(90deg, transparent, var(--stone-deep));
 }
 .zone-caption::after {
   transform: scaleX(-1);
@@ -171,20 +164,30 @@ button.fgrid__cell:active {
 .form-status .hint {
   padding: var(--s-2) var(--s-3);
   border-radius: var(--r-m);
-  background: rgba(255, 255, 255, 0.04);
-  box-shadow: inset 0 0 0 1px var(--line-1);
+  background: rgba(16, 30, 72, 0.28);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-weight: var(--fw-semibold);
+}
+.form-status .hint .icon {
+  color: var(--gold);
 }
 .form-status .hint.is-holding {
-  background: rgba(255, 195, 40, 0.1);
-  box-shadow: inset 0 0 0 1px rgba(255, 195, 40, 0.4);
-  color: var(--gold-100);
+  background: var(--gold-soft);
+  box-shadow:
+    inset 0 0 0 1.5px var(--gold-deep),
+    0 3px 0 var(--gold-lip);
+  color: #4a2f00;
+}
+.form-status .hint.is-holding .icon {
+  color: var(--gold-lip);
 }
 
 /* Character tray */
 .tray {
   display: flex;
   flex-direction: column;
-  gap: var(--s-2);
+  gap: var(--s-3);
 }
 .tray-card {
   position: relative;
@@ -192,16 +195,17 @@ button.fgrid__cell:active {
   align-items: center;
   gap: var(--s-3);
   width: 100%;
-  min-height: 84px;
-  padding: var(--s-3);
+  min-height: 88px;
+  margin-bottom: var(--lip);
+  padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4);
   border: 0;
   border-radius: var(--r-l);
-  background: var(--surface-1);
+  background: var(--panel-fill);
   box-shadow:
-    inset 0 0 0 1px var(--line-1),
-    var(--hi-2),
-    var(--sh-1);
-  color: inherit;
+    var(--panel-shadow),
+    0 0 0 2px var(--navy-ink),
+    0 var(--lip) 0 2px var(--navy-ink);
+  color: var(--text-1);
   text-align: left;
   cursor: pointer;
   overflow: hidden;
@@ -214,30 +218,38 @@ button.fgrid__cell:active {
   content: '';
   position: absolute;
   left: 0;
-  top: 12px;
-  bottom: 12px;
-  width: 3px;
-  border-radius: 0 3px 3px 0;
-  background: var(--rar);
-  box-shadow: 0 0 10px var(--rar);
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  background: linear-gradient(180deg, var(--rar), var(--rar-deep));
+}
+.tray-card.rarity-common::before {
+  background: linear-gradient(180deg, #d9e0ee, var(--rar-common-deep));
 }
 .tray-card:active {
-  transform: scale(0.98);
+  transform: translateY(3px);
 }
 .tray-card.is-selected {
   background:
-    radial-gradient(120% 100% at 0% 50%, rgba(255, 195, 40, 0.16), transparent 60%),
-    var(--surface-2);
+    radial-gradient(120% 100% at 0% 50%, rgba(255, 207, 58, 0.35), transparent 60%),
+    var(--panel-fill);
   box-shadow:
-    inset 0 0 0 2px var(--gold-300),
-    0 0 20px -4px rgba(255, 195, 40, 0.6),
-    var(--sh-2);
-  animation: diff-pick 320ms var(--ease-spring);
+    inset 0 2px 0 #fff,
+    0 0 0 3px var(--gold-deep),
+    0 0 0 5px var(--navy-ink),
+    0 var(--lip) 0 5px var(--navy-ink),
+    var(--drop);
+  animation: tray-pick 320ms var(--ease-spring);
+}
+@keyframes tray-pick {
+  from {
+    transform: scale(0.97);
+  }
 }
 .tray-card__token {
   display: grid;
   place-items: center;
-  width: 60px;
+  width: 62px;
   flex: none;
 }
 .tray-card__main {
@@ -252,8 +264,9 @@ button.fgrid__cell:active {
 }
 .tray-card__name {
   font-family: var(--font-display);
-  font-size: 18px;
+  font-size: 19px;
   line-height: 1.1;
+  color: var(--navy-ink);
 }
 .tray-card__desc {
   margin-top: 4px;
@@ -268,14 +281,16 @@ button.fgrid__cell:active {
   margin-top: 6px;
   padding: 2px 8px;
   border-radius: var(--r-full);
-  background: rgba(77, 155, 255, 0.14);
-  color: var(--blue-200);
+  background: #dbe9ff;
+  box-shadow: inset 0 0 0 1px #b5cff7;
+  color: var(--team-blue-deep);
   font-size: var(--fs-micro);
   font-weight: var(--fw-bold);
 }
 .tray-card__where.is-off {
-  background: rgba(255, 90, 99, 0.14);
-  color: var(--red-200);
+  background: #ffe3e5;
+  box-shadow: inset 0 0 0 1px #f6b7bc;
+  color: var(--team-red-deep);
 }
 .tray-card__diagram {
   flex: none;
@@ -284,17 +299,26 @@ button.fgrid__cell:active {
   position: absolute;
   z-index: 2;
   top: 6px;
-  left: 8px;
-  padding: 2px 8px;
+  left: 12px;
+  padding: 1px 8px;
   border-radius: var(--r-full);
-  background: linear-gradient(180deg, var(--gold-300), var(--gold-500));
-  color: var(--text-on-gold);
+  background: linear-gradient(180deg, var(--gold), var(--gold-deep));
+  box-shadow: 0 2px 0 var(--gold-lip);
+  color: #fff;
+  font-family: var(--font-display);
   font-size: var(--fs-micro);
-  font-weight: var(--fw-bold);
+  text-shadow: 0 1px 0 var(--navy-ink), 0 0 1px var(--navy-ink);
+}
+/* Benched (not in the squad of 3) */
+.tray-card.is-benched {
+  background: linear-gradient(180deg, #edf1f8, #dfe5f0);
+}
+.tray-card.is-benched .tray-card__token {
+  opacity: 0.8;
 }
 
-/* Bottom action bar (formation and other editors) */
-.action-bar {
+/* Bottom action bar (formation editor) */
+.formation .action-bar {
   position: absolute;
   left: 0;
   right: 0;
@@ -304,19 +328,19 @@ button.fgrid__cell:active {
   grid-template-columns: 1fr 1fr 1.3fr;
   gap: var(--s-2);
   padding: var(--s-3) calc(var(--gutter) + var(--sar)) calc(var(--s-2) + var(--sab)) calc(var(--gutter) + var(--sal));
-  background: linear-gradient(180deg, rgba(10, 16, 30, 0.9), rgba(5, 9, 18, 0.98));
+  border-radius: 22px 22px 0 0;
+  background: var(--dpanel-fill);
   box-shadow:
-    0 -1px 0 var(--line-2),
-    0 -12px 24px -8px rgba(0, 0, 0, 0.8);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
+    inset 0 2px 0 rgba(255, 255, 255, 0.22),
+    0 0 0 2.5px var(--navy-ink),
+    0 -12px 24px -10px rgba(14, 28, 72, 0.55);
 }
-.action-bar .btn {
+.formation .action-bar .btn {
   padding: 0 var(--s-2);
-  font-size: var(--fs-body);
+  font-size: 17px;
 }
 @media (min-width: 600px) {
-  .action-bar {
+  .formation .action-bar {
     padding-left: calc((100% - var(--column)) / 2);
     padding-right: calc((100% - var(--column)) / 2);
   }
@@ -328,18 +352,8 @@ button.fgrid__cell:active {
 }
 @media (prefers-reduced-motion: reduce) {
   .fgrid__cell.is-target::after,
-  .fgrid__cell.is-selected,
   .enemy-hint__chev .icon,
   .tray-card.is-selected {
     animation: none;
   }
 }
-
-/* Benched / locked tray cards (squads are 3 of the owned characters) */
-.tray-card.is-benched {
-  background: linear-gradient(180deg, rgba(21, 33, 58, 0.7), rgba(15, 24, 41, 0.7));
-}
-.tray-card.is-benched .tray-card__token {
-  opacity: 0.75;
-}
-

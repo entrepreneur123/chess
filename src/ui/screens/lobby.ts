@@ -29,26 +29,13 @@ function heroOrder(): CharacterId[] {
 
 const artSrc = (id: CharacterId, lv: Level) => `./chars/${id}-lv${lv}.jpg`;
 
-/** Ambient backdrop: rarity aura, slow light rays, rising embers, and (wide screens) side art. */
-function backdrop(levels: Record<CharacterId, Level>): HTMLElement {
-  const [, left, right] = heroOrder();
-  const embers: HTMLElement[] = [];
-  for (let i = 0; i < 16; i++) {
-    embers.push(
-      h('i', {
-        class: 'lobby-bg__ember',
-        style: `--x:${(i * 41 + 7) % 100}%;--d:${7 + (i % 5) * 1.9}s;--delay:${-(i * 1.13) % 9}s;--s:${2 + (i % 3)}px;--drift:${(i % 2 ? 1 : -1) * (8 + (i % 4) * 6)}px`,
-      }),
-    );
-  }
+/** Ambient sky backdrop: soft sun glow and slow light rays (pure CSS). */
+function backdrop(): HTMLElement {
   return h(
     'div',
     { class: 'lobby-bg', 'aria-hidden': 'true' },
-    h('img', { class: 'lobby-bg__side lobby-bg__side--l', src: artSrc(left, levels[left]), alt: '', decoding: 'async' }),
-    h('img', { class: 'lobby-bg__side lobby-bg__side--r', src: artSrc(right, levels[right]), alt: '', decoding: 'async' }),
     h('div', { class: 'lobby-bg__rays' }),
     h('div', { class: 'lobby-bg__aura' }),
-    h('div', { class: 'lobby-bg__embers' }, embers),
   );
 }
 
@@ -100,7 +87,6 @@ export function lobbyScreen(router: Router): Screen {
   const recordHost = h('div', { class: 'record' });
   const squadHost = h('div', { class: 'squad__body' });
   const dockHost = h('nav', { class: 'dock menu-grid', 'aria-label': '메뉴' });
-  let bgHost: HTMLElement = h('div');
   let stageHost: HTMLElement = h('div');
   let heroKey = '';
 
@@ -140,14 +126,14 @@ export function lobbyScreen(router: Router): Screen {
 
   replaceChildren(
     el,
-    bgHost,
+    backdrop(),
     h(
       'header',
       { class: 'lobby__top' },
       recordTop,
       h(
         'button',
-        { class: 'icon-btn icon-btn--glass', type: 'button', 'aria-label': '설정', 'data-action': 'settings', onclick: () => showSettings() },
+        { class: 'icon-btn', type: 'button', 'aria-label': '설정', 'data-action': 'settings', onclick: () => showSettings() },
         icon('settings'),
       ),
     ),
@@ -183,9 +169,6 @@ export function lobbyScreen(router: Router): Screen {
     if (key === heroKey) return;
     const first = heroKey === '';
     heroKey = key;
-    const nextBg = backdrop(levels);
-    bgHost.replaceWith(nextBg);
-    bgHost = nextBg;
     const nextStage = heroStage(levels);
     if (first) {
       replaceChildren(

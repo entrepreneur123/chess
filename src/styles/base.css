@@ -1,5 +1,6 @@
 /* ==========================================================================
-   Base: reset, app shell, typography primitives, screen layout, app bar.
+   Base: reset, app shell (sky background), type primitives, screen layout,
+   app bar.
    ========================================================================== */
 *,
 *::before,
@@ -10,7 +11,7 @@ html,
 body {
   margin: 0;
   height: 100%;
-  background: var(--ink-900);
+  background: var(--sky-bottom);
   color: var(--text-1);
   font-family: var(--font-body);
   font-size: var(--fs-body);
@@ -67,9 +68,21 @@ img {
   flex: none;
   display: block;
 }
+/* Focus ring: white on blue surfaces, deep blue inside light panels (both >= 3:1). */
 :focus-visible {
-  outline: 2px solid var(--gold-300);
+  outline: 3px solid #ffffff;
   outline-offset: 2px;
+}
+.on-light :focus-visible,
+.card :focus-visible,
+.dialog :focus-visible,
+.sheet :focus-visible,
+.tut :focus-visible,
+.fpanel__body :focus-visible,
+.play-panel :focus-visible,
+.unit-card :focus-visible,
+.tray-card:focus-visible {
+  outline-color: var(--team-blue-deep);
 }
 [hidden] {
   display: none !important;
@@ -84,20 +97,19 @@ img {
 }
 .t-num {
   font-family: var(--font-num);
-  font-weight: 800;
+  font-weight: 400;
   font-variant-numeric: tabular-nums lining-nums;
   letter-spacing: 0;
 }
 .t-eyebrow {
-  font-family: var(--font-num);
-  font-size: var(--fs-micro);
-  font-weight: 700;
-  letter-spacing: var(--ls-caps);
-  text-transform: uppercase;
+  font-family: var(--font-display);
+  font-size: var(--fs-caption);
+  font-weight: 400;
+  letter-spacing: 0.06em;
   color: var(--text-3);
 }
 
-/* ---- App shell ---------------------------------------------------------- */
+/* ---- App shell: daylight sky with a faint large lattice ------------------ */
 #app {
   position: fixed;
   inset: 0;
@@ -107,21 +119,7 @@ img {
   flex-direction: column;
   overflow: hidden;
   isolation: isolate;
-  background:
-    radial-gradient(130% 55% at 50% -12%, rgba(47, 125, 246, 0.2), transparent 62%),
-    radial-gradient(90% 45% at 50% 112%, rgba(236, 58, 69, 0.1), transparent 60%),
-    linear-gradient(180deg, #08101f 0%, var(--ink-900) 48%, #060a14 100%);
-}
-/* Film grain over every screen (static, composited once). */
-#app::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 50;
-  pointer-events: none;
-  background-image: var(--tex-grain);
-  opacity: 0.05;
-  mix-blend-mode: overlay;
+  background: var(--bg-pattern) center top / 132px 132px repeat, var(--bg-sky);
 }
 
 .screen {
@@ -152,7 +150,7 @@ img {
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
-  padding: var(--s-2) var(--gutter) calc(var(--s-6) + var(--sab));
+  padding: var(--s-3) var(--gutter) calc(var(--s-6) + var(--sab));
   display: flex;
   flex-direction: column;
   gap: var(--s-3);
@@ -177,29 +175,22 @@ img {
   opacity: 0;
 }
 
-/* ---- App bar (sub-screens) ---------------------------------------------- */
+/* ---- App bar (sub-screens): a dark-blue ribbon with a lip ---------------- */
 .appbar {
   position: relative;
   z-index: 2;
   flex: none;
   display: flex;
   align-items: center;
-  gap: var(--s-1);
-  min-height: calc(60px + var(--sat));
-  padding: var(--sat) var(--s-3) 0 var(--s-1);
-  background: linear-gradient(180deg, rgba(7, 12, 24, 0.96), rgba(7, 12, 24, 0.82));
-  box-shadow: 0 1px 0 var(--line-1), 0 10px 24px -14px rgba(0, 0, 0, 0.9);
-}
-.appbar::after {
-  /* gold hairline accent under the title */
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -1px;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255, 195, 40, 0.45) 30%, rgba(255, 195, 40, 0.45) 70%, transparent);
-  opacity: 0.6;
+  gap: var(--s-2);
+  min-height: calc(64px + var(--sat));
+  padding: calc(var(--s-1) + var(--sat)) var(--s-3) var(--s-1);
+  background: var(--dpanel-fill);
+  box-shadow:
+    inset 0 -2px 0 rgba(255, 255, 255, 0.08),
+    0 var(--lip) 0 var(--panel-dark-edge),
+    0 12px 20px -10px rgba(14, 28, 72, 0.6);
+  margin-bottom: var(--lip);
 }
 .appbar__title {
   flex: 1;
@@ -207,13 +198,14 @@ img {
   padding-left: var(--s-1);
   font-family: var(--font-display);
   font-weight: 400;
-  font-size: var(--fs-h1);
+  font-size: 26px;
   line-height: 1.1;
-  letter-spacing: var(--ls-display);
+  color: #fff;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
+  text-shadow: var(--ink-outline-m);
+  padding-bottom: 3px;
 }
 .appbar__trailing {
   display: flex;
@@ -228,7 +220,7 @@ img {
     padding-right: max(var(--gutter), calc((100% - var(--column)) / 2));
   }
   .appbar {
-    padding-left: max(var(--s-1), calc((100% - var(--column)) / 2 - var(--s-2)));
+    padding-left: max(var(--s-3), calc((100% - var(--column)) / 2 - var(--s-2)));
     padding-right: max(var(--s-3), calc((100% - var(--column)) / 2));
   }
 }

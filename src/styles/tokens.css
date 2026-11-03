@@ -1,95 +1,117 @@
 /* ==========================================================================
-   GRID CLASH design tokens — v2 "Night Arena".
-   One source of truth for colour, type, spacing, shape, elevation, texture and
-   motion. See src/styles/README.md for usage rules.
+   GRID CLASH design tokens — v4 "Bright Arena" (docs/design/arena-style.md).
+   One source of truth for colour, type, spacing, shape, depth and motion.
+   The arena palette below is shared with the board renderer: keep the hex
+   values in sync with the design doc. See src/styles/README.md for usage.
    ========================================================================== */
 :root {
-  /* ---- Ink: navy/graphite base, from deepest to most raised ------------- */
-  --ink-950: #04070e;
-  --ink-900: #070c18; /* app background */
-  --ink-850: #0b1222;
-  --ink-800: #101a2e; /* surface 1 (cards) */
-  --ink-750: #15213a; /* surface 2 (raised / wells on cards) */
-  --ink-700: #1b2a48; /* surface 3 (controls) */
-  --ink-600: #253759;
-  --ink-500: #34496f;
-  --ink-400: #4a608a;
+  /* ---- Arena palette (exact values from the design doc) ----------------- */
+  --sky-top: #4f8ee8;
+  --sky-bottom: #2a59b8;
+  --navy-ink: #1b2445;
+  --panel: #e9eef8;
+  --panel-hi: #f8faff; /* light panel top highlight */
+  --panel-edge: #b9c6e0;
+  --panel-well: #d7e0f0; /* inset wells on light panels */
+  --panel-line: #c9d4ea;
+  --panel-dark: #2d4b8f;
+  --panel-dark-hi: #3d63b0;
+  --panel-dark-edge: #1d3166;
+  --gold: #ffcf3a;
+  --gold-deep: #f29a16;
+  --gold-lip: #b8650a;
+  --gold-soft: #fff1c2;
+  --green: #63d34a;
+  --green-mid: #45b836;
+  --green-deep: #2f9a2a;
+  --green-text: #1f7a1c; /* green text on light panels (4.6:1) */
+  --team-blue: #3c8dff;
+  --team-blue-light: #8cc2ff;
+  --team-blue-deep: #1f56c4;
+  --team-red: #ff4d57;
+  --team-red-light: #ff9aa0;
+  --team-red-deep: #c4212c;
+  --violet: #a46bff;
+  --violet-deep: #7a3fe0;
+  --violet-lip: #4f2399;
+  --grass-light: #8fd16a;
+  --grass-dark: #79bf57;
+  --stone: #c9b48e;
+  --stone-light: #e3d3b0;
+  --stone-deep: #8f7a57;
+  --storm: #9b5cf0;
+  --storm-deep: #5d2aa8;
 
-  /* Lines */
-  --line-1: rgba(160, 186, 255, 0.1);
-  --line-2: rgba(160, 186, 255, 0.18);
-  --line-3: rgba(160, 186, 255, 0.3);
+  /* ---- Text --------------------------------------------------------------
+     Default context = blue surfaces (sky / dark panels): white text.
+     Light panels (.on-light and the panel components) flip these to navy.
+     Contrast: text-1 8.3:1, text-2 6.4:1, text-3 4.6:1 on --panel-dark;
+     on --panel: 13:1 / 7.4:1 / 4.7:1. */
+  --text-1: #ffffff;
+  --text-2: #d5e2ff;
+  --text-3: #a9c0ec;
+  --text-off: #8ea3cc;
+  --text-on-gold: #4a2600;
 
-  /* Text (all >= 4.5:1 on --ink-800; see README contrast table) */
-  --text-1: #f4f7ff;
-  --text-2: #b8c3dc;
-  --text-3: #8d9abb;
-  --text-off: #5f6c8c; /* disabled only (non-essential text) */
-  --text-on-gold: #3b2300;
-  --text-on-color: #ffffff;
+  /* Outlined display type (white/cream face, navy outline + drop). */
+  --ink-outline-s: -1px -1px 0 var(--navy-ink), 1px -1px 0 var(--navy-ink), -1px 1px 0 var(--navy-ink), 1px 1px 0 var(--navy-ink),
+    0 2px 0 var(--navy-ink);
+  --ink-outline-m: -1.5px -1.5px 0 var(--navy-ink), 1.5px -1.5px 0 var(--navy-ink), -1.5px 1.5px 0 var(--navy-ink),
+    1.5px 1.5px 0 var(--navy-ink), 0 -1.5px 0 var(--navy-ink), 0 3px 0 var(--navy-ink), 1.5px 3px 0 var(--navy-ink),
+    -1.5px 3px 0 var(--navy-ink);
+  --ink-outline-l: -2px -2px 0 var(--navy-ink), 2px -2px 0 var(--navy-ink), -2px 2px 0 var(--navy-ink), 2px 2px 0 var(--navy-ink),
+    0 -2px 0 var(--navy-ink), -2px 0 0 var(--navy-ink), 2px 0 0 var(--navy-ink), 0 4px 0 var(--navy-ink), 2px 4px 0 var(--navy-ink),
+    -2px 4px 0 var(--navy-ink), 0 6px 8px rgba(16, 26, 60, 0.35);
 
-  /* ---- Gold: the one primary-action colour ------------------------------ */
+  /* ---- Team scales (legacy step names still used by components) -------- */
+  --blue-200: #cfe3ff;
+  --blue-300: var(--team-blue-light);
+  --blue-400: var(--team-blue);
+  --blue-500: #2f74e6;
+  --blue-600: var(--team-blue-deep);
+  --blue-700: #163f93;
+  --red-200: #ffd2d5;
+  --red-300: var(--team-red-light);
+  --red-400: var(--team-red);
+  --red-500: #ec3a45;
+  --red-600: var(--team-red-deep);
+  --red-700: #8f1820;
   --gold-100: #fff6d1;
   --gold-200: #ffe58c;
-  --gold-300: #ffd556;
-  --gold-400: #ffc328;
-  --gold-500: #f5a30a;
-  --gold-600: #d88207;
-  --gold-700: #9e5604; /* press edge */
-  --gold-800: #6a3602;
-
-  /* ---- Team / semantic -------------------------------------------------- */
-  --blue-200: #bcd8ff;
-  --blue-300: #86baff;
-  --blue-400: #4d9bff;
-  --blue-500: #2f7df6;
-  --blue-600: #1f5fd0;
-  --blue-700: #163f93;
-  --red-200: #ffc3c6;
-  --red-300: #ff969c;
-  --red-400: #ff5a63;
-  --red-500: #ec3a45;
-  --red-600: #c4232f;
-  --red-700: #85141d;
-  --green-300: #8ff0b9;
-  --green-400: #3fe08f;
-  --green-500: #1fc172;
-  --green-600: #13945a;
-  --green-700: #0b5f3a;
-  --gem-300: #9cf3ff;
-  --gem-400: #47dbff;
-  --gem-500: #18b5e6;
-  --gem-700: #0b6a8f;
+  --gold-300: var(--gold);
+  --gold-500: var(--gold-deep);
+  --gold-700: var(--gold-lip);
 
   /* ---- Rarity: base, deep (frame shadow side) and glow ------------------ */
-  /* Rarity: common = white, rare = orange, epic = purple, legendary = aurora / rainbow. */
-  --rar-common: #eef2fa;
-  --rar-common-deep: #6b778f;
-  --rar-common-glow: rgba(238, 242, 250, 0.32);
+  /* common = white, rare = orange, epic = purple, legendary = rotating rainbow. */
+  --rar-common: #ffffff;
+  --rar-common-deep: #8fa0c2;
+  --rar-common-glow: rgba(255, 255, 255, 0.3);
   --rar-rare: #ff9a3c;
-  --rar-rare-deep: #a24d0c;
-  --rar-rare-glow: rgba(255, 154, 60, 0.55);
-  --rar-epic: #c070ff;
-  --rar-epic-deep: #5a1fa0;
-  --rar-epic-glow: rgba(192, 112, 255, 0.55);
+  --rar-rare-deep: #c4600e;
+  --rar-rare-glow: rgba(255, 154, 60, 0.5);
+  --rar-epic: #b46cff;
+  --rar-epic-deep: #6a2bc4;
+  --rar-epic-glow: rgba(180, 108, 255, 0.5);
   --rar-legendary: #7df2d0;
   --rar-legendary-deep: #6b2bd6;
-  --rar-legendary-glow: rgba(125, 242, 208, 0.55);
-  /* Rotating rainbow used for legendary rings (conic, spun with `rar-spin`). */
+  --rar-legendary-glow: rgba(160, 120, 255, 0.5);
   --rar-rainbow: conic-gradient(from var(--rar-angle, 0deg), #ff5f6d, #ffc371, #f9f871, #5ef2a0, #4fd1ff, #7d6bff, #e66bff, #ff5f6d);
 
   /* ---- Type -------------------------------------------------------------- */
   --font-body: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, 'Apple SD Gothic Neo', 'Noto Sans KR',
     'Malgun Gothic', 'Segoe UI', Roboto, sans-serif;
   --font-display: 'Black Han Sans', 'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
-  --font-num: 'Exo 2', 'Pretendard', system-ui, sans-serif;
+  /* Numbers read as display type too (timers, counts, records). */
+  --font-num: var(--font-display);
+  /* Latin logotype only (the GRID CLASH wordmark). */
+  --font-logo: 'Exo 2', 'Black Han Sans', system-ui, sans-serif;
 
-  /* Scale (px, mobile-first). Display sizes are for Black Han Sans / Exo 2. */
-  --fs-hero: 46px; /* wordmark */
-  --fs-display: 34px; /* result titles, VS */
-  --fs-h1: 24px; /* screen titles */
-  --fs-h2: 20px; /* card / dialog titles */
-  --fs-h3: 17px; /* section titles */
+  --fs-hero: 46px;
+  --fs-display: 34px;
+  --fs-h1: 24px;
+  --fs-h2: 20px;
+  --fs-h3: 17px;
   --fs-body-l: 16px;
   --fs-body: 14px;
   --fs-label: 13px;
@@ -104,12 +126,12 @@
   --lh-snug: 1.3;
   --lh-body: 1.5;
 
-  --ls-display: -0.01em;
+  --ls-display: 0;
   --ls-title: -0.02em;
   --ls-body: -0.01em;
-  --ls-caps: 0.12em; /* Latin all-caps eyebrows */
+  --ls-caps: 0.12em;
 
-  /* ---- Space (8px grid; 4px half-steps for tight UI) -------------------- */
+  /* ---- Space (8px grid; 4px half-steps) ---------------------------------- */
   --s-0: 2px;
   --s-1: 4px;
   --s-2: 8px;
@@ -121,36 +143,36 @@
   --s-8: 32px;
   --s-10: 40px;
   --gutter: 16px;
-  --column: 480px; /* max content column on tablets / desktop */
+  --column: 480px;
 
   /* ---- Shape ------------------------------------------------------------- */
   --r-xs: 6px;
   --r-s: 10px;
   --r-m: 14px;
   --r-l: 18px;
-  --r-xl: 24px;
+  --r-xl: 20px;
   --r-full: 999px;
 
-  /* ---- Elevation (dark UI: drop shadow + 1px top light) ----------------- */
-  --hi-1: inset 0 1px 0 rgba(255, 255, 255, 0.07);
-  --hi-2: inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  --sh-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 10px -2px rgba(0, 0, 0, 0.35);
-  --sh-2: 0 2px 4px rgba(0, 0, 0, 0.35), 0 12px 28px -8px rgba(0, 0, 0, 0.6);
-  --sh-3: 0 10px 24px -6px rgba(0, 0, 0, 0.6), 0 30px 60px -12px rgba(0, 0, 0, 0.7);
-  --glow-gold: 0 0 24px rgba(255, 195, 40, 0.45);
-  --glow-blue: 0 0 24px rgba(77, 155, 255, 0.45);
-  --glow-red: 0 0 24px rgba(255, 90, 99, 0.45);
+  /* ---- Depth: chunky lip + soft drop (one light, top-left) ---------------- */
+  --lip: 5px;
+  --drop: 0 10px 18px -8px rgba(14, 28, 72, 0.55);
+  --drop-l: 0 18px 34px -12px rgba(14, 28, 72, 0.6);
+  /* Light panel (cream-blue): highlight top edge, panel-edge lip, soft drop. */
+  --panel-fill: linear-gradient(180deg, var(--panel-hi) 0%, var(--panel) 46%, #e1e8f5 100%);
+  --panel-shadow: inset 0 2px 0 #ffffff, inset 0 -2px 0 rgba(150, 168, 205, 0.35), 0 var(--lip) 0 var(--panel-edge),
+    var(--drop);
+  /* Dark blue panel on the sky. */
+  --dpanel-fill: linear-gradient(180deg, var(--panel-dark-hi) 0%, var(--panel-dark) 55%, #294482 100%);
+  --dpanel-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.2), inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 var(--lip) 0 var(--panel-dark-edge), var(--drop);
+  /* Inset well (dark panels). */
+  --well-dark: rgba(16, 30, 72, 0.45);
+  --well-dark-shadow: inset 0 2px 3px rgba(10, 20, 55, 0.45), 0 1px 0 rgba(255, 255, 255, 0.12);
 
-  /* Surfaces (gradient fills, top-lit) */
-  --surface-1: linear-gradient(180deg, #15223b 0%, #0f1829 100%);
-  --surface-2: linear-gradient(180deg, #1c2b49 0%, #142039 100%);
-  --surface-glass: linear-gradient(180deg, rgba(27, 42, 72, 0.82), rgba(13, 21, 38, 0.86));
-  --surface-well: rgba(3, 7, 16, 0.42);
-
-  /* Texture: film grain (CSS-only SVG turbulence, tiled; ~1 KB) */
-  --tex-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  /* Fine diagonal hatching used on panels / frames */
-  --tex-hatch: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.025) 0 2px, transparent 2px 7px);
+  /* Background: sky gradient + a very large, very faint diamond lattice. */
+  --bg-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='132' height='132' viewBox='0 0 132 132'%3E%3Cpath d='M66 10 122 66 66 122 10 66Z' fill='%23fff' fill-opacity='.045'/%3E%3C/svg%3E");
+  --bg-sky: radial-gradient(120% 60% at 18% -8%, rgba(255, 255, 255, 0.22), transparent 55%),
+    linear-gradient(180deg, var(--sky-top) 0%, #3b75d4 52%, var(--sky-bottom) 100%);
 
   /* ---- Motion ------------------------------------------------------------ */
   --dur-press: 90ms;
@@ -161,8 +183,8 @@
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
   --ease-emph: cubic-bezier(0.05, 0.7, 0.1, 1);
-  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1); /* bouncy overshoot */
-  --ease-pop: cubic-bezier(0.2, 1.8, 0.4, 0.9); /* strong overshoot for rewards */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-pop: cubic-bezier(0.2, 1.8, 0.4, 0.9);
   --stagger: 60ms;
 
   /* ---- Layout / platform ------------------------------------------------- */
@@ -176,59 +198,24 @@
   --z-scrim: 80;
   --z-splash: 90;
 
-  /* ---- Legacy aliases (v1 names still used by the in-game HUD) ---------- */
-  --c-blue: var(--blue-400);
-  --c-blue-dark: var(--blue-600);
-  --c-blue-container: rgba(77, 155, 255, 0.18);
-  --c-on-blue-container: var(--blue-200);
-  --c-red: var(--red-400);
-  --c-red-dark: var(--red-600);
-  --c-red-container: rgba(255, 90, 99, 0.18);
-  --c-green: var(--green-400);
-  --c-green-container: rgba(63, 224, 143, 0.16);
-  --c-amber: var(--gold-400);
-  --c-amber-container: rgba(255, 195, 40, 0.16);
-  --c-gold: var(--gold-400);
-  --c-gold-dark: var(--gold-600);
-  --c-gem: var(--gem-400);
-  --c-gem-dark: var(--gem-500);
-  --r-common: var(--rar-common);
-  --r-rare: var(--rar-rare);
-  --r-epic: var(--rar-epic);
-  --r-legendary: var(--rar-legendary);
-  --c-bg: var(--ink-900);
-  --c-bg-2: var(--ink-850);
-  --c-surface: var(--ink-800);
-  --c-surface-2: var(--ink-750);
-  --c-surface-3: var(--ink-700);
-  --c-outline: var(--line-1);
-  --c-outline-strong: var(--line-2);
-  --c-text: var(--text-1);
-  --c-text-2: var(--text-2);
-  --c-text-3: var(--text-3);
-  --c-scrim: rgba(3, 6, 14, 0.78);
-  --font: var(--font-body);
-  --fs-title-l: 22px;
-  --fs-title-m: 18px;
-  --fs-title-s: 16px;
-  --fs-tiny: var(--fs-micro);
-  --radius-xs: var(--r-xs);
-  --radius-s: var(--r-s);
-  --radius-m: var(--r-m);
-  --radius-l: var(--r-l);
-  --radius-xl: var(--r-xl);
-  --radius-full: var(--r-full);
-  --elev-1: var(--sh-1);
-  --elev-2: var(--sh-2);
-  --elev-3: var(--sh-3);
-  --inset-hi: var(--hi-1);
-  --t-fast: var(--dur-1);
-  --t-med: var(--dur-2);
-  --t-slow: var(--dur-3);
-  --ease: var(--ease-out);
-  --ease-bounce: var(--ease-spring);
+  color-scheme: light;
+}
 
-  color-scheme: dark;
+/* Light-panel text context: anything inside a cream panel reads navy. */
+.on-light,
+.card,
+.panel,
+.dialog,
+.sheet,
+.tut,
+.fpanel,
+.tray-card,
+.play-panel,
+.unit-card {
+  --text-1: var(--navy-ink);
+  --text-2: #3b4a74;
+  --text-3: #5a6992;
+  --text-off: #8793b3;
 }
 
 /* Animatable angle for the legendary rainbow ring (static rainbow where @property is unsupported). */
@@ -243,24 +230,24 @@
   }
 }
 
-/* Rarity contexts: any element with .rarity-* exposes --rar / --rar-deep / --rar-glow. */
+/* Rarity contexts: any element with .rarity-* exposes --rar / --rar-deep / --rar-glow / --rar-soft. */
 .rarity-common {
   --rar: var(--rar-common);
   --rar-deep: var(--rar-common-deep);
   --rar-glow: var(--rar-common-glow);
-  --rar-soft: rgba(238, 242, 250, 0.26);
+  --rar-soft: rgba(143, 160, 194, 0.25);
 }
 .rarity-rare {
   --rar: var(--rar-rare);
   --rar-deep: var(--rar-rare-deep);
   --rar-glow: var(--rar-rare-glow);
-  --rar-soft: rgba(255, 154, 60, 0.32);
+  --rar-soft: rgba(255, 154, 60, 0.3);
 }
 .rarity-epic {
   --rar: var(--rar-epic);
   --rar-deep: var(--rar-epic-deep);
   --rar-glow: var(--rar-epic-glow);
-  --rar-soft: rgba(192, 112, 255, 0.32);
+  --rar-soft: rgba(180, 108, 255, 0.3);
 }
 .rarity-legendary {
   --rar: var(--rar-legendary);

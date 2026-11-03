@@ -89,7 +89,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   const menuBtn = h(
     'button',
     {
-      class: 'icon-btn icon-btn--outlined menu-btn',
+      class: 'icon-btn menu-btn',
       type: 'button',
       'aria-label': '현재 진형 보기',
       'aria-expanded': 'false',
@@ -165,7 +165,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   );
   const resignBtn = h(
     'button',
-    { class: 'icon-btn icon-btn--outlined', type: 'button', 'aria-label': '기권', 'data-action': 'resign', onclick: () => void askResign() },
+    { class: 'icon-btn', type: 'button', 'aria-label': '기권', 'data-action': 'resign', onclick: () => void askResign() },
     icon('flag', 20),
   );
   const bottomBar = h(
@@ -177,8 +177,12 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     botRing.el,
     resignBtn,
   );
-  const boardWrap = h('div', { class: 'board-wrap' }, boardHost, fx, h('div', { class: 'board-overlay' }, pill, counter, stormChip, passChip, coach), infoHost);
-  const el = h('main', { class: 'game no-select' }, topBar, boardWrap, bottomBar);
+  // Layout (top to bottom): opponent bar, turn strip (turn, clock, storm status), board, action
+  // dock, player bar. The strip and the dock have their own rows so neither ever covers the board;
+  // transient notes (auto pass, first-match coach) float over the board's top edge without taking input.
+  const hudStrip = h('div', { class: 'hud-strip' }, pill, counter, stormChip);
+  const boardWrap = h('div', { class: 'board-wrap' }, boardHost, fx, h('div', { class: 'board-overlay' }, passChip, coach));
+  const el = h('main', { class: 'game no-select' }, topBar, hudStrip, boardWrap, infoHost, bottomBar);
 
   // ---------- runtime objects (created on mount)
   let board: IBoardView | null = null;
@@ -374,7 +378,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       key = 'chain';
       content = [
         h('span', { class: 'action-bar__text' }, icon('magic', 16), '연쇄 이동 · 한 번 더!'),
-        h('button', { class: 'btn btn--tonal btn--sm', type: 'button', 'data-action': 'skip-bonus', onclick: () => ctrl?.skipBonus() }, '건너뛰기'),
+        h('button', { class: 'btn btn--secondary btn--sm', type: 'button', 'data-action': 'skip-bonus', onclick: () => ctrl?.skipBonus() }, '건너뛰기'),
       ];
     } else if (targeting) {
       const t = targeting;
@@ -384,7 +388,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       content = [
         h('span', { class: 'action-bar__text' }, icon('target', 16), t.preview ? (valid ? '한 번 더 탭하거나 설치를 누르세요' : '말이 있는 칸에는 깔 수 없어요') : `불모지(${k}×${k})를 깔 곳을 탭하세요`),
         h('button', { class: 'btn btn--text btn--sm', type: 'button', 'data-action': 'skill-cancel', onclick: () => { stopTargeting(); if (ctrl) renderSnapshot(ctrl.snapshot()); } }, '취소'),
-        h('button', { class: 'btn btn--filled btn--sm action-bar__go', type: 'button', 'data-action': 'skill-confirm', disabled: !valid, onclick: () => confirmSkill() }, '설치'),
+        h('button', { class: 'btn btn--success btn--sm action-bar__go', type: 'button', 'data-action': 'skill-confirm', disabled: !valid, onclick: () => confirmSkill() }, '설치'),
       ];
     } else if (myTurn && sel && sel.owner === HUMAN && CHARACTERS[sel.character].skill) {
       const block = skillBlock(s, sel.id);
