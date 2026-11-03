@@ -5,3 +5,6 @@ coverage
 .DS_Store
 android/app/build
 android/.gradle
+
+# Personal Claude Code settings
+.claude/settings.local.json
