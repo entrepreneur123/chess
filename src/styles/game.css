@@ -7,7 +7,7 @@
    Every row has a fixed height so the board never resizes when a note, the
    storm status or a dock control appears. The board row is sized to the
    board itself (no dead bands); the hand row takes the rest, and on very
-   tall screens the leftover is split above the board and above the hand.
+   tall screens the leftover goes 3:1 above the board vs above the hand.
    ========================================================================== */
 body.in-game,
 .game {
@@ -19,7 +19,7 @@ body.in-game,
   --notes-h: 30px;
   --dock-row-h: 58px;
   --hand-min: 104px;
-  --hand-max: 188px;
+  --hand-max: 212px;
   --hand-mb: calc(8px + var(--sab));
   --vh: 100vh;
   /* Everything but the board, with the hand at its minimum. */
@@ -28,7 +28,9 @@ body.in-game,
   /* The hand grows into what is left, up to its max. */
   --hand-h: clamp(var(--hand-min), var(--vh) - var(--chrome) + var(--hand-min) - var(--board-h), var(--hand-max));
   display: grid;
-  grid-template-rows: auto var(--strip-h) var(--notes-h) minmax(0, 1fr) var(--board-h) var(--dock-row-h) minmax(0, 1fr) calc(var(--hand-h) + var(--hand-mb));
+  /* Leftover height goes mostly above the board: a gap between the board and the hand
+     reads as dead space, while a little air under the turn strip does not. */
+  grid-template-rows: auto var(--strip-h) var(--notes-h) minmax(0, 3fr) var(--board-h) var(--dock-row-h) minmax(0, 1fr) calc(var(--hand-h) + var(--hand-mb));
   grid-template-areas: 'top' 'strip' 'notes' '.' 'board' 'dock' '.' 'hand';
   gap: 0;
   background: transparent;
