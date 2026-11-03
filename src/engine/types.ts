@@ -34,9 +34,16 @@ export const STORM_INTERVAL_PLIES = 6;
 export const SUDDEN_DEATH_PLY = 40;
 /** Wall-clock cap for a match (pauses excluded): when it runs out the game is decided by material. */
 export const MATCH_TIME_MS = 10 * 60_000;
+/**
+ * Brutile's skill "불모지" (wasteland) unlocks once both players have taken 3 turns (ply 6, the 7th
+ * turn of the match) and is forbidden once the storm has started to close in (storm >= 1).
+ */
+export const SKILL_UNLOCK_PLY = 6;
+/** How many times a side may use its skill per match. */
+export const SKILL_USES_PER_MATCH = 1;
 
 export type PlayerId = 0 | 1;
-export type CharacterId = 'sad' | 'marki' | 'walk' | 'insaner';
+export type CharacterId = 'sad' | 'marki' | 'walk' | 'insaner' | 'brutile';
 export type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
 export type Level = 1 | 2 | 3;
 
@@ -93,6 +100,15 @@ export interface Move {
   to: Pos;
   /** Id of the enemy piece captured on `to`, if any. */
   captureId?: string;
+  /** Set on recorded moves: `to` was wasteland, so the mover was destroyed there. */
+  wasted?: true;
+}
+
+/** Brutile's skill: lay a k x k wasteland whose lowest-row, lowest-column square is `anchor`. */
+export interface SkillAction {
+  kind: 'skill';
+  pieceId: string;
+  anchor: Pos;
 }
 
 export type EndReason =
@@ -101,7 +117,8 @@ export type EndReason =
   | 'timeoutForfeit' // MAX_CONSECUTIVE_TIMEOUTS reached
   | 'resign'
   | 'stalemate' // neither side has any legal move -> adjudicated by material
-  | 'timeUp'; // MATCH_TIME_MS ran out -> adjudicated by material
+  | 'timeUp' // MATCH_TIME_MS ran out -> adjudicated by material
+  | 'waste'; // the last piece of a side stepped onto wasteland
 
 export type PassReason =
   | 'timeout'
@@ -113,7 +130,9 @@ export type HistoryEntry =
   | { kind: 'move'; player: PlayerId; move: Move }
   | { kind: 'pass'; player: PlayerId; reason: PassReason }
   /** The storm advanced to `storm` columns per side and removed the listed pieces. */
-  | { kind: 'storm'; storm: number; killed: string[] };
+  | { kind: 'storm'; storm: number; killed: string[] }
+  /** `pieceId` (Brutile) laid wasteland on `squares` (square indices r * 12 + c). */
+  | { kind: 'skill'; player: PlayerId; pieceId: string; squares: number[] };
 
 export interface GameState {
   pieces: Piece[]; // only pieces still on the board
@@ -137,6 +156,13 @@ export interface GameState {
    * starts when a side is down to one piece or at SUDDEN_DEATH_PLY, whichever comes first.
    */
   stormIn: number | null;
+  /**
+   * Wasteland squares (r * 12 + c), sorted. A piece whose move touches wasteland (stops on it, or
+   * slides into it: slides end there) is destroyed. Wasteland never holds a piece.
+   */
+  waste: number[];
+  /** Skill uses so far per player. */
+  skillsUsed: [number, number];
 }
 
 export interface CharacterDef {
@@ -150,4 +176,6 @@ export interface CharacterDef {
   value: [number, number, number];
   /** Passive ability copy (UI only), if the character has one. */
   passiveKo?: string;
+  /** Active skill (UI copy), if the character has one; `descKo` per level. */
+  skill?: { nameKo: string; descKo: [string, string, string] };
 }

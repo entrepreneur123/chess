@@ -66,6 +66,7 @@ const DEFAULT_SLOT: Record<CharacterId, { row: number; col: number }> = {
   marki: { row: 2, col: 4 },
   walk: { row: 1, col: 5 },
   insaner: { row: 1, col: 6 },
+  brutile: { row: 0, col: 6 },
 };
 
 /** Normalise a squad: distinct known characters, exactly PIECES_PER_SIDE of them (starters fill in). */

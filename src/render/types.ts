@@ -13,6 +13,25 @@ export interface BoardHighlights {
    * 'enemy' = RED move markers and selection ring for a tapped enemy piece's reach preview.
    */
   tone?: 'own' | 'enemy';
+  /** Subset of `moves` that end on wasteland (the mover would be destroyed): draw a danger mark. */
+  deadly?: Pos[];
+}
+
+/** Options for creating a board view. */
+export interface BoardViewOptions {
+  /**
+   * Top-down only (3D arena disabled for now): never load or animate the glTF unit models; units
+   * are the illustrated tokens. Saves the model download and all skinning/animation work.
+   */
+  topOnly?: boolean;
+}
+
+/** Brutile's wasteland targeting overlay. */
+export interface SkillPreview {
+  /** Squares the wasteland would cover (r * 12 + c). */
+  squares: number[];
+  /** False when the area is not allowed (a piece stands there / off board): draw it red. */
+  valid: boolean;
 }
 
 /** Camera view of the board: tilted 3D arena (default) or straight top-down. */
@@ -24,6 +43,8 @@ export interface IBoardView {
   setPieces(pieces: Piece[]): void;
   /**
    * Animate one move (slide or jump), plus capture effect if move.captureId is set.
+   * If `move.wasted` is set the mover reaches the wasteland square and is destroyed there (green
+   * toxic dissolve; it is absent from `piecesAfter`).
    * Resolves when the animation is done. Afterwards the view reflects `piecesAfter`.
    */
   animateMove(move: Move, piecesAfter: Piece[]): Promise<void>;
@@ -50,4 +71,21 @@ export interface IBoardView {
    * syncs the impact sound, haptic and illustration cut-in to it). Only one listener.
    */
   onImpact?(cb: (move: Move) => void): void;
+  /**
+   * Optional: the wasteland squares (r * 12 + c) currently on the board — toxic, cracked, glowing
+   * green ground. Called with the full list whenever it changes (it only grows during a match).
+   */
+  setWaste?(squares: number[]): void;
+  /**
+   * Optional: skill targeting overlay. `anchors` = squares the player may tap to place the area
+   * (subtle green tint), `preview` = the area under consideration (bright, or red when invalid).
+   * null clears both.
+   */
+  setSkillPreview?(anchors: number[] | null, preview: SkillPreview | null): void;
+  /**
+   * Optional: play Brutile laying wasteland (`caster` is the Brutile piece id): green black-magic
+   * cast on the caster, then the curse spreading over `squares`. Resolves when done (always,
+   * also on dispose). The UI calls setWaste with the new full list afterwards.
+   */
+  animateSkill?(caster: string, squares: number[]): Promise<void>;
 }

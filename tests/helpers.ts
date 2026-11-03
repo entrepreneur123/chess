@@ -24,6 +24,8 @@ export function makeState(specs: Spec[], turn: PlayerId = 0, extra: Partial<Game
     bonusPieceId: null,
     storm: 0,
     stormIn: null,
+    waste: [],
+    skillsUsed: [0, 0],
     ...extra,
   };
 }

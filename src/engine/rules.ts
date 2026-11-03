@@ -1,6 +1,7 @@
-import { MAX_CONSECUTIVE_TIMEOUTS, STORM_INTERVAL_PLIES, SUDDEN_DEATH_PLY, TURN_TIME_1_MS, TURN_TIME_2_MS, TURN_TIME_MS } from './types';
-import type { AbsorbedAbility, Formation, GameState, HistoryEntry, Move, PassReason, Piece, PlayerId, Pos } from './types';
-import { CHAR_CODE, absorbMaskOf, effectiveValue } from './characters';
+import { MAX_CONSECUTIVE_TIMEOUTS, SKILL_UNLOCK_PLY, SKILL_USES_PER_MATCH, STORM_INTERVAL_PLIES, SUDDEN_DEATH_PLY, TURN_TIME_1_MS, TURN_TIME_2_MS, TURN_TIME_MS } from './types';
+import type { AbsorbedAbility, Formation, GameState, HistoryEntry, Move, PassReason, Piece, PlayerId, Pos, SkillAction } from './types';
+import { BOARD_SIZE } from './types';
+import { CHARACTERS, CHAR_CODE, WASTE_SIZE, absorbMaskOf, effectiveValue } from './characters';
 import { N_SQUARES, atTurnRow, formationToAbsolute, forwardDir, genTargets, inStorm, isOnBoard, posOf, sqOf } from './board';
 import { validateFormation } from './formation';
 
@@ -35,6 +36,8 @@ export function createGame(f0: Formation, f1: Formation, firstTurn: PlayerId = 0
     bonusPieceId: null,
     storm: 0,
     stormIn: null,
+    waste: [],
+    skillsUsed: [0, 0],
   };
   return settle(state);
 }
@@ -61,17 +64,30 @@ export function buildOccupancy(pieces: Piece[]): { occ: Int8Array; owners: Uint8
 
 const tmpTargets = new Int16Array(128);
 
+/** Length-144 wasteland flags for a state's `waste` list (shared scratch: read it before the next call). */
+const wasteScratch = new Uint8Array(N_SQUARES);
+let wasteScratchKey: number[] | null = null;
+export function wasteFlags(waste: readonly number[] | undefined): Uint8Array | null {
+  if (!waste || waste.length === 0) return null;
+  if (wasteScratchKey !== waste) {
+    wasteScratch.fill(0);
+    for (const s of waste) wasteScratch[s] = 1;
+    wasteScratchKey = waste as number[];
+  }
+  return wasteScratch;
+}
+
 /** Current forward direction of a piece (forward-only movers turn around at the far edge). */
 export function pieceDir(piece: Pick<Piece, 'owner' | 'dir'>): 1 | -1 {
   return piece.dir ?? forwardDir(piece.owner);
 }
 
-function countTargets(occ: Int8Array, owners: Uint8Array, piece: Piece, storm: number): number {
-  return genTargets(occ, owners, piece.owner, CHAR_CODE[piece.character], piece.level, sqOf(piece.pos), tmpTargets, 0, false, pieceDir(piece), storm, absorbMaskOf(piece.absorbed));
+function countTargets(occ: Int8Array, owners: Uint8Array, piece: Piece, storm: number, waste: Uint8Array | null): number {
+  return genTargets(occ, owners, piece.owner, CHAR_CODE[piece.character], piece.level, sqOf(piece.pos), tmpTargets, 0, false, pieceDir(piece), storm, absorbMaskOf(piece.absorbed), waste);
 }
 
-function targetsWith(pieces: Piece[], occ: Int8Array, owners: Uint8Array, piece: Piece, storm: number): Move[] {
-  const n = countTargets(occ, owners, piece, storm);
+function targetsWith(pieces: Piece[], occ: Int8Array, owners: Uint8Array, piece: Piece, storm: number, waste: Uint8Array | null): Move[] {
+  const n = countTargets(occ, owners, piece, storm, waste);
   const moves: Move[] = [];
   for (let i = 0; i < n; i++) {
     const s = tmpTargets[i];
@@ -86,7 +102,12 @@ function targetsWith(pieces: Piece[], occ: Int8Array, owners: Uint8Array, piece:
 /** Pseudo-moves for ANY piece regardless of whose turn it is (for previewing reach). */
 export function getTargetsForPiece(state: GameState, piece: Piece): Move[] {
   const { occ, owners } = buildOccupancy(state.pieces);
-  return targetsWith(state.pieces, occ, owners, piece, state.storm);
+  return targetsWith(state.pieces, occ, owners, piece, state.storm, wasteFlags(state.waste));
+}
+
+/** True when moving to `to` touches wasteland (the mover is destroyed there). */
+export function isWasteMove(state: Pick<GameState, 'waste'>, to: Pos): boolean {
+  return state.waste.includes(sqOf(to));
 }
 
 /**
@@ -101,17 +122,18 @@ export function getLegalMoves(state: GameState, pieceId?: string): Move[] {
     if (p.owner !== state.turn) continue;
     if (pieceId !== undefined && p.id !== pieceId) continue;
     if (state.bonusPieceId !== null && p.id !== state.bonusPieceId) continue;
-    for (const m of targetsWith(state.pieces, occ, owners, p, state.storm)) out.push(m);
+    for (const m of targetsWith(state.pieces, occ, owners, p, state.storm, wasteFlags(state.waste))) out.push(m);
   }
   return out;
 }
 
-function hasAnyMove(pieces: Piece[], player: PlayerId, storm: number, onlyPieceId: string | null = null): boolean {
+function hasAnyMove(pieces: Piece[], player: PlayerId, storm: number, waste: number[], onlyPieceId: string | null = null): boolean {
   const { occ, owners } = buildOccupancy(pieces);
+  const wf = wasteFlags(waste);
   for (const p of pieces) {
     if (p.owner !== player) continue;
     if (onlyPieceId !== null && p.id !== onlyPieceId) continue;
-    if (countTargets(occ, owners, p, storm) > 0) return true;
+    if (countTargets(occ, owners, p, storm, wf) > 0) return true;
   }
   return false;
 }
@@ -203,17 +225,18 @@ function settle(state: GameState): GameState {
     const n1 = countPieces(state.pieces, 1);
     if (n0 === 0 || n1 === 0) {
       const last = state.history[state.history.length - 1];
-      return end(state, n0 > 0 ? 0 : n1 > 0 ? 1 : null, last?.kind === 'storm' ? 'storm' : 'elimination');
+      const reason = last?.kind === 'storm' ? 'storm' : last?.kind === 'move' && last.move.wasted ? 'waste' : 'elimination';
+      return end(state, n0 > 0 ? 0 : n1 > 0 ? 1 : null, reason);
     }
     if (state.stormIn === null && (n0 <= 1 || n1 <= 1 || state.ply >= SUDDEN_DEATH_PLY)) state = { ...state, stormIn: STORM_INTERVAL_PLIES };
     if (state.bonusPieceId !== null) {
-      if (hasAnyMove(state.pieces, state.turn, state.storm, state.bonusPieceId)) return state;
+      if (hasAnyMove(state.pieces, state.turn, state.storm, state.waste, state.bonusPieceId)) return state;
       // The chaining piece is boxed in: the chain move lapses.
       state = switchTurn(state, { kind: 'pass', player: state.turn, reason: 'bonusSkip' }, state.pliesSinceCapture + 1);
       continue;
     }
-    if (hasAnyMove(state.pieces, state.turn, state.storm)) return state;
-    if (!hasAnyMove(state.pieces, other(state.turn), state.storm)) return end(state, adjudicate(state), 'stalemate');
+    if (hasAnyMove(state.pieces, state.turn, state.storm, state.waste)) return state;
+    if (!hasAnyMove(state.pieces, other(state.turn), state.storm, state.waste)) return end(state, adjudicate(state), 'stalemate');
     state = switchTurn(state, { kind: 'pass', player: state.turn, reason: 'noMoves' }, state.pliesSinceCapture + 1);
   }
 }
@@ -252,10 +275,13 @@ export function applyMove(state: GameState, move: Move): GameState {
   const player = state.turn;
   const mover = state.pieces.find((p) => p.id === legal.pieceId)!;
   const victim = legal.captureId ? state.pieces.find((p) => p.id === legal.captureId) : undefined;
+  // Touching wasteland destroys the mover (wasteland never holds a piece, so nothing is captured).
+  const wasted = isWasteMove(state, legal.to);
   const pieces: Piece[] = [];
   let moved: Piece | null = null;
   for (const p of state.pieces) {
     if (victim && p.id === victim.id) continue;
+    if (p.id === legal.pieceId && wasted) continue;
     if (p.id === legal.pieceId) {
       moved = { ...p, pos: { r: legal.to.r, c: legal.to.c } };
       // Forward-only movers turn around when they reach the last row in their direction.
@@ -272,6 +298,7 @@ export function applyMove(state: GameState, move: Move): GameState {
   ct[player] = 0;
   const recorded: Move = { pieceId: legal.pieceId, from: { ...legal.from }, to: { ...legal.to } };
   if (legal.captureId) recorded.captureId = legal.captureId;
+  if (wasted) recorded.wasted = true;
   const entry: HistoryEntry = { kind: 'move', player, move: recorded };
   const psc = legal.captureId ? 0 : state.pliesSinceCapture + 1;
   const base: GameState = { ...state, pieces, consecutiveTimeouts: ct };
@@ -280,6 +307,75 @@ export function applyMove(state: GameState, move: Move): GameState {
     return settle({ ...base, ply: state.ply + 1, pliesSinceCapture: psc, bonusPieceId: mover.id, history: [...state.history, entry] });
   }
   return settle(switchTurn(base, entry, psc));
+}
+
+/** Squares (r * 12 + c) of a k x k wasteland whose lowest-row, lowest-column square is `anchor`. */
+export function wasteArea(level: number, anchor: Pos): number[] {
+  const k = WASTE_SIZE[level] ?? 1;
+  const out: number[] = [];
+  for (let r = anchor.r; r < anchor.r + k; r++) for (let c = anchor.c; c < anchor.c + k; c++) out.push(r * BOARD_SIZE + c);
+  return out;
+}
+
+export type SkillBlock = 'noSkill' | 'notYourTurn' | 'chain' | 'notYet' | 'used' | 'storm' | 'ended';
+
+/**
+ * Why `pieceId` cannot use its skill right now, or null when it can. Brutile's wasteland unlocks at
+ * SKILL_UNLOCK_PLY (each side has played 3 turns), SKILL_USES_PER_MATCH times per side, and is
+ * forbidden once the storm has started closing in (storm >= 1).
+ */
+export function skillBlock(state: GameState, pieceId: string): SkillBlock | null {
+  if (state.status !== 'playing') return 'ended';
+  const p = state.pieces.find((x) => x.id === pieceId);
+  if (!p || !CHARACTERS[p.character].skill) return 'noSkill';
+  if (p.owner !== state.turn) return 'notYourTurn';
+  if (state.bonusPieceId !== null) return 'chain';
+  if (state.storm > 0) return 'storm';
+  if (state.skillsUsed[p.owner] >= SKILL_USES_PER_MATCH) return 'used';
+  if (state.ply < SKILL_UNLOCK_PLY) return 'notYet';
+  return null;
+}
+
+/** Turns (of the side to move) until the skill unlocks; 0 once unlocked. */
+export function skillUnlockIn(state: Pick<GameState, 'ply'>): number {
+  return Math.max(0, Math.ceil((SKILL_UNLOCK_PLY - state.ply) / 2));
+}
+
+/** Valid anchors for `pieceId`'s wasteland: the whole area on the board and free of pieces. */
+export function skillAnchors(state: GameState, pieceId: string): Pos[] {
+  if (skillBlock(state, pieceId) !== null) return [];
+  const p = state.pieces.find((x) => x.id === pieceId)!;
+  const k = WASTE_SIZE[p.level];
+  const occupied = new Uint8Array(N_SQUARES);
+  for (const q of state.pieces) occupied[sqOf(q.pos)] = 1;
+  const out: Pos[] = [];
+  for (let r = 0; r + k <= BOARD_SIZE; r++) {
+    for (let c = 0; c + k <= BOARD_SIZE; c++) {
+      let ok = true;
+      for (let dr = 0; dr < k && ok; dr++) for (let dc = 0; dc < k && ok; dc++) if (occupied[(r + dr) * BOARD_SIZE + c + dc]) ok = false;
+      if (ok) out.push({ r, c });
+    }
+  }
+  return out;
+}
+
+export function isLegalSkill(state: GameState, action: SkillAction): boolean {
+  if (!action || action.kind !== 'skill' || !action.anchor) return false;
+  return skillAnchors(state, action.pieceId).some((a) => samePos(a, action.anchor));
+}
+
+/** Pure: Brutile lays its wasteland; this is the player's action for the turn. Throws if illegal. */
+export function applySkill(state: GameState, action: SkillAction): GameState {
+  if (!isLegalSkill(state, action)) throw new Error(`Illegal skill: ${JSON.stringify(action)}`);
+  const p = state.pieces.find((x) => x.id === action.pieceId)!;
+  const squares = wasteArea(p.level, action.anchor);
+  const waste = [...new Set([...state.waste, ...squares])].sort((a, b) => a - b);
+  const used: [number, number] = [state.skillsUsed[0], state.skillsUsed[1]];
+  used[p.owner] += 1;
+  const ct: [number, number] = [state.consecutiveTimeouts[0], state.consecutiveTimeouts[1]];
+  ct[p.owner] = 0;
+  const entry: HistoryEntry = { kind: 'skill', player: p.owner, pieceId: p.id, squares };
+  return settle(switchTurn({ ...state, waste, skillsUsed: used, consecutiveTimeouts: ct }, entry, state.pliesSinceCapture + 1));
 }
 
 /** The player declines the pending chain move. No-op when none is pending. */
