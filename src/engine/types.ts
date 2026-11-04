@@ -199,11 +199,15 @@ export interface SkillAction {
 export type EndReason =
   | 'elimination' // all enemy pieces captured
   | 'storm' // the last piece(s) of a side were swallowed by the storm (both at once: more pieces wins, equal = draw)
-  /** Once the storm has closed in (storm >= 1), the side to move had no legal action: it loses. */
-  | 'stormLocked'
+  /**
+   * Owner rule "you must act every turn": the side to move had no legal action (no move and no
+   * castable skill, even once its doll-trap stuns wear off): it loses, at any point of the match.
+   */
+  | 'immobile'
   | 'timeoutForfeit' // the side to move ran out of turn time: it loses at once
   | 'resign'
-  | 'stalemate' // neither side has any legal move -> adjudicated by material
+  /** @deprecated Unreachable since 'immobile' (the side to move loses first); kept for old saves. */
+  | 'stalemate'
   /** @deprecated The match clock was removed; the engine never produces this any more. */
   | 'timeUp'
   | 'waste'; // the last piece of a side stepped onto wasteland

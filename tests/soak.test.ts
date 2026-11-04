@@ -20,7 +20,7 @@ import {
   createGame,
   fastFromState,
   fastGenMoves,
-  fastStormLocked,
+  fastImmobile,
   getLegalMoves,
   inStorm,
   isLegalMove,
@@ -81,7 +81,7 @@ describe('soak: bot self-play through the worker entry point', () => {
         expect(n, `game ${i} ply ${g.ply}: fast/engine move count`).toBe(legal.length);
         // A side boxed in by the storm has already lost: the engine never hands it the move, and
         // the fast board (the bot's search) agrees.
-        expect(fastStormLocked(b), `game ${i} ply ${g.ply}: storm-locked side to move`).toBe(false);
+        expect(fastImmobile(b), `game ${i} ply ${g.ply}: storm-locked side to move`).toBe(false);
         if (g.ply % 3 === 0) {
           const fb = fallbackAction(g);
           expect(fb && isLegal(g, fb), `game ${i} ply ${g.ply}: fallback`).toBe(true);
@@ -108,7 +108,7 @@ describe('soak: bot self-play through the worker entry point', () => {
       // Once the storm has closed in, a side without a move loses: no stalemate (and no 'noMoves'
       // pass) is left for it.
       if (g.storm >= 1) expect(g.endReason, `game ${i}`).not.toBe('stalemate');
-      if (g.endReason === 'stormLocked') expect(g.winner).not.toBe(g.turn);
+      if (g.endReason === 'immobile') expect(g.winner).not.toBe(g.turn);
       if (g.endReason === 'storm' && g.pieces.length === 0) {
         // A double wipe is decided by piece count (equal = draw).
         const last = [...g.history].reverse().find((e) => e.kind === 'storm');

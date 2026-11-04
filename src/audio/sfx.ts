@@ -46,8 +46,36 @@ function audioCtor(): typeof AudioContext | null {
   return w.AudioContext ?? w.webkitAudioContext ?? null;
 }
 
+/**
+ * iOS / iPadOS (every browser there is WebKit, Chrome included) treats web audio as "ambient" by
+ * default, so the Silent Mode switch / Control Center toggle mutes the whole game. Ask for the
+ * "playback" audio session (WebKit's Audio Session API, iOS 16.4+) so sound plays like in a native
+ * game. Feature-detected: elsewhere this is a no-op.
+ */
+function requestPlaybackSession(): void {
+  try {
+    const nav = navigator as Navigator & { audioSession?: { type: string } };
+    if (nav.audioSession && nav.audioSession.type !== 'playback') nav.audioSession.type = 'playback';
+  } catch {
+    /* unsupported */
+  }
+}
+
+/** One-line audio state for the `?diag=1` panel (iPad / iPhone sound reports). */
+export function audioDiagnostics(): string {
+  let session = 'n/a';
+  try {
+    session = (navigator as Navigator & { audioSession?: { type: string } }).audioSession?.type ?? 'n/a';
+  } catch {
+    /* ignore */
+  }
+  const s = getProfile().settings;
+  return `audio ctx=${ctx ? ctx.state : 'none'} rate=${ctx ? ctx.sampleRate : '-'} session=${session} sound=${s.sound} music=${(s as { music?: boolean }).music !== false}`;
+}
+
 /** Create (or resume) the context. Only call from a user gesture or when one already happened. */
 function ensureContext(): AudioContext | null {
+  requestPlaybackSession();
   if (!ctx) {
     const Ctor = audioCtor();
     if (!Ctor) return null;
@@ -85,6 +113,7 @@ function ensureContext(): AudioContext | null {
 export function installAudio(): void {
   if (installed || typeof document === 'undefined') return;
   installed = true;
+  (window as unknown as { __gcAudio?: () => string }).__gcAudio = audioDiagnostics;
   // Which events count as a user activation for audio differs: Chromium accepts pointerdown,
   // iOS / iPadOS Safari only touchend and click (a pointerdown/touchstart resume() is ignored there,
   // which used to leave the game silent until a settings switch was tapped). Listen to all of them.

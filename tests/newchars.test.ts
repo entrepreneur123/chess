@@ -603,21 +603,23 @@ describe('bot with Michelle and Picker on both sides', () => {
 });
 
 describe('draws and termination are unaffected', () => {
-  it('a stun is not a stalemate: the stuck side passes until the stunned side can play again', () => {
-    // Player 0's only piece is a Marki facing off the board (no move at all); player 1's sad steps
-    // onto player 0's trap. The old rule would have called that a stalemate (nobody can move now).
-    const trap: Trap = { sq: 6 * BOARD_SIZE + 5, owner: 0 };
-    const s0 = makeState([[0, 'marki', 1, 9, 0], [1, 'sad', 1, 7, 5]], 1, { traps: [trap] });
+  it('a stun only passes, but a side that can never act loses (must act every turn)', () => {
+    // Player 0: a Marki facing off the board (no move at all) and a Sad that will be stunned.
+    const trap: Trap = { sq: 6 * BOARD_SIZE + 5, owner: 1 };
+    const s0 = makeState([[0, 'marki', 1, 9, 0], [0, 'sad', 1, 7, 5], [1, 'sad', 1, 2, 2]], 0, { traps: [trap] });
     s0.pieces[0] = { ...s0.pieces[0], dir: 1 };
-    expect(getLegalMoves({ ...s0, turn: 0 }).length).toBe(0);
-    const s = play(s0, 'p1-sad', 6, 5);
+    // Blue's Sad steps onto red's doll: stunned. Red moves; blue's only free piece is the stuck Marki,
+    // but the Sad will be free next turn, so blue passes ('stunned') instead of losing.
+    let s = play(s0, 'p0-sad', 6, 5);
+    s = play(s, 'p1-sad', 2, 3);
     expect(s.status).toBe('playing');
-    expect(s.turn).toBe(1);
-    expect(s.history.slice(1)).toEqual([
-      { kind: 'pass', player: 0, reason: 'noMoves' },
-      { kind: 'pass', player: 1, reason: 'stunned' },
-      { kind: 'pass', player: 0, reason: 'noMoves' },
-    ]);
-    expect(getLegalMoves(s, 'p1-sad').length).toBeGreaterThan(0);
+    expect(s.history.some((e) => e.kind === 'pass' && e.player === 0 && e.reason === 'stunned')).toBe(true);
+    // Without the Sad, the Marki alone can never act: blue loses at once.
+    const lone = makeState([[0, 'marki', 1, 9, 0], [1, 'sad', 1, 2, 2]], 1);
+    lone.pieces[0] = { ...lone.pieces[0], dir: 1 };
+    const end = play(lone, 'p1-sad', 2, 3);
+    expect(end.status).toBe('ended');
+    expect(end.endReason).toBe('immobile');
+    expect(end.winner).toBe(1);
   });
 });

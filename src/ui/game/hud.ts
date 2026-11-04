@@ -141,8 +141,8 @@ export function endReasonText(reason: EndReason | null, outcome: 'win' | 'loss' 
       return outcome === 'win' ? '상대의 말을 모두 잡았습니다.' : '내 말이 모두 잡혔습니다.';
     case 'storm':
       return outcome === 'win' ? '상대의 마지막 말이 자기장에 휩쓸렸습니다.' : '내 마지막 말이 자기장에 휩쓸렸습니다.';
-    case 'stormLocked':
-      return outcome === 'win' ? '상대가 자기장에 막혀 승리' : '자기장에 막혀 더 움직일 수 없어 패배';
+    case 'immobile':
+      return outcome === 'win' ? '상대가 더 이상 움직일 수 없어 승리' : '더 이상 움직일 수 없어 패배 (매 턴 반드시 움직여야 해요)';
     case 'timeoutForfeit':
       return outcome === 'win' ? '상대 시간 초과 · 몰수승' : '시간 초과 · 몰수패';
     case 'resign':

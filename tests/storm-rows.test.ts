@@ -180,12 +180,12 @@ describe('storm rows', () => {
     expect(u.pieces.find((p) => p.id === 'p0-marki')!.dir).toBe(-1);
   });
 
-  it('a side whose only piece faces the storm rows is boxed in and loses (stormLocked)', () => {
+  it('a side whose only piece faces the storm rows is boxed in and loses (immobile)', () => {
     // Blue's only piece is a marki stuck facing row 9: red moves, blue has nothing to play and loses.
     let s = makeState([[0, 'marki', 1, 8, 5], [1, 'sad', 1, 4, 4]], 1, at(3));
     s = applyMove(s, mv(s, 'p1-sad', 4, 3));
     expect(s.status).toBe('ended');
-    expect(s.endReason).toBe('stormLocked');
+    expect(s.endReason).toBe('immobile');
     expect(s.winner).toBe(1);
     expect(s.history.some((e) => e.kind === 'pass')).toBe(false);
     // Red's walk lands on row 1 facing the storm row 0 while blue is stuck too: blue is to move, so
@@ -193,7 +193,7 @@ describe('storm rows', () => {
     let t = makeState([[0, 'marki', 1, 8, 5], [1, 'walk', 1, 2, 4]], 1, at(3));
     t = applyMove(t, mv(t, 'p1-walk', 1, 4));
     expect(t.status).toBe('ended');
-    expect(t.endReason).toBe('stormLocked');
+    expect(t.endReason).toBe('immobile');
     expect(t.winner).toBe(1);
   });
 

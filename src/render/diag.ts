@@ -155,7 +155,13 @@ export function mountDiagPanel(host: HTMLElement, source: () => RenderDiagnostic
       el.textContent = `diag error: ${String(e)}`;
       return;
     }
-    el.textContent = format(d);
+    let audio = '';
+    try {
+      audio = (window as unknown as { __gcAudio?: () => string }).__gcAudio?.() ?? '';
+    } catch {
+      /* ignore */
+    }
+    el.textContent = audio ? `${format(d)}\n${audio}` : format(d);
   };
   const timer = window.setInterval(tick, 1000);
   tick();

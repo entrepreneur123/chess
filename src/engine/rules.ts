@@ -1,5 +1,5 @@
 import { AWAKEN_TURNS, SKILL_UNLOCK_PLY, STORM_INTERVAL_PLIES, SUDDEN_DEATH_PLY, TRAPS_PER_MICHELLE, TRAP_STUN, TURN_TIME_1_MS, TURN_TIME_2_MS, TURN_TIME_MS } from './types';
-import type { AbsorbedAbility, CharacterId, EndReason, Formation, GameState, HistoryEntry, Move, PassReason, Piece, PlayerId, Pos, SkillAction, Trap } from './types';
+import type { AbsorbedAbility, CharacterId, EndReason, Formation, GameState, HistoryEntry, Move, Piece, PlayerId, Pos, SkillAction, Trap } from './types';
 import { BOARD_SIZE } from './types';
 import { CHARACTERS, CHAR_CODE, WASTE_SIZE, absorbMaskOf, effectiveValue, keepsDirection, skillKindOf } from './characters';
 import { N_SQUARES, atTurnRow, canHop, formationToAbsolute, forwardDir, genTargets, inStorm, isOnBoard, posOf, sqOf, trapBit } from './board';
@@ -414,10 +414,9 @@ function countDownTurnEnd(pieces: Piece[], player: PlayerId): Piece[] {
  * sudden death), chain moves that cannot be played, and what happens when the side to move has no
  * legal action (no move and no castable skill):
  *  - only its doll-trap stuns hold it (it would have a move without them): it passes ('stunned');
- *  - otherwise, once the storm has closed in (storm >= 1): it is boxed in for good and LOSES at
- *    once ('stormLocked'), e.g. a Walk or Marki facing a storm row it can never turn around at;
- *  - before that: it passes ('noMoves'), and if neither side could act it is a 'stalemate'
- *    (adjudicated by material).
+ *  - otherwise it cannot act at all and LOSES at once ('immobile'). Owner rule: a side must act
+ *    every turn, e.g. a Walk or Marki facing a storm row it can never turn around at, or a piece
+ *    boxed in by its own pieces and the board edge.
  * A pending chain move that cannot be played just lapses ('bonusSkip'), never a loss.
  * `state` must already be a fresh object owned by the caller.
  */
@@ -439,10 +438,8 @@ function settle(state: GameState): GameState {
     if (hasAnyMove(state, state.turn) || sideCanCast(state, state.turn)) return state;
     // Stuns wear off, so the game is only stuck when neither side could act even without them.
     const selfLater = hasAnyMove(state, state.turn, null, true) || sideCanCast(state, state.turn, true);
-    if (!selfLater && state.storm >= 1) return end(state, other(state.turn), 'stormLocked');
-    if (!selfLater && !hasAnyMove(state, other(state.turn), null, true) && !sideCanCast(state, other(state.turn), true)) return end(state, adjudicate(state), 'stalemate');
-    const reason: PassReason = selfLater ? 'stunned' : 'noMoves';
-    state = switchTurn(state, { kind: 'pass', player: state.turn, reason }, state.pliesSinceCapture + 1);
+    if (!selfLater) return end(state, other(state.turn), 'immobile');
+    state = switchTurn(state, { kind: 'pass', player: state.turn, reason: 'stunned' }, state.pliesSinceCapture + 1);
   }
 }
 

@@ -96,12 +96,11 @@ quoting a number.
 - **Storm squares:** a piece on one is removed. Nothing may enter or pass through a storm square.
 - **Both sides wiped in one step:** the side that had MORE PIECES wins. Rarity and grade are
   ignored; equal counts are a draw.
-- **`stormLocked`:** once storm ≥ 1, a side to move with no legal move and no castable skill
-  LOSES.
-  - A side that has no moves only because of a stun is passed instead.
-  - A chain move that cannot be played just lapses.
-- **Before the first shrink:** a side with no moves is auto-passed; if neither side can move,
-  it is a stalemate decided by material value.
+- **Must act every turn (`immobile`, owner rule):** at ANY point of the match, a side to move
+  with no legal move and no castable skill LOSES at once. Exceptions:
+  - a side that has no moves only because of a doll-trap stun is passed ('stunned');
+  - a chain move that cannot be played just lapses.
+- There is no stalemate any more: the side to move loses first.
 
 **Skills**
 - Each skill character may use its skill once per match (`Piece.skillUsed`).
@@ -242,7 +241,9 @@ legendary.
     - after a WebGL context loss the board switches to 2D in 3 s.
 - **Music only after opening settings (iOS):** Safari unlocks audio only on touchend or click,
   inside the gesture. The unlock now listens to pointerdown, touchend, click and keydown, and
-  starts a silent buffer.
+  starts a silent buffer. It also requests `navigator.audioSession.type = 'playback'` (WebKit Audio Session API) so the
+  iOS/iPadOS silent mode does not mute the game; every iOS browser, Chrome included, is WebKit.
+  `?diag=1` shows an `audio ctx=… session=…` line for device reports.
 - **Endless splash right after a deploy:** old hashed chunks 404 at once, and the CDN may serve a
   stale index for seconds. `public/boot-guard.js` reloads once with a cache-busting `?_r=`, then
   shows 다시 시도. After 12 s on the splash it reloads once if the main chunk already downloaded
@@ -254,10 +255,10 @@ legendary.
 
 ## 7. Open items and decisions waiting for the owner
 - **Balance (hard-bot self-play, noisy):**
-  - Insaner is far ahead (about 0.9 win rate overall, 3성 ~0.97+ vs other 3성).
+  - Insaner after the 3성 diagonal was removed (3성 vs 3성, 80 games each): 0.59 vs Brutile,
+    0.79 vs Rakaeli, 0.82 vs Walk. Further levers if needed: 3성 orthogonal to 2, or an absorb cap.
   - Michelle: 1성 weak (~0.24); 2/3성 ~0.53–0.55 after the forward buff.
-  - Possible levers for Insaner: 3성 orthogonal to 2, an absorb cap, or dropping the chain move.
-- **A storm-lock loss shows no on-board callout:** the result appears after about 0.65 s.
+- **An `immobile` loss shows no on-board callout:** the result appears after about 0.65 s with "더 이상 움직일 수 없어 패배".
   Consider a toast or FX.
 - **Store assets:** the screenshots and promo video still show the old 12×12 board and must be
   regenerated with `docs/store-assets/capture.mjs`.

@@ -238,7 +238,7 @@ describe('Rakaeli skill: 타천', () => {
     expect(fastCanSkill(b, b.ids.indexOf(R))).toBe(false);
   });
 
-  it('a boxed-in, untransformed Rakaeli with the skill unused is not passed: casting is the turn', () => {
+  it('a boxed-in, untransformed Rakaeli with the skill unused is not passed: casting is the turn (spent: he loses)', () => {
     // Blue's only piece faces off the board (dir +1 on the last row): no move at all.
     const boxed = (patch: Partial<Piece> = {}) =>
       withPiece(makeState([[0, 'rakaeli', 1, 9, 5], [1, 'sad', 1, 4, 0], [1, 'walk', 1, 6, 9]], 1, { ply: 20 }), R, { dir: 1, ...patch });
@@ -249,8 +249,9 @@ describe('Rakaeli skill: 타천', () => {
     const a = chooseAction(after, 'normal', { timeBudgetMs: 20, rng: rngFrom(1) });
     expect(isSkillAction(a) && a.pieceId === R).toBe(true);
     const spent = play(boxed({ skillUsed: true }), 'p1-sad', 4, 1);
-    expect(spent.turn).toBe(1);
-    expect(spent.history.some((e) => e.kind === 'pass' && e.reason === 'noMoves')).toBe(true);
+    expect(spent.status).toBe('ended');
+    expect(spent.endReason).toBe('immobile');
+    expect(spent.winner).toBe(1);
   });
 });
 

@@ -195,7 +195,7 @@ describe('no auto-pass while the wasteland can still be cast', () => {
       1,
       { ply: 20, ...extra },
     );
-  it('the side is not passed when it can cast, and is passed once it cannot', () => {
+  it('the side is not passed when it can cast, and LOSES once it cannot act at all', () => {
     // Blue's Brutile at (9,0) faces up (dir +1): no row ahead, it has not turned around (dir set by moves only).
     const s = boxed();
     expect(getLegalMoves({ ...s, turn: 0 }, 'p0-brutile')).toHaveLength(0);
@@ -206,10 +206,11 @@ describe('no auto-pass while the wasteland can still be cast', () => {
     expect(after.history[after.history.length - 1].kind).toBe('move');
     const a = chooseAction(after, 'normal', { timeBudgetMs: 20, rng: rngFrom(1) });
     expect(isSkillAction(a)).toBe(true);
-    // With the skill spent the same position passes automatically.
+    // With the skill spent the same position has no legal action: blue loses ('immobile').
     const spent = applyMove(spendSkill(boxed(), 'p0-brutile'), m);
-    expect(spent.turn).toBe(1);
-    expect(spent.history.some((e) => e.kind === 'pass' && e.reason === 'noMoves')).toBe(true);
+    expect(spent.status).toBe('ended');
+    expect(spent.endReason).toBe('immobile');
+    expect(spent.winner).toBe(1);
   });
 });
 

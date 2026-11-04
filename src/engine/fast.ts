@@ -186,12 +186,24 @@ export function fastHasMoves(b: FastBoard, side: number, ignoreStun = false): bo
 }
 
 /**
- * Engine rule 'stormLocked': once the storm has closed in (storm >= 1) the side to move loses when
- * it has no legal action. Skills are sealed by then, so that is "no move even once its doll-trap
- * stuns wear off" (a stun alone only passes). A boxed-in chain move just lapses: never a lock.
+ * Engine rule 'immobile': the side to move LOSES when it has no legal action, i.e. no move and no
+ * castable skill even once its doll-trap stuns wear off (a stun alone only passes). A boxed-in chain
+ * move just lapses: never a loss. Mirrors `settle` / `sideCanCast(.., ignoreStun)` in rules.ts.
  */
-export function fastStormLocked(b: FastBoard): boolean {
-  return b.storm >= 1 && b.bonus < 0 && !fastHasMoves(b, b.turn, true);
+export function fastImmobile(b: FastBoard): boolean {
+  if (b.bonus >= 0 || fastHasMoves(b, b.turn, true)) return false;
+  // Could a skill piece cast once its stun wears off? (Skills are sealed once the storm closes in.)
+  if (b.storm === 0 && b.ply >= SKILL_UNLOCK_PLY) {
+    for (let i = 0; i < b.n; i++) {
+      if (b.sq[i] < 0 || b.owner[i] !== b.turn || b.used[i] !== 0 || b.awaken[i] !== 0) continue;
+      if (b.ch[i] === CH_RAKAELI) return false;
+      if (b.ch[i] === CH_BRUTILE) {
+        const k = WASTE_SIZE[b.lvl[i]];
+        for (let a = 0; a < BOARD_SIZE * BOARD_SIZE; a++) if (fastSkillFits(b, k, a)) return false;
+      }
+    }
+  }
+  return true;
 }
 
 /**

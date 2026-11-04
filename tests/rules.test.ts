@@ -13,7 +13,6 @@ import {
   defaultFormation,
   getLegalMoves,
   isLegalMove,
-  materialScore,
   resign,
   skillUnlockIn,
   wipeWinner,
@@ -124,34 +123,31 @@ describe('turn counter', () => {
 });
 
 describe('no moves / stalemate / sudden death', () => {
-  it('auto-passes when the next player has no moves', () => {
-    // p1 only has a walk on row 0 (stuck). p0 moves -> p1 auto-passes -> p0 to move again.
+  it('a side with no legal action loses at once (must act every turn)', () => {
+    // p1 only has a walk on row 0 (stuck). p0 moves -> p1 cannot act -> p1 loses.
     const s = makeState([
       [0, 'sad', 1, 5, 5],
       [1, 'walk', 1, 0, 0],
     ]);
     const s2 = applyMove(s, { pieceId: 'p0-sad', from: { r: 5, c: 5 }, to: { r: 5, c: 6 } });
-    expect(s2.status).toBe('playing');
-    expect(s2.turn).toBe(0);
-    expect(s2.ply).toBe(2);
-    expect(s2.pliesSinceCapture).toBe(2);
-    expect(s2.history[s2.history.length - 1]).toEqual({ kind: 'pass', player: 1, reason: 'noMoves' });
-    expect(getLegalMoves(s2).length).toBeGreaterThan(0);
+    expect(s2.status).toBe('ended');
+    expect(s2.endReason).toBe('immobile');
+    expect(s2.winner).toBe(0);
   });
   it('reaching the last row no longer stalls the game: the mover turns around', () => {
     const s = makeState([
       [0, 'marki', 1, 8, 3],
       [0, 'walk', 3, 9, 0],
       [1, 'walk', 1, 0, 5],
+      [1, 'sad', 1, 5, 9],
     ]);
     const s2 = applyMove(s, { pieceId: 'p0-marki', from: { r: 8, c: 3 }, to: { r: 9, c: 3 } });
     expect(s2.status).toBe('playing');
     expect(s2.pieces.find((p) => p.id === 'p0-marki')!.dir).toBe(-1);
-    // p1's walk was placed on row 0 facing the edge (artificial), so p1 auto-passes and p0 moves again.
-    expect(s2.history[s2.history.length - 1]).toEqual({ kind: 'pass', player: 1, reason: 'noMoves' });
-    expect(s2.turn).toBe(0);
+    // p1 still has a free piece (its sad), so the game goes on.
+    expect(s2.turn).toBe(1);
   });
-  it('stalemate when neither side can move (all pieces boxed in), adjudicated by material', () => {
+  it('when nobody can move, the side to move loses (no stalemate any more)', () => {
     // p0: sad boxed in the corner by its own pieces; marki blocked by the ally ahead; walk facing
     // the edge; brutile's only steps lead onto wasteland. p1: a lone walk facing the edge.
     // Brutile steps onto wasteland (destroyed) -> nobody can move -> stalemate.
@@ -172,10 +168,9 @@ describe('no moves / stalemate / sudden death', () => {
     };
     const s2 = applyMove(s, mv(s, 'p0-brutile', 6, 4));
     expect(s2.status).toBe('ended');
-    expect(s2.endReason).toBe('stalemate');
+    // It is p1's turn and p1 cannot act: p1 loses, whatever the material says.
+    expect(s2.endReason).toBe('immobile');
     expect(s2.winner).toBe(0);
-    expect(materialScore(s2, 0)).toBe(3 + 3 + 4);
-    expect(materialScore(s2, 1)).toBe(4);
   });
   it('sudden death: the storm starts on its own at SUDDEN_DEATH_PLY', () => {
     const base = makeState(
