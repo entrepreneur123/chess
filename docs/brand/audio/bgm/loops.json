@@ -62,7 +62,7 @@
   "lobby": {
     "bpm": 104,
     "bars": 32,
-    "key": "F major",
+    "key": "Eb major",
     "loopStart": 0.512,
     "loopEnd": 74.368,
     "loopSamples": 3545088,

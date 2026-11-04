@@ -150,18 +150,26 @@ Each arena has a card art, an in-match backdrop and a BGM loop. All are original
 palette and readability rules apply, and the centre of the backdrop stays calm because the board
 sits there.
 
+**Music rule:** every arena has its own battle track, and the lobby has its own home theme that is
+no arena's track. The lobby and every tab screen (shop, collection, formation, arenas) play the
+lobby theme. A match plays its arena's track from the matchmaking VS card through the result panel;
+the search phase before the VS card keeps whatever was playing (no 1–2 s detour through the lobby
+theme on a rematch). Leaving the result panel crossfades back to the lobby theme. Scores, numbers
+and a distinctness audit: `docs/brand/audio/bgm/README.md`.
+
 | Arena | Visual concept | Music concept |
 | --- | --- | --- |
 | moonrune | cold moonlight, rune circles, mist, iron gate | low strings, harp, soft taiko; tense but calm; about 84 BPM |
 | emberforge | volcanic forge, molten channels, anvils, embers | anvil percussion, low brass, driving drums; about 100 BPM |
 | blightmire | toxic swamp shrine, green fog, roots, witch lanterns | plucked strings, eerie choir hum, hand drums; about 90 BPM |
 | frostkeep | ice citadel, aurora, frozen banners | glass bells, wide pads, war drums; about 96 BPM |
-| madcrown | violet-crimson throne hall, broken chains, demon fire | organ, dark choir, pulsing drums; about 110 BPM |
+| madcrown | violet-crimson throne hall, broken chains, demon fire | organ, dark choir, a triplet (12/8) drum pulse; about 110 BPM |
 | apex | floating arena above clouds, gold and starlight | full epic orchestral, triumphant but tense; about 120 BPM |
+| *(lobby, home)* | the lobby and tab screens; no backdrop of its own | warm, festive "home base": Eb major (the only major-key track), drum-kit backbeat with claps, bass guitar, marimba, brass fanfare, the Clash leitmotif in a major variant; about 104 BPM |
 
 **Music module contract** (`src/audio/music.ts`):
-- `setMusicTrack(id: string | null)` crossfades to `public/audio/bgm/<id>.m4a`, loops seamlessly,
-  and does nothing if that track is already playing.
+- `setMusicTrack(id: string | null)` crossfades to `public/audio/bgm/<id>.m4a` (an arena's `bgm`
+  or `lobby`), loops seamlessly, and does nothing if that track is already playing.
 - `setMusicEnabled(on: boolean)` switches music on or off.
 - `duckMusic(on: boolean)` lowers the music under voice lines and cut-ins.
 - It respects `settings.sound && settings.music`, autoplay policies (start after the first user

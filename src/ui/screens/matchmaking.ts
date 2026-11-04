@@ -10,6 +10,7 @@ import { formationAllowed, getProfile, levelsOf } from '../../meta/profile';
 import { DUNGEON_LABEL, MODE_LABEL, OPPONENT_BAND, arenaById, arenaForRating, clampRating } from '../../meta/progression';
 import { randInt, defaultRng } from '../../meta/rng';
 import { preloadArt } from '../backdrops';
+import { playArenaMusic } from '../musicBridge';
 import { arenaBadge } from '../components/currency';
 import { artMissing, pieceToken, unitArt } from '../components/piece';
 import { clearToasts, toast } from '../components/toast';
@@ -123,6 +124,11 @@ export function matchmakingScreen(router: Router, params: MatchRequest): Screen 
   const found = () => {
     el.classList.add('is-found');
     clearToasts(); // nothing may cover the VS card
+    // Music: the search keeps what was playing (the lobby theme, or after a rematch the previous
+    // match's track, so it does not bounce through the lobby theme for 1-2 s). The VS reveal is the
+    // start of the battle: crossfade to the match arena's track here, so it is decoded and playing
+    // before the board appears; the game screen's own request is then a no-op.
+    playArenaMusic(themeArena.id);
     replaceChildren(
       stage,
       h(

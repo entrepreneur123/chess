@@ -1,5 +1,5 @@
 """
-Render, master and encode the GRID CLASH arena loops.
+Render, master and encode the GRID CLASH music loops (the arena tracks and the lobby theme).
 
 Usage (from any directory):
   python docs/brand/audio/bgm/build_bgm.py [id ...] [--work DIR]

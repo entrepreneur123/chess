@@ -50,7 +50,7 @@ library voices (e.g. "Kang", `8G6jifm9f1BhHXadvwOt`) are real voice actors' voic
   Original work of this project; no samples or third-party sound libraries. This includes the
   shared `death.m4a` and `waste-death.m4a` (a piece dissolving on brutile's wasteland).
 
-## Arena music (`bgm/*.m4a`)
+## Music (`bgm/*.m4a`: the six arena loops and the lobby theme)
 
 - **Composition:** original to this project (2026). The note data is written in Python in
   `docs/brand/audio/bgm/tracks.py`; no existing melodies, MIDI files or loops were used. No AI
@@ -81,6 +81,10 @@ library voices (e.g. "Kang", `8G6jifm9f1BhHXadvwOt`) are real voice actors' voic
 
 - **Synthesised layers** (sub booms, anvil strikes, reverse swells, noise beds, the reverb impulse
   responses): original numpy/scipy code in `docs/brand/audio/bgm/bgm_lib.py`.
+- The lobby theme (`lobby.m4a`) uses the same sources only: its drum kit, bass, marimba, brass,
+  flute and glockenspiel are FluidR3_GM presets, and its melodies (including the major variant of
+  the shared leitmotif) are original to this project. No existing game or film music was
+  transcribed or imitated.
 - **Offline tools** (nothing from them is embedded in the shipped files):
   - FluidSynth 2.3.4 (`libfluidsynth3`, LGPL-2.1+), the renderer, called through ctypes;
   - ffmpeg 6.1 (AAC encoding and measurement);

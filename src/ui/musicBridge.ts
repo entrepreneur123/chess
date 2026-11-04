@@ -8,7 +8,13 @@
  *   setMusicTrack(id | null), setMusicEnabled(on), duckMusic(on).
  */
 import { getProfile, subscribeProfile } from '../meta/profile';
-import { arenaById, arenaForRating, type ArenaId } from '../meta/progression';
+import { arenaById, type ArenaId } from '../meta/progression';
+
+/**
+ * The lobby/home theme (public/audio/bgm/lobby.m4a). Mirrors LOBBY_TRACK in src/audio/music.ts
+ * (this adapter must not import that module statically, see above).
+ */
+export const HOME_TRACK = 'lobby';
 
 interface MusicModule {
   setMusicTrack?: (id: string | null) => void;
@@ -68,12 +74,18 @@ export function playTrack(id: string | null): void {
   call((m) => m.setMusicTrack?.(id));
 }
 
-/** The current arena's theme (lobby and tab screens). */
+/**
+ * The lobby/home theme, on the lobby and every tab screen (shop, collection, formation, arenas).
+ * It differs from every arena's battle track, so returning from a match crossfades home.
+ */
 export function playHomeMusic(): void {
-  playTrack(arenaForRating(getProfile().rating).bgm);
+  playTrack(HOME_TRACK);
 }
 
-/** A specific arena's theme (a match). */
+/**
+ * A specific arena's battle theme: from the matchmaking VS card on, and through the match and its
+ * result panel.
+ */
 export function playArenaMusic(id: ArenaId): void {
   playTrack(arenaById(id).bgm);
 }

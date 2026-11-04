@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   DUCK_GAIN,
+  LOBBY_TRACK,
   MUSIC_LOOPS,
   MUSIC_LOOP_RATE,
   MUSIC_TRACK_IDS,
@@ -13,6 +14,8 @@ import {
   setMusicEnabled,
   setMusicTrack,
 } from '../src/audio/music';
+import { ARENA_DEFS } from '../src/meta/progression';
+import { HOME_TRACK } from '../src/ui/musicBridge';
 
 // ------------------------------------------------------------------------------------------------
 // A minimal fake Web Audio graph: enough for music.ts, and it records what was started.
@@ -157,8 +160,19 @@ const live = (h: Harness) => h.ctx.sources.filter((s) => s.started && !s.stopped
 afterEach(() => _resetMusicForTests());
 
 describe('music module', () => {
-  it('lists the six arena tracks', () => {
-    expect(MUSIC_TRACK_IDS).toEqual(['moonrune', 'emberforge', 'blightmire', 'frostkeep', 'madcrown', 'apex']);
+  it('lists the six arena tracks and the lobby theme', () => {
+    expect(MUSIC_TRACK_IDS).toEqual(['moonrune', 'emberforge', 'blightmire', 'frostkeep', 'madcrown', 'apex', 'lobby']);
+    expect(LOBBY_TRACK).toBe('lobby');
+    expect(HOME_TRACK).toBe(LOBBY_TRACK);
+  });
+
+  it('gives every arena its own track, and the lobby theme is none of them', () => {
+    const arenaTracks = ARENA_DEFS.map((a) => a.bgm);
+    expect(new Set(arenaTracks).size).toBe(ARENA_DEFS.length);
+    for (const id of arenaTracks) expect(MUSIC_TRACK_IDS, id).toContain(id);
+    expect(arenaTracks).not.toContain(LOBBY_TRACK);
+    // Every shipped track is either an arena's or the lobby's: no orphan files.
+    expect([...arenaTracks, LOBBY_TRACK].sort()).toEqual([...MUSIC_TRACK_IDS].sort());
   });
 
   it('starts a looping source for a track and is idempotent for the same track', async () => {

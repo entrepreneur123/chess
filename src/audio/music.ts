@@ -1,5 +1,7 @@
 /**
- * Arena background music: one seamless loop per arena (public/audio/bgm/<id>.m4a).
+ * Background music: one seamless loop per arena plus the lobby/home theme
+ * (public/audio/bgm/<id>.m4a). Matches play their arena's loop; the lobby and every tab screen play
+ * `lobby` (LOBBY_TRACK), so home and battle never share a song.
  *
  * - Web Audio only: each track is fetched and decoded once into an AudioBuffer and played by an
  *   AudioBufferSourceNode with `loop = true`, which loops sample-accurately (no <audio> gap).
@@ -29,13 +31,16 @@ export const MUSIC_LOOPS: Readonly<Record<string, { start: number; length: numbe
   frostkeep: { start: 24576, length: 3359744 },
   madcrown: { start: 24576, length: 3351552 },
   apex: { start: 24576, length: 3456000 },
+  lobby: { start: 24576, length: 3545088 },
 };
 export const MUSIC_LOOP_RATE = 48000;
 const LOOPS = MUSIC_LOOPS;
 const LOOP_RATE = MUSIC_LOOP_RATE;
 
-/** The arena tracks that ship with the game. */
+/** Every track that ships with the game: the six arena loops, then the lobby/home theme. */
 export const MUSIC_TRACK_IDS = Object.keys(LOOPS);
+/** The lobby/home theme (lobby and tab screens). It is no arena's track. */
+export const LOBBY_TRACK = 'lobby';
 
 /** Music level on the shared bus (files are mastered to -20 LUFS; voice clips to -16 LUFS). */
 export const MUSIC_GAIN = 0.5;
@@ -387,8 +392,8 @@ function install(): void {
 // ------------------------------------------------------------------------------------------------
 
 /**
- * Play the loop for `id` (an arena id, see MUSIC_TRACK_IDS), crossfading about 800 ms from the
- * current one; null fades the music out. Does nothing if that track is already playing. Before the
+ * Play the loop for `id` (an arena id or LOBBY_TRACK, see MUSIC_TRACK_IDS), crossfading about
+ * 800 ms from the current one; null fades the music out. Does nothing if that track is already playing. Before the
  * first user gesture, or while the page is hidden, the request is queued.
  */
 export function setMusicTrack(id: string | null): void {
