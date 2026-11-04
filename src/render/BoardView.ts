@@ -893,19 +893,26 @@ export class BoardView implements IBoardView {
     r.debug.checkShaderErrors = true;
     const programOf = (mat: THREE.Material): { getUniforms(): unknown; diagnostics?: { runnable: boolean; programLog: string; fragmentShader: { log: string }; vertexShader: { log: string } } } | undefined =>
       (r.properties.get(mat) as { currentProgram?: never }).currentProgram;
+    /** Programs that failed and were replaced (their GL program is gone after the swap). */
+    const failed: ProgramDiag[] = [];
     const runnable = (mat: THREE.Material): boolean => {
       const prog = programOf(mat);
       if (!prog) return true; // not compiled (hidden): nothing to judge
       prog.getUniforms(); // forces the link check
-      return prog.diagnostics?.runnable !== false;
+      const d = prog.diagnostics;
+      if (d?.runnable !== false) return true;
+      const log = (d.programLog || d.fragmentShader.log || d.vertexShader.log).split('\n')[0];
+      failed.push({ name: mat.name || mat.type, runnable: false, log: log || undefined });
+      return false;
     };
     const collect = (): void => {
-      this.programDiag = [];
+      this.programDiag = [...failed];
       for (const prog of r.info.programs ?? []) {
         const p = prog as unknown as { name: string; type: string; getUniforms(): unknown; diagnostics?: { runnable: boolean; programLog: string; fragmentShader: { log: string }; vertexShader: { log: string } } };
         p.getUniforms();
         const d = p.diagnostics;
         const log = d ? (d.programLog || d.fragmentShader.log || d.vertexShader.log).split('\n')[0] : undefined;
+        if (d?.runnable === false && failed.some((f) => f.name === (p.name || p.type))) continue;
         this.programDiag.push({ name: p.name || p.type, runnable: d?.runnable !== false, log: log || undefined });
       }
     };
@@ -942,7 +949,7 @@ export class BoardView implements IBoardView {
     for (const m of [this.frameMat, this.overlayMat]) {
       if (m && !runnable(m)) {
         collect();
-        fail(`arena program failed to link (${m.type})`);
+        fail(`arena program failed to link (${m.name || m.type})`);
       }
     }
     collect();
