@@ -337,7 +337,14 @@ function install(): void {
   installed = true;
   const onGesture = () => {
     if (!waiting) return;
-    // Let sfx.ts's own gesture unlock run first (same event, capture phase).
+    // Create / resume the shared context INSIDE the gesture: iOS Safari ignores a resume() that
+    // runs later (e.g. from the setTimeout below), so priming there alone left the music silent.
+    try {
+      if (desired && allowed() && !be.out()) be.prime();
+    } catch {
+      /* ignore */
+    }
+    // Then retry once sfx.ts's own unlock (same event, capture phase) has run too.
     setTimeout(() => {
       retry();
       // resume() is async: if the context is still starting, try again once it reports running.
@@ -354,6 +361,7 @@ function install(): void {
   document.addEventListener('pointerdown', onGesture, true);
   document.addEventListener('keydown', onGesture, true);
   document.addEventListener('touchend', onGesture, true);
+  document.addEventListener('click', onGesture, true);
   // Settings toggles are clicks: re-check sound/music after each one.
   document.addEventListener(
     'click',

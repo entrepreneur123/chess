@@ -63,7 +63,19 @@ function ensureContext(): AudioContext | null {
     master.gain.value = 0.55;
     master.connect(comp).connect(ctx.destination);
   }
-  if (ctx.state === 'suspended' && !document.hidden) void ctx.resume().catch(() => {});
+  if (ctx.state !== 'running' && !document.hidden) {
+    void ctx.resume().catch(() => {});
+    // iOS / iPadOS WebKit only unlocks Web Audio once a sound is STARTED inside the gesture, so
+    // start a one-sample silent buffer too (harmless everywhere else).
+    try {
+      const src = ctx.createBufferSource();
+      src.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
+      src.connect(ctx.destination);
+      src.start(0);
+    } catch {
+      /* ignore */
+    }
+  }
   return ctx;
 }
 
@@ -73,16 +85,16 @@ function ensureContext(): AudioContext | null {
 export function installAudio(): void {
   if (installed || typeof document === 'undefined') return;
   installed = true;
+  // Which events count as a user activation for audio differs: Chromium accepts pointerdown,
+  // iOS / iPadOS Safari only touchend and click (a pointerdown/touchstart resume() is ignored there,
+  // which used to leave the game silent until a settings switch was tapped). Listen to all of them.
+  const UNLOCK_EVENTS = ['pointerdown', 'touchend', 'click', 'keydown'] as const;
   const unlock = () => {
     if (!soundOn()) return;
     const c = ensureContext();
-    if (c && c.state === 'running') {
-      document.removeEventListener('pointerdown', unlock, true);
-      document.removeEventListener('keydown', unlock, true);
-    }
+    if (c && c.state === 'running') for (const ev of UNLOCK_EVENTS) document.removeEventListener(ev, unlock, true);
   };
-  document.addEventListener('pointerdown', unlock, true);
-  document.addEventListener('keydown', unlock, true);
+  for (const ev of UNLOCK_EVENTS) document.addEventListener(ev, unlock, true);
   document.addEventListener('visibilitychange', () => {
     if (!ctx) return;
     if (document.hidden) void ctx.suspend().catch(() => {});
