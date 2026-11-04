@@ -170,8 +170,8 @@ function computePattern(character: CharacterId, level: Level, awake = false): Pa
   if (patternCache.has(key)) return patternCache.get(key)!;
   let result: Pattern | null = null;
   try {
-    // Room for the longest reach of every pattern on 10 x 10: 6 rows ahead (Marki 3성), 3 behind
-    // (Sad / Insaner), 4 to each side (Walk 3성's 9-wide landing row).
+    // Room for the longest reach of every pattern on 10 x 10: 6 rows ahead (Marki 3성 needs 5),
+    // 3 behind (Sad / Insaner), 4 to each side (Walk 3성's 9-wide landing row).
     const origin = { r: 3, c: 4 };
     const piece: Piece = { id: `p0-${character}`, owner: 0, character, level, pos: origin, ...(awake ? { awaken: AWAKEN_TURNS } : {}) };
     const state: GameState = {
@@ -213,6 +213,11 @@ function computePattern(character: CharacterId, level: Level, awake = false): Pa
   }
   patternCache.set(key, result);
   return result;
+}
+
+/** Squares a character reaches from the diagram's open-board square (the collection's reach stat). */
+export function movementReach(character: CharacterId, level: Level, awake = false): number {
+  return computePattern(character, level, awake)?.targets.size ?? 0;
 }
 
 /** Rows x columns of a character's movement diagram (to size it into a fixed box). */

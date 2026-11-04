@@ -76,8 +76,11 @@ import type { UnitActor } from './units/actor';
 import { loadUnitAssets, unitAssetsIfLoaded } from './units/assets';
 import { LOOKS, MOVE_CLIP } from './units/config';
 import type { UnitLibrary } from './units/library';
-import { DustPool, SparkPool } from './boardFx';
-import { ANIM, ARENA, BOARD_COLORS, CHARACTER_FX, CHARACTER_RARITY, HOLO, RAKAELI_AWAKE_FX, RARITY_COLORS, RARITY_GLOW, TEAM_COLORS, WASTE_COLORS } from './palette';
+import { AmbientPoints, DustPool, SparkPool } from './boardFx';
+import { AMBIENT_FRAME_MS, AMBIENT_MAX, makeAmbientSample, sampleAmbient } from './ambient';
+import { DEFAULT_BOARD_THEME, boardTheme } from './arenaThemes';
+import type { BoardTheme } from './arenaThemes';
+import { ANIM, BOARD_COLORS, CHARACTER_FX, CHARACTER_RARITY, RAKAELI_AWAKE_FX, RARITY_COLORS, RARITY_GLOW, TEAM_COLORS, WASTE_COLORS } from './palette';
 import { GROUND_MODE, StrikeFx } from './strikeFx';
 import { RingMaterials, TokenKit } from './tokens';
 import { STORM_COLORS, StormFx } from './storm';
@@ -105,8 +108,9 @@ import {
   shakeOffset,
   slideDuration,
   tileRgb,
+  tilePalette,
 } from './common';
-import type { HighlightIndex } from './common';
+import type { HighlightIndex, TilePalette } from './common';
 import {
   makeBandTexture,
   makeBlobTexture,
@@ -718,6 +722,12 @@ export class BoardView implements IBoardView {
   private scanMat: THREE.MeshBasicMaterial | null = null;
   private scanStart = performance.now() + SCAN_FIRST_MS;
   private scanTimer = 0;
+  /** Arena board theme (arenaThemes.ts): cells, bezel, grid, surface detail, ambient particles. */
+  private theme: BoardTheme = DEFAULT_BOARD_THEME;
+  private tilePal: TilePalette = tilePalette(DEFAULT_BOARD_THEME);
+  /** Ambient arena particles (top-only arena; null on the 3D path or if its shader failed). */
+  private ambient: AmbientPoints | null = null;
+  private readonly ambSample = makeAmbientSample();
   private readonly stormFx: StormFx;
   /** Brutile's wasteland, skill targeting overlay, danger marks and cast effects. */
   private readonly wasteFx: WasteFx;
@@ -830,6 +840,8 @@ export class BoardView implements IBoardView {
   constructor(container: HTMLElement, opts: BoardViewOptions = {}) {
     this.container = container;
     this.topOnly = !!opts.topOnly;
+    this.theme = boardTheme(opts.arena);
+    this.tilePal = tilePalette(this.theme);
     if (this.topOnly) {
       this.viewT = 1;
       this.viewFrom = 1;
@@ -1001,6 +1013,23 @@ export class BoardView implements IBoardView {
         fail(`arena program failed to link (${m.name || m.type})`);
       }
     }
+    // The ambient particles are decoration: if their program does not link, drop them only.
+    if (this.ambient) {
+      const vis = this.ambient.points.visible;
+      this.ambient.points.visible = true;
+      try {
+        r.compile(this.ambient.points, this.camera, this.scene);
+      } catch {
+        // judged below
+      }
+      this.ambient.points.visible = vis;
+      if (!runnable(this.ambient.mat)) {
+        this.diagNotes.push('ambient particle shader failed to link: ambient off');
+        this.scene.remove(this.ambient.points);
+        this.ambient.dispose();
+        this.ambient = null;
+      }
+    }
     collect();
   }
 
@@ -1036,7 +1065,7 @@ export class BoardView implements IBoardView {
       frame: this.frameStyle.id,
       tilePath: this.tilePath,
       programs: this.programDiag,
-      notes: [...this.diagNotes, `arena ${this.arenaPx}px/cell`],
+      notes: [...this.diagNotes, `arena ${this.arenaPx}px/cell`, `theme ${this.theme.id}`],
       nullCtx: canvasStats.nullCtx,
       canvases: canvasStats.created,
       fallbackReason: getFallbackReason(),
@@ -1195,7 +1224,7 @@ export class BoardView implements IBoardView {
     const sGeo = new THREE.PlaneGeometry(BOARD_SIZE, SCAN_BAND).rotateX(-Math.PI / 2);
     const sMat = new THREE.MeshBasicMaterial({
       map: bandTex,
-      color: ARENA.grid,
+      color: this.theme.grid,
       transparent: true,
       opacity: 0,
       blending: THREE.AdditiveBlending,
@@ -1218,6 +1247,13 @@ export class BoardView implements IBoardView {
     this.ownGeometries.push(sGeo);
     this.ownMaterials.push(pMat, oMat, gMat, sMat);
     this.ownTextures.push(bandTex);
+    // Ambient particles: over the grid and the turn glow, under the wasteland (1) and every marker.
+    const amb = new AmbientPoints(AMBIENT_MAX, this.pointScale, OVERLAY_Y + 0.004);
+    amb.points.renderOrder = 0.7;
+    amb.points.raycast = noRaycast;
+    this.ambient = amb;
+    this.scene.add(amb.points);
+    this.applyAmbientLook();
     const { w, h } = containerSize(this.container);
     this.paintArena(w, h, true);
   }
@@ -1239,8 +1275,8 @@ export class BoardView implements IBoardView {
     const styleChanged = st !== this.frameStyle || this.arenaPx === 0;
     this.frameStyle = st;
     this.arenaPx = px;
-    const frame = makeFrameTexture(st, px);
-    const ov = makeFieldOverlayTexture(px);
+    const frame = makeFrameTexture(st, px, this.theme);
+    const ov = makeFieldOverlayTexture(px, this.theme);
     const glow = makeTurnGlowTexture(st);
     for (const n of [...frame.notes, ...ov.notes, ...glow.notes]) if (!this.diagNotes.includes(n)) this.diagNotes.push(n);
     const swap = (mat: THREE.MeshBasicMaterial, tex: THREE.Texture): void => {
@@ -2202,7 +2238,7 @@ export class BoardView implements IBoardView {
     mesh.visible = true;
     const reach = HALF + 0.5 - SCAN_BAND * 0.25;
     mesh.position.z = -reach + 2 * reach * k;
-    this.scanMat.opacity = HOLO.scan * Math.sin(Math.PI * k);
+    this.scanMat.opacity = this.theme.holo.scan * Math.sin(Math.PI * k);
     return true;
   }
 
@@ -2215,6 +2251,58 @@ export class BoardView implements IBoardView {
       this.scanTimer = 0;
       this.requestRender();
     }, Math.max(16, this.scanStart - now));
+  }
+
+  /**
+   * Ambient particles: write this frame's positions (no allocations); false (and hidden) while the
+   * theme has none, motion is reduced / off, or the page is hidden.
+   */
+  private tickAmbient(now: number): boolean {
+    const amb = this.ambient;
+    const spec = this.theme.ambient;
+    if (!amb) return false;
+    if (!spec || !this.idleAnim || this.reducedMotion || document.hidden) {
+      amb.points.visible = false;
+      return false;
+    }
+    amb.points.visible = true;
+    const t = now / 1000;
+    const n = Math.min(AMBIENT_MAX, spec.count);
+    const p = this.ambSample;
+    for (let i = 0; i < n; i++) {
+      sampleAmbient(spec, i, t, p);
+      amb.set(i, p.x - BOARD_SIZE / 2, p.y - BOARD_SIZE / 2, p.a, p.size, p.color);
+    }
+    amb.commit();
+    return true;
+  }
+
+  /** Colours / shape / count of the ambient particles for the current theme. */
+  private applyAmbientLook(): void {
+    const spec = this.theme.ambient;
+    if (!this.ambient) return;
+    if (spec) this.ambient.setLook(spec.colors, spec.kind === 'twinkle', spec.count);
+    else this.ambient.points.visible = false;
+  }
+
+  /**
+   * Switch the arena board theme (arenaThemes.ts; unknown ids = moonrune): repaints the bezel and
+   * the field overlay (the old textures are disposed and their canvases freed), re-tints the cells,
+   * the scan sweep and the ambient particles. Same theme: no-op.
+   */
+  setArenaTheme(id: string): void {
+    const next = boardTheme(id);
+    if (this.disposed || next === this.theme) return;
+    this.theme = next;
+    this.tilePal = tilePalette(next);
+    this.scanMat?.color.set(next.grid);
+    this.applyAmbientLook();
+    if (this.topOnly) {
+      const { w, h } = containerSize(this.container);
+      this.paintArena(w, h, true);
+    }
+    this.applyTileColors();
+    this.requestRender();
   }
 
   /** Optional extra: enable/disable the units' idle loops (battery saver). */
@@ -2518,6 +2606,8 @@ export class BoardView implements IBoardView {
     this.units = null;
     this.dust.dispose();
     this.sparks.dispose();
+    this.ambient?.dispose();
+    this.ambient = null;
     this.kit.dispose();
     for (const g of this.ownGeometries) g.dispose();
     this.frameMesh?.geometry.dispose();
@@ -2781,7 +2871,7 @@ export class BoardView implements IBoardView {
     const hi = this.hi;
     for (let r = 0; r < BOARD_SIZE; r++) {
       for (let c = 0; c < BOARD_SIZE; c++) {
-        let rgb = tileRgb(r, c, hi);
+        let rgb = tileRgb(r, c, hi, this.tilePal);
         if (this.storm > 0 && this.stormColumn(c)) rgb = mixRgb(rgb, STORM_TILE, STORM_TILE_STRENGTH);
         const wk = this.wasteFx.openOf(r * BOARD_SIZE + c);
         if (wk > 0) rgb = mixRgb(rgb, WASTE_TILE, 0.85 * wk);
@@ -3035,8 +3125,11 @@ export class BoardView implements IBoardView {
     // Rakaeli's transform aura flickers at the same light rate (static with reduced motion).
     const awakeLoop = this.idleAnim && this.awakeCount > 0 && !document.hidden;
     const scanLoop = this.tickScan(now);
-    if (!busy && (this.pulsing || idleLoop || stormLoop || ringLoop || wasteLoop || trapLoop || awakeLoop || scanLoop)) {
-      const cap = this.pulsing ? IDLE_FRAME_MS : idleLoop ? IDLE_ANIM_FRAME_MS : IDLE_FRAME_MS;
+    // Ambient arena particles: the lightest tick (~20 fps), never with reduced motion.
+    const ambientLoop = this.tickAmbient(now);
+    const lightLoop = stormLoop || ringLoop || wasteLoop || trapLoop || awakeLoop || scanLoop;
+    if (!busy && (this.pulsing || idleLoop || lightLoop || ambientLoop)) {
+      const cap = this.pulsing ? IDLE_FRAME_MS : idleLoop ? IDLE_ANIM_FRAME_MS : lightLoop ? IDLE_FRAME_MS : AMBIENT_FRAME_MS;
       if (now - this.lastFrame < cap) {
         this.requestRender(); // idle pulse / idle loops are throttled; skip drawing this tick
         return;
@@ -3066,7 +3159,7 @@ export class BoardView implements IBoardView {
     this.updatePulse(now);
     if (this.topOnly) this.applyTopLift();
     this.renderer.render(this.scene, this.camera);
-    if (busy || this.pulsing || idleLoop || stormLoop || ringLoop || wasteLoop || trapLoop || awakeLoop || scanLoop) {
+    if (busy || this.pulsing || idleLoop || lightLoop || ambientLoop) {
       this.requestRender();
     } else {
       this.lastTick = 0;

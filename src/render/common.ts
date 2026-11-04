@@ -6,11 +6,11 @@ import type { BoardHighlights } from './types';
 import {
   ANIM,
   BOARD_COLORS,
-  HOME_TINT_STRENGTH,
   LAST_MOVE_TINT_STRENGTH,
   TEAM_COLORS,
   ZONE_TINT_STRENGTH,
 } from './palette';
+import { DEFAULT_BOARD_THEME, homeTintOf, type BoardTheme } from './arenaThemes';
 
 export type RGB = [number, number, number];
 
@@ -79,8 +79,6 @@ export function homeOwner(r: number): PlayerId | null {
   return null;
 }
 
-const RGB_LIGHT = hexToRgb(BOARD_COLORS.tileLight);
-const RGB_DARK = hexToRgb(BOARD_COLORS.tileDark);
 const RGB_LAST = hexToRgb(BOARD_COLORS.lastMove);
 const RGB_SEL = hexToRgb(BOARD_COLORS.selectedTint);
 const RGB_CAP = hexToRgb(BOARD_COLORS.captureTint);
@@ -94,6 +92,29 @@ const RGB_TEAM_GLOW: Record<PlayerId, RGB> = {
   0: hexToRgb(TEAM_COLORS[0].glow),
   1: hexToRgb(TEAM_COLORS[1].glow),
 };
+
+/** An arena theme's cell base colours (tileRgb). */
+export interface TilePalette {
+  light: RGB;
+  dark: RGB;
+  /** Home-zone team tint strength (HOME_TINT_STRENGTH x the theme's multiplier). */
+  homeTint: number;
+}
+
+const tilePalettes = new Map<BoardTheme, TilePalette>();
+
+/** The (cached) cell palette of a board theme. */
+export function tilePalette(theme: BoardTheme): TilePalette {
+  let p = tilePalettes.get(theme);
+  if (!p) {
+    p = { light: hexToRgb(theme.tileLight), dark: hexToRgb(theme.tileDark), homeTint: homeTintOf(theme) };
+    tilePalettes.set(theme, p);
+  }
+  return p;
+}
+
+/** The original hologram navy (moonrune = BOARD_COLORS tileLight / tileDark, HOME_TINT_STRENGTH). */
+const DEFAULT_TILES = tilePalette(DEFAULT_BOARD_THEME);
 
 /** Highlight tint strengths over the dark tiles (the glowing markers carry the meaning). */
 const ENEMY_MOVE_TINT = 0.4;
@@ -145,15 +166,18 @@ function zoneTeam(zone: [number, number]): PlayerId {
   return zone[0] >= BOARD_SIZE / 2 ? 1 : 0;
 }
 
-/** Final sRGB (0..1) color of a tile, combining base two-tone, home tint and highlights. */
-export function tileRgb(r: number, c: number, hi: HighlightIndex): RGB {
-  let col: RGB = (r + c) % 2 === 0 ? RGB_DARK : RGB_LIGHT;
+/**
+ * Final sRGB (0..1) color of a tile, combining base two-tone, home tint and highlights. `pal` = the
+ * arena theme's cells (default: the original hologram navy, moonrune).
+ */
+export function tileRgb(r: number, c: number, hi: HighlightIndex, pal: TilePalette = DEFAULT_TILES): RGB {
+  let col: RGB = (r + c) % 2 === 0 ? pal.dark : pal.light;
   const home = homeOwner(r);
   if (home !== null) {
     // Soft team-deep tint, a touch stronger toward the zone edge line (the glow wash and the
     // bright edge line sit there). Red is mixed a little harder: over navy it would turn violet.
     const depth = home === 0 ? r : BOARD_SIZE - 1 - r;
-    col = mixRgb(col, RGB_TEAM_ZONE[home], HOME_TINT_STRENGTH * (0.8 + 0.12 * depth) * (home === 1 ? 1.2 : 1));
+    col = mixRgb(col, RGB_TEAM_ZONE[home], pal.homeTint * (0.8 + 0.12 * depth) * (home === 1 ? 1.2 : 1));
   }
   // Soft field vignette (per tile, so both views and the highlight repaints agree): the centre of
   // the arena is a touch brighter than its corners, never a flat colour over the whole field.

@@ -19,7 +19,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     nameKo: '마르키',
     nameEn: 'Marki',
     rarity: 'rare',
-    descKo: ['앞으로만 최대 3칸 직진 · 끝줄에서 방향 전환', '앞으로만 최대 4칸 직진 · 끝줄에서 방향 전환', '앞으로만 최대 6칸 직진 · 끝줄에서 방향 전환'],
+    descKo: ['앞으로만 최대 3칸 직진 · 끝줄에서 방향 전환', '앞으로만 최대 4칸 직진 · 끝줄에서 방향 전환', '앞으로 최대 5칸 직진 + 좌우 1칸 · 끝줄에서 방향 전환'],
     value: [3, 4, 6],
   },
   walk: {
@@ -39,7 +39,11 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     nameKo: '인세이너',
     nameEn: 'Insaner',
     rarity: 'legendary',
-    descKo: ['상하좌우 최대 2칸 직진', '상하좌우 최대 3칸 직진', '상하좌우·대각선 최대 3칸 직진 · 적을 잡으면 한 번 더 이동'],
+    descKo: [
+      '상하좌우 최대 2칸 직진',
+      '상하좌우 최대 3칸 직진',
+      '상하좌우 최대 3칸 직진 + 대각선 1칸 · 적을 잡으면 한 번 더 이동 (추가 이동은 턴당 1번, 연속 추가 이동 없음)',
+    ],
     value: [5, 6, 8],
     passiveKo: '적을 잡으면 그 말의 이동 능력을 흡수해 자신의 이동에 더합니다',
   },
@@ -169,12 +173,16 @@ export const RAKAELI_BACK_LEVEL = 3;
 /** Sad orthogonal slide range by level (index = level). */
 export const SAD_RANGE = [0, 1, 2, 3];
 /** Marki forward slide range by level (index = level). */
-export const MARKI_RANGE = [0, 3, 4, 6];
+export const MARKI_RANGE = [0, 3, 4, 5];
+/** From this level Marki may also step 1 square left or right (a plain 1-square slide). */
+export const MARKI_SIDE_LEVEL = 3;
 /** Walk half-width of the landing row by level (index = level). */
 export const WALK_HALF = [0, 2, 3, 4];
-/** Insaner orthogonal slide range by level (index = level); level 3 also slides diagonally. */
+/** Insaner orthogonal slide range by level (index = level). */
 export const INSANER_RANGE = [0, 2, 3, 3];
+/** From INSANER_DIAG_LEVEL Insaner also slides diagonally, up to INSANER_DIAG_RANGE squares. */
 export const INSANER_DIAG_LEVEL = 3;
+export const INSANER_DIAG_RANGE = 1;
 /** Brutile wasteland side length by level (index = level): 1x1, 2x2, 3x3. */
 export const WASTE_SIZE = [0, 1, 2, 3];
 

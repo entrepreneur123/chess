@@ -10,16 +10,39 @@ describe('forward-only movers turn around at the far edge', () => {
     s = applyMove(s, { pieceId: 'p0-marki', from: { r: 6, c: 4 }, to: { r: 9, c: 4 } });
     const marki = s.pieces.find((p) => p.id === 'p0-marki')!;
     expect(marki.dir).toBe(-1);
-    // Not stuck: it now has backward moves (3/4/6 squares for Lv3 -> 6 squares toward row 0).
-    expect(targetKeys(getTargetsForPiece(s, marki))).toEqual(keys([[8, 4], [7, 4], [6, 4], [5, 4], [4, 4], [3, 4]]));
+    // Not stuck: it now rushes back toward row 0 (5 squares at Lv3), and the 3-star side step
+    // (not tied to the direction) is still 1 square left / right.
+    expect(targetKeys(getTargetsForPiece(s, marki))).toEqual(keys([[8, 4], [7, 4], [6, 4], [5, 4], [4, 4], [9, 3], [9, 5]]));
+  });
+
+  it('a 3-star marki side-steps on the far edge after turning around, for both players, and stays turned', () => {
+    // Player 0 on row 9 facing back (-1): side steps on row 9, rush toward row 0.
+    let s = makeState([[0, 'marki', 3, 4, 4], [1, 'sad', 1, 0, 9]]);
+    s = applyMove(s, { pieceId: 'p0-marki', from: { r: 4, c: 4 }, to: { r: 9, c: 4 } });
+    expect(pieceDir(s.pieces.find((p) => p.id === 'p0-marki')!)).toBe(-1);
+    s = applyMove(s, { pieceId: 'p1-sad', from: { r: 0, c: 9 }, to: { r: 1, c: 9 } });
+    s = applyMove(s, { pieceId: 'p0-marki', from: { r: 9, c: 4 }, to: { r: 9, c: 5 } });
+    const m0 = s.pieces.find((p) => p.id === 'p0-marki')!;
+    expect(m0.pos).toEqual({ r: 9, c: 5 });
+    expect(pieceDir(m0)).toBe(-1);
+    expect(targetKeys(getTargetsForPiece(s, m0))).toEqual(keys([[8, 5], [7, 5], [6, 5], [5, 5], [4, 5], [9, 4], [9, 6]]));
+    // Player 1 on row 0 facing back (+1).
+    let t = makeState([[1, 'marki', 3, 5, 2], [0, 'sad', 1, 9, 9]], 1);
+    t = applyMove(t, { pieceId: 'p1-marki', from: { r: 5, c: 2 }, to: { r: 0, c: 2 } });
+    const m1 = t.pieces.find((p) => p.id === 'p1-marki')!;
+    expect(pieceDir(m1)).toBe(1);
+    expect(targetKeys(getTargetsForPiece(t, m1))).toEqual(keys([[1, 2], [2, 2], [3, 2], [4, 2], [5, 2], [0, 1], [0, 3]]));
+    t = applyMove(t, { pieceId: 'p0-sad', from: { r: 9, c: 9 }, to: { r: 8, c: 9 } });
+    t = applyMove(t, { pieceId: 'p1-marki', from: { r: 0, c: 2 }, to: { r: 0, c: 1 } });
+    expect(pieceDir(t.pieces.find((p) => p.id === 'p1-marki')!)).toBe(1);
   });
 
   it('a turned-around marki flips again when it reaches row 0', () => {
     let s = makeState([[0, 'marki', 3, 9, 4], [1, 'sad', 1, 3, 9]]);
     s = { ...s, pieces: s.pieces.map((p) => (p.id === 'p0-marki' ? { ...p, dir: -1 as const } : p)) };
-    s = applyMove(s, { pieceId: 'p0-marki', from: { r: 9, c: 4 }, to: { r: 3, c: 4 } });
+    s = applyMove(s, { pieceId: 'p0-marki', from: { r: 9, c: 4 }, to: { r: 4, c: 4 } });
     s = applyMove(s, { pieceId: 'p1-sad', from: { r: 3, c: 9 }, to: { r: 3, c: 8 } });
-    s = applyMove(s, { pieceId: 'p0-marki', from: { r: 3, c: 4 }, to: { r: 0, c: 4 } });
+    s = applyMove(s, { pieceId: 'p0-marki', from: { r: 4, c: 4 }, to: { r: 0, c: 4 } });
     expect(s.pieces.find((p) => p.id === 'p0-marki')!.dir).toBe(1);
   });
 

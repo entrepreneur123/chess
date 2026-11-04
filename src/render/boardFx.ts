@@ -296,3 +296,111 @@ export class SparkPool {
     this.mesh.dispose();
   }
 }
+
+const AMBIENT_VS = /* glsl */ `
+uniform float uScale;
+attribute vec2 aData;  // opacity, diameter (world units)
+attribute vec3 aColor;
+varying float vA;
+varying vec3 vColor;
+void main() {
+  vA = aData.x;
+  vColor = aColor;
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  gl_Position = projectionMatrix * mv;
+  // The soft halo is about 2.6x the visible core (as the 2D sprite).
+  gl_PointSize = aData.x <= 0.0 ? 0.0 : aData.y * 2.6 * uScale / -mv.z;
+}`;
+
+const AMBIENT_FS = /* glsl */ `
+uniform float uStar;
+varying float vA;
+varying vec3 vColor;
+void main() {
+  vec2 d = gl_PointCoord - 0.5;
+  float r = length(d) * 2.0;
+  float a = smoothstep(1.0, 0.25, r) * 0.55 + smoothstep(0.32, 0.0, r) * 0.45;
+  // Twinkles: a thin four-point flare.
+  a = max(a, uStar * max(1.0 - abs(d.x) * 22.0, 1.0 - abs(d.y) * 22.0) * (1.0 - r) * 0.9);
+  a *= vA;
+  if (a < 0.004) discard;
+  vec3 c = mix(vColor, vec3(1.0), smoothstep(0.3, 0.0, r) * 0.6);
+  gl_FragColor = vec4(c, a);
+  #include <colorspace_fragment>
+}`;
+
+/**
+ * Ambient arena particles for the WebGL board (ambient.ts has the motion and the spec): one
+ * additive Points draw of at most `max` particles over the field, positions written in place each
+ * tick (no allocations). Hidden while the theme has no ambient spec.
+ */
+export class AmbientPoints {
+  readonly points: THREE.Points;
+  private readonly geo: THREE.BufferGeometry;
+  readonly mat: THREE.ShaderMaterial;
+  private readonly pos: Float32Array;
+  private readonly data: Float32Array;
+  private readonly col: Float32Array;
+  private readonly max: number;
+  private readonly c0 = new THREE.Color();
+  private readonly c1 = new THREE.Color();
+
+  constructor(max: number, pointScale: { value: number }, y: number) {
+    this.max = max;
+    this.pos = new Float32Array(max * 3);
+    this.data = new Float32Array(max * 2);
+    this.col = new Float32Array(max * 3);
+    for (let i = 0; i < max; i++) this.pos[i * 3 + 1] = y;
+    this.geo = new THREE.BufferGeometry();
+    this.geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage));
+    this.geo.setAttribute('aData', new THREE.BufferAttribute(this.data, 2).setUsage(THREE.DynamicDrawUsage));
+    this.geo.setAttribute('aColor', new THREE.BufferAttribute(this.col, 3));
+    this.geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 50);
+    this.mat = new THREE.ShaderMaterial({
+      uniforms: { uScale: pointScale, uStar: { value: 0 } },
+      vertexShader: AMBIENT_VS,
+      fragmentShader: AMBIENT_FS,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    this.mat.name = 'arena-ambient';
+    this.points = new THREE.Points(this.geo, this.mat);
+    this.points.frustumCulled = false;
+    this.points.visible = false;
+  }
+
+  /** New colours / shape (theme change); `count` particles drawn. */
+  setLook(colors: readonly [string, string], star: boolean, count: number): void {
+    this.c0.set(colors[0]);
+    this.c1.set(colors[1]);
+    this.mat.uniforms.uStar.value = star ? 1 : 0;
+    this.geo.setDrawRange(0, Math.min(this.max, count));
+    for (let i = 0; i < this.max; i++) this.data[i * 2] = 0;
+    (this.geo.attributes.aData as THREE.BufferAttribute).needsUpdate = true;
+  }
+
+  /** Write particle i (world x / z, opacity, world diameter, colour 0 / 1). */
+  set(i: number, x: number, z: number, a: number, size: number, color: 0 | 1): void {
+    this.pos[i * 3] = x;
+    this.pos[i * 3 + 2] = z;
+    this.data[i * 2] = a;
+    this.data[i * 2 + 1] = size;
+    const c = color ? this.c1 : this.c0;
+    this.col[i * 3] = c.r;
+    this.col[i * 3 + 1] = c.g;
+    this.col[i * 3 + 2] = c.b;
+  }
+
+  /** Flag the buffers written by set() for upload. */
+  commit(): void {
+    (this.geo.attributes.position as THREE.BufferAttribute).needsUpdate = true;
+    (this.geo.attributes.aData as THREE.BufferAttribute).needsUpdate = true;
+    (this.geo.attributes.aColor as THREE.BufferAttribute).needsUpdate = true;
+  }
+
+  dispose(): void {
+    this.geo.dispose();
+    this.mat.dispose();
+  }
+}

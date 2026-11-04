@@ -27,7 +27,7 @@ const mv = (s: GameState, id: string, r: number, c: number): Move => {
 };
 
 describe('insaner movement', () => {
-  it('Lv1 slides up to 2 orthogonally, Lv2 up to 3, Lv3 adds diagonals', () => {
+  it('Lv1 slides up to 2 orthogonally, Lv2 up to 3, Lv3 adds 1 diagonal square', () => {
     const l1 = makeState([[0, 'insaner', 1, 5, 5]]);
     expect(targetKeys(getLegalMoves(l1))).toEqual(
       keys([[6, 5], [7, 5], [4, 5], [3, 5], [5, 6], [5, 7], [5, 4], [5, 3]]),
@@ -36,10 +36,31 @@ describe('insaner movement', () => {
     expect(getLegalMoves(l2)).toHaveLength(12);
     const l3 = makeState([[0, 'insaner', 3, 5, 5]]);
     const t = targetKeys(getLegalMoves(l3));
-    expect(t).toHaveLength(24);
-    expect(t).toContain('8,8');
-    expect(t).toContain('2,2');
-    expect(t).not.toContain('9,9');
+    // Orthogonal up to 3 (12) + the 4 diagonal neighbours.
+    expect(t).toHaveLength(16);
+    expect(t).toEqual(
+      keys([
+        [6, 5], [7, 5], [8, 5], [4, 5], [3, 5], [2, 5], [5, 6], [5, 7], [5, 8], [5, 4], [5, 3], [5, 2],
+        [6, 6], [6, 4], [4, 6], [4, 4],
+      ]),
+    );
+    expect(t).not.toContain('7,7');
+    expect(t).not.toContain('3,3');
+  });
+
+  it('Lv3 diagonal step captures an enemy on the diagonal neighbour and is blocked by an ally there', () => {
+    const s = makeState([
+      [0, 'insaner', 3, 5, 5],
+      [0, 'sad', 1, 4, 4],
+      [1, 'walk', 1, 6, 6],
+      [1, 'sad', 1, 7, 7],
+    ]);
+    const moves = getLegalMoves(s, 'p0-insaner');
+    const t = targetKeys(moves);
+    expect(t).toContain('6,6');
+    expect(t).not.toContain('7,7');
+    expect(t).not.toContain('4,4');
+    expect(moves.find((m) => m.to.r === 6 && m.to.c === 6)!.captureId).toBe('p1-walk');
   });
 
   it('is blocked by allies and captures the first enemy on a line', () => {
@@ -126,6 +147,42 @@ describe('insaner chain move (Lv3)', () => {
       { character: 'walk', level: 1 },
       { character: 'sad', level: 1 },
     ]);
+  });
+
+  it('a diagonal capture chains too; the chain is once per turn and comes back the next turn', () => {
+    let s = makeState([
+      [0, 'insaner', 3, 5, 5],
+      [1, 'walk', 1, 6, 6],
+      [1, 'sad', 1, 6, 8],
+      [1, 'michelle', 1, 9, 9],
+      [1, 'picker', 1, 9, 0],
+      [0, 'sad', 1, 0, 0],
+    ]);
+    s = applyMove(s, mv(s, 'p0-insaner', 6, 6)); // diagonal capture
+    expect(s.turn).toBe(0);
+    expect(s.bonusPieceId).toBe('p0-insaner');
+    s = applyMove(s, mv(s, 'p0-insaner', 6, 8)); // the chain move captures again: no second chain
+    expect(s.turn).toBe(1);
+    expect(s.bonusPieceId).toBeNull();
+    s = applyMove(s, mv(s, 'p1-michelle', 9, 8));
+    // A new turn: a capture chains again.
+    s = applyMove(s, mv(s, 'p0-insaner', 9, 8));
+    expect(s.turn).toBe(0);
+    expect(s.bonusPieceId).toBe('p0-insaner');
+  });
+
+  it('Lv1 and Lv2 never chain', () => {
+    for (const lv of [1, 2] as const) {
+      const s = makeState([
+        [0, 'insaner', lv, 5, 5],
+        [1, 'walk', 1, 5, 6],
+        [1, 'sad', 1, 9, 9],
+        [0, 'sad', 1, 0, 0],
+      ]);
+      const a = applyMove(s, mv(s, 'p0-insaner', 5, 6));
+      expect(a.turn).toBe(1);
+      expect(a.bonusPieceId).toBeNull();
+    }
   });
 
   it('a non-capturing chain move just ends the turn', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getLegalMoves, getPieceById, getTargetsForPiece } from '../src/engine';
+import { applyMove, getLegalMoves, getPieceById, getTargetsForPiece } from '../src/engine';
 import type { Level } from '../src/engine';
 import { keys, makeState, targetKeys } from './helpers';
 
@@ -35,41 +35,79 @@ describe('Sad (orthogonal slide up to L)', () => {
   });
 });
 
-describe('Marki (forward-only slide)', () => {
-  const R = { 1: 3, 2: 4, 3: 6 } as const;
+describe('Marki (forward slide; 3-star adds a 1-square side step)', () => {
+  const R = { 1: 3, 2: 4, 3: 5 } as const;
   for (const L of [1, 2, 3] as Level[]) {
-    it(`level ${L} player 0 moves up to ${R[L]} squares +r`, () => {
+    it(`level ${L} player 0 moves up to ${R[L]} squares +r${L === 3 ? ' and 1 left / right' : ''}`, () => {
       const s = makeState([[0, 'marki', L, 2, 4]]);
       const exp: [number, number][] = [];
       for (let k = 1; k <= R[L]; k++) exp.push([2 + k, 4]);
+      if (L === 3) exp.push([2, 3], [2, 5]);
       expect(t(s, 'p0-marki')).toEqual(keys(exp));
     });
-    it(`level ${L} player 1 moves up to ${R[L]} squares -r`, () => {
+    it(`level ${L} player 1 moves up to ${R[L]} squares -r${L === 3 ? ' and 1 left / right' : ''}`, () => {
       const s = makeState([[1, 'marki', L, 9, 7]]);
       const exp: [number, number][] = [];
       for (let k = 1; k <= R[L]; k++) exp.push([9 - k, 7]);
+      if (L === 3) exp.push([9, 6], [9, 8]);
       expect(t(s, 'p1-marki')).toEqual(keys(exp));
     });
   }
-  it('clipped at the far edge and stuck on the last row', () => {
-    expect(t(makeState([[0, 'marki', 3, 7, 0]]), 'p0-marki')).toEqual(keys([[8, 0], [9, 0]]));
-    expect(t(makeState([[0, 'marki', 3, 9, 0]]), 'p0-marki')).toEqual([]);
-    expect(t(makeState([[1, 'marki', 3, 0, 3]]), 'p1-marki')).toEqual([]);
+  it('clipped at the far edge; with no row ahead only the 3-star side step is left', () => {
+    expect(t(makeState([[0, 'marki', 3, 7, 0]]), 'p0-marki')).toEqual(keys([[8, 0], [9, 0], [7, 1]]));
+    expect(t(makeState([[0, 'marki', 2, 9, 0]]), 'p0-marki')).toEqual([]);
+    expect(t(makeState([[0, 'marki', 3, 9, 0]]), 'p0-marki')).toEqual(keys([[9, 1]]));
+    expect(t(makeState([[1, 'marki', 2, 0, 3]]), 'p1-marki')).toEqual([]);
+    expect(t(makeState([[1, 'marki', 3, 0, 3]]), 'p1-marki')).toEqual(keys([[0, 2], [0, 4]]));
   });
-  it('blocked by ally / captures first enemy / no sideways', () => {
+  it('blocked by ally / captures first enemy / no sideways below 3-star', () => {
+    for (const L of [1, 2] as Level[]) {
+      expect(t(makeState([[0, 'marki', L, 2, 4]]), 'p0-marki').some((k) => k.startsWith('2,'))).toBe(false);
+    }
     const blocked = makeState([
       [0, 'marki', 3, 2, 4],
       [0, 'sad', 1, 4, 4],
     ]);
-    expect(t(blocked, 'p0-marki')).toEqual(keys([[3, 4]]));
+    expect(t(blocked, 'p0-marki')).toEqual(keys([[3, 4], [2, 3], [2, 5]]));
     const cap = makeState([
       [0, 'marki', 3, 2, 4],
       [1, 'sad', 1, 4, 4],
       [1, 'walk', 1, 6, 4],
     ]);
     const moves = getTargetsForPiece(cap, getPieceById(cap, 'p0-marki')!);
-    expect(targetKeys(moves)).toEqual(keys([[3, 4], [4, 4]]));
+    expect(targetKeys(moves)).toEqual(keys([[3, 4], [4, 4], [2, 3], [2, 5]]));
     expect(moves.find((m) => m.to.r === 4)!.captureId).toBe('p1-sad');
+  });
+  it('3-star side step: captures an enemy beside him, is blocked by his own piece, 1 square only', () => {
+    const s = makeState([
+      [0, 'marki', 3, 4, 4],
+      [0, 'sad', 1, 4, 5], // ally on the right: blocked
+      [1, 'walk', 1, 4, 3], // enemy on the left: capture
+      [1, 'sad', 1, 4, 2], // never reached (1 square only)
+    ]);
+    const moves = getTargetsForPiece(s, getPieceById(s, 'p0-marki')!);
+    expect(targetKeys(moves)).toEqual(keys([[5, 4], [6, 4], [7, 4], [8, 4], [9, 4], [4, 3]]));
+    expect(moves.find((m) => m.to.c === 3)!.captureId).toBe('p1-walk');
+    const after = applyMove(s, moves.find((m) => m.to.c === 3)!);
+    expect(getPieceById(after, 'p1-walk')).toBeUndefined();
+    expect(getPieceById(after, 'p0-marki')!.pos).toEqual({ r: 4, c: 3 });
+    // A side step does not turn him around (he is not on the far edge).
+    expect(getPieceById(after, 'p0-marki')!.dir ?? 1).toBe(1);
+  });
+  it('3-star side step obeys the storm, wasteland and doll traps like any landing', () => {
+    // Storm: column 0 is gone, so from column 1 only the right step remains.
+    const storm = makeState([[0, 'marki', 3, 4, 1], [1, 'sad', 1, 9, 5], [1, 'walk', 1, 9, 6]], 0, { storm: 1, stormIn: 6 });
+    expect(t(storm, 'p0-marki').filter((k) => k.startsWith('4,'))).toEqual(['4,2']);
+    // Wasteland beside him: he may step there and is destroyed.
+    const w = makeState([[0, 'marki', 3, 4, 4], [0, 'sad', 1, 0, 0], [1, 'sad', 1, 9, 9]], 0, { waste: [4 * 10 + 5] });
+    const wm = getTargetsForPiece(w, getPieceById(w, 'p0-marki')!).find((m) => m.to.r === 4 && m.to.c === 5)!;
+    expect(wm).toBeDefined();
+    const wasted = applyMove(w, wm);
+    expect(getPieceById(wasted, 'p0-marki')).toBeUndefined();
+    // Enemy doll trap beside him: stepping onto it stuns him.
+    const tr = makeState([[0, 'marki', 3, 4, 4], [0, 'sad', 1, 0, 0], [1, 'sad', 1, 9, 9]], 0, { traps: [{ sq: 4 * 10 + 3, owner: 1 }] });
+    const trapped = applyMove(tr, { pieceId: 'p0-marki', from: { r: 4, c: 4 }, to: { r: 4, c: 3 } });
+    expect(getPieceById(trapped, 'p0-marki')!.stun).toBeGreaterThan(0);
   });
 });
 

@@ -13,16 +13,16 @@ const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 /* ------------------------------------------------------------------ movement diagrams */
 const RANGE: Record<Char, [number, number, number]> = {
   sad: [1, 2, 3],
-  marki: [3, 4, 6],
+  marki: [3, 4, 5], // forward reach; Lv3 adds 1 square left / right
   walk: [2, 3, 4], // half width of the front row
-  insaner: [2, 3, 3], // orthogonal reach; Lv3 adds diagonals
+  insaner: [2, 3, 3], // orthogonal reach; Lv3 adds 1 diagonal square
   brutile: [1, 1, 1], // single steps: forward diagonals, + back (2성), all 8 (3성)
 };
 const DESC: Record<Char, [string, string, string]> = {
   sad: ['상하좌우 1칸', '상하좌우 최대 2칸', '상하좌우 최대 3칸'],
-  marki: ['앞으로 최대 3칸', '앞으로 최대 4칸', '앞으로 최대 6칸'],
+  marki: ['앞으로 최대 3칸', '앞으로 최대 4칸', '앞으로 최대 5칸 + 좌우 1칸'],
   walk: ['바로 앞줄 5칸으로 점프', '바로 앞줄 7칸으로 점프', '바로 앞줄 9칸으로 점프'],
-  insaner: ['상하좌우 최대 2칸', '상하좌우 최대 3칸', '상하좌우·대각선 최대 3칸'],
+  insaner: ['상하좌우 최대 2칸', '상하좌우 최대 3칸', '상하좌우 최대 3칸 + 대각선 1칸'],
   brutile: ['앞쪽 좌우 대각선 1칸', '대각선 앞 2칸 + 뒤로 1칸', '주변 8칸 어디로든 1칸'],
 };
 
@@ -32,15 +32,14 @@ function reach(ch: Char, level: number): Array<[number, number]> {
   const out: Array<[number, number]> = [];
   if (ch === 'sad' || ch === 'insaner') {
     for (let k = 1; k <= n; k++) out.push([-k, 0], [k, 0], [0, -k], [0, k]);
-    if (ch === 'insaner' && level === 3) {
-      for (let k = 1; k <= n; k++) out.push([-k, -k], [-k, k], [k, -k], [k, k]);
-    }
+    if (ch === 'insaner' && level === 3) out.push([-1, -1], [-1, 1], [1, -1], [1, 1]);
   } else if (ch === 'brutile') {
     out.push([-1, -1], [-1, 1]);
     if (level >= 2) out.push([1, 0]);
     if (level === 3) out.push([-1, 0], [0, -1], [0, 1], [1, -1], [1, 1]);
   } else if (ch === 'marki') {
     for (let k = 1; k <= n; k++) out.push([-k, 0]);
+    if (level === 3) out.push([0, -1], [0, 1]);
   } else {
     for (let c = -n; c <= n; c++) out.push([-1, c]);
   }
@@ -51,7 +50,7 @@ function drawGrid(el: HTMLElement, ch: Char, level: number): void {
   const n = RANGE[ch][level - 1];
   // Grid size: enough to show the full range, piece near the bottom for forward movers.
   const omni = ch === 'sad' || ch === 'insaner';
-  const half = ch === 'marki' ? 0 : n;
+  const half = ch === 'marki' ? (level === 3 ? 1 : 0) : n;
   const cols = half * 2 + 1;
   const rowsUp = ch === 'walk' || ch === 'brutile' ? 1 : n;
   const rowsDown = omni ? n : ch === 'brutile' && level >= 2 ? 1 : 0;

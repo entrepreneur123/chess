@@ -23,7 +23,7 @@ import {
   sqOf,
   type GameState,
 } from '../src/engine';
-import { movementSpan } from '../src/ui/components/piece';
+import { movementReach, movementSpan } from '../src/ui/components/piece';
 import { squareLabel } from '../src/ui/game/fieldPanel';
 import { keys, makeState, targetKeys } from './helpers';
 
@@ -66,19 +66,32 @@ describe('character reach on 10 columns', () => {
     expect(t(makeState([[0, 'walk', 3, 1, 0], [1, 'sad', 1, 9, 9]]), 'p0-walk')).toEqual(exp(0, 4));
   });
 
-  it("Marki 3성 from the front home row reaches row 7, one short of the enemy zone", () => {
+  it("Marki 3성 from the front home row rushes to row 6 (5 squares) or steps 1 left / right", () => {
     const s = makeState([[0, 'marki', 3, 1, 4], [1, 'sad', 1, 9, 0]]);
-    expect(t(s, 'p0-marki')).toEqual(keys([[2, 4], [3, 4], [4, 4], [5, 4], [6, 4], [7, 4]]));
+    expect(t(s, 'p0-marki')).toEqual(keys([[2, 4], [3, 4], [4, 4], [5, 4], [6, 4], [1, 3], [1, 5]]));
   });
 
   it('the movement diagrams show every pattern whole (no clipping at the 10 x 10 edges)', () => {
-    expect(movementSpan('marki', 3)).toEqual({ rows: 7, cols: 3 });
+    expect(movementSpan('marki', 3)).toEqual({ rows: 6, cols: 3 });
     expect(movementSpan('walk', 3)).toEqual({ rows: 2, cols: 9 });
     expect(movementSpan('sad', 3)).toEqual({ rows: 7, cols: 7 });
     expect(movementSpan('insaner', 3)).toEqual({ rows: 7, cols: 7 });
     expect(movementSpan('picker', 3)).toEqual({ rows: 7, cols: 7 });
     expect(movementSpan('michelle', 3)).toEqual({ rows: 4, cols: 5 });
     expect(movementSpan('brutile', 3)).toEqual({ rows: 3, cols: 3 });
+  });
+
+  it("the collection's reach stat counts the engine's open-board targets", () => {
+    const reach = (id: Parameters<typeof movementReach>[0]) => [1, 2, 3].map((lv) => movementReach(id, lv as 1 | 2 | 3));
+    expect(reach('sad')).toEqual([4, 8, 12]);
+    expect(reach('marki')).toEqual([3, 4, 7]);
+    expect(reach('walk')).toEqual([5, 7, 9]);
+    expect(reach('insaner')).toEqual([8, 12, 16]);
+    expect(reach('brutile')).toEqual([2, 3, 8]);
+    expect(reach('michelle')).toEqual([3, 6, 7]);
+    expect(reach('picker')).toEqual([4, 8, 12]);
+    expect(reach('rakaeli')).toEqual([3, 6, 7]);
+    expect([1, 2, 3].map((lv) => movementReach('rakaeli', lv as 1 | 2 | 3, true))).toEqual([5, 10, 16]);
   });
 });
 
@@ -90,9 +103,9 @@ describe('storm on 10 columns', () => {
     expect(open).toEqual([4, 5]);
   });
 
-  it('a capture-free game in the centre columns ends at exactly MAX_MATCH_PLIES = 110 by the storm (engine and FastBoard agree)', () => {
+  it('a capture-free game in the centre columns ends at exactly MAX_MATCH_PLIES = 68 by the storm (engine and FastBoard agree)', () => {
     expect(MAX_MATCH_PLIES).toBe(SUDDEN_DEATH_PLY + STORM_FULL_STEPS * STORM_INTERVAL_PLIES);
-    expect(MAX_MATCH_PLIES).toBe(110);
+    expect(MAX_MATCH_PLIES).toBe(68);
     // Two pieces a side (so the one-piece trigger never fires), shuffling in columns 4..5 of their
     // own half without ever capturing: only sudden death and the storm can end it.
     let s = makeState([
@@ -118,8 +131,8 @@ describe('storm on 10 columns', () => {
       expect(b.storm).toBe(s.storm);
       expect(b.ply).toBe(s.ply);
     }
-    // Storm from ply 80, one advance every 6 turn changes: plies 86, 92, 98, 104, 110.
-    expect(advances).toEqual([86, 92, 98, 104, 110]);
+    // Storm from ply 38 (turn 20), one advance every 6 turn changes (3 turns): plies 44 .. 68.
+    expect(advances).toEqual([44, 50, 56, 62, 68]);
     expect(s.ply).toBe(MAX_MATCH_PLIES);
     expect(s.storm).toBe(STORM_FULL_STEPS);
     expect(s.endReason).toBe('storm');

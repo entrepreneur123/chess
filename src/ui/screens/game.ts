@@ -60,8 +60,11 @@ import { CUTIN_MS, cutInEl, preloadCutIns } from '../game/cutin';
 import type { GameParams } from './gameParams';
 import '../game/hud.css';
 
-/** Show the sudden-death countdown this many turns (per player, see `turnNumber`) before it starts. */
-const SUDDEN_DEATH_WARN_TURNS = 10;
+/**
+ * Show the sudden-death countdown this many turns (per player, see `turnNumber`) before it starts:
+ * from turn 15 with the storm at turn 20 (about the last quarter of the run-up, as before).
+ */
+const SUDDEN_DEATH_WARN_TURNS = 5;
 /** Plies -> turns as the player counts them (one move each = one turn). */
 const pliesToTurns = (plies: number) => Math.ceil(plies / 2);
 

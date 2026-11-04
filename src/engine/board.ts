@@ -9,8 +9,10 @@ import {
   CH_RAKAELI,
   CH_SAD,
   INSANER_DIAG_LEVEL,
+  INSANER_DIAG_RANGE,
   INSANER_RANGE,
   MARKI_RANGE,
+  MARKI_SIDE_LEVEL,
   MICHELLE_FORWARD_LEVEL,
   MICHELLE_RANGE,
   N_CHARS,
@@ -71,6 +73,8 @@ export function inStorm(c: number, storm: number): boolean {
 const ORTHO_DIRS = [1, 0, -1, 0, 0, 1, 0, -1];
 const DIAG_DIRS = [1, 1, 1, -1, -1, 1, -1, -1];
 const KING_DIRS = [...ORTHO_DIRS, ...DIAG_DIRS];
+/** Marki 3-star's sideways step: left and right. */
+const SIDE_DIRS = [0, 1, 0, -1];
 /** Brutile 1-star: the two forward diagonals; 2-star adds one step straight back (by direction). */
 const BRUTILE_DIRS: Record<number, [number[], number[], number[]]> = {
   1: [[], [1, -1, 1, 1], [1, -1, 1, 1, -1, 0]],
@@ -248,7 +252,7 @@ function genPattern(
   if (ch === CH_SAD) return slide(occ, owners, owner, r, c, ORTHO_DIRS, SAD_RANGE[level], out, n, includeAllies, storm, waste);
   if (ch === CH_INSANER) {
     n = slide(occ, owners, owner, r, c, ORTHO_DIRS, INSANER_RANGE[level], out, n, includeAllies, storm, waste);
-    if (level >= INSANER_DIAG_LEVEL) n = slide(occ, owners, owner, r, c, DIAG_DIRS, INSANER_RANGE[level], out, n, includeAllies, storm, waste);
+    if (level >= INSANER_DIAG_LEVEL) n = slide(occ, owners, owner, r, c, DIAG_DIRS, INSANER_DIAG_RANGE, out, n, includeAllies, storm, waste);
     return n;
   }
   if (ch === CH_BRUTILE) {
@@ -283,6 +287,8 @@ function genPattern(
       if (includeAllies || owners[o] !== owner) out[n++] = s;
       break;
     }
+    // 3-star: a plain 1-square step left or right (not tied to the forward direction).
+    if (level >= MARKI_SIDE_LEVEL) n = slide(occ, owners, owner, r, c, SIDE_DIRS, 1, out, n, includeAllies, storm, waste);
     return n;
   }
   // walk: jump into the row directly in front

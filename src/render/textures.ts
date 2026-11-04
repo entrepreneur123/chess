@@ -26,6 +26,8 @@ import {
   paintTurnGlow,
 } from './arena';
 import type { FrameStyle } from './arena';
+import { DEFAULT_BOARD_THEME } from './arenaThemes';
+import type { BoardTheme } from './arenaThemes';
 
 /**
  * Largest canvas side we ever allocate. iOS Safari caps a canvas at 16.7 M pixels (4096 x 4096) and
@@ -269,13 +271,14 @@ export function makeSlabTexture(slabSize: number, margin: number): THREE.CanvasT
 export function makeFrameTexture(
   st: FrameStyle = FRAME_REGULAR,
   px = 72,
+  theme: BoardTheme = DEFAULT_BOARD_THEME,
 ): PaintedTexture & { width: number; depth: number; offsetZ: number } {
   const E = frameExtent(st);
   const width = BOARD_SIZE + E.side * 2;
   const depth = BOARD_SIZE + E.top + E.bottom;
   const k = Math.min(px, MAX_CANVAS_SIDE / Math.max(width, depth));
   const { cvs, ctx } = canvas(width * k, depth * k);
-  if (ctx) paintFrame(ctx, k, E.side * k, E.top * k, st);
+  if (ctx) paintFrame(ctx, k, E.side * k, E.top * k, st, theme);
   const tex = toTexture(cvs);
   tex.generateMipmaps = false;
   tex.minFilter = THREE.LinearFilter;
@@ -297,7 +300,7 @@ function midCell(s: number, ox: number, oy: number): [number, number] {
  * pixels per cell. Self-test: the middle of the field must stay see-through, or it is repainted
  * without the hole-based edge shadow (see arena.ts fillFrameHole).
  */
-export function makeFieldOverlayTexture(px = 100): PaintedTexture & { size: number } {
+export function makeFieldOverlayTexture(px = 100, theme: BoardTheme = DEFAULT_BOARD_THEME): PaintedTexture & { size: number } {
   const size = BOARD_SIZE + FIELD_OVERLAY_MARGIN * 2;
   const side = Math.min(MAX_CANVAS_SIDE, Math.round(size * px));
   const s = side / size;
@@ -305,13 +308,13 @@ export function makeFieldOverlayTexture(px = 100): PaintedTexture & { size: numb
   const notes: string[] = [];
   if (ctx) {
     const o = FIELD_OVERLAY_MARGIN * s;
-    paintFieldOverlay(ctx, s, o, o);
+    paintFieldOverlay(ctx, s, o, o, { theme });
     const [mx, my] = midCell(s, o, o);
     const a = alphaAt(ctx, mx, my);
     if (a > SEE_THROUGH_MAX_ALPHA) {
       notes.push(`overlay centre alpha ${a.toFixed(2)}: repainted without edge shadow`);
       ctx.clearRect(0, 0, side, side);
-      paintFieldOverlay(ctx, s, o, o, { edgeShadow: false });
+      paintFieldOverlay(ctx, s, o, o, { edgeShadow: false, theme });
     }
   } else notes.push('overlay: no 2d context');
   const tex = toTexture(cvs);

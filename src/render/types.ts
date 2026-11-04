@@ -25,6 +25,11 @@ export interface BoardViewOptions {
    * are the illustrated tokens. Saves the model download and all skinning/animation work.
    */
   topOnly?: boolean;
+  /**
+   * Arena whose board theme to paint from the start (src/render/arenaThemes.ts: cells, bezel, grid,
+   * surface detail, ambient particles). Unknown or missing ids get the original moonrune look.
+   */
+  arena?: string;
 }
 
 /** Brutile's wasteland targeting overlay. */
@@ -136,4 +141,10 @@ export interface IBoardView {
    * calling it again with the same owner is a no-op, so it is safe to call on every UI refresh.
    */
   setTurnGlow?(owner: 0 | 1 | null): void;
+  /**
+   * Optional: switch the arena board theme at runtime (same ids as BoardViewOptions.arena; unknown =
+   * moonrune). Repaints the static arena layers once (old textures / canvases are freed); a no-op
+   * for the theme already shown. Team colours, markers and every FX are the same on every theme.
+   */
+  setArenaTheme?(id: string): void;
 }

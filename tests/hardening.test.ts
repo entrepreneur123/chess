@@ -21,6 +21,7 @@ import {
   isLegalMove,
   normalizeSquad,
   suddenDeathIn,
+  turnNumber,
   validateFormation,
 } from '../src/engine';
 import type { CharacterId, Formation, GameState, Move } from '../src/engine';
@@ -161,14 +162,38 @@ describe('end reasons', () => {
 });
 
 describe('sudden death at the new constant', () => {
-  it('SUDDEN_DEATH_PLY is turn 41 and the match is bounded by 110 plies on 10 columns', () => {
-    expect(SUDDEN_DEATH_PLY).toBe(80);
+  it('SUDDEN_DEATH_PLY is turn 20 (ply 38), the storm closes in every 3 turns and the match is bounded by 68 plies', () => {
+    expect(SUDDEN_DEATH_PLY).toBe(38);
+    expect(turnNumber({ ply: SUDDEN_DEATH_PLY })).toBe(20);
+    expect(STORM_INTERVAL_PLIES).toBe(6);
+    expect(turnNumber({ ply: SUDDEN_DEATH_PLY + STORM_INTERVAL_PLIES })).toBe(23);
     expect(STORM_FULL_STEPS).toBe(5);
-    expect(SUDDEN_DEATH_PLY + STORM_FULL_STEPS * STORM_INTERVAL_PLIES).toBe(110);
-    expect(MAX_MATCH_PLIES).toBe(110);
+    expect(SUDDEN_DEATH_PLY + STORM_FULL_STEPS * STORM_INTERVAL_PLIES).toBe(68);
+    expect(MAX_MATCH_PLIES).toBe(68);
   });
 
-  it('FastBoard activates and ticks the storm exactly like the engine around ply 80', () => {
+  it('a capture-free match has no storm through ply 37 and starts it at ply 38 (turn 20)', () => {
+    // Two pieces a side shuffling sideways in their own half: nothing is ever captured.
+    let s = makeState([
+      [0, 'sad', 1, 1, 4],
+      [0, 'walk', 1, 0, 6],
+      [1, 'sad', 1, 8, 5],
+      [1, 'walk', 1, 9, 3],
+    ]);
+    while (s.ply < SUDDEN_DEATH_PLY) {
+      expect(s.stormIn).toBeNull();
+      expect(suddenDeathIn(s)).toBe(SUDDEN_DEATH_PLY - s.ply);
+      const own = (r: number) => (s.turn === 0 ? r <= 2 : r >= 7);
+      const m = getLegalMoves(s).find((x) => !x.captureId && x.pieceId.endsWith('sad') && own(x.to.r))!;
+      s = applyMove(s, m);
+    }
+    expect(s.ply).toBe(38);
+    expect(s.stormIn).toBe(STORM_INTERVAL_PLIES);
+    expect(s.storm).toBe(0);
+    expect(suddenDeathIn(s)).toBeNull();
+  });
+
+  it('FastBoard activates and ticks the storm exactly like the engine around ply 38', () => {
     let s = makeState(
       [
         [0, 'sad', 2, 5, 5],

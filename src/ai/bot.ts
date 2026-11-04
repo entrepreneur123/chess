@@ -17,7 +17,7 @@ import {
 } from '../engine';
 import type { FastBoard } from '../engine';
 import { SKILL_FLAG, fastCanSkill, fastHopGain, fastSkillFits, fastSkillSize } from '../engine/fast';
-import { CHARACTERS, CHAR_BY_CODE, CH_BRUTILE, CH_INSANER, CH_MARKI, CH_MICHELLE, CH_PICKER, CH_RAKAELI, CH_SAD, CH_WALK, N_CHARS } from '../engine/characters';
+import { CHARACTERS, CHAR_BY_CODE, CH_BRUTILE, CH_INSANER, CH_MARKI, CH_MICHELLE, CH_PICKER, CH_RAKAELI, CH_SAD, CH_WALK, MARKI_RANGE, MARKI_SIDE_LEVEL, N_CHARS } from '../engine/characters';
 import { trapBit } from '../engine/board';
 import { BOARD_SIZE, TRAPS_PER_MICHELLE } from '../engine/types';
 
@@ -116,6 +116,8 @@ const now: () => number =
 
 // ---------------------------------------------------------------- evaluation
 
+/** Marki's longest forward rush (3-star): open squares ahead past it add nothing. */
+const MARKI_MAX_RUSH = MARKI_RANGE[3];
 /** Last row / column index, and the board's centre line (4.5 on 10 x 10). */
 const LAST = BOARD_SIZE - 1;
 const MID = LAST / 2;
@@ -183,7 +185,7 @@ export function evaluate(b: FastBoard, side: number): number {
     } else if (ch === CH_MARKI) {
       if (!facingEnemy) sc -= v * 0.2;
       {
-        // free squares straight ahead (blocked by ally = less potential)
+        // Free squares straight ahead (blocked by ally = less potential), up to his longest rush.
         let free = 0;
         const dr = dir > 0 ? BOARD_SIZE : -BOARD_SIZE;
         for (let t = s + dr, k = 0; k < room; k++, t += dr) {
@@ -192,8 +194,9 @@ export function evaluate(b: FastBoard, side: number): number {
           free++;
           if (o >= 0) break;
         }
-        sc += Math.min(free, 6) * 4;
-        if (free === 0) sc -= v * 0.15;
+        sc += Math.min(free, MARKI_MAX_RUSH) * 4;
+        // Boxed in front; from 3-star the sideways step (counted as mobility) still gets him out.
+        if (free === 0 && b.lvl[i] < MARKI_SIDE_LEVEL) sc -= v * 0.15;
       }
     } else if (ch === CH_WALK) {
       if (!facingEnemy) sc -= v * 0.2;

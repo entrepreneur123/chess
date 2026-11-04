@@ -107,8 +107,12 @@ describe('turn counter', () => {
     expect(turnNumber({ ply: 1 })).toBe(1);
     expect(turnNumber({ ply: 2 })).toBe(2);
     expect(turnNumber({ ply: 119 })).toBe(60);
-    expect(turnNumber({ ply: 79 })).toBe(40);
-    expect(turnNumber({ ply: SUDDEN_DEATH_PLY })).toBe(41);
+    expect(turnNumber({ ply: 37 })).toBe(19);
+    // The storm starts with turn 20.
+    expect(turnNumber({ ply: SUDDEN_DEATH_PLY })).toBe(20);
+    expect(turnNumber({ ply: SUDDEN_DEATH_PLY - 1 })).toBe(19);
+    // STORM_INTERVAL_PLIES is 3 turns.
+    expect(turnNumber({ ply: SUDDEN_DEATH_PLY + STORM_INTERVAL_PLIES }) - turnNumber({ ply: SUDDEN_DEATH_PLY })).toBe(3);
     let g = createGame(defaultFormation(), defaultFormation());
     g = applyMove(g, getLegalMoves(g)[0]);
     expect(turnNumber(g)).toBe(1);
@@ -235,11 +239,11 @@ describe('no moves / stalemate / sudden death', () => {
       s = applyMove(s, (moves.length ? moves : legal)[guard % (moves.length || legal.length)]);
     }
     expect(s.status).toBe('ended');
-    // 10 columns: 5 storm advances swallow the board, so 80 + 5 * 6 = 110 plies at most.
+    // 10 columns: 5 storm advances swallow the board, so 38 + 5 * 6 = 68 plies at most.
     expect(BOARD_SIZE).toBe(10);
     expect(STORM_FULL_STEPS).toBe(5);
     expect(MAX_MATCH_PLIES).toBe(SUDDEN_DEATH_PLY + STORM_FULL_STEPS * STORM_INTERVAL_PLIES);
-    expect(MAX_MATCH_PLIES).toBe(110);
+    expect(MAX_MATCH_PLIES).toBe(68);
     expect(s.ply).toBeLessThanOrEqual(MAX_MATCH_PLIES);
   });
 });

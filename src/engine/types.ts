@@ -36,9 +36,10 @@ export const MAX_CONSECUTIVE_TIMEOUTS = 1;
 export const STORM_INTERVAL_PLIES = 6;
 /**
  * Sudden death: the storm activates when either side is down to its last piece, or on its own once
- * this many plies were played (40 turns each, see `turnNumber`: turn 41 starts at ply 80).
+ * this many plies were played: at the start of turn 20 (`turnNumber`: turn 20 starts at ply 38,
+ * after 19 turns each). From then on it closes in every STORM_INTERVAL_PLIES = 6 plies = 3 turns.
  */
-export const SUDDEN_DEATH_PLY = 80;
+export const SUDDEN_DEATH_PLY = 38;
 /**
  * Storm advances needed to swallow the whole board: each one closes a column on BOTH sides, so
  * ceil(BOARD_SIZE / 2) = 5 on 10 columns (after the 5th, columns 0..4 and 5..9 are all storm).
@@ -47,7 +48,7 @@ export const STORM_FULL_STEPS = Math.ceil(BOARD_SIZE / 2);
 /**
  * Upper bound on the turn changes of a match: the storm starts at SUDDEN_DEATH_PLY at the latest
  * and swallows the board STORM_FULL_STEPS * STORM_INTERVAL_PLIES turn changes later, so
- * 80 + 5 * 6 = 110 plies (55 turns). Only a level-3 Insaner's chain moves (an extra ply that is
+ * 38 + 5 * 6 = 68 plies (34 turns each). Only a level-3 Insaner's chain moves (an extra ply that is
  * not a turn change) can push `GameState.ply` past it, by one ply per chain move.
  */
 export const MAX_MATCH_PLIES = SUDDEN_DEATH_PLY + STORM_FULL_STEPS * STORM_INTERVAL_PLIES;

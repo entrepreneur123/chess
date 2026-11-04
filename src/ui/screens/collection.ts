@@ -18,7 +18,7 @@ import { buyBlocker, getProfile, isOwned, priceOf, setGrade, subscribeProfile, u
 import { arenaForRating, unlockArenaOf, upgradeCost } from '../../meta/progression';
 import { essenceIcon, tokenIcon, topBar } from '../components/currency';
 import { confirmBuy, confirmUpgrade } from '../components/purchase';
-import { RARITY_LABEL, artMissing, cardArtUrl, faceUrl, movementDiagram, rarityChip, starsOf, unitArt } from '../components/piece';
+import { RARITY_LABEL, artMissing, cardArtUrl, faceUrl, movementDiagram, movementReach, rarityChip, starsOf, unitArt } from '../components/piece';
 import { showBottomSheet, type SheetHandle } from '../components/sheet';
 import { Disposables, h, prefersReducedMotion, replaceChildren } from '../dom';
 import { icon } from '../icons';
@@ -37,11 +37,12 @@ export const TIER_TITLE: Record<CharacterId, [string, string, string]> = {
   rakaeli: ['눈가린 천사', '추락한 천사', '타천의 군주'],
 };
 
-export const ROLE: Record<CharacterId, { role: string; trait: string }> = {
+/** Role and one-line trait per character; `trait3` replaces `trait` on the 3-star card. */
+export const ROLE: Record<CharacterId, { role: string; trait: string; trait3?: string }> = {
   sad: { role: '수비형 탱커', trait: '상하좌우 자유 이동 · 유일하게 후퇴 가능' },
-  marki: { role: '돌격형 공격수', trait: '앞으로만 일직선 돌진 · 사거리 최장' },
+  marki: { role: '돌격형 공격수', trait: '앞으로만 일직선 돌진 · 사거리 최장', trait3: '앞으로 일직선 돌진 · 사거리 최장 · 좌우 1칸 이동도 가능' },
   walk: { role: '기습형 점퍼', trait: '사이의 말을 뛰어넘는 점프 · 넓은 앞줄 커버' },
-  insaner: { role: '흡수형 광전사', trait: '적을 잡으면 그 말의 이동 능력을 흡수 · 3성은 잡은 뒤 한 번 더 이동' },
+  insaner: { role: '흡수형 광전사', trait: '적을 잡으면 그 말의 이동 능력을 흡수', trait3: '적을 잡으면 그 말의 이동 능력을 흡수 · 잡은 뒤 한 번 더 이동 (턴당 1번)' },
   brutile: { role: '저주형 마녀', trait: '한 칸씩 걷는 느린 마녀 · 성급이 오를수록 사방으로' },
   michelle: { role: '함정형 견제수', trait: '뒤로 물러날 때 인형 함정(한 판 3개) · 밟은 상대는 1턴 속박' },
   picker: { role: '돌파형 사냥꾼', trait: '대각선 콩콩 점프 · 막히지 않고 지나는 적을 모두 잡음 · 상대 함정에서 멈춤' },
@@ -49,13 +50,12 @@ export const ROLE: Record<CharacterId, { role: string; trait: string }> = {
 };
 
 /**
- * Numeric "reach" per level for the stat bar (max squares reachable on an open board); `awake` is
- * Rakaeli's transformed form.
+ * Numeric "reach" per level for the stat bar: squares reachable on an open board, taken from the
+ * engine's move generator (the movement diagram's targets), so it can never drift from the rules.
+ * `awake` is Rakaeli's transformed form.
  */
 function reachCount(id: CharacterId, lv: Level, awake = false): number {
-  const tbl: Record<CharacterId, [number, number, number]> = { sad: [4, 8, 12], marki: [3, 4, 6], walk: [5, 7, 9], insaner: [8, 12, 24], brutile: [2, 3, 8], michelle: [3, 6, 7], picker: [4, 8, 12], rakaeli: [3, 6, 7] };
-  if (awake && id === 'rakaeli') return [5, 10, 16][lv - 1];
-  return tbl[id][lv - 1];
+  return movementReach(id, lv, awake);
 }
 
 /** The unit's illustration at a level (the board is top-down only for now, so no 3D renders). */
@@ -253,7 +253,7 @@ export function collectionScreen(router: Router): Screen {
       ),
       twoForms ? formToggle(id, awake) : null,
       actionRow(p, id),
-      h('p', { class: 'unit-card__trait' }, icon('info', 14), ROLE[id].trait),
+      h('p', { class: 'unit-card__trait' }, icon('info', 14), (grade === 3 && ROLE[id].trait3) || ROLE[id].trait),
       def.passiveKo ? h('p', { class: 'unit-card__passive' }, icon('magic', 14), h('span', null, h('b', null, '패시브 · 흡수'), ' ', def.passiveKo)) : null,
       def.trait ? h('p', { class: 'unit-card__passive unit-card__trait' }, icon('magic', 14), h('span', null, h('b', null, `특성 · ${def.trait.nameKo}`), ' ', def.trait.descKo)) : null,
       def.skill
