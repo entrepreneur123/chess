@@ -10,6 +10,7 @@
  *    6 stunned pieces exist, so plain meshes (shared geometry + 3 materials) are cheapest.
  */
 import * as THREE from 'three';
+import { BOARD_SIZE } from '../engine/types';
 import type { PlayerId } from '../engine/types';
 import { TEAM_COLORS } from './palette';
 
@@ -301,8 +302,8 @@ export class TrapMarks3D {
       }
       d.sq = m.sq;
       d.mesh.material = this.dollMat[m.owner];
-      const r = Math.floor(m.sq / 12);
-      const c = m.sq % 12;
+      const r = Math.floor(m.sq / BOARD_SIZE);
+      const c = m.sq % BOARD_SIZE;
       const k = m.covered ? DOLL_CORNER_SIZE : DOLL_SIZE;
       // Covered: the doll peeks out of the square's bottom-left corner, over the token (the top
       // edge is where a stunned piece's "속박" pill sits).

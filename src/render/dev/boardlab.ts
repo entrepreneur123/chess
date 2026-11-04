@@ -5,6 +5,7 @@
  * so a Playwright script can drive every visual state (wasteland, skill preview / cast, wasted
  * moves, deadly highlights, captures) and measure the JS cost of the render loop.
  */
+import { BOARD_SIZE } from '../../engine/types';
 import type { CharacterId, Level, Move, Piece, PlayerId, Pos } from '../../engine/types';
 import { BoardView } from '../BoardView';
 import { Board2DView } from '../Board2DView';
@@ -30,20 +31,24 @@ if (clock.manual) {
     clock.queue.length = 0;
   };
 }
-/** Advance the manual clock by `ms` in ~16 ms frames. */
-function step(ms: number): void {
+/** Advance the manual clock by `ms` in `frameMs` frames (coarser frames: faster software GL runs). */
+function step(ms: number, frameMs = 16): void {
   const end = clock.now + ms;
   while (clock.now < end) {
-    clock.now = Math.min(end, clock.now + 16);
+    clock.now = Math.min(end, clock.now + frameMs);
     const q = clock.queue.splice(0);
     for (const cb of q) cb(clock.now);
   }
 }
 const host = document.getElementById('board') as HTMLElement;
+// `?fill=1`: the board fills the viewport (phone / tablet screenshots at the real board size).
+if (params.get('fill') === '1') {
+  host.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;margin:0';
+}
 const logEl = document.getElementById('log') as HTMLElement;
 const view: IBoardView = mode === '2d' ? new Board2DView(host) : new BoardView(host, { topOnly: mode === '3d' });
 
-const sq = (r: number, c: number): number => r * 12 + c;
+const sq = (r: number, c: number): number => r * BOARD_SIZE + c;
 const P = (id: string, owner: PlayerId, character: CharacterId, level: Level, r: number, c: number): Piece => ({ id, owner, character, level, pos: { r, c } });
 
 /** Both teams, every character, mixed levels. */
@@ -54,11 +59,31 @@ function basePieces(): Piece[] {
     P('p0-walk', 0, 'walk', 3, 0, 6),
     P('p0-insaner', 0, 'insaner', 3, 2, 8),
     P('p0-brutile', 0, 'brutile', 2, 2, 4),
-    P('p1-sad', 1, 'sad', 3, 11, 10),
-    P('p1-marki', 1, 'marki', 1, 10, 8),
-    P('p1-walk', 1, 'walk', 2, 11, 5),
-    P('p1-insaner', 1, 'insaner', 1, 9, 3),
-    P('p1-brutile', 1, 'brutile', 3, 9, 7),
+    P('p1-sad', 1, 'sad', 3, 9, 9),
+    P('p1-marki', 1, 'marki', 1, 8, 8),
+    P('p1-walk', 1, 'walk', 2, 9, 5),
+    P('p1-insaner', 1, 'insaner', 1, 7, 3),
+    P('p1-brutile', 1, 'brutile', 3, 7, 7),
+  ];
+}
+
+/**
+ * Rakaeli scene: p0 Rakaeli (Lv3) at (3, 4) with `awaken` (undefined = base form), an enemy Rakaeli
+ * (Lv2, transformed with `enemyAwaken`) at (6, 6), a stunned walk and a few others around.
+ */
+function rakPieces(awaken?: number, enemyAwaken?: number): Piece[] {
+  const me = P('p0-rak', 0, 'rakaeli' as CharacterId, 3, 3, 4);
+  const foe = P('p1-rak', 1, 'rakaeli' as CharacterId, 2, 6, 6);
+  if (awaken) (me as Piece & { awaken?: number }).awaken = awaken;
+  if (enemyAwaken) (foe as Piece & { awaken?: number }).awaken = enemyAwaken;
+  return [
+    me,
+    foe,
+    P('p0-sad', 0, 'sad', 2, 1, 2),
+    P('p0-walk', 0, 'walk', 1, 1, 6),
+    P('p1-marki', 1, 'marki', 2, 5, 3),
+    P('p1-insaner', 1, 'insaner', 3, 8, 4),
+    P('p1-picker', 1, 'picker', 1, 8, 7),
   ];
 }
 
@@ -220,6 +245,46 @@ const lab = {
     const mover = pieces.find((p) => p.id === id) as Piece;
     const move: Move = { pieceId: id, from: { ...mover.pos }, to };
     const after = pieces.map((p) => (p.id === id ? { ...p, pos: { ...to } } : p));
+    (window as unknown as { moveDone: unknown }).moveDone = view.animateMove(move, after).then(() => 'done');
+  },
+  rakPieces,
+  /** Rakaeli scene with p0 Rakaeli at `awaken` (2, 1 or undefined) and the enemy one at `enemy`. */
+  rak(awaken?: number, enemy?: number): void {
+    impacts = 0;
+    view.setPieces(rakPieces(awaken, enemy));
+    view.setWaste?.([]);
+    view.setHighlights({});
+    log(`${mode} rakaeli awaken=${awaken ?? '-'} enemy=${enemy ?? '-'}`);
+  },
+  /** playAwaken on p0 Rakaeli; window.awDone resolves to 'done'. `after` = the state to sync to. */
+  startAwaken(phase: 'on' | 'off', id = 'p0-rak'): void {
+    const p = view.playAwaken?.(id, phase) ?? Promise.resolve();
+    (window as unknown as { awDone: unknown }).awDone = p.then(() => 'done');
+  },
+  /**
+   * A Rakaeli move from the scene: `awaken` before the move (undefined = base form), to `to`,
+   * capturing `victim` if given; piecesAfter has awaken - 1 (absent at 0).
+   */
+  startRakMove(awaken: number | undefined, to: Pos, victim?: string): void {
+    const pieces = rakPieces(awaken, undefined);
+    if (victim) {
+      const vp = pieces.find((q) => q.id === victim);
+      if (vp) vp.pos = { ...to };
+    }
+    view.setPieces(pieces);
+    const me = pieces[0];
+    const move: Move = { pieceId: me.id, from: { ...me.pos }, to, ...(victim ? { captureId: victim } : {}) };
+    const left = awaken ? awaken - 1 : 0;
+    const after = pieces
+      .filter((q) => q.id !== victim)
+      .map((q) => {
+        if (q.id !== me.id) return q;
+        const n: Piece & { awaken?: number } = { ...q, pos: { ...to } };
+        delete n.awaken;
+        if (left > 0) n.awaken = left;
+        return n;
+      });
+    impacts = 0;
     (window as unknown as { moveDone: unknown }).moveDone = view.animateMove(move, after).then(() => 'done');
   },
   sleep,

@@ -170,8 +170,9 @@ export const BADGE_OFFSET = 0.33;
 export const AURA_BOX = 1.9;
 /** Coin radius (tokens.ts COIN_R) + its keyline: the aura ring starts just outside it. */
 const AURA_R0 = 0.41;
-/** Embers per aura (both boards). */
+/** Embers per aura (both boards) and their base size (cells). */
 export const EMBER_COUNT = 10;
+const EMBER_SIZE = 0.055;
 
 /** Ember `i` at `time` (s): radius (cells), angle, size (cells) and brightness (0..1). */
 export function emberAt(i: number, time: number, out: { r: number; a: number; s: number; k: number }): void {
@@ -180,7 +181,7 @@ export function emberAt(i: number, time: number, out: { r: number; a: number; s:
   const ph = fract(time * (0.32 + 0.26 * h) + h2 * 7.1);
   out.r = AURA_R0 + 0.02 + 0.42 * ph;
   out.a = h * Math.PI * 2 + ph * (0.7 + h2) * (i % 2 ? 1 : -1);
-  out.s = 0.04 * (1 - ph * 0.55) * (0.8 + 0.4 * h2);
+  out.s = EMBER_SIZE * (1 - ph * 0.55) * (0.8 + 0.4 * h2);
   const flick = 0.65 + 0.35 * Math.sin(time * 13 + h * 40);
   out.k = (1 - ph) * clamp01(ph / 0.12) * flick;
 }
@@ -255,47 +256,62 @@ export function paintAwakenBadge(g: CanvasRenderingContext2D, S: number, n: numb
 }
 
 /**
- * The idle aura's static layer on an S x S canvas (AURA_BOX cells): a soft crimson-to-violet glow
- * ring hugging the coin with flame tongues. The 2D board rotates / flickers two copies of it.
+ * The idle aura's smoky halo on an S x S canvas (AURA_BOX cells): a near-black crimson ring of smoke
+ * hugging the coin with a thin hot rim (drawn with normal blending, so it dims the rarity glow).
  */
-export function paintAuraRing(g: CanvasRenderingContext2D, S: number, seed: number): void {
+export function paintAuraSmoke(g: CanvasRenderingContext2D, S: number): void {
   const u = S / AURA_BOX;
   const c = S / 2;
   const r0 = AURA_R0 * u;
   g.save();
-  const glow = g.createRadialGradient(c, c, r0 * 0.9, c, c, r0 + u * 0.32);
-  glow.addColorStop(0, 'rgba(255,39,66,0.7)');
-  glow.addColorStop(0.35, 'rgba(200,30,120,0.38)');
-  glow.addColorStop(0.7, 'rgba(154,60,255,0.14)');
-  glow.addColorStop(1, 'rgba(154,60,255,0)');
-  g.fillStyle = glow;
+  const sm = g.createRadialGradient(c, c, r0 * 0.92, c, c, r0 + u * 0.32);
+  sm.addColorStop(0, 'rgba(24,2,8,0.7)');
+  sm.addColorStop(0.4, 'rgba(30,4,14,0.45)');
+  sm.addColorStop(1, 'rgba(30,4,14,0)');
+  g.fillStyle = sm;
   g.fillRect(0, 0, S, S);
-  g.globalCompositeOperation = 'lighter';
-  g.lineCap = 'round';
-  const n = 22;
-  for (let i = 0; i < n; i++) {
-    const h = fract(Math.sin((i + seed * 31) * 12.9898) * 43758.5453);
-    const a = (i / n) * Math.PI * 2 + h * 0.2;
-    const len = u * (0.08 + 0.17 * h);
-    const x0 = c + Math.cos(a) * r0;
-    const y0 = c + Math.sin(a) * r0;
-    const bend = (h - 0.5) * 0.6;
-    const x1 = c + Math.cos(a + bend * 0.3) * (r0 + len);
-    const y1 = c + Math.sin(a + bend * 0.3) * (r0 + len);
-    const col = i % 3 === 0 ? 'rgba(154,60,255,0.8)' : i % 3 === 1 ? 'rgba(255,39,66,0.85)' : 'rgba(255,122,61,0.75)';
-    g.strokeStyle = col;
-    g.lineWidth = u * (0.05 + 0.03 * h);
-    g.beginPath();
-    g.moveTo(x0, y0);
-    g.quadraticCurveTo(c + Math.cos(a + bend) * (r0 + len * 0.55), c + Math.sin(a + bend) * (r0 + len * 0.55), x1, y1);
-    g.stroke();
-  }
-  // Thin hot rim right at the coin edge.
-  g.strokeStyle = 'rgba(255,190,170,0.55)';
+  g.strokeStyle = 'rgba(255,90,80,0.6)';
   g.lineWidth = u * 0.025;
   g.beginPath();
   g.arc(c, c, r0 + u * 0.01, 0, Math.PI * 2);
   g.stroke();
+  g.restore();
+}
+
+/**
+ * The idle aura's flame tongues on an S x S canvas (AURA_BOX cells): crimson / ember tongues
+ * licking out of the coin edge, violet at the tips. The 2D board rotates / flickers two copies.
+ */
+export function paintAuraFlames(g: CanvasRenderingContext2D, S: number, seed: number): void {
+  const u = S / AURA_BOX;
+  const c = S / 2;
+  const r0 = AURA_R0 * u;
+  g.save();
+  g.globalCompositeOperation = 'lighter';
+  g.lineCap = 'round';
+  const n = 20;
+  for (let i = 0; i < n; i++) {
+    const h = fract(Math.sin((i + seed * 31) * 12.9898) * 43758.5453);
+    const a = (i / n) * Math.PI * 2 + h * 0.25;
+    const len = u * (0.1 + 0.24 * h);
+    const bend = (h - 0.5) * 0.7;
+    const x0 = c + Math.cos(a) * r0;
+    const y0 = c + Math.sin(a) * r0;
+    const xm = c + Math.cos(a + bend * 0.5) * (r0 + len * 0.55);
+    const ym = c + Math.sin(a + bend * 0.5) * (r0 + len * 0.55);
+    const x1 = c + Math.cos(a + bend * 0.3) * (r0 + len);
+    const y1 = c + Math.sin(a + bend * 0.3) * (r0 + len);
+    const gr = g.createLinearGradient(x0, y0, x1, y1);
+    gr.addColorStop(0, i % 2 ? 'rgba(255,130,70,0.95)' : 'rgba(255,39,66,0.95)');
+    gr.addColorStop(0.6, 'rgba(255,39,66,0.75)');
+    gr.addColorStop(1, 'rgba(154,60,255,0.1)');
+    g.strokeStyle = gr;
+    g.lineWidth = u * (0.06 + 0.04 * h);
+    g.beginPath();
+    g.moveTo(x0, y0);
+    g.quadraticCurveTo(xm, ym, x1, y1);
+    g.stroke();
+  }
   g.restore();
 }
 
@@ -471,10 +487,16 @@ export function badgeSprite(n: number, px: number): HTMLCanvasElement {
   return cached(`badge:${n}:${S}`, S, S, (g) => paintAwakenBadge(g, S, n));
 }
 
-/** Aura ring sprite (AURA_BOX cells wide); two seeds so the layered copies differ. */
+/** Aura flame sprite (AURA_BOX cells wide); two seeds so the layered copies differ. */
 export function auraSprite(px: number, seed: 0 | 1): HTMLCanvasElement {
   const S = bucket(px, 24);
-  return cached(`aura:${seed}:${S}`, S, S, (g) => paintAuraRing(g, S, seed));
+  return cached(`aura:${seed}:${S}`, S, S, (g) => paintAuraFlames(g, S, seed));
+}
+
+/** Aura smoke halo sprite (AURA_BOX cells wide). */
+export function auraSmokeSprite(px: number): HTMLCanvasElement {
+  const S = bucket(px, 24);
+  return cached(`aurasmoke:${S}`, S, S, (g) => paintAuraSmoke(g, S));
 }
 
 export function emberSprite(px: number): HTMLCanvasElement {
@@ -563,8 +585,10 @@ void main() {
 const f4 = (x: number): string => x.toFixed(4);
 
 /**
- * Idle aura (additive): a flickering crimson / violet flame ring hugging the coin, a soft halo and
- * EMBER_COUNT embers spiralling out (the same motion as `emberAt`). Quad = AURA_BOX cells.
+ * Idle aura (premultiplied alpha): a smoky near-black crimson halo hugging the coin (it dims the
+ * rarity ring's glow under it, so the aura reads crimson, not as a brighter epic ring), crimson /
+ * ember flame tongues licking out of it with violet at their tips, and EMBER_COUNT embers spiralling
+ * out (the same motion as `emberAt`). Quad = AURA_BOX cells.
  */
 const AURA_FS = /* glsl */ `
 uniform float uTime;
@@ -578,17 +602,19 @@ void main() {
   float r = length(p);
   float ang = atan(p.y, p.x);
   float t = r - ${f4(AURA_R0)};
-  float n = vnoise(vec2(ang * 3.0 + uSeed, r * 8.0 - uTime * 2.2));
-  float n2 = vnoise(vec2(ang * 7.0 - uSeed, r * 14.0 - uTime * 3.4));
-  float flame = smoothstep(0.09 + 0.24 * n * n2 + 0.05 * n, 0.0, t) * smoothstep(-0.03, 0.005, t);
-  float hueK = 0.5 + 0.5 * sin(ang * 2.0 + uTime * 0.9 + uSeed);
-  vec3 crimson = vec3(1.0, 0.02, 0.055);
-  vec3 violet = vec3(0.32, 0.045, 1.0);
-  vec3 ember = vec3(1.0, 0.19, 0.045);
-  vec3 col = mix(crimson, violet, hueK * 0.65) * flame * (1.15 + 0.5 * n2);
-  col += mix(ember, vec3(1.0, 0.75, 0.6), n2) * flame * flame * 0.5;
-  float halo = exp(-pow(max(t, 0.0) / 0.14, 2.0)) * step(-0.02, t);
-  col += mix(crimson, violet, 0.4) * halo * 0.35;
+  float n = vnoise(vec2(ang * 3.0 + uSeed, r * 7.0 - uTime * 2.4));
+  float n2 = vnoise(vec2(ang * 7.0 - uSeed, r * 13.0 - uTime * 3.6));
+  float reach = 0.1 + 0.34 * n * n2 + 0.08 * n;
+  float flame = smoothstep(reach, 0.0, t) * smoothstep(-0.03, 0.005, t);
+  float tip = smoothstep(0.35, 1.0, t / max(reach, 0.01));
+  // Linear colours: deep crimson, hot ember orange, violet only toward the tongue tips.
+  vec3 crimson = vec3(0.8, 0.0, 0.016);
+  vec3 violet = vec3(0.24, 0.02, 0.85);
+  vec3 ember = vec3(1.0, 0.11, 0.0);
+  vec3 col = mix(mix(crimson, ember, n2 * 0.45), violet, tip * (0.3 + 0.25 * sin(ang * 2.0 + uTime + uSeed))) * flame * (0.95 + 0.45 * n2);
+  col += ember * flame * flame * flame * 0.35;
+  // Smoky dark halo (alpha only darkens what is under it).
+  float smoke = exp(-pow(max(t, 0.0) / 0.2, 2.0)) * step(-0.03, t) * (0.62 + 0.25 * n);
   float emb = 0.0;
   for (int i = 0; i < ${EMBER_COUNT}; i++) {
     float fi = float(i);
@@ -599,14 +625,16 @@ void main() {
     float a = h * 6.2831853 + ph * (0.7 + h2) * side;
     float rr = ${f4(AURA_R0 + 0.02)} + 0.42 * ph;
     vec2 c = vec2(cos(a), sin(a)) * rr;
-    float s = 0.04 * (1.0 - ph * 0.55) * (0.8 + 0.4 * h2);
+    float s = ${f4(EMBER_SIZE)} * (1.0 - ph * 0.55) * (0.8 + 0.4 * h2);
     float d = length(p - c);
     float flick = 0.65 + 0.35 * sin(uTime * 13.0 + h * 40.0);
     emb += exp(-d * d / (s * s)) * (1.0 - ph) * clamp(ph / 0.12, 0.0, 1.0) * flick;
   }
-  col += mix(ember, vec3(1.0, 0.9, 0.8), clamp(emb - 0.5, 0.0, 1.0)) * emb * 1.6;
-  col *= uK * smoothstep(${f4(AURA_BOX / 2)}, ${f4(AURA_BOX / 2 - 0.1)}, r);
-  gl_FragColor = vec4(col, 1.0);
+  col += mix(ember, vec3(1.0, 0.75, 0.5), clamp(emb - 0.5, 0.0, 1.0)) * emb * 1.8;
+  float edge = smoothstep(${f4(AURA_BOX / 2)}, ${f4(AURA_BOX / 2 - 0.1)}, r);
+  vec3 deep = vec3(0.03, 0.002, 0.01);
+  float a = clamp(max(smoke * 0.85, max(flame * 0.75, emb * 0.6)), 0.0, 1.0) * uK * edge;
+  gl_FragColor = vec4((col + deep * smoke) * uK * edge, a);
   #include <colorspace_fragment>
 }`;
 
@@ -650,7 +678,9 @@ export class AwakenMarks3D {
       fragmentShader: AURA_FS,
       transparent: true,
       depthWrite: false,
-      blending: THREE.AdditiveBlending,
+      blending: THREE.CustomBlending,
+      blendSrc: THREE.OneFactor,
+      blendDst: THREE.OneMinusSrcAlphaFactor,
     });
     m.name = 'rakaeli-aura';
     return m;
@@ -944,10 +974,18 @@ export class RakaeliFx3D {
     return m;
   }
 
-  /** Make every effect mesh visible for a synchronous shader compile (then call with false). */
+  private warmVis: boolean[] = [];
+
+  /** Show every effect mesh for a synchronous shader compile; false restores what was visible. */
   setWarm(on: boolean): void {
-    for (const o of [this.feathers, this.wings[0], this.wings[1], this.dark, this.warmAura]) o.visible = on;
-    if (!on) this.lastT = 0;
+    const all = [this.feathers, this.wings[0], this.wings[1], this.dark, this.warmAura];
+    if (on) {
+      this.warmVis = all.map((o) => o.visible);
+      for (const o of all) o.visible = true;
+    } else {
+      all.forEach((o, i) => (o.visible = this.warmVis[i] ?? false));
+      this.warmAura.visible = false;
+    }
   }
 
   /**

@@ -1563,7 +1563,9 @@ export class BoardView implements IBoardView {
     // Stepping onto wasteland: the mover reaches the square, then dissolves (no strike, no impact).
     const wasted = !!move.wasted && !capture;
 
-    const jump = ch === 'walk';
+    // Rakaeli leaps like Walk (pieces in between never block him).
+    const rk = rakaeliStyle(mover.piece);
+    const jump = ch === 'walk' || rk !== null;
     const moveDur = jump ? ANIM.jump : slideDuration(move);
     const from = mover.root.position.clone();
     from.y = 0;
@@ -1612,9 +1614,16 @@ export class BoardView implements IBoardView {
     const fx = CHARACTER_FX[ch];
     const charge = ch === 'marki' && dist >= 2;
     const witch = ch === 'brutile';
-    const trail = jump || chain || witch;
+    // Base-form Rakaeli only sheds ash feathers (no ribbon); transformed he leaves a crimson ribbon.
+    const trail = (jump && rk !== 'ash') || chain || witch;
     const p0 = mover.root.position;
-    if (ch === 'sad') {
+    if (rk === 'awake') {
+      // Dark flame flaring under him as he takes off + a crimson glint.
+      this.rakFx.darkFlame(p0.x, TILE_TOP + 0.014, p0.z, 0.62, 460, now);
+      this.strike.glint(p0.x, 0.7, p0.z, 0.8, RAKAELI_AWAKE_FX.primary, 260, now);
+    } else if (rk === 'ash') {
+      this.dust.ring(p0.x, TILE_TOP + 0.05, p0.z, 6, 0.8, 0.36, 0.55, ASH_DUST, 0.5);
+    } else if (ch === 'sad') {
       this.strike.glint(p0.x - dirZ * 0.18, 1.05, p0.z + dirX * 0.18, 0.9, fx.primary, 300, now);
       for (let i = 0; i < 4; i++) {
         const a = i * 1.7 + now * 0.001;
@@ -1633,6 +1642,7 @@ export class BoardView implements IBoardView {
     if (trail) {
       this.camera.getWorldDirection(this.camDir);
       if (witch) this.strike.trailStart(fx.primary, fx.core, 0.36, 340, dirX, dirZ, this.camDir);
+      else if (rk === 'awake') this.strike.trailStart(RAKAELI_AWAKE_FX.primary, '#FF9A7A', 0.3, 360, dirX, dirZ, this.camDir);
       else this.strike.trailStart(jump ? fx.primary : '#D04BFF', jump ? fx.core : '#FFD6FA', jump ? 0.34 : 0.42, jump ? 300 : 260, dirX, dirZ, this.camDir);
     }
 
@@ -1671,6 +1681,8 @@ export class BoardView implements IBoardView {
         wasteFired: false,
         piecesAfter,
         hop: null,
+        rk,
+        nextFeather: rk ? 30 : Infinity,
         resolve,
       };
       this.requestRender();
@@ -1751,6 +1763,8 @@ export class BoardView implements IBoardView {
         wasteFired: false,
         piecesAfter,
         hop: { squares, stepMs: timing.stepMs, landMs: timing.landMs, arc: timing.arc, victims, landed: -1 },
+        rk: null,
+        nextFeather: Infinity,
         resolve,
       };
       this.requestRender();
@@ -1820,6 +1834,7 @@ export class BoardView implements IBoardView {
   /** Victim of a hop: white flash + shake, then the token burns away (like a strike's victim). */
   private dissolveHopVictim(a: RunningAnim, v: HopVictim, tk: number): void {
     const cv = v.visual!;
+    if (cv.awake) this.fadeVictimMarks(cv, clamp01((tk - HIT_MS) / DEATH_MS));
     if (!v.deathFired && tk >= HIT_MS) {
       v.deathFired = true;
       const act = cv.actor;
@@ -1841,6 +1856,208 @@ export class BoardView implements IBoardView {
     cv.token.scale.set(sw, 1, sw);
     const rs = Math.max(0.001, 1 - easeOutCubic(ck));
     cv.ring.scale.set(rs, 1, rs);
+  }
+
+  // ---------------------------------------------------------------- Rakaeli ("타천")
+
+  /**
+   * Play Rakaeli's transform ('on') or revert ('off') on `pieceId`'s token; resolves when done
+   * (immediately if the piece is not on the board, always on dispose). setPieces alone gives the
+   * same final look without the FX. Call it before (or in the same tick as) the setPieces that
+   * changes `awaken`, so the old look is never drawn in between.
+   */
+  playAwaken(pieceId: string, phase: AwakenPhase): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    const v = this.visuals.get(pieceId);
+    if (!v) return Promise.resolve();
+    const prev = this.awakening.get(pieceId);
+    if (prev) this.endAwaken(prev, null); // keep the look it reached; this call continues from it
+    if (phase === 'on') this.tokens.loadAwake(v.piece.character, v.piece.level);
+    const now = performance.now();
+    const reduced = this.reducedMotion || !this.idleAnim;
+    // 'on' starts from the base look and 'off' from the transformed one, unless a run was
+    // interrupted mid-way (then it continues from what is on screen).
+    const face0 = prev ? v.awakeFace : phase === 'on' ? 0 : 1;
+    const aura0 = prev ? v.awakeAura : phase === 'on' ? 0 : 1;
+    this.ensureMarks(v);
+    return new Promise<void>((resolve) => {
+      this.awakening.set(pieceId, { id: pieceId, phase, tl: awakenTimeline(phase, reduced), start: now, face0, aura0, pulsed: false, smoked: false, auto: false, resolve });
+      if (phase === 'on' && !reduced) {
+        // The blindfold catches fire: a hot glint at the eyes as the burn starts.
+        const p = v.root.position;
+        this.strike.glint(p.x, 0.62, p.z - 0.06, 0.9, AWAKEN_COLORS.ember, 320, now);
+      }
+      this.tickAwaken(now);
+      this.requestRender();
+    });
+  }
+
+  /** Advance every running transform / revert; true while any is running. */
+  private tickAwaken(now: number): boolean {
+    if (this.awakening.size === 0) return false;
+    for (const run of this.awakening.values()) {
+      const v = this.visuals.get(run.id) ?? null;
+      const t = now - run.start;
+      if (!v || t >= run.tl.duration) {
+        this.endAwaken(run, v);
+        continue;
+      }
+      const sm = sampleAwaken(run.phase, run.tl, Math.max(0, t), run.face0, run.aura0, this.awSample);
+      v.awakeFace = sm.face;
+      v.awakeAura = sm.aura;
+      v.tokenMat.uniforms.uBurn.value = sm.burn;
+      this.applyAwakeLook(v);
+      const p = v.root.position;
+      if (run.phase === 'on') this.rakFx.setWings(p.x, v.inner.position.y + TOKEN_Y - 0.03, p.z, sm.wingK, sm.wingA, now);
+      if (!run.pulsed && t >= run.tl.pulseAt) {
+        run.pulsed = true;
+        this.awakenPulse(v, now);
+      }
+      if (!run.smoked && t >= run.tl.smokeAt) {
+        run.smoked = true;
+        this.awakenSmoke(v, now);
+      }
+    }
+    this.recountAwake();
+    return this.awakening.size > 0;
+  }
+
+  /** Finish a run: settle its end look on `v` (null = keep the current look) and resolve it. */
+  private endAwaken(run: AwakenRun, v: PieceVisual | null): void {
+    if (this.awakening.get(run.id) !== run) return;
+    this.awakening.delete(run.id);
+    if (run.phase === 'on') this.rakFx.setWings(0, 0, 0, 0, 0, 0);
+    if (v) {
+      const k = run.phase === 'on' ? 1 : 0;
+      v.awakeFace = k;
+      v.awakeAura = k;
+      v.tokenMat.uniforms.uBurn.value = 0;
+      this.applyAwakeLook(v);
+    }
+    run.resolve();
+  }
+
+  /** Resolve every run (dispose / context loss): no frames may come to finish them. */
+  private settleAwaken(): void {
+    for (const run of [...this.awakening.values()]) this.endAwaken(run, this.visuals.get(run.id) ?? null);
+  }
+
+  /** The transform peaks: crimson pulse ring, embers, black feathers, a flash and a short shake. */
+  private awakenPulse(v: PieceVisual, now: number): void {
+    const p = v.root.position;
+    const ax = RAKAELI_AWAKE_FX;
+    const seed = now % 97;
+    this.strike.ground(0, GROUND_MODE.ring, p.x, TILE_TOP + 0.012, p.z, 1.35, ax.primary, ax.core, 560, now);
+    this.rakFx.darkFlame(p.x, TILE_TOP + 0.016, p.z, 0.95, 620, now);
+    this.sparks.burst(p.x, 0.65, p.z, 18, 3.2, ax.primary, seed);
+    this.sparks.burst(p.x, 0.5, p.z, 10, 2.4, ax.secondary, (seed + 31) % 97);
+    this.rakFx.featherBurst(p.x, 0.6, p.z, 8, 1.8, 0.36, 950, 0, now);
+    this.flashMat.color.set('#ffffff').lerp(this.tmpC.set(ax.primary), 0.6);
+    this.flash.position.set(p.x, 0.55, p.z);
+    this.flash.visible = true;
+    this.tCap = Math.max(this.tCap, now); // reuse the flash timeline (shock ring / burst stay hidden)
+    this.tShake = now;
+    this.shakeAmp = 1.3;
+    this.shakeMs = 200;
+  }
+
+  /** The transform ends: a dark smoke puff, a few black feathers drifting off, a dim ash ring. */
+  private awakenSmoke(v: PieceVisual, now: number): void {
+    const p = v.root.position;
+    // The puff rolls outward off the coin (the base face must read again as it swaps back).
+    this.dust.ring(p.x, TILE_TOP + 0.08, p.z, 12, 2.0, 0.48, 0.8, SMOKE_RAK, 0.4);
+    this.dust.ring(p.x, TILE_TOP + 0.1, p.z, 6, 1.7, 0.26, 0.8, ASH_DUST, 1.3);
+    this.rakFx.featherBurst(p.x, 0.5, p.z, 6, 1.0, 0.32, 1000, 0, now);
+    this.strike.ground(1, GROUND_MODE.ring, p.x, TILE_TOP + 0.012, p.z, 0.85, CHARACTER_FX.rakaeli.secondary, CHARACTER_FX.rakaeli.primary, 420, now);
+  }
+
+  /** Feathers shed along a Rakaeli leap (crimson-edged black when transformed, pale ash otherwise). */
+  private featherTrail(a: RunningAnim, t: number, now: number): void {
+    const awake = a.rk === 'awake';
+    a.nextFeather = t + (awake ? FEATHER_MS_AWAKE : FEATHER_MS_ASH);
+    const p = a.mover.root.position;
+    const n = (t / 34) | 0;
+    const side = n % 2 === 0 ? 1 : -1;
+    const ox = -a.dirZ * side * 0.2;
+    const oz = a.dirX * side * 0.2;
+    const y = a.mover.inner.position.y + 0.25;
+    const drift = awake ? 0.7 : 0.4;
+    this.rakFx.feather(p.x + ox - a.dirX * 0.2, y, p.z + oz - a.dirZ * 0.2, ox * drift * 2 - a.dirX * 0.5, 0.3, oz * drift * 2 - a.dirZ * 0.5, awake ? 0.34 : 0.28, awake ? 720 : 620, awake ? 0 : 1, Math.atan2(a.dirX, a.dirZ) + side * 0.9, side * (awake ? 3.2 : 2), now);
+  }
+
+  /** Landing of a Rakaeli leap (no capture): dark flame + feathers, or an ash puff. */
+  private rakaeliLanding(a: RunningAnim, now: number): void {
+    const at = a.strikeAt;
+    if (a.rk === 'awake') {
+      if (!a.capture) this.rakFx.darkFlame(at.x, TILE_TOP + 0.014, at.z, 0.78, 520, now);
+      this.rakFx.featherBurst(at.x, 0.45, at.z, 6, 1.4, 0.3, 760, 0, now);
+    } else {
+      this.strike.ground(1, GROUND_MODE.ring, at.x, TILE_TOP + 0.012, at.z, 0.85, CHARACTER_FX.rakaeli.primary, CHARACTER_FX.rakaeli.core, 380, now);
+      this.rakFx.featherBurst(at.x, 0.45, at.z, 4, 1.0, 0.26, 680, 1, now);
+    }
+  }
+
+  /** A struck transformed Rakaeli: the badge goes at once, the aura burns out with the token. */
+  private fadeVictimMarks(cv: PieceVisual, ck: number): void {
+    if (!cv.awake) return;
+    this.awakenMarks.setCount(cv.awake, 0);
+    this.awakenMarks.setAura(cv.awake, cv.awakeAura * (1 - ck));
+  }
+
+  /** Create the transform marks of a visual (once; kept until the visual goes). */
+  private ensureMarks(v: PieceVisual): AwakeMarks {
+    if (!v.awake) {
+      v.awake = this.awakenMarks.create();
+      v.inner.add(v.awake.group);
+    }
+    return v.awake;
+  }
+
+  /**
+   * Sync a visual's transform look to its piece (setPieces / a finished move). A matching running
+   * playAwaken keeps playing; `soft` (the mover of a finished move whose transform just ran out)
+   * fades out briefly instead of popping, so a playAwaken('off') right after continues from it.
+   */
+  private syncAwake(v: PieceVisual, soft: boolean): void {
+    const want = awakenOf(v.piece) > 0 ? 1 : 0;
+    const run = this.awakening.get(v.piece.id);
+    if (run) {
+      if ((run.phase === 'on') === (want === 1)) {
+        this.applyAwakeLook(v);
+        return;
+      }
+      this.endAwaken(run, v);
+    }
+    if (soft && want === 0 && v.awakeFace > 0 && !this.disposing) {
+      const tl = awakenTimeline('off', true);
+      this.awakening.set(v.piece.id, { id: v.piece.id, phase: 'off', tl, start: performance.now(), face0: v.awakeFace, aura0: v.awakeAura, pulsed: true, smoked: true, auto: true, resolve: () => undefined });
+      return;
+    }
+    if (want === 1 && isRakaeli(v.piece)) this.tokens.loadAwake(v.piece.character, v.piece.level);
+    v.awakeFace = want;
+    v.awakeAura = want;
+    v.tokenMat.uniforms.uBurn.value = 0;
+    this.applyAwakeLook(v);
+  }
+
+  /** Push a visual's transform look to its coin uniform, aura decal and countdown badge. */
+  private applyAwakeLook(v: PieceVisual): void {
+    v.tokenMat.uniforms.uAwake.value = v.awakeFace;
+    // The crimson aura stands in for the rarity ring while transformed (the purple epic glow under
+    // it would turn the aura pink); the ring comes back as the aura fades.
+    v.ring.visible = v.awakeAura < 0.5;
+    if (v.awakeFace <= 0 && v.awakeAura <= 0 && !v.awake) return;
+    const m = this.ensureMarks(v);
+    // The aura fades with the coin (view blend, drag ghost).
+    const vis = clamp01(v.tokenMat.uniforms.uOpacity.value / Math.max(0.001, v.piece.stun ? STUN_OPACITY : 1));
+    this.awakenMarks.setAura(m, v.awakeAura * vis);
+    this.awakenMarks.setCount(m, v.awakeFace >= 0.5 && vis > 0.5 ? awakenOf(v.piece) : 0);
+  }
+
+  private recountAwake(): void {
+    let n = 0;
+    for (const v of this.visuals.values()) if (v.awakeAura > 0) n++;
+    this.awakeCount = n;
   }
 
   /** Register the strike-impact listener (called once per capturing move, at the impact frame). */
@@ -2019,7 +2236,7 @@ export class BoardView implements IBoardView {
     this.requestRender();
   }
 
-  /** Wasteland squares (r * 12 + c, full list): scorched ground with glowing green cracks. */
+  /** Wasteland squares (r * BOARD_SIZE + c, full list): scorched ground with glowing green cracks. */
   setWaste(squares: number[]): void {
     if (this.disposed) return;
     this.wasteFx.setWaste(squares);
@@ -2204,7 +2421,12 @@ export class BoardView implements IBoardView {
     const to = mode === 'top' ? 1 : 0;
     if (to === this.viewTo && (this.tView >= 0 || this.viewT === to)) return;
     this.viewTo = to;
-    if (to === 1) for (const v of this.visuals.values()) this.tokens.load(v.piece.character, v.piece.level);
+    if (to === 1) {
+      for (const v of this.visuals.values()) {
+        this.tokens.load(v.piece.character, v.piece.level);
+        this.tokens.loadAwake(v.piece.character, v.piece.level);
+      }
+    }
     if (!animate || !this.idleAnim) {
       this.viewT = to;
       this.tView = -1;
@@ -2276,6 +2498,7 @@ export class BoardView implements IBoardView {
     canvas.removeEventListener('webglcontextlost', this.onContextLost);
     canvas.removeEventListener('webglcontextrestored', this.onContextRestored);
     document.removeEventListener('visibilitychange', this.onVisibility);
+    this.settleAwaken();
     for (const v of this.visuals.values()) this.removeVisual(v);
     this.visuals.clear();
     for (const v of this.fading) this.removeVisual(v);
@@ -2288,6 +2511,8 @@ export class BoardView implements IBoardView {
     this.stormFx.dispose();
     this.wasteFx.dispose();
     this.trapMarks.dispose();
+    this.rakFx.dispose();
+    this.awakenMarks.dispose();
     this.units?.dispose();
     this.units = null;
     this.dust.dispose();
@@ -2321,7 +2546,7 @@ export class BoardView implements IBoardView {
    * Sync the visuals to `pieces`. With `dissolve`, pieces that vanished while the storm is active
    * and stood in (or next to) a storm column are taken by the storm (dissolve) instead of popping.
    */
-  private syncPieces(pieces: Piece[], dissolve = false): void {
+  private syncPieces(pieces: Piece[], dissolve = false, softId: string | null = null): void {
     const seen = new Set<string>();
     for (const p of pieces) {
       seen.add(p.id);
@@ -2362,8 +2587,10 @@ export class BoardView implements IBoardView {
     for (const v of this.visuals.values()) {
       if (CHARACTER_RARITY[v.piece.character] === 'legendary') legend++;
       this.blendVisual(v); // stun dim follows the piece state
+      this.syncAwake(v, v.piece.id === softId);
     }
     this.legendaryCount = legend;
+    this.recountAwake();
     this.applyLift();
     this.applyTrapMarks();
   }
@@ -2391,6 +2618,7 @@ export class BoardView implements IBoardView {
     // A stunned piece (doll trap) is dimmed until it is free again.
     const stun = v.piece.stun ? STUN_OPACITY : 1;
     v.tokenMat.uniforms.uOpacity.value = (v.piece.id === this.draggingId ? tokenK * DRAG_SOURCE_OPACITY : tokenK) * stun;
+    if (v.awake) this.applyAwakeLook(v);
   }
 
   /** The storm takes a piece: death clip + magenta dissolve, sparks and a purple dust ring. */
@@ -2440,7 +2668,11 @@ export class BoardView implements IBoardView {
     token.renderOrder = 4;
     token.raycast = noRaycast;
     b.inner.add(token);
-    if (this.viewTo === 1 || this.viewT > 0) this.tokens.load(p.character, p.level);
+    if (this.viewTo === 1 || this.viewT > 0) {
+      this.tokens.load(p.character, p.level);
+      // Rakaeli's transformed face is preloaded with his base face so the swap never waits on it.
+      this.tokens.loadAwake(p.character, p.level);
+    }
     const v: PieceVisual = {
       piece: p,
       root: b.root,
@@ -2455,6 +2687,9 @@ export class BoardView implements IBoardView {
       token,
       tokenMat,
       topLift: 0,
+      awake: null,
+      awakeFace: 0,
+      awakeAura: 0,
     };
     // Top-down coins carry their own rim / thickness: the 3D puck under them is never seen.
     if (this.topOnly) b.puck.visible = false;
@@ -2514,6 +2749,10 @@ export class BoardView implements IBoardView {
     v.actor?.dispose(); // geometry/materials are shared templates -> freed by the library
     v.actor = null;
     v.tokenMat.dispose(); // per-piece uniforms (the face texture is shared, freed by the token kit)
+    if (v.awake) {
+      this.awakenMarks.release(v.awake);
+      v.awake = null;
+    }
     if (this.soulTarget === v) this.soulTarget = null;
   }
 
@@ -2767,7 +3006,8 @@ export class BoardView implements IBoardView {
     if (this.disposed) return;
     const moving = this.tickAnimation(now);
     const casting = this.tickSkill(now);
-    const animating = moving || casting;
+    const awakening = this.tickAwaken(now);
+    const animating = moving || casting || awakening;
     const viewMoving = this.tickView(now);
     const glowing = this.tickGlow(now);
     const fxActive = this.updateFx(now) || viewMoving || glowing;
@@ -2789,8 +3029,10 @@ export class BoardView implements IBoardView {
     const wasteLoop = this.idleAnim && this.wasteFx.animated && !document.hidden;
     // Doll traps wobble gently (~30 fps idle tick; resting with prefers-reduced-motion).
     const trapLoop = this.idleAnim && this.trapMarks.hasDolls && !document.hidden;
+    // Rakaeli's transform aura flickers at the same light rate (static with reduced motion).
+    const awakeLoop = this.idleAnim && this.awakeCount > 0 && !document.hidden;
     const scanLoop = this.tickScan(now);
-    if (!busy && (this.pulsing || idleLoop || stormLoop || ringLoop || wasteLoop || trapLoop || scanLoop)) {
+    if (!busy && (this.pulsing || idleLoop || stormLoop || ringLoop || wasteLoop || trapLoop || awakeLoop || scanLoop)) {
       const cap = this.pulsing ? IDLE_FRAME_MS : idleLoop ? IDLE_ANIM_FRAME_MS : IDLE_FRAME_MS;
       if (now - this.lastFrame < cap) {
         this.requestRender(); // idle pulse / idle loops are throttled; skip drawing this tick
@@ -2816,11 +3058,12 @@ export class BoardView implements IBoardView {
     }
     if (stormLoop) this.stormFx.update(now / 1000);
     if (this.trapMarks.hasDolls) this.trapMarks.update(now, trapLoop);
+    if (this.idleAnim) this.awakenMarks.update(now / 1000);
     this.lastFrame = now;
     this.updatePulse(now);
     if (this.topOnly) this.applyTopLift();
     this.renderer.render(this.scene, this.camera);
-    if (busy || this.pulsing || idleLoop || stormLoop || ringLoop || wasteLoop || trapLoop || scanLoop) {
+    if (busy || this.pulsing || idleLoop || stormLoop || ringLoop || wasteLoop || trapLoop || awakeLoop || scanLoop) {
       this.requestRender();
     } else {
       this.lastTick = 0;
@@ -2889,18 +3132,21 @@ export class BoardView implements IBoardView {
     }
     if (a.trail && t <= a.moveDur + 16) this.strike.trailPush(root.position.x, inner.position.y + (a.jump ? 0.62 : 0.55), root.position.z, now);
     if (t < a.moveDur && t >= a.nextDust) this.footstep(a, t);
+    if (a.rk && t < a.moveDur && t >= a.nextFeather) this.featherTrail(a, t, now);
     if (a.wasted && t >= a.moveDur) {
       this.tickWasted(a, t, now);
       return true;
     }
     if (!a.landed && t >= a.moveDur) {
       a.landed = true;
-      const fx = CHARACTER_FX[a.mover.piece.character];
+      const fx = a.rk === 'awake' ? RAKAELI_AWAKE_FX : CHARACTER_FX[a.mover.piece.character];
       this.startLandFx(a.strikeAt, a.jump ? fx.primary : TEAM_COLORS[a.mover.piece.owner].glow, now);
       const big = a.jump || a.charge;
-      this.dust.ring(a.strikeAt.x, TILE_TOP + 0.04, a.strikeAt.z, a.jump ? 12 : big ? 10 : 6, a.jump ? 1.8 : big ? 1.5 : 1.0, big ? 0.55 : 0.38, 0.6, DUST, k);
+      const dustCol = a.rk === 'awake' ? SMOKE_RAK : a.rk === 'ash' ? ASH_DUST : DUST;
+      this.dust.ring(a.strikeAt.x, TILE_TOP + 0.04, a.strikeAt.z, a.jump ? 12 : big ? 10 : 6, a.jump ? 1.8 : big ? 1.5 : 1.0, big ? 0.55 : 0.38, 0.6, dustCol, k);
       if (a.trail) this.strike.trailEnd();
-      if (a.jump) this.strike.ground(1, GROUND_MODE.ring, a.strikeAt.x, TILE_TOP + 0.012, a.strikeAt.z, 0.95, fx.secondary, fx.core, 380, now);
+      if (a.rk) this.rakaeliLanding(a, now);
+      else if (a.jump) this.strike.ground(1, GROUND_MODE.ring, a.strikeAt.x, TILE_TOP + 0.012, a.strikeAt.z, 0.95, fx.secondary, fx.core, 380, now);
       if (a.mover.piece.character === 'brutile' && !a.capture) {
         this.strike.ground(1, GROUND_MODE.ring, a.strikeAt.x, TILE_TOP + 0.012, a.strikeAt.z, 0.8, fx.primary, fx.core, 380, now);
         this.sparks.burst(a.strikeAt.x, 0.3, a.strikeAt.z, 8, 1.8, fx.primary, now % 97);
@@ -2948,6 +3194,7 @@ export class BoardView implements IBoardView {
         const sk = clamp01((ck - 0.3) / 0.7);
         cv.inner.scale.setScalar(Math.max(0.001, 1 - easeOutCubic(sk)));
       }
+      if (cv.awake) this.fadeVictimMarks(cv, ck);
       // Token: white hit flash + shake, then a burning dissolve that swells slightly (shatter).
       const u = cv.tokenMat.uniforms;
       u.uFlash.value = Math.max(0, 1 - tk / 160) * 0.85;
@@ -2978,7 +3225,31 @@ export class BoardView implements IBoardView {
     let shake = 1;
     let shakeMs: number = ANIM.shake;
     let flash = 0.45;
-    switch (ch) {
+    let col = fx.primary;
+    if (a.rk === 'awake') {
+      // Dark flame: a smoky black bloom under crimson tongues, crimson / violet embers, black
+      // feathers flung out, dark smoke; the victim burns away on a crimson edge.
+      const ax = RAKAELI_AWAKE_FX;
+      col = ax.primary;
+      this.rakFx.darkFlame(at.x, gy + 0.004, at.z, 1.25, 720, now);
+      this.strike.ground(0, GROUND_MODE.ring, at.x, gy, at.z, 1.15, ax.primary, ax.core, 460, now);
+      this.sparks.burst(at.x, 0.75, at.z, 18 + mp.level * 3, 3.6, ax.primary, seed);
+      this.sparks.burst(at.x, 0.55, at.z, 10, 2.6, ax.secondary, (seed + 31) % 97);
+      this.rakFx.featherBurst(at.x, 0.55, at.z, 10, 2.2, 0.36, 900, 0, now);
+      this.dust.ring(at.x, TILE_TOP + 0.08, at.z, 12, 1.5, 0.6, 0.9, SMOKE_RAK, 0.3);
+      if (a.captured) (a.captured.tokenMat.uniforms.uEdge.value as THREE.Color).set(ax.primary);
+      shake = this.reducedMotion ? 0.6 : 1.9;
+      shakeMs = 200;
+      flash = 0.7;
+    } else if (a.rk === 'ash') {
+      // Base form: a dim halo-gold ring and a soft burst of pale ash feathers.
+      this.strike.ground(0, GROUND_MODE.sigil, at.x, gy, at.z, 0.95, fx.secondary, fx.primary, 560, now);
+      this.sparks.burst(at.x, 0.7, at.z, 12, 2.8, fx.primary, seed);
+      this.rakFx.featherBurst(at.x, 0.55, at.z, 8, 1.6, 0.32, 820, 1, now);
+      this.dust.ring(at.x, TILE_TOP + 0.06, at.z, 10, 1.2, 0.5, 0.8, ASH_DUST, 0.35);
+      if (a.captured) (a.captured.tokenMat.uniforms.uEdge.value as THREE.Color).set(fx.primary);
+      flash = 0.25;
+    } else switch (ch) {
       case 'sad':
         this.strike.slash(at.x - a.dirX * 0.1, 0.85, at.z - a.dirZ * 0.1, 2.3, fx.primary, fx.core, a.dirX < 0, now);
         this.strike.pillar(at.x, TILE_TOP, at.z, fx.primary, fx.secondary, fx.core, false, 600, now);
@@ -3042,7 +3313,7 @@ export class BoardView implements IBoardView {
         shake = this.reducedMotion ? 0.5 : 1.4;
         break;
     }
-    this.startCaptureFx(at, fx.primary, flash, now, shake, shakeMs);
+    this.startCaptureFx(at, col, flash, now, shake, shakeMs);
     const act = a.captured?.actor;
     if (act?.has('hit')) act.play('hit', { once: true, hold: true, fade: 0.04, timeScale: Math.min(2.5, act.clipDuration('hit') / 0.45) });
     this.emitImpact(a.move);
@@ -3136,7 +3407,7 @@ export class BoardView implements IBoardView {
     dz /= d;
     const y = TILE_TOP + 0.03;
     if (a.jump) {
-      this.dust.ring(p.x, y, p.z, 7, 1.1, 0.36, 0.5, DUST, 0);
+      this.dust.ring(p.x, y, p.z, 7, 1.1, 0.36, 0.5, a.rk === 'awake' ? SMOKE_RAK : a.rk === 'ash' ? ASH_DUST : DUST, 0);
       return;
     }
     const side = ((t / 70) | 0) % 2 === 0 ? 1 : -1;
@@ -3202,6 +3473,7 @@ export class BoardView implements IBoardView {
     }
     if (this.strike.update(now, this.camera)) active = true;
     else this.soulTarget = null;
+    if (this.rakFx.update(now)) active = true;
 
     if (this.tSpawn >= 0) {
       const el = now - this.tSpawn;
@@ -3381,7 +3653,8 @@ export class BoardView implements IBoardView {
       if (!natural) a.mover.actor.face(a.mover.actor.facing, 0);
       a.mover.actor.idle(natural ? 0.2 : 0);
     }
-    this.syncPieces(a.piecesAfter, true);
+    // A transformed mover whose transform ran out with this move fades back instead of popping.
+    this.syncPieces(a.piecesAfter, true, natural ? a.mover.piece.id : null);
     this.requestRender();
     a.resolve();
   }
@@ -3400,6 +3673,7 @@ export class BoardView implements IBoardView {
     this.dust.clear();
     this.sparks.clear();
     this.strike.clear();
+    this.rakFx.clear();
     this.soulTarget = null;
     this.units?.setDissolve(0);
     if (this.tSpawn >= 0) {
@@ -3446,6 +3720,7 @@ export class BoardView implements IBoardView {
     // No frames are guaranteed until the context comes back (it may never): settle any running
     // move animation now so the game (which awaits animateMove) cannot stall in 'animating'.
     this.finishAnimation(false);
+    this.settleAwaken();
   };
 
   private readonly onContextRestored = (): void => {
@@ -3455,6 +3730,9 @@ export class BoardView implements IBoardView {
       const { w, h } = containerSize(this.container);
       this.paintArena(w, h, true);
     }
+    // The Rakaeli FX canvases were freed after upload too.
+    this.awakenMarks.restore();
+    this.rakFx.restore();
     this.requestRender();
   };
 

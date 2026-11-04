@@ -24,15 +24,46 @@
  * a poison bubble per square (~30 fps, static with reduced motion). setSkillPreview draws the
  * targeting overlay, animateSkill the cast (rune, green bolt, squares cracking open), wasted moves
  * dissolve the mover in green, and deadly move targets show a skull instead of the dot.
+ *
+ * Rakaeli (awakenFx.ts, same timeline as the WebGL board): base-form leaps shed pale ash feathers;
+ * transformed (`Piece.awaken` > 0) his coin shows the awake face (the base face tinted crimson if
+ * that art is missing), a flickering crimson / violet aura with embers (cached sprites, ~30 fps
+ * idle, static with reduced motion) and the countdown badge; his moves leave crimson feathers and
+ * a crimson ribbon, captures burst in a dark flame. playAwaken plays the transform / revert.
  */
 import { BOARD_SIZE, STORM_FULL_STEPS, ZONE_DEPTH } from '../engine/types';
 import type { CharacterId, Level, Move, Piece, PlayerId, Pos, Trap } from '../engine/types';
 import type { BoardHighlights, IBoardView, ScreenRect, SkillPreview } from './types';
-import { ANIM, BOARD_COLORS, CHARACTER_FX, CHARACTER_RARITY, RARITY_RING, TEAM_COLORS, WASTE_COLORS } from './palette';
+import { ANIM, BOARD_COLORS, CHARACTER_FX, CHARACTER_RARITY, RAKAELI_AWAKE_FX, RARITY_RING, TEAM_COLORS, WASTE_COLORS } from './palette';
 import { STORM_COLORS } from './storm';
 import { wasteMask } from './waste';
 import { Waste2DSprites, wasteVariant } from './waste2d';
 import { DOLL_CORNER_OFFSET, DOLL_CORNER_SIZE, DOLL_SIZE, STUN_BOX, dollSprite, stunSprite, wobbleAngle } from './trapFx';
+import {
+  AURA_BOX,
+  AWAKEN_COLORS,
+  AWAKE_TINT,
+  BADGE_BOX,
+  BADGE_OFFSET,
+  EMBER_COUNT,
+  auraSmokeSprite,
+  auraSprite,
+  awakeFaceUrl,
+  awakenOf,
+  awakenTimeline,
+  badgeSprite,
+  clearAwakenSprites,
+  emberAt,
+  emberSprite,
+  featherSprite,
+  isRakaeli,
+  makeAwakenSample,
+  rakaeliStyle,
+  sampleAwaken,
+  smokeSprite,
+  wingSprite,
+} from './awakenFx';
+import type { AwakenPhase, AwakenTimeline, FeatherTone, RakaeliStyle } from './awakenFx';
 import {
   clamp01,
   containerSize,
@@ -161,8 +192,49 @@ interface Anim2D {
   piecesAfter: Piece[];
   /** Picker's hop-through (square by square), or null for every other move. */
   hop: Hop2D | null;
+  /** Rakaeli's move style (crimson feathers when transformed, pale ash otherwise) or null. */
+  rk: RakaeliStyle | null;
+  nextFeather: number;
   resolve: () => void;
 }
+
+/** A running playAwaken (or the automatic short revert after a transformed piece's last move). */
+interface AwakenRun2D {
+  id: string;
+  phase: AwakenPhase;
+  tl: AwakenTimeline;
+  start: number;
+  face0: number;
+  aura0: number;
+  pulsed: boolean;
+  smoked: boolean;
+  resolve: () => void;
+}
+
+/** Shown transform look of a piece (awake face blend, aura, blindfold burn; 0..1). */
+interface AwakeLook {
+  face: number;
+  aura: number;
+  burn: number;
+}
+
+/** A feather in flight, in screen cell units (x right / y down from the board origin). */
+interface Feather2D {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  rot: number;
+  spin: number;
+  size: number;
+  t0: number;
+  life: number;
+  tone: FeatherTone;
+}
+
+const FEATHER_POOL = 36;
+const FEATHER_MS_AWAKE = 34;
+const FEATHER_MS_ASH = 75;
 
 /** Picker's hop: landing squares in order, timing, and the victims struck on landing. */
 interface Hop2D {
@@ -179,7 +251,15 @@ const faceImages = new Map<string, HTMLImageElement>();
 const faceWaiters = new Set<() => void>();
 
 function faceImage(character: CharacterId, level: Level): HTMLImageElement | null {
-  const url = faceUrl(character, level);
+  return imageAt(faceUrl(character, level));
+}
+
+/** Rakaeli's transformed face (null while loading or missing: the base face is tinted instead). */
+function awakeImage(level: Level): HTMLImageElement | null {
+  return imageAt(awakeFaceUrl(level));
+}
+
+function imageAt(url: string): HTMLImageElement | null {
   let img = faceImages.get(url);
   if (!img) {
     if (typeof Image === 'undefined') return null;
@@ -279,6 +359,21 @@ export class Board2DView implements IBoardView {
   /** Bolt-impact flash at the area centre (start time) and cast sparks. */
   private tSkillHit = -1;
   private readonly skillSparks: { x: number; y: number; a: number; v: number; t0: number }[] = [];
+  /** Rakaeli: running transforms, looks that differ from the piece data, feathers, one-shot FX. */
+  private readonly awRuns = new Map<string, AwakenRun2D>();
+  private readonly awLook = new Map<string, AwakeLook>();
+  private readonly dataLook: AwakeLook = { face: 0, aura: 0, burn: 0 };
+  private readonly awSample = makeAwakenSample();
+  private readonly ember = { r: 0, a: 0, s: 0, k: 0 };
+  private wing = { id: '', k: 0, a: 0 };
+  private readonly feathers: Feather2D[] = [];
+  private featherNext = 0;
+  private lastFeatherT = 0;
+  /** Dark flame (transformed capture / take-off / landing), transform pulse and revert smoke. */
+  private dark = { t0: -1, dur: 1, x: 0, y: 0, r: 1 };
+  private awPulse = { t0: -1, x: 0, y: 0 };
+  private awSmoke = { t0: -1, x: 0, y: 0 };
+  private capRak: RakaeliStyle | null = null;
   private readonly onFaceLoaded = (): void => {
     this.sprites.clear();
     this.requestRender();
@@ -320,9 +415,370 @@ export class Board2DView implements IBoardView {
     this.requestRender();
   }
 
-  private setPieceList(list: Piece[]): void {
+  /**
+   * Replace the piece list. Transform looks follow the data (a matching running playAwaken keeps
+   * playing); `softId` = the mover of a finished move: if its transform just ran out, it fades out
+   * briefly instead of popping (a playAwaken('off') right after continues from there).
+   */
+  private setPieceList(list: Piece[], softId: string | null = null): void {
+    const before = softId ? this.pieces.find((p) => p.id === softId) : undefined;
+    const softFace = before ? this.lookOf(before).face : 0;
+    const softAura = before ? this.lookOf(before).aura : 0;
     this.pieces = list;
     this.hasLegendary = list.some((p) => CHARACTER_RARITY[p.character] === 'legendary');
+    for (const run of [...this.awRuns.values()]) {
+      const p = list.find((q) => q.id === run.id);
+      if (!p || (run.phase === 'on') !== awakenOf(p) > 0) this.endRun(run, false);
+    }
+    for (const id of [...this.awLook.keys()]) if (!this.awRuns.has(id)) this.awLook.delete(id);
+    const after = softId ? list.find((p) => p.id === softId) : undefined;
+    if (after && softFace > 0 && awakenOf(after) === 0 && !this.awRuns.has(after.id) && !this.disposing) {
+      this.awRuns.set(after.id, { id: after.id, phase: 'off', tl: awakenTimeline('off', true), start: performance.now(), face0: softFace, aura0: softAura, pulsed: true, smoked: true, resolve: () => undefined });
+      this.awLook.set(after.id, { face: softFace, aura: softAura, burn: 0 });
+    }
+    // Preload Rakaeli's transformed face so the swap never waits on it.
+    for (const p of list) if (isRakaeli(p)) awakeImage(p.level);
+  }
+
+  // ---------------------------------------------------------------- Rakaeli ("타천")
+
+  /** See IBoardView.playAwaken. Same timeline as the WebGL board (awakenFx.ts). */
+  playAwaken(pieceId: string, phase: AwakenPhase): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    const p = this.pieces.find((q) => q.id === pieceId);
+    if (!p) return Promise.resolve();
+    const prev = this.awRuns.get(pieceId);
+    if (prev) this.endRun(prev, false);
+    const cur = this.lookOf(p);
+    const face0 = prev ? cur.face : phase === 'on' ? 0 : 1;
+    const aura0 = prev ? cur.aura : phase === 'on' ? 0 : 1;
+    if (phase === 'on' && isRakaeli(p)) awakeImage(p.level);
+    const now = performance.now();
+    if (phase === 'on' && !this.reducedMotion) {
+      this.tGlint = now;
+      this.glintAt = { x: this.cx(p.pos.c), y: this.cy(p.pos.r) - this.layout.cell * 0.05 };
+      this.glintColor = AWAKEN_COLORS.ember;
+    }
+    return new Promise<void>((resolve) => {
+      this.awRuns.set(pieceId, { id: pieceId, phase, tl: awakenTimeline(phase, this.reducedMotion), start: now, face0, aura0, pulsed: false, smoked: false, resolve });
+      this.awLook.set(pieceId, { face: face0, aura: aura0, burn: 0 });
+      this.requestRender();
+    });
+  }
+
+  /** Finish a run: `settle` = jump to its end look (held until the next piece sync); resolve it. */
+  private endRun(run: AwakenRun2D, settle: boolean): void {
+    if (this.awRuns.get(run.id) !== run) return;
+    this.awRuns.delete(run.id);
+    if (this.wing.id === run.id) this.wing.a = 0;
+    const l = this.awLook.get(run.id);
+    if (l) {
+      if (settle) {
+        l.face = l.aura = run.phase === 'on' ? 1 : 0;
+      }
+      l.burn = 0;
+    }
+    run.resolve();
+  }
+
+  private tickAwaken(now: number): boolean {
+    if (this.awRuns.size === 0) return false;
+    for (const run of this.awRuns.values()) {
+      const p = this.pieces.find((q) => q.id === run.id);
+      const t = now - run.start;
+      if (!p || t >= run.tl.duration) {
+        this.endRun(run, true);
+        continue;
+      }
+      const sm = sampleAwaken(run.phase, run.tl, Math.max(0, t), run.face0, run.aura0, this.awSample);
+      let l = this.awLook.get(run.id);
+      if (!l) {
+        l = { face: 0, aura: 0, burn: 0 };
+        this.awLook.set(run.id, l);
+      }
+      l.face = sm.face;
+      l.aura = sm.aura;
+      l.burn = sm.burn;
+      if (run.phase === 'on') {
+        this.wing.id = run.id;
+        this.wing.k = sm.wingK;
+        this.wing.a = sm.wingA;
+      }
+      const x = p.pos.c + 0.5;
+      const y = BOARD_SIZE - 0.5 - p.pos.r;
+      if (!run.pulsed && t >= run.tl.pulseAt) {
+        run.pulsed = true;
+        this.awPulse = { t0: now, x, y };
+        this.darkFlame(x, y, 0.95, 620, now);
+        this.featherBurst(x, y, 8, 1.8, 0.36, 950, 0, now);
+        this.tShake = now;
+        this.shakeAmp = 1.3;
+        this.shakeMs = 200;
+      }
+      if (!run.smoked && t >= run.tl.smokeAt) {
+        run.smoked = true;
+        this.awSmoke = { t0: now, x, y };
+        this.featherBurst(x, y, 6, 1.0, 0.32, 1000, 0, now);
+      }
+    }
+    return this.awRuns.size > 0;
+  }
+
+  /** Shown transform look of `p` (a shared scratch object when it simply follows the data). */
+  private lookOf(p: Piece): AwakeLook {
+    const l = this.awLook.get(p.id);
+    if (l) return l;
+    const k = awakenOf(p) > 0 ? 1 : 0;
+    this.dataLook.face = k;
+    this.dataLook.aura = k;
+    this.dataLook.burn = 0;
+    return this.dataLook;
+  }
+
+  /** Any transform aura on the board (keeps the light idle tick alive). */
+  private get awakeOnBoard(): boolean {
+    for (const p of this.pieces) if (this.lookOf(p).aura > 0) return true;
+    return false;
+  }
+
+  private feather(x: number, y: number, vx: number, vy: number, size: number, life: number, tone: FeatherTone, rot: number, spin: number, now: number): void {
+    const f: Feather2D = this.feathers.length < FEATHER_POOL ? { x, y, vx, vy, rot, spin, size, t0: now, life, tone } : this.feathers[this.featherNext];
+    if (this.feathers.length < FEATHER_POOL) this.feathers.push(f);
+    else {
+      this.featherNext = (this.featherNext + 1) % FEATHER_POOL;
+      Object.assign(f, { x, y, vx, vy, rot, spin, size, t0: now, life, tone });
+    }
+  }
+
+  private featherBurst(x: number, y: number, n: number, speed: number, size: number, life: number, tone: FeatherTone, now: number): void {
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + Math.sin(now * 0.013 + i * 2.3) * 0.4;
+      const v = speed * (0.7 + 0.3 * Math.sin(i * 5.1 + now));
+      this.feather(x + Math.cos(a) * 0.15, y + Math.sin(a) * 0.15, Math.cos(a) * v, Math.sin(a) * v, size * (0.85 + 0.15 * (i % 3)), life, tone, a + Math.PI / 2, (i % 2 ? 1 : -1) * (1.5 + (i % 3)), now);
+    }
+  }
+
+  private darkFlame(x: number, y: number, r: number, dur: number, now: number): void {
+    this.dark = { t0: now, dur, x, y, r };
+  }
+
+  /** Transform aura under a coin at (x, y): two flickering flame-ring layers + rising embers. */
+  private drawAura(x: number, y: number, k: number, now: number): void {
+    const ctx = this.ctx;
+    const cell = this.layout.cell;
+    const S = cell * AURA_BOX;
+    const px = S * this.dpr;
+    const t = this.reducedMotion ? 0 : now / 1000;
+    ctx.save();
+    const a0 = ctx.globalAlpha;
+    // Smoky dark halo (normal blending: dims the rarity glow under it), then the flames on top.
+    ctx.globalAlpha = a0 * k * (0.9 + 0.1 * Math.sin(t * 4.1));
+    ctx.drawImage(auraSmokeSprite(px), x - S / 2, y - S / 2, S, S);
+    ctx.globalCompositeOperation = 'lighter';
+    for (let layer = 0; layer < 2; layer++) {
+      const fl = layer === 0 ? 0.85 + 0.15 * Math.sin(t * 7.3) * Math.sin(t * 3.1 + 1) : 0.55 + 0.45 * Math.sin(t * 5.1 + 2) * Math.sin(t * 2.3);
+      ctx.globalAlpha = a0 * k * fl;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(layer === 0 ? t * 0.35 : -t * 0.5 + 1.3);
+      ctx.drawImage(auraSprite(px, layer as 0 | 1), -S / 2, -S / 2, S, S);
+      ctx.restore();
+    }
+    const ep = emberSprite(cell * 0.3 * this.dpr);
+    const e = this.ember;
+    for (let i = 0; i < EMBER_COUNT; i++) {
+      emberAt(i, t, e);
+      if (e.k <= 0.01) continue;
+      ctx.globalAlpha = a0 * k * Math.min(1, e.k);
+      const d = e.s * cell * 4.5;
+      ctx.drawImage(ep, x + Math.cos(e.a) * e.r * cell - d / 2, y + Math.sin(e.a) * e.r * cell - d / 2, d, d);
+    }
+    ctx.restore();
+  }
+
+  /** Flame wings unfolding from behind a coin at (x, y): `k` unfold, `a` opacity. */
+  private drawWings(x: number, y: number, k: number, a: number): void {
+    const ctx = this.ctx;
+    const cell = this.layout.cell;
+    const s = 0.45 + 0.6 * k;
+    const W = 1.6 * cell * s;
+    const H = W / 1.6;
+    const spr = wingSprite(1.6 * cell * 1.05 * this.dpr);
+    ctx.save();
+    ctx.globalAlpha *= a;
+    for (const side of [1, -1]) {
+      ctx.save();
+      ctx.translate(x + side * 0.17 * cell, y + 0.04 * cell);
+      ctx.scale(side, 1);
+      ctx.rotate(1.35 * (1 - k));
+      ctx.drawImage(spr, -0.06 * W, -0.55 * H, W, H);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  /** The blindfold burning away: a white-hot band across the eyes, its crimson edge racing out. */
+  private drawBurn(x: number, y: number, b: number, sx: number): void {
+    const ctx = this.ctx;
+    const cell = this.layout.cell;
+    const R = 0.385 * cell * sx;
+    const ty = y - 0.024 * cell;
+    const fade = 1 - clamp01((b - 0.65) / 0.35);
+    const w = R * b * 1.15;
+    if (w <= 0.5 || fade <= 0) return;
+    const by = ty - 0.14 * R;
+    const h = 0.13 * R;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, ty, R * 0.775, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createLinearGradient(x - w, 0, x + w, 0);
+    g.addColorStop(0, 'rgba(255,39,66,0)');
+    g.addColorStop(0.08, `rgba(255,60,40,${0.95 * fade})`);
+    g.addColorStop(0.3, `rgba(255,220,190,${0.8 * fade})`);
+    g.addColorStop(0.7, `rgba(255,220,190,${0.8 * fade})`);
+    g.addColorStop(0.92, `rgba(255,60,40,${0.95 * fade})`);
+    g.addColorStop(1, 'rgba(255,39,66,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(x - w, by - h, w * 2, h * 2);
+    ctx.restore();
+  }
+
+  /** Feathers, dark flame, the transform pulse and the revert smoke (over the pieces). */
+  private drawRakaeliFx(now: number): void {
+    const ctx = this.ctx;
+    const { x0, y0, cell } = this.layout;
+    const dt = this.lastFeatherT > 0 ? Math.min(0.05, Math.max(0, (now - this.lastFeatherT) / 1000)) : 1 / 60;
+    this.lastFeatherT = now;
+    const d = this.dark;
+    if (d.t0 >= 0) {
+      const k = (now - d.t0) / d.dur;
+      if (k >= 1) d.t0 = -1;
+      else if (k >= 0) {
+        const x = x0 + d.x * cell;
+        const y = y0 + d.y * cell;
+        const e = easeOutCubic(k);
+        const fade = 1 - k;
+        const R = cell * d.r * (0.2 + 0.62 * e);
+        ctx.save();
+        // Smoky near-black bloom (darkens the board: normal blending).
+        const sg = ctx.createRadialGradient(x, y, R * 0.25, x, y, R * 1.3);
+        sg.addColorStop(0, `rgba(12,2,7,${0.2 * fade})`);
+        sg.addColorStop(0.55, `rgba(18,3,10,${0.78 * Math.pow(fade, 0.7)})`);
+        sg.addColorStop(1, 'rgba(18,3,10,0)');
+        ctx.fillStyle = sg;
+        ctx.beginPath();
+        ctx.arc(x, y, R * 1.3, 0, Math.PI * 2);
+        ctx.fill();
+        // Crimson / ember flame tongues licking off its rim.
+        ctx.globalCompositeOperation = 'lighter';
+        const el = now - d.t0;
+        for (let layer = 0; layer < 2; layer++) {
+          ctx.beginPath();
+          for (let i = 0; i <= 40; i++) {
+            const a = (i / 40) * Math.PI * 2;
+            const fl = Math.abs(Math.sin(a * 7 + el * 0.024 + layer * 1.9)) * Math.abs(Math.sin(a * 3 - el * 0.011)) * cell * 0.34 * fade;
+            const rr = R + fl;
+            if (i === 0) ctx.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+            else ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+          }
+          ctx.closePath();
+          ctx.strokeStyle = hexAlpha(layer === 0 ? AWAKEN_COLORS.crimson : AWAKEN_COLORS.ember, 0.9 * fade);
+          ctx.lineWidth = cell * (0.09 - layer * 0.04);
+          ctx.stroke();
+        }
+        if (k < 0.25) {
+          const fk = 1 - k / 0.25;
+          const fg = ctx.createRadialGradient(x, y, 0, x, y, cell * 0.5);
+          fg.addColorStop(0, `rgba(255,230,215,${0.85 * fk})`);
+          fg.addColorStop(1, 'rgba(255,39,66,0)');
+          ctx.fillStyle = fg;
+          ctx.fillRect(x - cell * 0.5, y - cell * 0.5, cell, cell);
+        }
+        ctx.restore();
+      }
+    }
+    const pu = this.awPulse;
+    if (pu.t0 >= 0) {
+      const k = (now - pu.t0) / 560;
+      if (k >= 1) pu.t0 = -1;
+      else if (k >= 0) {
+        const x = x0 + pu.x * cell;
+        const y = y0 + pu.y * cell;
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = hexAlpha(AWAKEN_COLORS.crimson, 0.9 * (1 - k));
+        ctx.lineWidth = cell * 0.07 * (1 - k * 0.5);
+        ctx.beginPath();
+        ctx.arc(x, y, cell * (0.35 + 1.0 * easeOutCubic(k)), 0, Math.PI * 2);
+        ctx.stroke();
+        if (k < 0.4) {
+          const fk = 1 - k / 0.4;
+          const g = ctx.createRadialGradient(x, y, 0, x, y, cell * 1.1);
+          g.addColorStop(0, `rgba(255,235,225,${0.8 * fk})`);
+          g.addColorStop(0.4, hexAlpha(AWAKEN_COLORS.crimson, 0.5 * fk));
+          g.addColorStop(1, hexAlpha(AWAKEN_COLORS.violet, 0));
+          ctx.fillStyle = g;
+          ctx.fillRect(x - cell * 1.1, y - cell * 1.1, cell * 2.2, cell * 2.2);
+        }
+        ctx.restore();
+      }
+    }
+    const sm = this.awSmoke;
+    if (sm.t0 >= 0) {
+      const k = (now - sm.t0) / 900;
+      if (k >= 1) sm.t0 = -1;
+      else if (k >= 0) {
+        const x = x0 + sm.x * cell;
+        const y = y0 + sm.y * cell;
+        const spr = smokeSprite(cell * 0.9 * this.dpr);
+        ctx.save();
+        for (let i = 0; i < 7; i++) {
+          const a = i * 0.9 + 0.4;
+          // Rolls outward off the coin so the base face reads again as it swaps back.
+          const dd = cell * (0.3 + 0.75 * easeOutCubic(k)) * (0.7 + 0.3 * ((i * 3) % 4) / 3);
+          const r = cell * (0.26 + 0.3 * k);
+          ctx.globalAlpha = 0.85 * (1 - k) * (1 - k);
+          ctx.drawImage(spr, x + Math.cos(a) * dd - r, y + Math.sin(a) * dd - r * 1.1 - k * cell * 0.25, r * 2, r * 2);
+        }
+        ctx.restore();
+      }
+    }
+    if (this.feathers.length > 0) {
+      const drag = Math.pow(0.12, dt);
+      const fh = cell * 0.4 * this.dpr;
+      ctx.save();
+      let alive = 0;
+      for (const f of this.feathers) {
+        const k = (now - f.t0) / f.life;
+        if (k >= 1 || k < 0) continue;
+        alive++;
+        f.vx *= drag;
+        f.vy *= drag;
+        f.x += f.vx * dt;
+        f.y += f.vy * dt + 0.08 * dt;
+        f.rot += f.spin * dt;
+        f.spin *= Math.pow(0.5, dt);
+        const h = cell * f.size * (1 - 0.25 * k);
+        const flut = 0.55 + 0.45 * Math.abs(Math.cos(f.rot * 3.1 + k * 9));
+        ctx.globalAlpha = Math.min(1, k * 8) * (1 - k * k);
+        ctx.save();
+        ctx.translate(x0 + (f.x + Math.sin(k * 7 + f.rot) * 0.05) * cell, y0 + f.y * cell);
+        ctx.rotate(f.rot);
+        ctx.drawImage(featherSprite(f.tone, fh), (-h / 4) * flut, -h / 2, (h / 2) * flut, h);
+        ctx.restore();
+      }
+      ctx.restore();
+      if (alive === 0) this.feathers.length = 0;
+    }
+  }
+
+  /** True while any Rakaeli one-shot effect is visible. */
+  private rakFxActive(now: number): boolean {
+    if (this.awRuns.size > 0 || this.dark.t0 >= 0 || this.awPulse.t0 >= 0 || this.awSmoke.t0 >= 0) return true;
+    for (const f of this.feathers) if (now - f.t0 < f.life) return true;
+    return false;
   }
 
   /**
@@ -337,7 +793,7 @@ export class Board2DView implements IBoardView {
     this.requestRender();
   }
 
-  /** Wasteland squares (r * 12 + c, full list). */
+  /** Wasteland squares (r * BOARD_SIZE + c, full list). */
   setWaste(squares: number[]): void {
     if (this.disposed) return;
     const next = squares.filter((q) => Number.isInteger(q) && q >= 0 && q < BOARD_SIZE * BOARD_SIZE);
@@ -487,7 +943,9 @@ export class Board2DView implements IBoardView {
     const captured = move.captureId ? (this.pieces.find((p) => p.id === move.captureId) ?? null) : null;
     const capture = !!move.captureId;
     const wasted = !!move.wasted && !capture;
-    const jump = ch === 'walk';
+    // Rakaeli leaps like Walk.
+    const rk = rakaeliStyle(mover);
+    const jump = ch === 'walk' || rk !== null;
     const moveDur = jump ? ANIM.jump : slideDuration(move);
     const dr = move.to.r - move.from.r;
     const dc = move.to.c - move.from.c;
@@ -514,7 +972,13 @@ export class Board2DView implements IBoardView {
       this.glintAt = { x: this.cx(mover.pos.c), y: this.cy(mover.pos.r) };
       this.glintColor = '#FF4FE8';
     }
-    this.trailColor = chain ? '#D04BFF' : ch === 'marki' ? '#FFE2B0' : fx.primary;
+    this.trailColor = chain ? '#D04BFF' : ch === 'marki' ? '#FFE2B0' : rk === 'awake' ? RAKAELI_AWAKE_FX.primary : fx.primary;
+    if (rk === 'awake') {
+      this.darkFlame(mover.pos.c + 0.5, BOARD_SIZE - 0.5 - mover.pos.r, 0.62, 460, now);
+      this.tGlint = now;
+      this.glintAt = { x: this.cx(mover.pos.c), y: this.cy(mover.pos.r) };
+      this.glintColor = RAKAELI_AWAKE_FX.primary;
+    }
     return new Promise<void>((resolve) => {
       this.anim = {
         move,
@@ -539,6 +1003,8 @@ export class Board2DView implements IBoardView {
         wasted,
         piecesAfter: clonePieces(piecesAfter),
         hop: null,
+        rk,
+        nextFeather: rk ? 30 : Infinity,
         resolve,
       };
       this.requestRender();
@@ -593,6 +1059,8 @@ export class Board2DView implements IBoardView {
         wasted,
         piecesAfter: clonePieces(piecesAfter),
         hop: { squares, stepMs: timing.stepMs, landMs: timing.landMs, arc: timing.arc, victims, landed: -1 },
+        rk: null,
+        nextFeather: Infinity,
         resolve,
       };
       this.requestRender();
@@ -624,6 +1092,7 @@ export class Board2DView implements IBoardView {
       this.shakeAmp = this.reducedMotion ? 0.5 : 1.3;
       this.shakeMs = ANIM.shake;
       this.soulTo = null;
+      this.capRak = null;
       this.emitImpact({ ...a.move, captureId: v.piece.id });
     }
   }
@@ -792,6 +1261,7 @@ export class Board2DView implements IBoardView {
     this.layout = { x0: (w - size) / 2, y0: (h - (BOARD_SIZE + topE + botE) * cell) / 2 + topE * cell, cell, pad };
     this.sprites.clear();
     this.wasteSprites.clear();
+    clearAwakenSprites();
     this.glowSprites[0] = null;
     this.glowSprites[1] = null;
     this.buildBoardLayer();
@@ -802,6 +1272,7 @@ export class Board2DView implements IBoardView {
     if (this.disposed) return;
     this.disposing = true;
     this.finishAnimation(false);
+    for (const run of [...this.awRuns.values()]) this.endRun(run, true);
     this.disposed = true;
     this.impactCb = null;
     faceWaiters.delete(this.onFaceLoaded);
@@ -826,6 +1297,7 @@ export class Board2DView implements IBoardView {
     this.glowSprites[1] = null;
     this.sprites.clear();
     this.wasteSprites.clear();
+    clearAwakenSprites();
     this.canvas.remove();
     this.pieces = [];
     this.cellCb = null;
@@ -899,7 +1371,8 @@ export class Board2DView implements IBoardView {
       this.trail.length > 0 ||
       this.fading.length > 0 ||
       (this.tSkillHit >= 0 && now - this.tSkillHit < 520) ||
-      this.skillSparks.length > 0
+      this.skillSparks.length > 0 ||
+      this.rakFxActive(now)
     );
   }
 
@@ -910,12 +1383,15 @@ export class Board2DView implements IBoardView {
     if (this.disposed) return;
     if (this.anim) this.tickAnim(now);
     this.tickSkill(now);
+    this.tickAwaken(now);
     this.tickGlow(now);
     const busy = !!this.anim || !!this.skill || this.fxActive(now);
     const ringLoop = this.hasLegendary && !this.reducedMotion && !document.hidden;
     // Wasteland glow / bubbles and the targeting ghost breathe at <= ~30 fps (static if reduced motion).
     const wasteLoop = !this.reducedMotion && !document.hidden && (this.waste.size > 0 || this.traps.length > 0 || this.anchors.length > 0 || this.preview !== null);
-    const loop = this.pulsing || ringLoop || wasteLoop || this.storm > 0 || (this.stormActive && this.stormNext !== null && this.stormNext <= 2);
+    // Rakaeli's transform aura flickers at the same light rate (static with reduced motion).
+    const awakeLoop = !this.reducedMotion && !document.hidden && this.awakeOnBoard;
+    const loop = this.pulsing || ringLoop || wasteLoop || awakeLoop || this.storm > 0 || (this.stormActive && this.stormNext !== null && this.stormNext <= 2);
     if (!busy && loop && now - this.lastFrame < IDLE_FRAME_MS) {
       this.requestRender();
       return;
@@ -942,7 +1418,21 @@ export class Board2DView implements IBoardView {
       this.tLand = now;
       this.landAt = { ...a.strike };
       const m = this.pieces.find((p) => p.id === a.moverId);
-      this.landColor = a.wasted ? WASTE_COLORS.glow : a.jump ? CHARACTER_FX.walk.primary : TEAM_COLORS[m ? m.owner : 0].glow;
+      this.landColor = a.wasted
+        ? WASTE_COLORS.glow
+        : a.rk === 'awake'
+          ? RAKAELI_AWAKE_FX.primary
+          : a.rk === 'ash'
+            ? CHARACTER_FX.rakaeli.primary
+            : a.jump
+              ? CHARACTER_FX.walk.primary
+              : TEAM_COLORS[m ? m.owner : 0].glow;
+      if (a.rk && !a.wasted) {
+        const x = a.strike.c + 0.5;
+        const y = BOARD_SIZE - 0.5 - a.strike.r;
+        if (a.rk === 'awake' && !a.capture) this.darkFlame(x, y, 0.78, 520, now);
+        this.featherBurst(x, y, a.rk === 'awake' ? 6 : 4, a.rk === 'awake' ? 1.4 : 1.0, a.rk === 'awake' ? 0.3 : 0.26, 720, a.rk === 'awake' ? 0 : 1, now);
+      }
     }
     if (a.capture && !a.impactFired && t >= a.impactAt) {
       a.impactFired = true;
@@ -969,6 +1459,20 @@ export class Board2DView implements IBoardView {
     this.shakeMs = a.character === 'marki' ? 260 : ANIM.shake;
     this.soulTo = a.character === 'insaner' ? a.moverId : null;
     if (a.character === 'insaner') this.lastCapture = { id: a.moverId, t: now };
+    this.capRak = a.rk;
+    if (a.rk) {
+      const x = this.capAt.c + 0.5;
+      const y = BOARD_SIZE - 0.5 - this.capAt.r;
+      if (a.rk === 'awake') {
+        // Dark flame: a smoky black bloom under crimson tongues, black feathers flung out.
+        this.darkFlame(x, y, 1.25, 720, now);
+        this.featherBurst(x, y, 10, 2.2, 0.36, 900, 0, now);
+        this.shakeAmp = this.reducedMotion ? 0.6 : 1.9;
+        this.shakeMs = 200;
+      } else {
+        this.featherBurst(x, y, 8, 1.6, 0.32, 820, 1, now);
+      }
+    }
   }
 
   private finishAnimation(natural: boolean): void {
@@ -983,13 +1487,18 @@ export class Board2DView implements IBoardView {
       this.tSkillHit = -1;
       this.trail.length = 0;
       this.skillSparks.length = 0;
+      this.feathers.length = 0;
+      this.dark.t0 = -1;
+      this.awPulse.t0 = -1;
+      this.awSmoke.t0 = -1;
     }
     if (!a) return;
     this.anim = null;
     // A mover destroyed on the wasteland already dissolved: never a storm ghost too.
     const skip = [a.moverId, ...(a.captured ? [a.captured.id] : []), ...(a.hop ? a.hop.victims.map((v) => v.piece.id) : [])];
     this.collectStormVictims(a.piecesAfter, a.wasted || a.hop ? skip : (a.captured?.id ?? null));
-    this.setPieceList(a.piecesAfter);
+    // A transformed mover whose transform ran out with this move fades back instead of popping.
+    this.setPieceList(a.piecesAfter, natural ? a.moverId : null);
     if (a.capture && !a.impactFired) {
       a.impactFired = true;
       if (!this.disposing) this.emitImpact(a.move);
@@ -1215,7 +1724,19 @@ export class Board2DView implements IBoardView {
         }
         const pop = 1 + 0.14 * bump(a.impactAt - 90, a.impactAt + 170, t);
         moverXY = { x, y: y - lift * cell * 0.1 };
-        if (t < a.moveDur && (a.jump || a.chain || a.charge || a.character === 'brutile')) this.pushTrail(moverXY.x, moverXY.y, now);
+        if (t < a.moveDur && a.rk !== 'ash' && (a.jump || a.chain || a.charge || a.character === 'brutile')) this.pushTrail(moverXY.x, moverXY.y, now);
+        if (a.rk && t < a.moveDur && t >= a.nextFeather) {
+          // Feathers shed along the leap (crimson-edged black when transformed, pale ash otherwise).
+          const awake = a.rk === 'awake';
+          a.nextFeather = t + (awake ? FEATHER_MS_AWAKE : FEATHER_MS_ASH);
+          const l = Math.hypot(a.to.r - a.from.r, a.to.c - a.from.c) || 1;
+          const dx = (a.to.c - a.from.c) / l;
+          const dy = -(a.to.r - a.from.r) / l;
+          const side = ((t / 34) | 0) % 2 === 0 ? 1 : -1;
+          const fx0 = (moverXY.x - x0) / cell - dx * 0.2 - dy * side * 0.2;
+          const fy0 = (moverXY.y - y0) / cell - dy * 0.2 + dx * side * 0.2;
+          this.feather(fx0, fy0, -dy * side * 0.6 - dx * 0.5, dx * side * 0.6 - dy * 0.5, awake ? 0.34 : 0.28, awake ? 720 : 620, awake ? 0 : 1, Math.atan2(dx, -dy) + side * 0.9, side * (awake ? 3.2 : 2), now);
+        }
         if (a.wasted && t >= a.moveDur) {
           const tx = this.cx(a.to.c);
           const ty = this.cy(a.to.r);
@@ -1253,6 +1774,7 @@ export class Board2DView implements IBoardView {
     for (const p of h.captures ?? []) this.drawMarker('capture', BOARD_COLORS.capture, this.cx(p.c), this.cy(p.r), cell * (0.96 + 0.07 * cp));
     this.drawTrail(now);
     if (moverDraw) moverDraw();
+    this.drawRakaeliFx(now);
     this.drawStormGhosts(now);
     this.drawSkillFx(now);
 
@@ -1326,7 +1848,7 @@ export class Board2DView implements IBoardView {
     if (ck < 1) this.drawPiece(p, vx, vy, s, s, 1 - ck * ck, 0, now, Math.max(0, 1 - tk / 160) * 0.85);
     if (ck > 0) {
       // Shards flying out in the attacker's FX colour.
-      const fx = CHARACTER_FX[a.character];
+      const fx = a.rk === 'awake' ? RAKAELI_AWAKE_FX : CHARACTER_FX[a.character];
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       ctx.fillStyle = hexAlpha(fx.primary, 0.9 * (1 - ck));
@@ -1926,7 +2448,7 @@ export class Board2DView implements IBoardView {
     }
     const x = this.cx(this.capAt.c);
     const y = this.cy(this.capAt.r);
-    const fx = CHARACTER_FX[this.capKind];
+    const fx = this.capRak === 'awake' ? RAKAELI_AWAKE_FX : CHARACTER_FX[this.capKind];
     const k = clamp01(el / FX_MS);
     const e = easeOutCubic(k);
     const fade = 1 - k;
@@ -2159,16 +2681,38 @@ export class Board2DView implements IBoardView {
     ctx.beginPath();
     ctx.ellipse(x + u * 0.04, y + u * 0.07, u * 0.42 * sg, u * 0.4 * sg, 0, 0, Math.PI * 2);
     ctx.fill();
-    this.drawRarityRing(p.character, x, y, cell * RING_R * Math.min(sx, 1.15), now);
     const yb = y - lift * cell * 0.12;
     const d = cell * TOKEN_SPRITE;
-    ctx.drawImage(this.tokenSprite(p.character, p.level, p.owner), x - (d * sx) / 2, yb - (d * sy) / 2, d * sx, d * sy);
+    // Rakaeli transformed: the crimson aura stands in for the rarity ring (cross-faded), wings
+    // (during the transform) under the coin, the awake face over it.
+    const lk = this.lookOf(p);
+    if (lk.aura < 1) {
+      ctx.globalAlpha = alpha * (1 - lk.aura);
+      this.drawRarityRing(p.character, x, y, cell * RING_R * Math.min(sx, 1.15), now);
+      ctx.globalAlpha = alpha;
+    }
+    if (lk.aura > 0.003) this.drawAura(x, yb, lk.aura, now);
+    if (this.wing.a > 0.003 && this.wing.id === p.id) this.drawWings(x, yb, this.wing.k, this.wing.a);
+    if (lk.face < 1) ctx.drawImage(this.tokenSprite(p.character, p.level, p.owner), x - (d * sx) / 2, yb - (d * sy) / 2, d * sx, d * sy);
+    if (lk.face > 0) {
+      ctx.globalAlpha = alpha * Math.min(1, lk.face);
+      ctx.drawImage(this.tokenSprite(p.character, p.level, p.owner, true), x - (d * sx) / 2, yb - (d * sy) / 2, d * sx, d * sy);
+      ctx.globalAlpha = alpha;
+    }
+    if (lk.burn > 0) this.drawBurn(x, yb, lk.burn, sx);
     if (flash > 0) {
       ctx.globalAlpha = alpha * flash;
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
       ctx.ellipse(x, yb, (d * sx) / 2, (d * sy) / 2, 0, 0, Math.PI * 2);
       ctx.fill();
+      ctx.globalAlpha = alpha;
+    }
+    // Countdown badge: transformed moves left, on the coin's top-right.
+    const n = awakenOf(p);
+    if (n > 0 && lk.face >= 0.5 && alpha > 0.5 && flash < 0.3) {
+      const B = cell * BADGE_BOX;
+      ctx.drawImage(badgeSprite(n, B * this.dpr), x + BADGE_OFFSET * cell - B / 2, yb - BADGE_OFFSET * cell - B / 2, B, B);
     }
     ctx.restore();
   }
@@ -2253,17 +2797,22 @@ export class Board2DView implements IBoardView {
   }
 
   /** Illustrated coin for a look, pre-rendered at the current cell size (cached). */
-  private tokenSprite(ch: CharacterId, level: Level, owner: PlayerId): HTMLCanvasElement {
+  /**
+   * Illustrated coin (cached per look and size). `awake`: Rakaeli's transformed face, or the base
+   * face tinted crimson while that art is loading / missing.
+   */
+  private tokenSprite(ch: CharacterId, level: Level, owner: PlayerId, awake = false): HTMLCanvasElement {
     const S = Math.max(8, Math.round(this.layout.cell * TOKEN_SPRITE * this.dpr));
-    const img = faceImage(ch, level);
-    const key = `${ch}:${level}:${owner}:${S}:${img ? 1 : 0}`;
+    const art = awake && isRakaeli({ character: ch }) ? awakeImage(level) : null;
+    const img = art ?? faceImage(ch, level);
+    const key = `${ch}:${level}:${owner}:${S}:${img ? 1 : 0}:${awake ? (art ? 'a' : 't') : ''}`;
     let c = this.sprites.get(key);
     if (c) return c;
     c = document.createElement('canvas');
     c.width = S;
     c.height = S;
     const g = ctx2d(c);
-    if (g) paintToken(g, S, img, level, owner);
+    if (g) paintToken(g, S, img, level, owner, awake && !art);
     this.sprites.set(key, c);
     return c;
   }
@@ -2298,7 +2847,7 @@ export class Board2DView implements IBoardView {
  * WebGL token shader in tokens.ts): ink keyline, team-deep milled edge below the top face, team rim
  * lit from the top-left with a specular arc, inset bevel ring, face art, gold star pips.
  */
-function paintToken(g: CanvasRenderingContext2D, S: number, img: HTMLImageElement | null, level: Level, owner: PlayerId): void {
+function paintToken(g: CanvasRenderingContext2D, S: number, img: HTMLImageElement | null, level: Level, owner: PlayerId, tint = false): void {
   const team = TEAM_COLORS[owner];
   const u = S / TOKEN_SPRITE; // px per cell
   const c = S / 2;
@@ -2365,6 +2914,16 @@ function paintToken(g: CanvasRenderingContext2D, S: number, img: HTMLImageElemen
     pg.addColorStop(1, '#101833');
     g.fillStyle = pg;
     g.fillRect(0, 0, S, S);
+  }
+  if (tint) {
+    // Transformed Rakaeli without his awake art: the base face (or placeholder) in crimson.
+    g.globalCompositeOperation = 'multiply';
+    g.fillStyle = `rgb(${Math.round(AWAKE_TINT[0] * 255)},${Math.round(AWAKE_TINT[1] * 255)},${Math.round(AWAKE_TINT[2] * 255)})`;
+    g.fillRect(0, 0, S, S);
+    g.globalCompositeOperation = 'lighter';
+    g.fillStyle = 'rgba(70,0,14,0.35)';
+    g.fillRect(0, 0, S, S);
+    g.globalCompositeOperation = 'source-over';
   }
   const vg = g.createRadialGradient(c + fr * 0.12, ty + fr * 0.16, fr * 0.6, c, ty, fr * 1.05);
   vg.addColorStop(0, 'rgba(10,14,30,0)');

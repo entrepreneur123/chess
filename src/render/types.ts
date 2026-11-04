@@ -29,7 +29,7 @@ export interface BoardViewOptions {
 
 /** Brutile's wasteland targeting overlay. */
 export interface SkillPreview {
-  /** Squares the wasteland would cover (r * 12 + c). */
+  /** Squares the wasteland would cover (r * BOARD_SIZE + c). */
   squares: number[];
   /** False when the area is not allowed (a piece stands there / off board): draw it red. */
   valid: boolean;
@@ -72,7 +72,7 @@ export interface IBoardView {
   setViewMode?(mode: BoardViewMode, animate?: boolean): void;
   /**
    * Optional: storm ("자기장") state. `storm` = outer columns consumed per side (0 = none: columns
-   * 0..storm-1 and 12-storm..11 are gone), `nextIn` = plies until the next shrink (null = the storm
+   * 0..storm-1 and BOARD_SIZE-storm..BOARD_SIZE-1 are gone), `nextIn` = plies until the next shrink (null = the storm
    * has not started). Pieces that vanish from the piece list while the storm is active (and are not
    * a move's capture) dissolve with a storm effect instead of popping out.
    */
@@ -84,7 +84,7 @@ export interface IBoardView {
    */
   onImpact?(cb: (move: Move) => void): void;
   /**
-   * Optional: the wasteland squares (r * 12 + c) currently on the board — toxic, cracked, glowing
+   * Optional: the wasteland squares (r * BOARD_SIZE + c) currently on the board — toxic, cracked, glowing
    * green ground. Called with the full list whenever it changes (it only grows during a match).
    */
   setWaste?(squares: number[]): void;
@@ -107,6 +107,17 @@ export interface IBoardView {
    * also on dispose). The UI calls setWaste with the new full list afterwards.
    */
   animateSkill?(caster: string, squares: number[]): Promise<void>;
+  /**
+   * Optional: Rakaeli's transform "타천" on `pieceId`'s token. 'on' = the blindfold burns away in
+   * a flash, crimson flame wings unfold, a short pulse, and the coin swaps to the transformed face at
+   * the peak (then carries the crimson / violet ember aura and the countdown badge = `Piece.awaken`).
+   * 'off' = the embers fade, a smoke puff, the coin swaps back to the base face. Resolves when done
+   * (at once if the piece is not on the board; always on dispose). prefers-reduced-motion: short
+   * fades only. Optional for the caller too: setPieces alone gives the same final look (a
+   * transformed piece's last move fades the look out by itself). Call it before, or in the same
+   * tick as, the setPieces that changes `awaken`.
+   */
+  playAwaken?(pieceId: string, phase: 'on' | 'off'): Promise<void>;
   /**
    * Optional (drag-to-move): the board square under a viewport point (client px), using the same
    * mapping as taps; null when the point is off the board.
