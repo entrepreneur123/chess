@@ -1,5 +1,10 @@
 /** Minimal DOM helpers (no framework). */
 
+/** Shortest wait of a paced loop (ms): never faster than a 60 Hz frame. */
+const MIN_PACED_MS = 16;
+/** Wait of a paced loop whose callback threw (ms). */
+const PACED_IDLE_MS = 250;
+
 export type Child = Node | string | number | null | undefined | false | Child[];
 export type Attrs = Record<string, unknown>;
 
@@ -75,16 +80,35 @@ export class Disposables {
     return id;
   }
 
-  /** rAF loop until disposed. */
-  frameLoop(fn: (t: number) => void): void {
+  /**
+   * Self-paced timer loop until disposed: `fn` runs on the next task and then again after the
+   * delay (ms) it returns (at least MIN_PACED_MS). Unlike a requestAnimationFrame loop it does not
+   * wake the page on every display refresh (60–120 Hz), so a mostly static screen produces no
+   * frames between updates. Returns `poke`, which runs `fn` at once and restarts the wait (call it
+   * when the watched state changes, so the screen does not lag a whole delay behind).
+   */
+  pacedLoop(fn: () => number): () => void {
     let id = 0;
-    const tick = (t: number) => {
+    const run = (): void => {
+      id = 0;
       if (this.disposed) return;
-      fn(t);
-      id = requestAnimationFrame(tick);
+      let next = PACED_IDLE_MS;
+      try {
+        next = fn();
+      } finally {
+        if (!this.disposed) id = window.setTimeout(run, Math.max(MIN_PACED_MS, next || 0));
+      }
     };
-    id = requestAnimationFrame(tick);
-    this.add(() => cancelAnimationFrame(id));
+    id = window.setTimeout(run, 0);
+    this.add(() => {
+      if (id) window.clearTimeout(id);
+      id = 0;
+    });
+    return () => {
+      if (this.disposed) return;
+      if (id) window.clearTimeout(id);
+      run();
+    };
   }
 
   sleep(ms: number): Promise<void> {

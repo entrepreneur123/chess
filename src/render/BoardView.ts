@@ -49,7 +49,7 @@
  * capture ring, and a lifted selection shown as a screen-up offset with a spreading shadow
  * (applyTopLift). The arena board theme (BoardViewOptions.arena / setArenaTheme, arenaThemes.ts)
  * recolours the cells, bezel, grid and scan sweep, swaps the overlay's surface detail and drives
- * one additive Points draw of ambient particles (ambient.ts, ~20 fps, never with reduced motion).
+ * one additive Points draw of ambient particles (ambient.ts, ~10–20 fps by theme, never with reduced motion).
  *
  * Rakaeli (awakenFx.ts): base-form moves leap and shed pale ash feathers (ash feather burst + dim
  * halo-gold ring on a capture). While transformed (`Piece.awaken` > 0) his coin shows the awake face
@@ -62,12 +62,16 @@
  * Performance notes: tiles are one InstancedMesh, overlays are InstancedMeshes, effects reuse
  * pre-allocated meshes (no per-frame / per-move allocations), one 1024 shadow map (none when
  * top-only), pixel ratio capped at 2, effect shaders pre-compiled when idle. Frames are only
- * requested while something is animating: moves/effects at full rate; the selection pulse, the
- * legendary ring and the wasteland at ~30 fps (ring / wasteland static with prefers-reduced-motion);
- * unit idle loops at ~24 fps (off with prefers-reduced-motion or setIdleAnimation(false)); nothing
- * while the tab is hidden. An idle top-only board with no legendary and no wasteland draws nothing
- * except the ambient scan sweep (2.6 s at ~30 fps every 9 s, woken by one timer; never with
- * prefers-reduced-motion).
+ * requested while something is animating: moves / effects at up to 60–90 fps (BUSY_FRAME_MS: a
+ * 120 Hz display draws every other refresh); the selection pulse, the legendary ring and the
+ * wasteland at ~30 fps (ring / wasteland static with prefers-reduced-motion); unit idle loops at
+ * ~24 fps (off with prefers-reduced-motion or setIdleAnimation(false)); nothing while the tab is
+ * hidden. An idle top-only board with no legendary and no wasteland draws only the theme's ambient
+ * drift (~10–20 fps, ambientFrameMs) and the scan sweep (2.6 s at ~30 fps every 9 s; never with
+ * prefers-reduced-motion). Throttled idle loops sleep on a timer between draws (nextFrameIn), not
+ * frame by frame; any change (requestRender) still draws on the very next frame. setPaused (the
+ * result dialog covers the board) and setLowPower (절전 모드, also ~30 fps moves) stop the
+ * decorative idle loops; the storm keeps moving under 절전 모드 (it is game information).
  */
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
@@ -79,7 +83,7 @@ import { loadUnitAssets, unitAssetsIfLoaded } from './units/assets';
 import { LOOKS, MOVE_CLIP } from './units/config';
 import type { UnitLibrary } from './units/library';
 import { AmbientPoints, DustPool, SparkPool } from './boardFx';
-import { AMBIENT_FRAME_MS, AMBIENT_MAX, makeAmbientSample, sampleAmbient } from './ambient';
+import { AMBIENT_MAX, ambientFrameMs, BUSY_FRAME_MS, LOW_POWER_FRAME_MS, makeAmbientSample, PULSE_REST, sampleAmbient } from './ambient';
 import { DEFAULT_BOARD_THEME, boardTheme } from './arenaThemes';
 import type { BoardTheme } from './arenaThemes';
 import { ANIM, BOARD_COLORS, CHARACTER_FX, CHARACTER_RARITY, RAKAELI_AWAKE_FX, RARITY_COLORS, RARITY_GLOW, TEAM_COLORS, WASTE_COLORS } from './palette';
@@ -166,6 +170,15 @@ function arenaPxFor(devicePxPerCell: number): number {
 }
 const IDLE_FRAME_MS = 32; // idle pulse (selection / targets) is capped at ~30 fps
 const IDLE_ANIM_FRAME_MS = 41; // unit idle loops alone run at ~24 fps
+/** A throttled idle loop shorter than this waits frame by frame instead of on a timer (ms). */
+const WAKE_MIN_MS = 12;
+/** Its timer fires this much early (ms), so the frame it then waits for is not a whole frame late. */
+const WAKE_EARLY_MS = 6;
+/**
+ * Idle caps are met this much early (ms): a frame's timestamp is its start, a little before the
+ * timer that woke it, and must not cost one more wake-up just to skip.
+ */
+const CAP_SLACK_MS = 4;
 /** Attack clip length on the board (ms). */
 const ATTACK_MS = 440;
 /**
@@ -807,6 +820,14 @@ export class BoardView implements IBoardView {
   private placedCaps: Pos[] = [];
   private selVisual: PieceVisual | null = null;
   private pulsing = false;
+  /** Covered by the result dialog (setPaused): no decorative idle loops. */
+  private paused = false;
+  /** 절전 모드 (setLowPower): no decorative idle loops, ~30 fps animations. */
+  private lowPower = false;
+  /** A change waits to be drawn (requestRender): the next frame draws past the idle caps. */
+  private dirty = false;
+  /** Timer of a throttled idle loop sleeping until its next draw (nextFrameIn). */
+  private wakeTimer = 0;
   private lastFrame = 0;
 
   private cellCb: ((pos: Pos) => void) | null = null;
@@ -988,8 +1009,7 @@ export class BoardView implements IBoardView {
     };
     const fail = (why: string): never => {
       this.disposed = true;
-      if (this.rafId) cancelAnimationFrame(this.rafId);
-      this.rafId = 0;
+      this.cancelFrames();
       try {
         this.renderer.dispose();
         this.renderer.forceContextLoss();
@@ -2244,7 +2264,7 @@ export class BoardView implements IBoardView {
   private tickScan(now: number): boolean {
     const mesh = this.scanMesh;
     if (!mesh || !this.scanMat) return false;
-    if (!this.idleAnim || document.hidden) {
+    if (!this.idleAnim || document.hidden || this.paused || this.lowPower) {
       mesh.visible = false;
       return false;
     }
@@ -2267,7 +2287,7 @@ export class BoardView implements IBoardView {
   private scheduleScan(now: number): void {
     if (this.scanTimer) clearTimeout(this.scanTimer);
     this.scanTimer = 0;
-    if (!this.scanMesh || !this.idleAnim || document.hidden || this.disposed) return;
+    if (!this.scanMesh || !this.idleAnim || document.hidden || this.paused || this.lowPower || this.disposed) return;
     this.scanTimer = window.setTimeout(() => {
       this.scanTimer = 0;
       this.requestRender();
@@ -2282,7 +2302,7 @@ export class BoardView implements IBoardView {
     const amb = this.ambient;
     const spec = this.theme.ambient;
     if (!amb) return false;
-    if (!spec || !this.idleAnim || this.reducedMotion || document.hidden) {
+    if (!spec || !this.idleAnim || this.reducedMotion || document.hidden || this.paused || this.lowPower) {
       amb.points.visible = false;
       return false;
     }
@@ -2296,6 +2316,12 @@ export class BoardView implements IBoardView {
     }
     amb.commit();
     return true;
+  }
+
+  /** Frame interval of the ambient drift alone for the current theme (see ambientFrameMs). */
+  private ambientCapMs(): number {
+    const spec = this.theme.ambient;
+    return spec ? ambientFrameMs(spec) : IDLE_FRAME_MS;
   }
 
   /** Colours / shape / count of the ambient particles for the current theme. */
@@ -2329,6 +2355,19 @@ export class BoardView implements IBoardView {
   /** Optional extra: enable/disable the units' idle loops (battery saver). */
   setIdleAnimation(enabled: boolean): void {
     this.idleAnim = enabled;
+    this.requestRender();
+  }
+
+  /** Covered board (IBoardView.setPaused): the decorative idle loops stop until resumed. */
+  setPaused(paused: boolean): void {
+    if (this.paused === paused || this.disposed) return;
+    this.paused = paused;
+    this.requestRender();
+  }
+
+  setLowPower(on: boolean): void {
+    if (this.lowPower === on || this.disposed) return;
+    this.lowPower = on;
     this.requestRender();
   }
 
@@ -2598,8 +2637,7 @@ export class BoardView implements IBoardView {
     this.finishAnimation(false);
     this.disposed = true;
     this.impactCb = null;
-    if (this.rafId) cancelAnimationFrame(this.rafId);
-    this.rafId = 0;
+    this.cancelFrames();
     if (this.stallTimer) clearTimeout(this.stallTimer);
     this.stallTimer = 0;
     if (this.scanTimer) clearTimeout(this.scanTimer);
@@ -2955,10 +2993,13 @@ export class BoardView implements IBoardView {
     mesh.instanceMatrix.needsUpdate = true;
   }
 
-  /** Idle pulse: selection ring, move dots, capture rings, selected-piece bob. No allocations. */
-  private updatePulse(now: number): void {
+  /**
+   * Idle pulse: selection ring, move dots, capture rings, selected-piece bob. No allocations.
+   * `rest` (the idle loop is off: covered board / 절전 모드) holds a steady PULSE_REST glow.
+   */
+  private updatePulse(now: number, rest = false): void {
     if (!this.pulsing) return;
-    const s = pulse01(now, 950);
+    const s = rest ? PULSE_REST : pulse01(now, 950);
     if (this.selectRing.visible) {
       const k = 1 + 0.03 * s;
       this.selectRing.scale.set(k, 1, k);
@@ -2972,13 +3013,13 @@ export class BoardView implements IBoardView {
       this.placeInstances(this.moveDots, this.placedMoves, 0.9 + 0.16 * s);
     }
     if (this.placedCaps.length > 0) {
-      const sc = pulse01(now, 700);
+      const sc = rest ? PULSE_REST : pulse01(now, 700);
       (this.captureGlow.material as THREE.MeshBasicMaterial).opacity = 0.4 + 0.35 * sc;
       this.placeInstances(this.captureRings, this.placedCaps, 0.96 + 0.07 * sc);
       this.placeInstances(this.captureGlow, this.placedCaps, 0.85 + 0.25 * sc);
     }
     if (this.selVisual && !this.anim) {
-      this.selVisual.inner.position.y = TILE_TOP + SELECT_LIFT + 0.04 * Math.sin(now / 240);
+      this.selVisual.inner.position.y = TILE_TOP + SELECT_LIFT + (rest ? 0 : 0.04 * Math.sin(now / 240));
     }
   }
 
@@ -3116,9 +3157,42 @@ export class BoardView implements IBoardView {
 
   // ---------------------------------------------------------------- rendering
 
+  /**
+   * Something on the board changed: draw on the next frame, past the idle frame caps (taps,
+   * highlights, pieces never wait for a throttled tick).
+   */
   private requestRender(): void {
+    this.dirty = true;
+    this.nextFrame();
+  }
+
+  /** Keep the frame loop going (an animation or idle loop runs); no forced draw. */
+  private nextFrame(): void {
     if (this.disposed || this.rafId !== 0) return;
     this.rafId = requestAnimationFrame(this.frame);
+  }
+
+  /**
+   * Throttled idle loop: sleep on a timer until the next draw is due, then align to a frame.
+   * Waiting frame by frame woke the page on every display refresh (60–120 Hz) just to skip it.
+   */
+  private nextFrameIn(ms: number): void {
+    if (this.disposed || this.rafId !== 0 || this.wakeTimer !== 0) return;
+    if (ms <= WAKE_MIN_MS) {
+      this.nextFrame();
+      return;
+    }
+    this.wakeTimer = window.setTimeout(() => {
+      this.wakeTimer = 0;
+      this.nextFrame();
+    }, ms - WAKE_EARLY_MS);
+  }
+
+  private cancelFrames(): void {
+    if (this.rafId) cancelAnimationFrame(this.rafId);
+    this.rafId = 0;
+    if (this.wakeTimer) clearTimeout(this.wakeTimer);
+    this.wakeTimer = 0;
   }
 
   private readonly frame = (now: number): void => {
@@ -3193,27 +3267,39 @@ export class BoardView implements IBoardView {
     }
     const capturedActor = this.anim?.captured?.actor ?? null;
     const busy = animating || fxActive || unitsBusy;
-    const idleLoop = this.idleAnim && haveActors && !document.hidden;
-    const stormLoop = this.stormFx.active && !document.hidden;
+    // Decorative idle loops run only on a visible, uncovered board (setPaused).
+    const live = !document.hidden && !this.paused && !this.lowPower;
+    const idleLoop = this.idleAnim && haveActors && live;
+    // The storm field and its next-line warning are game information: they keep moving in 절전 모드.
+    const stormLoop = this.stormFx.active && !document.hidden && !this.paused;
     // Legendary rainbow ring: a light ~30 fps tick only while one is on the board.
-    const ringLoop = this.idleAnim && this.legendaryCount > 0 && !document.hidden;
+    const ringLoop = this.idleAnim && this.legendaryCount > 0 && live;
     // Wasteland cracks / bubbles, skill ghost and danger marks breathe at the same light rate.
-    const wasteLoop = this.idleAnim && this.wasteFx.animated && !document.hidden;
+    const wasteLoop = this.idleAnim && this.wasteFx.animated && live;
     // Doll traps wobble gently (~30 fps idle tick; resting with prefers-reduced-motion).
-    const trapLoop = this.idleAnim && this.trapMarks.hasDolls && !document.hidden;
+    const trapLoop = this.idleAnim && this.trapMarks.hasDolls && live;
     // Rakaeli's transform aura flickers at the same light rate (static with reduced motion).
-    const awakeLoop = this.idleAnim && this.awakeCount > 0 && !document.hidden;
+    const awakeLoop = this.idleAnim && this.awakeCount > 0 && live;
     const scanLoop = this.tickScan(now);
-    // Ambient arena particles: the lightest tick (~20 fps), never with reduced motion.
+    // Ambient arena particles: the lightest tick (~10–20 fps by theme), never with reduced motion.
     const ambientLoop = this.tickAmbient(now);
     const lightLoop = stormLoop || ringLoop || wasteLoop || trapLoop || awakeLoop || scanLoop;
-    if (!busy && (this.pulsing || idleLoop || lightLoop || ambientLoop)) {
-      const cap = this.pulsing ? IDLE_FRAME_MS : idleLoop ? IDLE_ANIM_FRAME_MS : lightLoop ? IDLE_FRAME_MS : AMBIENT_FRAME_MS;
-      if (now - this.lastFrame < cap) {
-        this.requestRender(); // idle pulse / idle loops are throttled; skip drawing this tick
+    const pulseLoop = this.pulsing && live;
+    const since = now - this.lastFrame;
+    if (busy || this.dirty) {
+      if (since < (this.lowPower ? LOW_POWER_FRAME_MS : BUSY_FRAME_MS)) {
+        // High-refresh displays (120 Hz+): moves draw every other refresh (see BUSY_FRAME_MS).
+        this.nextFrame();
+        return;
+      }
+    } else if (pulseLoop || idleLoop || lightLoop || ambientLoop) {
+      const cap = pulseLoop ? IDLE_FRAME_MS : idleLoop ? IDLE_ANIM_FRAME_MS : lightLoop ? IDLE_FRAME_MS : this.ambientCapMs();
+      if (since < cap - CAP_SLACK_MS) {
+        this.nextFrameIn(cap - since); // idle pulse / idle loops are throttled; skip drawing this tick
         return;
       }
     }
+    this.dirty = false;
     // Unit animation clock (clamped so a long pause never makes the mixers jump).
     const dt = this.lastTick > 0 ? Math.min(0.1, Math.max(0, (now - this.lastTick) / 1000)) : 0;
     this.lastTick = now;
@@ -3227,19 +3313,21 @@ export class BoardView implements IBoardView {
       for (const v of this.fading) v.actor?.update(dt);
       this.units?.update(now / 1000);
     }
-    if (this.idleAnim) {
+    // Decorative shader clocks (rainbow ring, wasteland shimmer, transform aura) hold still while
+    // their loops are off, so a redraw for something else does not make them jump.
+    if (this.idleAnim && live) {
       this.rings.time.value = now / 1000;
       this.wasteFx.update(now / 1000, pulse01(now, 800));
     }
     if (stormLoop) this.stormFx.update(now / 1000);
     if (this.trapMarks.hasDolls) this.trapMarks.update(now, trapLoop);
-    if (this.idleAnim) this.awakenMarks.update(now / 1000);
+    if (this.idleAnim && live) this.awakenMarks.update(now / 1000);
     this.lastFrame = now;
-    this.updatePulse(now);
+    this.updatePulse(now, !pulseLoop);
     if (this.topOnly) this.applyTopLift();
     this.renderer.render(this.scene, this.camera);
-    if (busy || this.pulsing || idleLoop || lightLoop || ambientLoop) {
-      this.requestRender();
+    if (busy || pulseLoop || idleLoop || lightLoop || ambientLoop) {
+      this.nextFrame();
     } else {
       this.lastTick = 0;
       this.scheduleScan(now);
@@ -3248,8 +3336,7 @@ export class BoardView implements IBoardView {
 
   private readonly onVisibility = (): void => {
     if (document.hidden) {
-      if (this.rafId) cancelAnimationFrame(this.rafId);
-      this.rafId = 0;
+      this.cancelFrames();
       this.lastTick = 0;
       // No frames while hidden: the game must not wait for a running animation.
       this.settleRunning();
@@ -3902,8 +3989,7 @@ export class BoardView implements IBoardView {
 
   private readonly onContextLost = (ev: Event): void => {
     ev.preventDefault(); // allow restoration
-    if (this.rafId) cancelAnimationFrame(this.rafId);
-    this.rafId = 0;
+    this.cancelFrames();
     // No frames are guaranteed until the context comes back (it may never): settle any running
     // move animation now so the game (which awaits animateMove) cannot stall in 'animating'.
     this.finishAnimation(false);

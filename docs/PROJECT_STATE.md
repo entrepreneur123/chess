@@ -203,8 +203,14 @@ legendary.
   - a lobby "DEV · 전장 선택" picker that plays any arena.
 - **Off:** restores the snapshot of the real profile (current settings kept).
 
+**절전 모드 (settings.powerSave, off by default)**
+- A settings switch (`ui/powerSave.ts`): `html.power-save` stops the decorative CSS loops
+  (`base.css`), and the board (`setLowPower`) stops its decorative idle loops (particles, scan
+  sweep, shimmer, selection pulse) and draws moves at ~30 fps. The storm keeps animating (it is
+  game information).
+
 ## 5. Deploy and verify (the routine)
-1. **Gates:** `npx tsc --noEmit -p .`, `npx vitest run` (361 tests at last count) and
+1. **Gates:** `npx tsc --noEmit -p .`, `npx vitest run` (368 tests at last count) and
    `npm run build`.
    - Never leave temporary `tests/*.tmp.test.ts` or `zz-*` files; `node:` imports break tsc.
    - Vitest hides `console.log` from passing tests, so simulations write results to files.
@@ -222,6 +228,23 @@ legendary.
 6. **Playwright:** only the pre-installed Chromium. Never run `playwright install`; there is no
    WebKit here, so iOS Safari is always unverified.
 7. **Never use `pkill -f`**; kill processes by PID or port.
+
+**Heat / battery budget (measure before and after any render or CSS change)**
+- Rules that keep the device cool:
+  - no requestAnimationFrame loop for DOM UI: the HUD clock is a paced timer
+    (`Disposables.pacedLoop`, `clockRedrawMs`, ~5–12 updates/s);
+  - looping CSS animations use `transform` / `opacity` only (compositor); never `left`, `box-shadow`,
+    custom properties or filters in an infinite animation (use an opacity cross-fade on a
+    pseudo-element instead, see `.hand-card__skill.is-ready`, `.storm-chip.is-soon`);
+  - the board draws on demand: idle loops are throttled (ambient drift ~10–20 fps by theme via
+    `ambientFrameMs`, light loops ~30 fps) and sleep on a timer between draws; moves draw at most
+    every ~10 ms (120 Hz displays every other refresh); any change still draws on the next frame;
+  - the result dialog pauses the board (`setPaused`): no full-screen re-blur under the scrim.
+- How it was measured (headless Chromium, software GL, idle match, 12 s): requestAnimationFrame
+  callbacks 120/s → 29/s, board frames 21/s → 14/s, main thread 379 → 239 ms/s; result screen
+  board frames 23/s → 0; 2D board main thread 232 → 116 ms/s; 절전 모드 idle match 7 ms/s;
+  lobby and collection main thread 3.9% / 5.8% → ~0% (no per-frame style recalcs). Real-device
+  temperatures were not measured.
 
 **Debug aids**
 - `?diag=1` shows the render diagnostics panel and exposes the read-only `window.__gridclash`
@@ -268,8 +291,13 @@ legendary.
   regenerated with `docs/store-assets/capture.mjs`.
 - **Online PvP needs a server.** Supabase is available as a connector. Until then the
   currencies, rating and dev mode are client-side only.
-- **Unverified everywhere:** real iOS/Android devices, WebKit GPU cost of the ambient particles
-  (the board redraws at about 20 fps while idle), and how the voices and music actually sound.
+- **Unverified everywhere:** real iOS/Android devices (including actual temperatures after the
+  heat work), WebKit GPU cost of the ambient particles (the idle board redraws at ~10–20 fps by
+  theme, plus a ~30 fps scan sweep 2.6 s of every 9 s), and how the voices and music sound.
+- **Legendary rainbow rings in the DOM never rotated:** `--rar-rainbow` resolves its angle at
+  `:root`, so the old `rar-spin` animation only cost style passes. It was removed (the static look
+  players saw is kept). A real rotation would need a compositor `transform` on the round rings; an
+  owner call (it adds a constant compositor animation).
 - **IP notes:** a small cross pendant on Rakaeli's base 2성 art. Owner mood references
   (Damian, Wednesday or Jinx, Clash Royale) were taken as mood only.
 - **Main JS chunk** is about 1.1 MB (gzip about 320 kB); code splitting is a future

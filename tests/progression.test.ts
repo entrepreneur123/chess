@@ -67,7 +67,7 @@ describe('migration v3 -> v4 (-> v5)', () => {
     // Kept: stats, settings (music defaults on), onboarding, the all-owned squad. Its squares
     // used the old 3-row zone (row 2), so v4 -> v5 puts the same squad on the preset squares.
     expect(p.stats).toEqual({ wins: 9, losses: 4, draws: 1 });
-    expect(p.settings).toEqual({ sound: false, music: true, voice: true, haptics: false, view: 'top' });
+    expect(p.settings).toEqual({ sound: false, music: true, voice: true, haptics: false, powerSave: false, view: 'top' });
     expect(p.onboarding.tutorialSeen).toBe(true);
     expect(p.formationSaved).toBe(false);
     expect(p.formation).toEqual([

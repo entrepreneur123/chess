@@ -98,6 +98,11 @@ export interface Settings {
   /** Character voice lines (AI voice actors); also needs `sound`. */
   voice: boolean;
   haptics: boolean;
+  /**
+   * 절전 모드: decorative idle animation stops (board particles, scan sweep, shimmer, menu loops)
+   * and board animations run at 30 fps, for less heat and battery drain. Off by default.
+   */
+  powerSave: boolean;
   /** Board camera (kept for when the 3D arena returns; the board is top-down only for now). */
   view: ViewSetting;
 }
@@ -113,7 +118,7 @@ export interface Onboarding {
   stunTip: boolean;
 }
 
-export const DEFAULT_SETTINGS: Settings = { sound: true, music: true, voice: true, haptics: true, view: 'tilt' };
+export const DEFAULT_SETTINGS: Settings = { sound: true, music: true, voice: true, haptics: true, powerSave: false, view: 'tilt' };
 /** Grade a character is fielded at until the player picks another. */
 export const DEFAULT_GRADE: Level = 1;
 export const DEFAULT_DUNGEON_LEVEL: DungeonLevel = 'easy';
@@ -377,6 +382,7 @@ function sanitizeBase(input: unknown): ProfileBase {
       music: asBool(settings.music, DEFAULT_SETTINGS.music),
       voice: asBool(settings.voice, DEFAULT_SETTINGS.voice),
       haptics: asBool(settings.haptics, DEFAULT_SETTINGS.haptics),
+      powerSave: asBool(settings.powerSave, DEFAULT_SETTINGS.powerSave),
       view: settings.view === 'top' ? 'top' : 'tilt',
     },
     onboarding: {

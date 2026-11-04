@@ -25,6 +25,7 @@ import { lobbyScreen } from './ui/screens/lobby';
 import { matchmakingScreen } from './ui/screens/matchmaking';
 import { shopScreen } from './ui/screens/shop';
 import { installMusic } from './ui/musicBridge';
+import { installPowerSave } from './ui/powerSave';
 import { installArtFallback } from './ui/components/piece';
 
 document.title = APP_NAME;
@@ -44,6 +45,8 @@ installAudio();
 if (Capacitor.isNativePlatform()) primeAudio();
 // Background music follows settings.sound && settings.music (no-op until src/audio/music.ts exists).
 installMusic();
+// 절전 모드: the root class that stops decorative CSS loops (the board reads the setting itself).
+installPowerSave();
 
 const outlet = document.getElementById('app')!;
 const router = new Router(outlet)

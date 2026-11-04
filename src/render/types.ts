@@ -147,4 +147,16 @@ export interface IBoardView {
    * for the theme already shown. Team colours, markers and every FX are the same on every theme.
    */
   setArenaTheme?(id: string): void;
+  /**
+   * Optional: the board is covered (the result dialog over a blurred scrim) and no one is looking
+   * at its ambience: stop every decorative idle loop (particles, scan sweep, rings, storm field,
+   * wasteland / trap / aura shimmer). Running moves and effects still finish; the board rests on
+   * its last frame. false resumes. Saves the whole-screen re-blur each board frame used to cost.
+   */
+  setPaused?(paused: boolean): void;
+  /**
+   * Optional: 절전 모드 (settings.powerSave). The same decorative idle loops as setPaused stay off
+   * (highlights rest at a steady glow) and moves / effects draw at ~30 fps instead of up to 60–90.
+   */
+  setLowPower?(on: boolean): void;
 }

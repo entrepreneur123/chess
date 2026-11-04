@@ -22,6 +22,20 @@ const RING_R = 18;
 /** Last seconds of a turn: running out is an immediate forfeit, so the ring pulses red. */
 export const CRITICAL_MS = 5_000;
 const RING_C = 2 * Math.PI * RING_R;
+/** Arc the ring may shrink per redraw (SVG units; 1 unit ≈ 1 CSS px at the ring's 46 px size). */
+const RING_STEP = 0.5;
+
+/**
+ * How long (ms) the HUD clock may wait before its next redraw while a turn of `totalMs` runs: the
+ * arc then moves by about half a pixel per redraw (smooth to the eye), the number changes on time,
+ * and the page draws ~5–12 frames a second for the clock instead of one per display refresh.
+ */
+export function clockRedrawMs(remainingMs: number, totalMs: number): number {
+  const arcStep = Math.min(250, Math.max(40, (totalMs * RING_STEP) / RING_C));
+  // The label (and the last-seconds tick sound) changes when ceil(remaining / 1000) drops.
+  const toNextSecond = remainingMs - (Math.ceil(remainingMs / 1000) - 1) * 1000;
+  return remainingMs > 0 ? Math.min(arcStep, toNextSecond + 2) : arcStep;
+}
 
 export class TimerRing {
   readonly el: HTMLElement;
@@ -65,7 +79,7 @@ export class TimerRing {
       this.el.classList.toggle('is-critical', critical);
     }
     const frac = active ? Math.max(0, Math.min(1, remainingMs / totalMs)) : 1;
-    // Called every frame: only touch the style when the (rounded) value changes.
+    // Called on every HUD clock tick: only touch the style when the (rounded) value changes.
     const offset = (RING_C * (1 - frac)).toFixed(2);
     if (offset !== this.lastOffset) {
       this.lastOffset = offset;

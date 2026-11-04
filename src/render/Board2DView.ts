@@ -34,7 +34,7 @@
 import { BOARD_SIZE, STORM_FULL_STEPS, ZONE_DEPTH, stormRows } from '../engine/types';
 import type { CharacterId, Level, Move, Piece, PlayerId, Pos, Trap } from '../engine/types';
 import type { BoardHighlights, BoardViewOptions, IBoardView, ScreenRect, SkillPreview } from './types';
-import { AMBIENT_FRAME_MS, clearAmbientSprites, drawAmbient2D } from './ambient';
+import { ambientFrameMs, BUSY_FRAME_MS, clearAmbientSprites, drawAmbient2D, LOW_POWER_FRAME_MS, PULSE_REST } from './ambient';
 import { DEFAULT_BOARD_THEME, boardTheme } from './arenaThemes';
 import type { BoardTheme } from './arenaThemes';
 import { ANIM, BOARD_COLORS, CHARACTER_FX, CHARACTER_RARITY, RAKAELI_AWAKE_FX, RARITY_RING, TEAM_COLORS, WASTE_COLORS } from './palette';
@@ -126,6 +126,15 @@ const DRAG_SOURCE_ALPHA = 0.3;
 const STUN_ALPHA = 0.55;
 const MAX_PIXEL_RATIO = 2;
 const IDLE_FRAME_MS = 32;
+/** A throttled idle loop shorter than this waits frame by frame instead of on a timer (ms). */
+const WAKE_MIN_MS = 12;
+/** Its timer fires this much early (ms), so the frame it then waits for is not a whole frame late. */
+const WAKE_EARLY_MS = 6;
+/**
+ * Idle caps are met this much early (ms): a frame's timestamp is its start, a little before the
+ * timer that woke it, and must not cost one more wake-up just to skip.
+ */
+const CAP_SLACK_MS = 4;
 /** Storm removal: dissolve length (ms). */
 const STORM_MS = 520;
 /** Capture timeline (ms after the impact): recoil, death (shatter), attacker steps in. */
@@ -311,6 +320,10 @@ export class Board2DView implements IBoardView {
   private interactive = true;
   private anim: Anim2D | null = null;
   private rafId = 0;
+  /** A change waits to be drawn (requestRender): the next frame draws past the idle caps. */
+  private dirty = false;
+  /** Timer of a throttled idle loop sleeping until its next draw (nextFrameIn). */
+  private wakeTimer = 0;
   private disposed = false;
   private disposing = false;
   private resizeObserver: ResizeObserver | null = null;
@@ -600,7 +613,7 @@ export class Board2DView implements IBoardView {
     const cell = this.layout.cell;
     const S = cell * AURA_BOX;
     const px = S * this.dpr;
-    const t = this.reducedMotion ? 0 : now / 1000;
+    const t = this.still ? 0 : now / 1000;
     ctx.save();
     const a0 = ctx.globalAlpha;
     // Smoky dark halo (normal blending: dims the rarity glow under it), then the flames on top.
@@ -1319,6 +1332,8 @@ export class Board2DView implements IBoardView {
     faceWaiters.delete(this.onFaceLoaded);
     if (this.rafId) cancelAnimationFrame(this.rafId);
     this.rafId = 0;
+    if (this.wakeTimer) clearTimeout(this.wakeTimer);
+    this.wakeTimer = 0;
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     this.canvas.removeEventListener('pointerdown', this.onPointerDown);
@@ -1392,9 +1407,32 @@ export class Board2DView implements IBoardView {
     this.overlayLayer = ov;
   }
 
+  /** Something changed: draw on the next frame, past the idle frame caps. */
   private requestRender(): void {
+    this.dirty = true;
+    this.nextFrame();
+  }
+
+  /** Keep the frame loop going (an animation or idle loop runs); no forced draw. */
+  private nextFrame(): void {
     if (this.disposed || this.rafId !== 0) return;
     this.rafId = requestAnimationFrame(this.frame);
+  }
+
+  /**
+   * Throttled idle loop: sleep on a timer until the next draw is due, then align to a frame
+   * (instead of waking on every display refresh just to skip it).
+   */
+  private nextFrameIn(ms: number): void {
+    if (this.disposed || this.rafId !== 0 || this.wakeTimer !== 0) return;
+    if (ms <= WAKE_MIN_MS) {
+      this.nextFrame();
+      return;
+    }
+    this.wakeTimer = window.setTimeout(() => {
+      this.wakeTimer = 0;
+      this.nextFrame();
+    }, ms - WAKE_EARLY_MS);
   }
 
   private get pulsing(): boolean {
@@ -1422,7 +1460,29 @@ export class Board2DView implements IBoardView {
 
   /** Ambient particles run while the theme has some, motion is allowed and the page is visible. */
   private get ambientOn(): boolean {
-    return !!this.theme.ambient && !this.reducedMotion && !document.hidden;
+    return !!this.theme.ambient && !this.still && !document.hidden;
+  }
+
+  /** Covered board (setPaused): decorative idle loops stop. */
+  private paused = false;
+  /** 절전 모드 (setLowPower): no decorative idle loops, ~30 fps animations. */
+  private lowPower = false;
+
+  /** Decorative motion rests (reduced motion, covered board or 절전 모드): steady draw-time looks. */
+  private get still(): boolean {
+    return this.reducedMotion || this.paused || this.lowPower;
+  }
+
+  setPaused(paused: boolean): void {
+    if (this.paused === paused) return;
+    this.paused = paused;
+    this.requestRender();
+  }
+
+  setLowPower(on: boolean): void {
+    if (this.lowPower === on) return;
+    this.lowPower = on;
+    this.requestRender();
   }
 
   /**
@@ -1505,22 +1565,36 @@ export class Board2DView implements IBoardView {
     this.tickAwaken(now);
     this.tickGlow(now);
     const busy = !!this.anim || !!this.skill || this.fxActive(now);
-    const ringLoop = this.hasLegendary && !this.reducedMotion && !document.hidden;
+    const ringLoop = this.hasLegendary && !this.still && !document.hidden;
     // Wasteland glow / bubbles and the targeting ghost breathe at <= ~30 fps (static if reduced motion).
-    const wasteLoop = !this.reducedMotion && !document.hidden && (this.waste.size > 0 || this.traps.length > 0 || this.anchors.length > 0 || this.preview !== null);
+    const wasteLoop = !this.still && !document.hidden && (this.waste.size > 0 || this.traps.length > 0 || this.anchors.length > 0 || this.preview !== null);
     // Rakaeli's transform aura flickers at the same light rate (static with reduced motion).
-    const awakeLoop = !this.reducedMotion && !document.hidden && this.awakeOnBoard;
-    const lightLoop = this.pulsing || ringLoop || wasteLoop || awakeLoop || this.storm > 0 || (this.stormActive && this.stormNext !== null && this.stormNext <= 2);
-    // Ambient arena particles alone tick at the lightest rate (~20 fps).
+    const awakeLoop = !this.still && !document.hidden && this.awakeOnBoard;
+    // The storm field and its next-line warning are game information: they keep moving in 절전 모드.
+    const stormLoop = this.storm > 0 || (this.stormActive && this.stormNext !== null && this.stormNext <= 2);
+    const lightLoop = this.pulsing || ringLoop || wasteLoop || awakeLoop || stormLoop;
+    // Ambient arena particles alone tick at the lightest rate (~10–20 fps by theme).
     const ambientLoop = this.ambientOn;
-    const loop = lightLoop || ambientLoop;
-    if (!busy && loop && now - this.lastFrame < (lightLoop ? IDLE_FRAME_MS : AMBIENT_FRAME_MS)) {
-      this.requestRender();
-      return;
+    const loop = !this.paused && (this.lowPower ? stormLoop : lightLoop || ambientLoop);
+    const since = now - this.lastFrame;
+    if (busy || this.dirty) {
+      // High-refresh displays (120 Hz+): moves draw every other refresh (see BUSY_FRAME_MS).
+      if (since < (this.lowPower ? LOW_POWER_FRAME_MS : BUSY_FRAME_MS)) {
+        this.nextFrame();
+        return;
+      }
+    } else if (loop) {
+      const spec = this.theme.ambient;
+      const cap = lightLoop || !spec ? IDLE_FRAME_MS : ambientFrameMs(spec);
+      if (since < cap - CAP_SLACK_MS) {
+        this.nextFrameIn(cap - since);
+        return;
+      }
     }
+    this.dirty = false;
     this.lastFrame = now;
     this.draw(now);
-    if (busy || loop) this.requestRender();
+    if (busy || loop) this.nextFrame();
   }
 
   private tickAnim(now: number): void {
@@ -1730,7 +1804,7 @@ export class Board2DView implements IBoardView {
     const enemy = this.hi.enemy;
     const selCol = enemy ? BOARD_COLORS.enemySelected : BOARD_COLORS.selected;
     const dotCol = enemy ? BOARD_COLORS.enemyMoveDot : BOARD_COLORS.moveDot;
-    const sp = pulse01(now, 950);
+    const sp = this.still ? PULSE_REST : pulse01(now, 950);
     if (h.selected) {
       const x = this.cx(h.selected.c);
       const y = this.cy(h.selected.r);
@@ -1903,7 +1977,7 @@ export class Board2DView implements IBoardView {
     }
     this.drawTrapsOver(now);
     // Capture targets sit on top of the threatened tokens.
-    const cp = pulse01(now, 700);
+    const cp = this.still ? PULSE_REST : pulse01(now, 700);
     for (const p of h.captures ?? []) this.drawMarker('capture', BOARD_COLORS.capture, this.cx(p.c), this.cy(p.r), cell * (0.96 + 0.07 * cp));
     this.drawTrail(now);
     if (moverDraw) moverDraw();
@@ -1933,7 +2007,7 @@ export class Board2DView implements IBoardView {
       const x = this.cx(t.sq % BOARD_SIZE);
       const y = this.cy(Math.floor(t.sq / BOARD_SIZE));
       const spr = dollSprite(t.owner, d * this.dpr);
-      const ang = this.reducedMotion ? 0 : wobbleAngle(now, t.sq);
+      const ang = this.still ? 0 : wobbleAngle(now, t.sq);
       ctx.save();
       ctx.translate(x, y + d * 0.35);
       ctx.rotate(ang);
@@ -1958,7 +2032,7 @@ export class Board2DView implements IBoardView {
       if (!occ.has(t.sq)) continue;
       const x = this.cx(t.sq % BOARD_SIZE) - cell * DOLL_CORNER_OFFSET;
       const y = this.cy(Math.floor(t.sq / BOARD_SIZE)) + cell * DOLL_CORNER_OFFSET;
-      const ang = this.reducedMotion ? 0 : wobbleAngle(now, t.sq);
+      const ang = this.still ? 0 : wobbleAngle(now, t.sq);
       ctx.save();
       ctx.translate(x, y + d * 0.35);
       ctx.rotate(ang);
@@ -2193,7 +2267,7 @@ export class Board2DView implements IBoardView {
     const ctx = this.ctx;
     const { x0, y0, cell } = this.layout;
     const S = Math.max(8, Math.round(cell * this.dpr));
-    const t = this.reducedMotion ? 0 : now / 1000;
+    const t = this.still ? 0 : now / 1000;
     for (const sq of this.waste) {
       const r = Math.floor(sq / BOARD_SIZE);
       const c = sq % BOARD_SIZE;
@@ -2214,10 +2288,10 @@ export class Board2DView implements IBoardView {
       }
       ctx.drawImage(this.wasteSprites.ground(v, m, S), x, y, cell, cell);
       ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = this.reducedMotion ? 0.45 : 0.3 + 0.32 * (0.5 + 0.5 * Math.sin(t * 2.2 + sq * 1.7));
+      ctx.globalAlpha = this.still ? 0.45 : 0.3 + 0.32 * (0.5 + 0.5 * Math.sin(t * 2.2 + sq * 1.7));
       ctx.drawImage(this.wasteSprites.glow(v, m, S), x, y, cell, cell);
       ctx.globalAlpha = 1;
-      if (!this.reducedMotion) {
+      if (!this.still) {
         // One poison bubble per square: grows, glints, pops.
         const h = ((sq * 2246822519) >>> 0) / 4294967296;
         const ph = (t * 0.45 + h * 7) % 1;
@@ -2264,7 +2338,7 @@ export class Board2DView implements IBoardView {
     if (this.anchors.length === 0 && !this.preview) return;
     const ctx = this.ctx;
     const { x0, y0, cell } = this.layout;
-    const pulse = this.reducedMotion ? 0.5 : 0.5 + 0.5 * Math.sin((now / 1000) * 4.2);
+    const pulse = this.still ? 0.5 : 0.5 + 0.5 * Math.sin((now / 1000) * 4.2);
     const at = (sq: number): { x: number; y: number } => ({ x: x0 + (sq % BOARD_SIZE) * cell, y: y0 + (BOARD_SIZE - 1 - Math.floor(sq / BOARD_SIZE)) * cell });
     ctx.save();
     const inset = cell * 0.1;
@@ -2928,7 +3002,7 @@ export class Board2DView implements IBoardView {
     ctx.stroke();
     ctx.lineWidth = lw;
     if (look.rainbow) {
-      const rot = this.reducedMotion ? 0 : (now / 1000) * 1.4;
+      const rot = this.still ? 0 : (now / 1000) * 1.4;
       ctx.shadowColor = `hsl(${Math.round((rot * 57.3) % 360)},100%,70%)`;
       ctx.shadowBlur = cell * 0.3;
       const cg = (ctx as CanvasRenderingContext2D & { createConicGradient?: (a: number, x: number, y: number) => CanvasGradient }).createConicGradient;

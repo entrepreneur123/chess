@@ -407,6 +407,7 @@ body.in-game,
   display: none;
 }
 .storm-chip {
+  position: relative;
   flex: 0 1 auto;
   display: inline-flex;
   align-items: center;
@@ -446,15 +447,24 @@ body.in-game,
   box-shadow: inset 0 0 0 1px rgba(139, 108, 255, 0.6);
   color: var(--arcane-text);
 }
-.storm-chip.is-soon {
+/* Shrink imminent: a brighter rim and glow fade in and out over the chip. Opacity only
+   (compositor); animating the chip's own box-shadow repainted it every frame. */
+.storm-chip.is-soon::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 1px 0 rgba(198, 184, 255, 0.45),
+    inset 0 0 0 1.5px rgba(169, 147, 255, 1),
+    0 0 26px 0 rgba(139, 108, 255, 0.9);
+  opacity: 0;
+  pointer-events: none;
   animation: storm-pulse 0.9s ease-in-out infinite alternate;
 }
 @keyframes storm-pulse {
   to {
-    box-shadow:
-      inset 0 1px 0 rgba(198, 184, 255, 0.45),
-      inset 0 0 0 1.5px rgba(169, 147, 255, 1),
-      0 0 26px 0 rgba(139, 108, 255, 0.9);
+    opacity: 1;
   }
 }
 .pass-chip {
@@ -840,7 +850,7 @@ body.in-game,
 @media (prefers-reduced-motion: reduce) {
   .coach__icon,
   .coach.is-entering,
-  .storm-chip.is-soon,
+  .storm-chip.is-soon::after,
   .turn-count.is-tick .turn-count__num,
   .turn-pill.is-thinking .turn-pill__dot {
     animation: none;

@@ -44,6 +44,7 @@ import { getProfile, setProfile, settleMatch, updateProfile, type MatchOutcome, 
 import { DUNGEON_LABEL, arenaById } from '../../meta/progression';
 import { useMatchBackdrop } from '../backdrops';
 import { duck, playArenaMusic } from '../musicBridge';
+import { isPowerSave, watchPowerSave } from '../powerSave';
 import { resultPanel } from '../game/resultPanel';
 import { coinFlipFirst, randInt, defaultRng } from '../../meta/rng';
 import { installBoardDrag, type BoardDrag } from '../components/boardDrag';
@@ -55,7 +56,7 @@ import { Disposables, h, replaceChildren } from '../dom';
 import { icon } from '../icons';
 import type { Router, Screen } from '../router';
 import { BOT, GameController, HUMAN, type ControllerSnapshot, type Phase } from '../game/GameController';
-import { CRITICAL_MS, createRoster, endReasonText, setText, stormStatusText, TimerRing, turnPillContent, wipeCounts } from '../game/hud';
+import { clockRedrawMs, CRITICAL_MS, createRoster, endReasonText, setText, stormStatusText, TimerRing, turnPillContent, wipeCounts } from '../game/hud';
 import { createFieldPanel } from '../game/fieldPanel';
 import { createHand, handModel, selectFromHand } from '../game/hand';
 import { CUTIN_MS, cutInEl, preloadCutIns } from '../game/cutin';
@@ -69,6 +70,10 @@ import '../game/hud.css';
 const SUDDEN_DEATH_WARN_TURNS = 5;
 /** Grace period for a lost WebGL context to come back before the match switches to the 2D board. */
 const CONTEXT_FALLBACK_MS = 3000;
+/** HUD clock check between turns (ms): nothing on it moves then; controller changes poke it. */
+const CLOCK_IDLE_MS = 250;
+/** HUD clock check while the page is hidden (ms); coming back pokes it at once anyway. */
+const CLOCK_HIDDEN_MS = 1000;
 /** Plies -> turns as the player counts them (one move each = one turn). */
 const pliesToTurns = (plies: number) => Math.ceil(plies / 2);
 
@@ -287,6 +292,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   let prevPhase: Phase | null = null;
   let prevSel: string | null = null;
   let lastTickSec = -1;
+  /** Redraw the HUD clock now (set once the match runs; see the paced loop below). */
+  let pokeClock: () => void = () => {};
   let stormKey = '';
   let selChipKey = '';
   let wasteKey = 0;
@@ -881,6 +888,9 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       panel?.el ?? null,
       params.mode === 'dungeon' ? null : h('p', { class: 'result__total', 'data-record': '' }, icon('trophy', 16), `통산 ${after.stats.wins}승 ${after.stats.losses}패 ${after.stats.draws}무`),
     );
+    // The result covers the board (dark blurred scrim): its ambience would only cost a full-screen
+    // re-blur per board frame. It rests on its last frame from here on.
+    board?.setPaused?.(true);
     const dialog = showDialog<'again' | 'lobby'>({
       title,
       className: `result result--${outcome}`,
@@ -929,6 +939,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
         replaceChildren(boardHost, h('div', { class: 'board-error' }, '보드를 표시할 수 없습니다.'));
       }
       bag.add(() => board?.dispose());
+      // 절전 모드 follows the setting live (it can be switched from the in-match settings too).
+      bag.add(watchPowerSave((on) => board?.setLowPower?.(on)));
       bot = new BotClient();
       const botRef = bot;
       bag.add(() => botRef.dispose());
@@ -1021,6 +1033,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
             return;
           }
           wireBoard(board);
+          board.setLowPower?.(isPowerSave());
+          if (resultShown) board.setPaused?.(true);
           // Everything the board was told so far is re-sent by the next render.
           board.setPieces(c.state.pieces);
           syncedPieces = c.state.pieces;
@@ -1056,7 +1070,10 @@ export function gameScreen(router: Router, params: GameParams): Screen {
 
       bag.add(
         c.on((e) => {
-          if (e.type === 'change') renderSnapshot(c.snapshot());
+          if (e.type === 'change') {
+            renderSnapshot(c.snapshot());
+            pokeClock();
+          }
           else if (e.type === 'toast') {
             // Repeated auto-passes would toast every single move: show it once, then the pass chip.
             if (e.kind === 'pass' && e.player !== undefined) {
@@ -1152,7 +1169,9 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       // clock). Hidden pages throttle timers and a suspended app runs none, so the deadline is
       // re-checked whenever the player comes back: time that ran out meanwhile is applied at once.
       const checkClock = () => {
-        if (!document.hidden) c.checkClock();
+        if (document.hidden) return;
+        c.checkClock();
+        pokeClock(); // the HUD clock rests while hidden: catch up at once
       };
       bag.listen(document, 'visibilitychange', checkClock);
       bag.listen(window, 'pageshow', checkClock);
@@ -1174,7 +1193,12 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       bag.listen(window, 'resize', () => board?.resize());
       bag.listen(window, 'orientationchange', () => board?.resize());
 
-      bag.frameLoop(() => {
+      // HUD clock: a paced timer, not a per-frame loop (clockRedrawMs). A frame loop here redrew the
+      // ring on every display refresh (60–120 Hz) for the whole match: a big, avoidable heat cost.
+      pokeClock = bag.pacedLoop(() => {
+        // Hidden page / app in the background: nothing to draw and no countdown ticks to play
+        // (the deadline itself is the controller's; checkClock pokes this loop on return).
+        if (document.hidden) return CLOCK_HIDDEN_MS;
         const snap = c.state;
         const active = c.phase === 'humanTurn' || c.phase === 'botThinking';
         const rem = c.turnRemainingMs();
@@ -1197,6 +1221,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
           lastTickSec = -1;
           bottomBar.classList.remove('is-urgent', 'is-critical');
         }
+        // Between turns nothing moves; a controller change pokes the loop at once anyway.
+        return active ? clockRedrawMs(rem, c.turnTimeMs) : CLOCK_IDLE_MS;
       });
 
       if (import.meta.env.DEV) {

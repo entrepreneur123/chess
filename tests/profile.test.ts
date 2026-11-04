@@ -176,7 +176,7 @@ describe('migration v4 -> v5 (12 x 12 board with a 3 x 12 zone -> 10 x 10 with 2
     expect(p.dungeon.lastClaimDay).toBe('2026-11-01');
     expect(p.dungeonLevel).toBe('hard');
     expect(p.stats).toEqual({ wins: 40, losses: 12, draws: 3 });
-    expect(p.settings).toEqual({ sound: false, music: false, voice: true, haptics: false, view: 'top' });
+    expect(p.settings).toEqual({ sound: false, music: false, voice: true, haptics: false, powerSave: false, view: 'top' });
     expect(p.onboarding).toEqual({ tutorialSeen: true, firstMoveDone: true, trapTip: true, stunTip: false });
     // The migrated profile is written back at once.
     expect(stored().version).toBe(5);
@@ -237,7 +237,7 @@ describe('board view setting', () => {
     const base = createDefaultProfile();
     expect(sanitizeProfile({ ...base, settings: { ...base.settings, view: 'top' } }).settings.view).toBe('top');
     expect(sanitizeProfile({ ...base, settings: { sound: false, haptics: true, view: 'iso' } }).settings.view).toBe('tilt');
-    expect(sanitizeProfile({ ...base, settings: { sound: false, haptics: true } }).settings).toEqual({ sound: false, music: true, voice: true, haptics: true, view: 'tilt' });
+    expect(sanitizeProfile({ ...base, settings: { sound: false, haptics: true } }).settings).toEqual({ sound: false, music: true, voice: true, haptics: true, powerSave: false, view: 'tilt' });
     expect(sanitizeProfile({ ...base, settings: { ...base.settings, music: false } }).settings.music).toBe(false);
     expect(sanitizeProfile({ ...base, settings: { ...base.settings, music: 'no' } }).settings.music).toBe(true);
     expect(sanitizeProfile({ ...base, settings: { ...base.settings, voice: false } }).settings.voice).toBe(false);

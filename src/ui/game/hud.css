@@ -1217,6 +1217,8 @@
   gap: 1px;
 }
 .hand-card__skill {
+  /* Containing block of the ready pulse (::before / ::after); short rows make it absolute. */
+  position: relative;
   align-self: flex-start;
   display: inline-flex;
   align-items: center;
@@ -1233,7 +1235,8 @@
   font-weight: var(--fw-bold);
   line-height: 1;
   white-space: nowrap;
-  overflow: hidden;
+  /* No overflow clip: the text truncates itself (an overflow:hidden flex item shrinks to fit the
+     max-width), and a clip here would cut the ready glow off. */
 }
 .hand-card__skill-text {
   overflow: hidden;
@@ -1241,11 +1244,32 @@
 }
 .hand-card__skill.is-ready {
   background: rgba(24, 48, 20, 0.92);
+  box-shadow: none;
+  color: var(--toxic-text);
+}
+/* The ready pulse cross-fades the calm glow (::before) and the bright one (::after): opacity only,
+   so it runs on the compositor. Animating the box-shadow itself repainted the card every frame
+   for as long as the skill stayed ready. Without motion the calm glow simply stays. */
+.hand-card__skill.is-ready::before,
+.hand-card__skill.is-ready::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  animation: hand-skill-ready 1.6s ease-in-out infinite alternate;
+}
+.hand-card__skill.is-ready::before {
   box-shadow:
     inset 0 0 0 1.5px rgba(124, 255, 90, 0.75),
     0 0 12px -2px rgba(124, 255, 90, 0.6);
-  color: var(--toxic-text);
-  animation: hand-skill-ready 1.6s ease-in-out infinite alternate;
+  animation-direction: alternate-reverse;
+}
+.hand-card__skill.is-ready::after {
+  box-shadow:
+    inset 0 0 0 1.5px rgba(166, 255, 140, 1),
+    0 0 18px 0 rgba(124, 255, 90, 0.75);
+  opacity: 0;
 }
 .hand-card__skill.is-ready .icon {
   color: var(--toxic);
@@ -1255,10 +1279,11 @@
   color: var(--text-3);
 }
 @keyframes hand-skill-ready {
+  from {
+    opacity: 0;
+  }
   to {
-    box-shadow:
-      inset 0 0 0 1.5px rgba(166, 255, 140, 1),
-      0 0 18px 0 rgba(124, 255, 90, 0.75);
+    opacity: 1;
   }
 }
 /* A static flex item (z-index works on flex items), so the skill badge can be lifted out to
@@ -1477,7 +1502,8 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .hand-card,
-  .hand-card__skill.is-ready {
+  .hand-card__skill.is-ready::before,
+  .hand-card__skill.is-ready::after {
     animation: none;
     transition: none;
   }

@@ -257,3 +257,20 @@ body.in-game #app::before {
     padding-right: max(var(--s-3), calc((100% - var(--column)) / 2));
   }
 }
+
+/* ---- 절전 모드 (settings.powerSave, ui/powerSave.ts) -------------------------------
+   Purely decorative looping animations rest (each element shows its static look, as with
+   prefers-reduced-motion). Loops that carry game information keep running: the turn timer's last
+   seconds, the storm warning, the bot-thinking dot, coach hints and the tutorial. */
+.power-save .btn--play::before,
+.power-save .arena__fig img,
+.power-save .mode-btn__dot,
+.power-save .badge,
+.power-save .ctile__badge,
+.power-save .unit-art.tier-3::before,
+.power-save .unit-card__shine,
+.power-save .unit-card__aura,
+.power-save .hand-card__skill.is-ready::before,
+.power-save .hand-card__skill.is-ready::after {
+  animation: none !important;
+}

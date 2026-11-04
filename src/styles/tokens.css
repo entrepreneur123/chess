@@ -82,7 +82,7 @@
   --gold-700: var(--gold-lip);
 
   /* ---- Rarity: base, deep (frame shadow side) and glow ------------------ */
-  /* common = white, rare = orange, epic = purple, legendary = rotating rainbow. */
+  /* common = white, rare = orange, epic = purple, legendary = rainbow. */
   --rar-common: #e9eefb;
   --rar-common-deep: #6f7c9c;
   --rar-common-glow: rgba(233, 238, 251, 0.25);
@@ -95,7 +95,9 @@
   --rar-legendary: #7df2d0;
   --rar-legendary-deep: #6b2bd6;
   --rar-legendary-glow: rgba(160, 120, 255, 0.5);
-  --rar-rainbow: conic-gradient(from var(--rar-angle, 0deg), #ff5f6d, #ffc371, #f9f871, #5ef2a0, #4fd1ff, #7d6bff, #e66bff, #ff5f6d);
+  /* Static on purpose: a var() inside a custom property is resolved where it is declared (:root),
+     so the old animated --rar-angle never turned it; it only cost a style pass every frame. */
+  --rar-rainbow: conic-gradient(#ff5f6d, #ffc371, #f9f871, #5ef2a0, #4fd1ff, #7d6bff, #e66bff, #ff5f6d);
 
   /* ---- Type -------------------------------------------------------------- */
   --font-body: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, 'Apple SD Gothic Neo', 'Noto Sans KR',
@@ -204,18 +206,6 @@
   --z-splash: 90;
 
   color-scheme: dark;
-}
-
-/* Animatable angle for the legendary rainbow ring (static rainbow where @property is unsupported). */
-@property --rar-angle {
-  syntax: '<angle>';
-  inherits: true;
-  initial-value: 0deg;
-}
-@keyframes rar-spin {
-  to {
-    --rar-angle: 360deg;
-  }
 }
 
 /* Rarity contexts: any element with .rarity-* exposes --rar / --rar-deep / --rar-glow / --rar-soft. */

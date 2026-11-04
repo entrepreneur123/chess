@@ -52,7 +52,7 @@
 }
 
 /* Frame: a metal rim in the rarity colour around the portrait (white / orange / purple /
-   rotating rainbow), a dark outline and a lip below. */
+   rainbow), a dark outline and a lip below. */
 .ctile__frame {
   position: relative;
   display: block;
@@ -78,7 +78,6 @@
 .ctile.rarity-legendary .ctile__frame {
   --frame: 3.5px;
   background: var(--rar-rainbow);
-  animation: rar-spin 3.2s linear infinite;
   box-shadow:
     0 0 0 1.5px var(--outline),
     0 5px 0 1.5px rgba(0, 0, 0, 0.55),
@@ -273,11 +272,6 @@
 /* A character that just joined pops in at its new place. */
 .ctile.is-new .ctile__frame {
   animation: ctile-new 700ms var(--ease-spring) both;
-}
-.ctile.rarity-legendary.is-new .ctile__frame {
-  animation:
-    ctile-new 700ms var(--ease-spring) both,
-    rar-spin 3.2s linear infinite;
 }
 @keyframes ctile-new {
   0% {

@@ -181,9 +181,12 @@
   pointer-events: none;
   animation: btn-shine 4.2s 1.4s var(--ease-in-out) infinite;
 }
+/* Moves by transform only (compositor; animating `left` re-laid out and repainted the lobby every
+   frame). The travel, 190% of the button (left -60% -> 130%), is 190 / 36 = 527.78% of the 36%-wide
+   streak. */
 @keyframes btn-shine {
   0% {
-    left: -60%;
+    transform: translateX(0) skewX(-18deg);
     opacity: 0;
   }
   8% {
@@ -191,7 +194,7 @@
   }
   30%,
   100% {
-    left: 130%;
+    transform: translateX(527.78%) skewX(-18deg);
     opacity: 0;
   }
 }
@@ -498,7 +501,6 @@
   mask:
     linear-gradient(#000 0 0) content-box exclude,
     linear-gradient(#000 0 0);
-  animation: rar-spin 3.2s linear infinite;
   pointer-events: none;
 }
 .chip--rarity.rarity-legendary::before {
@@ -647,7 +649,7 @@
     inset 0 0 0 1.5px var(--gold-hi),
     0 0 0 1.5px var(--outline);
 }
-/* Legendary: rotating rainbow ring over the rarity ring. */
+/* Legendary: rainbow ring over the rarity ring. */
 .unit-art--face.rarity-legendary::after {
   content: '';
   position: absolute;
@@ -656,7 +658,6 @@
   background: var(--rar-rainbow);
   -webkit-mask: radial-gradient(closest-side, transparent calc(100% - 3.5px), #000 calc(100% - 3px));
   mask: radial-gradient(closest-side, transparent calc(100% - 3.5px), #000 calc(100% - 3px));
-  animation: rar-spin 3.2s linear infinite;
   pointer-events: none;
 }
 /* 3성: a slow gold laurel of light around the portrait. */
@@ -793,7 +794,6 @@
   background: var(--rar-rainbow);
   -webkit-mask: radial-gradient(closest-side, transparent calc(100% - var(--tk-ring) - 0.5px), #000 calc(100% - var(--tk-ring)));
   mask: radial-gradient(closest-side, transparent calc(100% - var(--tk-ring) - 0.5px), #000 calc(100% - var(--tk-ring)));
-  animation: rar-spin 3.2s linear infinite;
   pointer-events: none;
 }
 .token__lv {
@@ -1240,10 +1240,7 @@ body.in-game .toast.is-in {
   .badge,
   .fx-ripple::after,
   .enter,
-  .unit-art.tier-3::before,
-  .token.rarity-legendary::after,
-  .unit-art--face.rarity-legendary::after,
-  .chip--rarity.rarity-legendary::after {
+  .unit-art.tier-3::before {
     animation: none !important;
   }
 }

@@ -40,7 +40,7 @@ the outer screens, the matchmaking art by `[data-screen='matchmaking']`, and the
   Gold copy uses `--gold-text`; labels on gold use `--gold-ink` (11:1). Arcane / toxic / positive
   copy use `--arcane-text`, `--toxic-text`, `--positive-text`.
 - Rarity: `.rarity-common|rare|epic|legendary` exposes `--rar`, `--rar-deep`, `--rar-glow`, `--rar-soft`.
-  Common = white, rare = orange, epic = purple, legendary = rotating rainbow (`--rar-rainbow`).
+  Common = white, rare = orange, epic = purple, legendary = rainbow (`--rar-rainbow`).
 - Gold is sparse: the primary CTA, the turn chip on my turn, stars, 3성 / selected items, frame
   hairlines and victory moments.
 

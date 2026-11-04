@@ -102,7 +102,7 @@ export function levelBadge(level: Level, cls = ''): HTMLElement {
 
 /**
  * Round piece token: the character's face illustration inside a team-coloured rim, wrapped in the
- * rarity ring (white / orange / purple / rotating rainbow), with a star-grade pip.
+ * rarity ring (white / orange / purple / rainbow), with a star-grade pip.
  */
 export function pieceToken(
   character: CharacterId,

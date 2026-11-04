@@ -18,7 +18,7 @@ const W = +(process.argv[3] || 390), H = +(process.argv[4] || 844), tag = proces
   await p.goBack(); await p.waitForTimeout(600);
   // shop removed (no economy)
   await p.click('[data-action="settings"]'); await p.waitForTimeout(500); await shot('06-settings');
-  await p.mouse.click(W/2, 80); await p.waitForTimeout(500);
+  await p.mouse.click(W/2, 24); await p.waitForTimeout(500); // tap the scrim above the sheet
   await p.click('[data-action="start-match"]'); await p.waitForTimeout(1600); await shot('07-matching');
   await p.waitForTimeout(3000); await shot('08-game');
   await p.click('button[aria-label="기권"]').catch(()=>{}); await p.waitForTimeout(500); await shot('09-resign');

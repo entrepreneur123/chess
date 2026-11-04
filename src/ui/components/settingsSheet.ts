@@ -1,6 +1,7 @@
 /**
- * Settings bottom sheet (sound / music / voice / haptics / replay tutorial). Values persist in the
- * profile; the music bridge follows `sound && music` on its own.
+ * Settings bottom sheet (sound / music / voice / haptics / 절전 모드 / replay tutorial). Values
+ * persist in the profile; the music bridge follows `sound && music` and the power-save module
+ * (ui/powerSave.ts) follows `powerSave` on their own.
  */
 import { haptic, primeAudio, sfx } from '../../audio/sfx';
 import { APP_NAME } from '../../meta/economy';
@@ -152,6 +153,7 @@ export function showSettings(): void {
       switchRow('music', '배경음악', '전장마다 다른 테마 음악', 'music'),
       switchRow('voice', '캐릭터 음성', '선택 · 공격 · 스킬 대사', 'person'),
       switchRow('haptics', '진동', canVibrate ? '잡기 · 내 차례 · 승리 시 짧은 진동' : '이 기기에서는 지원되지 않을 수 있어요', 'vibration'),
+      switchRow('powerSave', '절전 모드', '발열 · 배터리 절약 · 효과 간소화', 'battery'),
     ),
     h(
       'div',

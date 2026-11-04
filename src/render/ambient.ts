@@ -7,8 +7,8 @@
  *    one Points draw; Canvas2D: `drawAmbient2D`, cached sprites);
  *  - particles live in field coordinates (cells, x left -> right, y top -> bottom, 0..BOARD_SIZE)
  *    and stay over the field, under the pieces and every marker;
- *  - the views tick it at AMBIENT_FRAME_MS (~20 fps) only while the page is visible and motion is
- *    allowed (never with prefers-reduced-motion).
+ *  - the views tick it at ambientFrameMs (~10–20 fps by theme) only while the page is visible,
+ *    motion is allowed (never with prefers-reduced-motion) and 절전 모드 is off.
  * Pure Canvas2D + math: no three.js here (the 2D fallback stays light).
  */
 import { BOARD_SIZE } from '../engine/types';
@@ -18,8 +18,42 @@ import type { AmbientSpec } from './arenaThemes';
 
 /** Most particles any theme uses (buffers are sized once). */
 export const AMBIENT_MAX = 32;
-/** Frame cap while only the ambient drift is animating (~20 fps). */
+/** Fastest frame rate of the ambient drift alone (~20 fps; for the quickest themes). */
 export const AMBIENT_FRAME_MS = 50;
+/** Slowest (~10 fps): the gentlest drifts move well under a pixel per frame even then. */
+const AMBIENT_SLOW_FRAME_MS = 100;
+/** Travel (cells) a particle may cover between two frames: ~1 CSS px on a phone-sized board. */
+const AMBIENT_FRAME_TRAVEL = 0.03;
+/**
+ * Busy-animation frame floor of both views (ms): a 120 / 144 Hz display draws every other refresh
+ * (60 / 72 fps), 60 and 90 Hz displays draw every refresh. Moves stay smooth; the GPU does half the
+ * work on high-refresh phones.
+ */
+export const BUSY_FRAME_MS = 10;
+/** Busy-animation frame floor in 절전 모드 (setLowPower): ~30 fps on any display. */
+export const LOW_POWER_FRAME_MS = 30;
+/** Level (0..1) the selection / reach pulses rest at while their idle loop is off. */
+export const PULSE_REST = 0.75;
+
+/**
+ * Frame interval (ms) while only the ambient drift of `spec` animates: derived from its fastest
+ * particle speed (rise + sway, see sampleAmbient) so each frame moves a particle about a pixel.
+ * Slow themes (moonrune motes, apex twinkles) redraw at ~10 fps, fast ones (embers, snow) at ~20.
+ * On an idle board this drift is usually the only thing redrawn, so its rate sets the idle cost.
+ */
+export function ambientFrameMs(spec: AmbientSpec): number {
+  // Peak speeds (cells / s) of the motion in sampleAmbient: rise (or twinkle drift) and side sway.
+  const rise = spec.speed * 1.4;
+  let sway = 0;
+  if (spec.kind === 'snow') sway = 0.35 * 1.1;
+  else if (spec.kind !== 'twinkle') {
+    const amp = spec.kind === 'spores' ? 0.45 : spec.kind === 'motes' ? 0.3 : 0.18;
+    sway = amp * (spec.kind === 'embers' ? 1.6 : 0.6) * 1.3;
+  }
+  const v = Math.hypot(rise, sway);
+  const ms = v > 0 ? (1000 * AMBIENT_FRAME_TRAVEL) / v : AMBIENT_SLOW_FRAME_MS;
+  return Math.round(Math.min(AMBIENT_SLOW_FRAME_MS, Math.max(AMBIENT_FRAME_MS, ms)));
+}
 
 /** Per-particle seeds: x, y, phase, variance (deterministic: identical on every device). */
 const SEEDS = (() => {
