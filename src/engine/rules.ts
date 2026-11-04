@@ -1,5 +1,5 @@
 import { AWAKEN_TURNS, SKILL_UNLOCK_PLY, STORM_INTERVAL_PLIES, SUDDEN_DEATH_PLY, TRAPS_PER_MICHELLE, TRAP_STUN, TURN_TIME_1_MS, TURN_TIME_2_MS, TURN_TIME_MS } from './types';
-import type { AbsorbedAbility, EndReason, Formation, GameState, HistoryEntry, Move, PassReason, Piece, PlayerId, Pos, SkillAction, Trap } from './types';
+import type { AbsorbedAbility, CharacterId, EndReason, Formation, GameState, HistoryEntry, Move, PassReason, Piece, PlayerId, Pos, SkillAction, Trap } from './types';
 import { BOARD_SIZE } from './types';
 import { CHARACTERS, CHAR_CODE, WASTE_SIZE, absorbMaskOf, effectiveValue, keepsDirection, skillKindOf } from './characters';
 import { N_SQUARES, atTurnRow, canHop, formationToAbsolute, forwardDir, genTargets, inStorm, isOnBoard, posOf, sqOf, trapBit } from './board';
@@ -150,6 +150,70 @@ function hopVictims(pieces: Piece[], occ: Int8Array, owner: PlayerId, from: Pos,
 /** Current forward direction of a piece (forward-only movers turn around at the far edge). */
 export function pieceDir(piece: Pick<Piece, 'owner' | 'dir'>): 1 | -1 {
   return piece.dir ?? forwardDir(piece.owner);
+}
+
+/**
+ * Does this (character, level) movement pattern tell forward from back? Sad, Insaner's own pattern,
+ * Picker and a level-3 Brutile (every neighbour) are symmetric; Marki, Walk, Michelle, Rakaeli and a
+ * level-1/2 Brutile are not.
+ */
+function patternIsDirectional(character: CharacterId, level: number): boolean {
+  switch (character) {
+    case 'marki':
+    case 'walk':
+    case 'michelle':
+    case 'rakaeli':
+      return true;
+    case 'brutile':
+      return level < 3;
+    default:
+      return false;
+  }
+}
+
+/** Empty-board scratch for `reachDependsOnDir` (an Insaner's absorbed patterns, cached by mask). */
+const EMPTY_OCC = new Int8Array(N_SQUARES).fill(-1);
+const dirScratch = [new Int16Array(256), new Int16Array(256)];
+const insanerDirCache = new Map<number, boolean>();
+
+/**
+ * Does flipping forward change where an Insaner of `level` with absorb mask `absorb` can go? Asked
+ * of the move generator on an empty board (the union of patterns can be symmetric even when an
+ * absorbed one is not: his own orthogonal slides already cover Michelle's back steps).
+ */
+function reachDependsOnDir(level: number, absorb: number): boolean {
+  const key = absorb * 4 + level;
+  let v = insanerDirCache.get(key);
+  if (v === undefined) {
+    const mid = (BOARD_SIZE >> 1) * BOARD_SIZE + (BOARD_SIZE >> 1);
+    const ch = CHAR_CODE.insaner;
+    const n0 = genTargets(EMPTY_OCC, [], 0, ch, level, mid, dirScratch[0], 0, false, 1, 0, absorb);
+    const n1 = genTargets(EMPTY_OCC, [], 0, ch, level, mid, dirScratch[1], 0, false, -1, 0, absorb);
+    const a = dirScratch[0].slice(0, n0).sort();
+    const b = dirScratch[1].slice(0, n1).sort();
+    v = n0 !== n1 || a.some((x, i) => x !== b[i]);
+    insanerDirCache.set(key, v);
+  }
+  return v;
+}
+
+/**
+ * True when the piece's current movement depends on its forward direction (`pieceDir`), i.e. the
+ * UI should show which way is forward. An Insaner is directional once what he has absorbed makes
+ * his combined reach direction-dependent.
+ */
+export function isDirectional(piece: Pick<Piece, 'character' | 'level' | 'absorbed'>): boolean {
+  if (piece.character === 'insaner') return !!piece.absorbed?.length && reachDependsOnDir(piece.level, absorbMaskOf(piece.absorbed));
+  return patternIsDirectional(piece.character, piece.level);
+}
+
+/**
+ * The piece's forward direction as the player sees the board: player 0 is always drawn at the
+ * bottom (rows grow upward on screen, both renderers; the board never flips), so `dir` +1 is up.
+ * The one helper every arrow (hand cards, roster chips, board tokens, toasts) goes through.
+ */
+export function screenArrow(piece: Pick<Piece, 'owner' | 'dir'>): 'up' | 'down' {
+  return pieceDir(piece) === 1 ? 'up' : 'down';
 }
 
 function countTargets(occ: Int8Array, owners: Uint8Array, piece: Piece, storm: number, waste: Uint8Array | null, traps: Uint8Array | null): number {

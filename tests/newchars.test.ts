@@ -65,11 +65,52 @@ describe('Michelle movement', () => {
     expect(targetKeys(getLegalMoves(s1, 'p1-michelle'))).toEqual(keys([[5, 4], [5, 6], [6, 5]]));
   });
 
-  it('never turns around at the far edge (her back stays toward her home rows)', () => {
+  it('turns around at the far edge like everyone (game rule): her back then faces the enemy side', () => {
     let s = makeState([[0, 'michelle', 3, 8, 5], [1, 'sad', 1, 0, 0]]);
+    s = play(s, 'p0-michelle', 9, 5); // forward 1 onto the enemy back rank: no trap, then she turns
+    let m = s.pieces.find((p) => p.id === 'p0-michelle')!;
+    expect(m.dir).toBe(-1);
+    expect(traps(s)).toEqual([]);
+    // Now "forward" is toward her home rows: only 1 square (3-star), and moving there lays nothing.
+    const reach = targetKeys(getTargetsForPiece(s, m));
+    expect(reach).not.toContain('7,5');
+    expect(reach).toContain('8,5');
+    s = play(s, 'p1-sad', 0, 1);
+    s = play(s, 'p0-michelle', 8, 5);
+    expect(traps(s)).toEqual([]);
+    // Her back is now toward row 9: stepping there is a backward move and lays a trap on 8,5.
+    s = play(s, 'p1-sad', 0, 2);
     s = play(s, 'p0-michelle', 9, 5);
-    const m = s.pieces.find((p) => p.id === 'p0-michelle')!;
-    expect(m.dir ?? 1).toBe(1);
+    m = s.pieces.find((p) => p.id === 'p0-michelle')!;
+    expect(traps(s)).toEqual([`0@${8 * BOARD_SIZE + 5}`]);
+    expect(m.dir).toBe(-1); // a backward step onto row 9 is not the far edge of her (new) forward
+  });
+});
+
+describe('Michelle turn-around: FastBoard parity', () => {
+  it('the fast board flips her at the far edge and judges "backward" with her pre-move direction', () => {
+    let s = makeState([[0, 'michelle', 3, 8, 5], [1, 'sad', 1, 0, 0]]);
+    const step = (pieceId: string, r: number, c: number) => {
+      const b = fastFromState(s);
+      const buf = new Int32Array(256);
+      const n = fastGenMoves(b, b.turn, buf, 0);
+      const i = b.ids.indexOf(pieceId);
+      const code = Array.from(buf.subarray(0, n)).find((m) => ((m >> 8) & 255) === i && (m & 255) === r * BOARD_SIZE + c);
+      expect(code, `${pieceId}>${r},${c}`).toBeDefined();
+      fastMake(b, code!);
+      s = play(s, pieceId, r, c);
+      const m = s.pieces.find((p) => p.id === pieceId)!;
+      expect(b.dir[i]).toBe(m.dir ?? (m.owner === 0 ? 1 : -1));
+      const fastTraps: number[] = [];
+      for (let q = 0; q < BOARD_SIZE * BOARD_SIZE; q++) if (b.trap[q]) fastTraps.push(q);
+      expect(fastTraps).toEqual((s.traps ?? []).map((t) => t.sq));
+    };
+    step('p0-michelle', 9, 5); // forward onto the far edge: turns, no trap
+    step('p1-sad', 0, 1);
+    step('p0-michelle', 8, 5); // her new forward: no trap
+    step('p1-sad', 0, 2);
+    step('p0-michelle', 9, 5); // her new back: trap on 8,5
+    expect(s.traps?.map((t) => t.sq)).toEqual([8 * BOARD_SIZE + 5]);
   });
 });
 

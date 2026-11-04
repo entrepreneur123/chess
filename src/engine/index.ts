@@ -17,6 +17,8 @@ export {
   adjudicate,
   buildOccupancy,
   pieceDir,
+  isDirectional,
+  screenArrow,
   turnTimeMsFor,
   suddenDeathIn,
   turnNumber,

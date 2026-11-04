@@ -23,6 +23,10 @@ character)
 
 - Moves slide like 사드's: the path must be clear, and she captures the enemy on the landing
   square.
+- **Turning around (owner rule, 2026-11-04).** Like every forward mover, she turns around when she
+  reaches the far edge in her forward direction (the enemy's back rank). Her forward and back
+  swap, so after the turn her "back" (where her doll traps come from) points toward the enemy
+  side. Whether a move is backward is judged with her direction before that move.
 
 **Trait: 인형 함정 (doll trap)**
 - **When a trap is laid.** The first **3** times in a match that Michelle makes a **backward**

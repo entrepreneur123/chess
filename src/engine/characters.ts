@@ -65,7 +65,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     nameKo: '미셸',
     nameEn: 'Michelle',
     rarity: 'common',
-    descKo: ['좌·우·뒤로 1칸', '좌·우·뒤로 최대 2칸 직진', '좌·우·뒤로 최대 2칸 직진 + 앞으로 1칸'],
+    descKo: ['좌·우·뒤로 1칸 · 끝줄에서 방향 전환', '좌·우·뒤로 최대 2칸 직진 · 끝줄에서 방향 전환', '좌·우·뒤로 최대 2칸 직진 + 앞으로 1칸 · 끝줄에서 방향 전환'],
     value: [3, 4, 5],
     trait: {
       nameKo: '인형 함정',
@@ -139,9 +139,14 @@ if (N_CHARS * 3 > 30) throw new Error('absorb masks no longer fit in 31 bits: wi
 /** All three level bits of Picker's pattern in an absorb mask (a hop-through pattern). */
 export const PICKER_BITS = 0b111 << (CH_PICKER * 3);
 
-/** Characters that never turn around at the far edge (symmetric, or they mostly step back). */
+/**
+ * Game rule: a piece that reaches the far edge in its forward direction (the enemy's back rank)
+ * turns around: its forward and backward swap. Only the fully symmetric movers (Sad, Picker) skip
+ * the flip, because it would not change a single square they can reach. Michelle turns too: after
+ * the flip her "back" (where she lays doll traps) points toward the enemy side.
+ */
 export function keepsDirection(ch: number): boolean {
-  return ch === CH_SAD || ch === CH_MICHELLE || ch === CH_PICKER;
+  return ch === CH_SAD || ch === CH_PICKER;
 }
 
 /** Michelle's sideways / backward slide range by level (index = level); 3-star adds forward 1. */
