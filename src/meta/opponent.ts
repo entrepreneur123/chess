@@ -24,7 +24,7 @@ import {
   type FormationSlot,
   type Level,
 } from '../engine';
-import { ARENA_AI, ARENA_DEFS, arenaForRating, opponentRating, shopPool, type ArenaId, type DungeonLevel, type MatchMode } from './progression';
+import { ARENA_AI, ARENA_DEFS, arenaById, arenaForRating, opponentRating, shopPool, type ArenaId, type DungeonLevel, type MatchMode } from './progression';
 import { defaultRng, pick, randInt, type Rng } from './rng';
 
 const BOT_NAMES = ['전략가 하늘', '체크메이트 민', '나이트 루나', '그림자 준', '북풍 서윤', '철벽 도윤', '번개 지호', '기사 하린'];
@@ -44,7 +44,16 @@ export interface Opponent {
 }
 
 export type OpponentRequest =
-  | { mode: 'ranked' | 'casual'; rating: number; playerGrades: readonly Level[] }
+  | {
+      mode: 'ranked' | 'casual';
+      rating: number;
+      playerGrades: readonly Level[];
+      /**
+       * Developer mode only (the lobby's DEV arena picker): draw the opponent from this arena
+       * instead (a rating inside it, its cumulative shop pool, its AI strength).
+       */
+      arena?: ArenaId;
+    }
   | { mode: 'dungeon'; level: DungeonLevel };
 
 /** Characters with the legendary rarity (Insaner, Brutile). */
@@ -188,6 +197,12 @@ function dungeonRating(level: DungeonLevel, rng: Rng): number {
   return randInt(rng, a.min, a.max ?? a.min + 200);
 }
 
+/** A random rating inside an arena (the open-ended top arena uses its first 300 points). */
+export function ratingInArena(id: ArenaId, rng: Rng): number {
+  const a = arenaById(id);
+  return randInt(rng, a.min, a.max ?? a.min + 300);
+}
+
 /** An AI opponent for a mode (see the module comment). */
 export function createOpponent(req: OpponentRequest, rng: Rng = defaultRng): Opponent {
   if (req.mode === 'dungeon') {
@@ -205,7 +220,7 @@ export function createOpponent(req: OpponentRequest, rng: Rng = defaultRng): Opp
       arena: arenaForRating(rating).id,
     };
   }
-  const rating = opponentRating(req.mode, req.rating, rng);
+  const rating = req.arena ? ratingInArena(req.arena, rng) : opponentRating(req.mode, req.rating, rng);
   const arena = arenaForRating(rating);
   const difficulty: Difficulty = ARENA_AI[arena.id];
   const squad = drawDistinct(rng, shopPool(arena), PIECES_PER_SIDE);

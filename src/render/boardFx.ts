@@ -319,12 +319,14 @@ varying vec3 vColor;
 void main() {
   vec2 d = gl_PointCoord - 0.5;
   float r = length(d) * 2.0;
-  float a = smoothstep(1.0, 0.25, r) * 0.55 + smoothstep(0.32, 0.0, r) * 0.45;
-  // Twinkles: a thin four-point flare.
-  a = max(a, uStar * max(1.0 - abs(d.x) * 22.0, 1.0 - abs(d.y) * 22.0) * (1.0 - r) * 0.9);
+  // (smoothstep edges in ascending order: reversed edges are undefined in GLSL ES.)
+  float a = (1.0 - smoothstep(0.25, 1.0, r)) * 0.55 + (1.0 - smoothstep(0.0, 0.32, r)) * 0.45;
+  // Twinkles: a thin four-point flare (both factors clamped: outside the disc they go negative).
+  float flare = max(max(1.0 - abs(d.x) * 22.0, 1.0 - abs(d.y) * 22.0), 0.0) * max(1.0 - r, 0.0);
+  a = max(a, uStar * flare * 0.9);
   a *= vA;
   if (a < 0.004) discard;
-  vec3 c = mix(vColor, vec3(1.0), smoothstep(0.3, 0.0, r) * 0.6);
+  vec3 c = mix(vColor, vec3(1.0), (1.0 - smoothstep(0.0, 0.3, r)) * 0.6);
   gl_FragColor = vec4(c, a);
   #include <colorspace_fragment>
 }`;

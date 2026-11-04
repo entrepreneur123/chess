@@ -93,14 +93,21 @@ export function sampleAmbient(spec: AmbientSpec, i: number, t: number, out: Ambi
 
 // ---------------------------------------------------------------- Canvas2D
 
-/** Sprite cache per colour (and shape): a few tiny canvases, freed by clearAmbientSprites. */
-const sprites = new Map<string, HTMLCanvasElement>();
+/** Sprite pair per spec (one per colour): a few tiny canvases, freed by clearAmbientSprites. */
+const sprites = new Map<AmbientSpec, readonly [HTMLCanvasElement, HTMLCanvasElement] | null>();
 const SPRITE_PX = 32;
 
+function spritesOf(spec: AmbientSpec): readonly [HTMLCanvasElement, HTMLCanvasElement] | null {
+  if (sprites.has(spec)) return sprites.get(spec) ?? null;
+  const star = spec.kind === 'twinkle';
+  const a = sprite(spec.colors[0], star);
+  const b = sprite(spec.colors[1], star);
+  const pair = a && b ? ([a, b] as const) : null;
+  sprites.set(spec, pair);
+  return pair;
+}
+
 function sprite(hex: string, star: boolean): HTMLCanvasElement | null {
-  const key = `${hex}|${star ? 1 : 0}`;
-  const hit = sprites.get(key);
-  if (hit) return hit;
   const cvs = document.createElement('canvas');
   cvs.width = SPRITE_PX;
   cvs.height = SPRITE_PX;
@@ -125,14 +132,15 @@ function sprite(hex: string, star: boolean): HTMLCanvasElement | null {
   } else {
     g.fillRect(0, 0, SPRITE_PX, SPRITE_PX);
   }
-  sprites.set(key, cvs);
   return cvs;
 }
 
 export function clearAmbientSprites(): void {
-  for (const c of sprites.values()) {
-    c.width = 0;
-    c.height = 0;
+  for (const pair of sprites.values()) {
+    for (const c of pair ?? []) {
+      c.width = 0;
+      c.height = 0;
+    }
   }
   sprites.clear();
 }
@@ -144,10 +152,10 @@ const sample2d = makeAmbientSample();
  * (x0, y0) with `cell` px per cell. Additive, no allocations after the first call per colour.
  */
 export function drawAmbient2D(g: CanvasRenderingContext2D, spec: AmbientSpec, t: number, x0: number, y0: number, cell: number): void {
-  const star = spec.kind === 'twinkle';
-  const s0 = sprite(spec.colors[0], star);
-  const s1 = sprite(spec.colors[1], star);
-  if (!s0 || !s1) return;
+  const pair = spritesOf(spec);
+  if (!pair) return;
+  const s0 = pair[0];
+  const s1 = pair[1];
   const n = Math.min(AMBIENT_MAX, spec.count);
   g.save();
   g.globalCompositeOperation = 'lighter';

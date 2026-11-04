@@ -234,6 +234,144 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* ---- Developer mode: arena picker strip (DEV · 전장 선택) --------------------------- */
+/* Only in the DOM while dev mode is on. Pink DEV hazard styling (as the top bar's DEV chip) so a
+   dev screenshot is never mistaken for the real game. */
+.devpick-host:empty {
+  display: none;
+}
+.devpick {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 8px 9px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(40, 18, 38, 0.92), rgba(16, 12, 26, 0.92));
+  box-shadow:
+    inset 0 0 0 1.5px rgba(255, 79, 163, 0.55),
+    inset 0 1px 0 rgba(255, 200, 228, 0.18),
+    0 4px 0 var(--panel-lip);
+}
+.devpick__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 2px;
+}
+.devpick__tag {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 5px;
+  background: repeating-linear-gradient(135deg, #d92f86 0 6px, #b0175f 6px 12px);
+  box-shadow: 0 0 0 1.5px var(--outline), 0 0 10px rgba(255, 79, 163, 0.5);
+  color: #fff;
+  font-family: var(--font-logo);
+  font-size: var(--fs-micro);
+  letter-spacing: 0.06em;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45);
+}
+.devpick__title {
+  flex: none;
+  color: var(--ink);
+  font-size: var(--fs-label, 13px);
+  font-weight: var(--fw-bold);
+}
+.devpick__hint {
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: var(--fs-micro);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.devpick__strip {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
+}
+.devpick__chip {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 10px;
+  background: var(--panel-well);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.1);
+  color: var(--text-2);
+  cursor: pointer;
+  --chip-accent: #ff4fa3;
+}
+.devpick__art,
+.devpick__auto {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  object-position: 50% 30%;
+  filter: saturate(0.75) brightness(0.72);
+  transition: filter 160ms var(--ease-out, ease-out);
+}
+.devpick__auto {
+  display: grid;
+  place-items: center;
+  background: linear-gradient(180deg, #1b2338, #10172a);
+  color: var(--text-2);
+}
+.devpick__label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  height: 18px;
+  padding: 0 2px;
+  overflow: hidden;
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-bold);
+  line-height: 1;
+  white-space: nowrap;
+}
+.devpick__label b {
+  color: var(--chip-accent);
+  font-family: var(--font-display);
+  font-size: 12px;
+}
+.devpick__chip.is-on {
+  color: var(--ink);
+  box-shadow:
+    inset 0 0 0 2px var(--chip-accent),
+    0 0 12px color-mix(in srgb, var(--chip-accent) 55%, transparent);
+}
+.devpick__chip.is-on .devpick__art,
+.devpick__chip.is-on .devpick__auto {
+  filter: none;
+}
+.devpick__chip:focus-visible {
+  outline: 2px solid #ff4fa3;
+  outline-offset: 2px;
+}
+/* The arena card previews the DEV pick: a DEV tag after the arena number. */
+.arena.is-dev-preview .arena__eyebrow::after {
+  content: 'DEV';
+  margin-left: 4px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #c41f72;
+  color: #fff;
+  font-size: var(--fs-micro);
+  letter-spacing: 0.06em;
+  text-shadow: none;
+}
+
 /* ---- Play block: the 전장전 CTA + the 견습전투 / 던전 row (progression.css) ------------ */
 .play {
   display: flex;

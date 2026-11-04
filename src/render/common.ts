@@ -99,6 +99,8 @@ export interface TilePalette {
   dark: RGB;
   /** Home-zone team tint strength (HOME_TINT_STRENGTH x the theme's multiplier). */
   homeTint: number;
+  /** Brightness multiplier of the gold last-move tint (warm / gold fields need a brighter one). */
+  lastBoost: number;
 }
 
 const tilePalettes = new Map<BoardTheme, TilePalette>();
@@ -107,7 +109,7 @@ const tilePalettes = new Map<BoardTheme, TilePalette>();
 export function tilePalette(theme: BoardTheme): TilePalette {
   let p = tilePalettes.get(theme);
   if (!p) {
-    p = { light: hexToRgb(theme.tileLight), dark: hexToRgb(theme.tileDark), homeTint: homeTintOf(theme) };
+    p = { light: hexToRgb(theme.tileLight), dark: hexToRgb(theme.tileDark), homeTint: homeTintOf(theme), lastBoost: theme.lastMoveBoost };
     tilePalettes.set(theme, p);
   }
   return p;
@@ -193,7 +195,7 @@ export function tileRgb(r: number, c: number, hi: HighlightIndex, pal: TilePalet
   if (hi.last.has(sq)) {
     // Warm candle-gold at the tile's own brightness (a plain mix with the blue / red zone tints
     // would cancel out to grey).
-    const k = 0.22 + luma(col) * 1.25;
+    const k = (0.22 + luma(col) * 1.25) * pal.lastBoost;
     col = mixRgb(col, [RGB_LAST[0] * k, RGB_LAST[1] * k, RGB_LAST[2] * k], LAST_MOVE_TINT_STRENGTH);
   }
   if (hi.enemy && hi.moves.has(sq)) col = mixRgb(col, RGB_ENEMY_MOVE, ENEMY_MOVE_TINT);

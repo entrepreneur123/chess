@@ -900,8 +900,9 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       bag.add(() => duck(false));
       bag.add(() => document.body.classList.remove('in-game'));
       try {
-        // The 3D arena is disabled for now: top-down board with illustrated tokens only.
-        board = createBoardView(boardHost, { topOnly: true });
+        // The 3D arena is disabled for now: top-down board with illustrated tokens only, in the
+        // match arena's board theme (cells, bezel, grid, surface detail, ambient particles).
+        board = createBoardView(boardHost, { topOnly: true, arena: theme.id });
       } catch (e) {
         console.error('board init failed', e);
         replaceChildren(boardHost, h('div', { class: 'board-error' }, '보드를 표시할 수 없습니다.'));

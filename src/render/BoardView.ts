@@ -47,7 +47,9 @@
  * scan sweep (off with reduced motion), chunky coins (tokens.ts) with glowing rarity rings,
  * luminous additive markers (ice-cyan / red glow dots, glowing selection frame) under a glowing red
  * capture ring, and a lifted selection shown as a screen-up offset with a spreading shadow
- * (applyTopLift).
+ * (applyTopLift). The arena board theme (BoardViewOptions.arena / setArenaTheme, arenaThemes.ts)
+ * recolours the cells, bezel, grid and scan sweep, swaps the overlay's surface detail and drives
+ * one additive Points draw of ambient particles (ambient.ts, ~20 fps, never with reduced motion).
  *
  * Rakaeli (awakenFx.ts): base-form moves leap and shed pale ash feathers (ash feather burst + dim
  * halo-gold ring on a capture). While transformed (`Piece.awaken` > 0) his coin shows the awake face

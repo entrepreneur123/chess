@@ -17,6 +17,9 @@
  *    and blended additively (dots, selection) or normally (capture ring, which sits over a coin).
  * Everything is painted in raw canvas pixels from a cell size `s` and the pixel position (ox, oy)
  * of the field's top-left corner (col 0, row BOARD_SIZE - 1).
+ * Every painter of the field takes an arena board theme (arenaThemes.ts; default = the original
+ * moonrune hologram): bezel / grid / accent / bracket colours, a corner ornament and one procedural
+ * surface detail (paintSurfaceDetail) in the overlay. Markers are the same on every theme.
  * Pure Canvas2D: no three.js, so the 2D fallback stays light.
  */
 import { BOARD_SIZE, ZONE_DEPTH } from '../engine/types';
@@ -732,7 +735,7 @@ const DETAIL_PAINTERS: Record<BoardTheme['detail'], DetailPainter> = {
       g.beginPath();
       g.moveTo(x, y);
       for (let i = 0; i < segs; i++) {
-        a += (rnd() - 0.5) * 1.1;
+        a += (rnd() - 0.5) * 0.8;
         const l = len * (0.6 + rnd() * 0.8);
         x += Math.cos(a) * l;
         y += Math.sin(a) * l;
@@ -748,12 +751,12 @@ const DETAIL_PAINTERS: Record<BoardTheme['detail'], DetailPainter> = {
       glowStroke(g, s, T.d0, hot, k, w);
     };
     const pending: [number, number, number, number, number, number][] = [];
-    const N = 15;
+    const N = 11;
     for (let i = 0; i < N; i++) {
       const x = ox + rnd() * size;
       const y = oy + rnd() * size;
-      blob(g, x, y, s * (0.45 + rnd() * 0.5), T.d0, 0.05 * k);
-      crack(x, y, rnd() * Math.PI * 2, 4 + Math.floor(rnd() * 5), s * 0.26, 0.8 + rnd() * 0.5, true);
+      blob(g, x, y, s * (0.5 + rnd() * 0.5), T.d0, 0.07 * k);
+      crack(x, y, rnd() * Math.PI * 2, 5 + Math.floor(rnd() * 4), s * 0.3, 1.05 + rnd() * 0.5, true);
     }
     for (const b of pending) crack(b[0], b[1], b[2], b[3], b[4], b[5], false);
     // Heat haze rising from the bottom and top edges (the forge below the plates).
@@ -769,28 +772,28 @@ const DETAIL_PAINTERS: Record<BoardTheme['detail'], DetailPainter> = {
     }
   },
 
-  /** blightmire: moss and fog mottling, a few creeping roots and lichen specks. */
+  /** blightmire: moss and fog mottling, creeping roots, lichen specks and a few witch-lantern glows. */
   moss(g, s, ox, oy, size, T, k, rnd) {
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 34; i++) {
       const x = ox + rnd() * size;
       const y = oy + rnd() * size;
-      const r = s * (0.5 + rnd() * 1.1);
-      if (rnd() < 0.62) blob(g, x, y, r, T.d1, 0.26 * k, 1 + rnd() * 0.6);
-      else blob(g, x, y, r, T.d0, 0.055 * k, 1.4 + rnd() * 0.8);
+      const r = s * (0.55 + rnd() * 1.2);
+      if (rnd() < 0.6) blob(g, x, y, r, T.d1, 0.3 * k, 1 + rnd() * 0.6);
+      else blob(g, x, y, r, T.d0, 0.07 * k, 1.4 + rnd() * 0.8);
     }
-    // Fog drifting across the middle rows.
-    for (let i = 0; i < 4; i++) blob(g, ox + size * (0.15 + rnd() * 0.7), oy + size * (0.4 + rnd() * 0.2), s * (1.2 + rnd() * 0.6), T.d0, 0.05 * k, 2.4);
-    // Roots creeping in from the edges.
-    const root = mixRgb(T.d1, [0, 0, 0], 0.4);
-    for (let i = 0; i < 8; i++) {
+    // Fog banks drifting across the field.
+    for (let i = 0; i < 6; i++) blob(g, ox + size * (0.1 + rnd() * 0.8), oy + size * (0.25 + rnd() * 0.5), s * (1.3 + rnd() * 0.7), T.d0, 0.075 * k, 2.6);
+    // Roots creeping in from the edges: a dark body with a faint wet highlight.
+    const root = mixRgb(T.d1, [0, 0, 0], 0.3);
+    for (let i = 0; i < 12; i++) {
       const side = i % 4;
-      const t = 0.1 + rnd() * 0.8;
+      const t = 0.08 + rnd() * 0.84;
       let x = side === 0 ? ox : side === 1 ? ox + size : ox + t * size;
       let y = side === 2 ? oy : side === 3 ? oy + size : oy + t * size;
       let a = side === 0 ? 0 : side === 1 ? Math.PI : side === 2 ? Math.PI / 2 : -Math.PI / 2;
       g.beginPath();
       g.moveTo(x, y);
-      const segs = 5 + Math.floor(rnd() * 4);
+      const segs = 5 + Math.floor(rnd() * 5);
       for (let j = 0; j < segs; j++) {
         a += (rnd() - 0.5) * 0.9;
         const l = s * (0.3 + rnd() * 0.25);
@@ -800,17 +803,25 @@ const DETAIL_PAINTERS: Record<BoardTheme['detail'], DetailPainter> = {
         y += Math.sin(a) * l;
         g.quadraticCurveTo(mx, my, x, y);
       }
-      g.strokeStyle = rgbToCss(root, 0.42 * k);
-      g.lineWidth = s * 0.05;
+      g.strokeStyle = rgbToCss(root, 0.55 * k);
+      g.lineWidth = s * (0.05 + rnd() * 0.03);
       g.stroke();
-      g.strokeStyle = rgbToCss(T.d0, 0.07 * k);
+      g.strokeStyle = rgbToCss(T.d0, 0.12 * k);
       g.lineWidth = Math.max(0.75, s * 0.014);
       g.stroke();
     }
+    // Witch-lantern glows: small warm pools of light at a few cell corners.
+    const lantern: RGB = [1, 0.84, 0.45];
+    for (let i = 0; i < 5; i++) {
+      const x = ox + Math.round(1 + rnd() * (BOARD_SIZE - 2)) * s;
+      const y = oy + Math.round(2 + rnd() * (BOARD_SIZE - 4)) * s;
+      blob(g, x, y, s * 0.7, lantern, 0.07 * k);
+      blob(g, x, y, s * 0.16, lantern, 0.22 * k);
+    }
     // Lichen specks.
-    g.fillStyle = rgbToCss(T.d0, 0.1 * k);
-    for (let i = 0; i < 140; i++) {
-      const r = s * (0.008 + rnd() * 0.014);
+    g.fillStyle = rgbToCss(T.d0, 0.14 * k);
+    for (let i = 0; i < 160; i++) {
+      const r = s * (0.008 + rnd() * 0.016);
       g.fillRect(ox + rnd() * size - r, oy + rnd() * size - r, r * 2, r * 2);
     }
   },
@@ -833,8 +844,8 @@ const DETAIL_PAINTERS: Record<BoardTheme['detail'], DetailPainter> = {
       g.lineWidth = s * 0.55;
       g.stroke();
     };
-    veil(oy + size * 0.42, s * 0.45, T.d1, 0.04, 0.3);
-    veil(oy + size * 0.56, s * 0.35, [0.62, 0.5, 1], 0.03, 2.1);
+    veil(oy + size * 0.4, s * 0.5, T.d1, 0.06, 0.3);
+    veil(oy + size * 0.58, s * 0.4, [0.62, 0.5, 1], 0.045, 2.1);
     // Frost dendrites: a stem with paired side branches, recursively (depth 2).
     const branchPath = (x: number, y: number, a: number, len: number, depth: number): void => {
       const ex = x + Math.cos(a) * len;

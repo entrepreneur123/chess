@@ -19,6 +19,7 @@
  */
 import { BOARD_SIZE, CHARACTERS, CHARACTER_IDS, PIECES_PER_SIDE, ZONE_DEPTH, defaultFormation, isCharacterId, squadOf, validateFormation, type CharacterId, type Formation, type Level } from '../engine';
 import {
+  ARENA_DEFS,
   DUNGEON_LEVELS,
   DUNGEON_REWARD,
   ESSENCE_REWARD,
@@ -80,6 +81,12 @@ export interface DevMode {
    * Dev mode is on exactly when this is non-null.
    */
   snapshot: ProfileBase | null;
+  /**
+   * Arena picked in the lobby's DEV arena picker: while dev mode is on, ranked, casual and dungeon
+   * matches use its theme (backdrop, board, music) and draw the opponent from its pool. null = the
+   * normal rules. Always null while dev mode is off.
+   */
+  arena: ArenaId | null;
 }
 
 export type ViewSetting = 'tilt' | 'top';
@@ -149,7 +156,7 @@ function allGrades(level: Level): Record<CharacterId, Level> {
 }
 
 export function createDefaultProfile(): Profile {
-  return { ...createDefaultBase(), devMode: { unlocked: false, snapshot: null } };
+  return { ...createDefaultBase(), devMode: { unlocked: false, snapshot: null, arena: null } };
 }
 
 function createDefaultBase(): ProfileBase {
@@ -276,13 +283,13 @@ export function sanitizeProfile(input: unknown): Profile {
   const base = sanitizeBase(input);
   const rawDev = isObj(input) && isObj(input.devMode) ? input.devMode : {};
   const rawSnap = rawDev.snapshot;
-  if (rawSnap === undefined || rawSnap === null) return { ...base, devMode: { unlocked: asBool(rawDev.unlocked, false), snapshot: null } };
+  if (rawSnap === undefined || rawSnap === null) return { ...base, devMode: { unlocked: asBool(rawDev.unlocked, false), snapshot: null, arena: null } };
   // Dev mode is on. A snapshot that is an object is sanitized field by field like any saved
   // profile. One that is not an object at all cannot be restored: dev mode stays on (the DEV chip
   // keeps saying so) and switching it off lands on a fresh starter profile with the player's
   // settings and onboarding, never on the inflated dev values.
   const snapshot = isObj(rawSnap) ? sanitizeBase(rawSnap) : { ...createDefaultBase(), settings: base.settings, onboarding: base.onboarding };
-  return pinDevValues({ ...base, devMode: { unlocked: true, snapshot } });
+  return pinDevValues({ ...base, devMode: { unlocked: true, snapshot, arena: isArenaId(rawDev.arena) ? rawDev.arena : null } });
 }
 
 /** `sanitizeProfile` without the dev-mode state (also used for the dev snapshot). */
@@ -566,6 +573,22 @@ export const DEV_RATING = 10_000;
 
 export const isDevMode = (p: Pick<Profile, 'devMode'>): boolean => p.devMode.snapshot !== null;
 
+/** True for the id of one of the six arenas. */
+export const isArenaId = (v: unknown): v is ArenaId => typeof v === 'string' && ARENA_DEFS.some((a) => a.id === v);
+
+/** The arena forced by the DEV arena picker, or null (always null while dev mode is off). */
+export const devArenaOf = (p: Pick<Profile, 'devMode'>): ArenaId | null => (isDevMode(p) ? p.devMode.arena : null);
+
+/**
+ * Pick the arena every match uses while dev mode is on (null = back to the normal rules). Ignored
+ * while dev mode is off, and for anything that is not an arena id.
+ */
+export function setDevArena(p: Profile, arena: ArenaId | null): Profile {
+  if (!isDevMode(p)) return p;
+  const next = arena !== null && isArenaId(arena) ? arena : null;
+  return next === p.devMode.arena ? p : { ...p, devMode: { ...p.devMode, arena: next } };
+}
+
 /** The profile without its dev-mode state, deep-copied so later edits can never reach it. */
 function baseOf(p: Profile): ProfileBase {
   const { devMode: _dev, ...base } = p;
@@ -605,7 +628,7 @@ export function enableDevMode(p: Profile): Profile {
     formation: syncFormationLevels(p.formation, grades),
     rating: DEV_RATING,
     bestRating: Math.max(p.bestRating, DEV_RATING),
-    devMode: { unlocked: true, snapshot },
+    devMode: { unlocked: true, snapshot, arena: null },
   });
 }
 
@@ -617,7 +640,7 @@ export function disableDevMode(p: Profile): Profile {
   if (!p.devMode.snapshot) return p;
   // Sound / music / voice / haptics preferences are not progress: the current ones are kept.
   const real = JSON.parse(JSON.stringify(p.devMode.snapshot)) as ProfileBase;
-  return { ...real, settings: { ...p.settings }, devMode: { unlocked: true, snapshot: null } };
+  return { ...real, settings: { ...p.settings }, devMode: { unlocked: true, snapshot: null, arena: null } };
 }
 
 // ---------------------------------------------------------------------------------------------

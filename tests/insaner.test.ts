@@ -394,6 +394,53 @@ describe('fast board mirrors the engine with the new rules', () => {
     expect(storms).toBeGreaterThan(0);
   });
 
+  it('3-star Marki (side step) and 3-star Insaner (diagonal 1, chain once): fast moves, make / unmake match the engine', () => {
+    const rng = rngFrom(4242);
+    const lv3 = { sad: 3, marki: 3, walk: 3, insaner: 3 } as const;
+    const buf = new Int32Array(256);
+    let checked = 0;
+    let sideSteps = 0;
+    let diagSteps = 0;
+    let chains = 0;
+    for (let game = 0; game < 30; game++) {
+      let g = createGame(randomFormation(rng, lv3, ['insaner', 'marki', 'sad']), randomFormation(rng, lv3, ['marki', 'insaner', 'walk']), (game % 2) as 0 | 1);
+      let guard = 0;
+      while (g.status === 'playing' && guard++ < 200) {
+        const legal = getLegalMoves(g);
+        const b = fastFromState(g);
+        const n = fastGenMoves(b, b.turn, buf, 0);
+        expect(Array.from(buf.subarray(0, n)).map((m) => `${b.ids[(m >> 8) & 255]}>${m & 255}`).sort()).toEqual(legal.map((m) => `${m.pieceId}>${m.to.r * 10 + m.to.c}`).sort());
+        for (const m of legal) {
+          const p = getPieceById(g, m.pieceId)!;
+          if (p.character === 'marki' && m.to.r === m.from.r) sideSteps++;
+          if (p.character === 'insaner' && m.to.r !== m.from.r && m.to.c !== m.from.c) {
+            // Diagonal reach is 1 (absorbed patterns aside).
+            if (!p.absorbed?.length) expect(Math.abs(m.to.r - m.from.r)).toBe(1);
+            diagSteps++;
+          }
+        }
+        for (let k = 0; k < n; k++) {
+          const eng = applyMove(g, fastMoveToMove(b, buf[k]));
+          const undo = fastMake(b, buf[k]);
+          if (eng.status === 'playing' && eng.history.length === g.history.length + 1) {
+            expect(b.turn).toBe(eng.turn);
+            expect(b.bonus >= 0 ? b.ids[b.bonus] : null).toBe(eng.bonusPieceId);
+            expect(b.stormIn).toBe(eng.stormIn ?? -1);
+            for (const p of eng.pieces) expect(b.dir[b.ids.indexOf(p.id)]).toBe(p.dir ?? (p.owner === 0 ? 1 : -1));
+          }
+          fastUnmake(b, buf[k], undo);
+          checked++;
+        }
+        if (g.bonusPieceId) chains++;
+        g = applyMove(g, legal[Math.floor(rng() * legal.length)]);
+      }
+    }
+    expect(checked).toBeGreaterThan(3000);
+    expect(sideSteps).toBeGreaterThan(0);
+    expect(diagSteps).toBeGreaterThan(0);
+    expect(chains).toBeGreaterThan(0);
+  }, 60_000);
+
   it('every difficulty plays legal moves with insaner squads (incl. chain moves)', () => {
     const rng = rngFrom(99);
     for (const d of ['easy', 'normal', 'hard'] as const) {

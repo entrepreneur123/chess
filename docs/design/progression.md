@@ -167,6 +167,31 @@ and a distinctness audit: `docs/brand/audio/bgm/README.md`.
 | apex | floating arena above clouds, gold and starlight | full epic orchestral, triumphant but tense; about 120 BPM |
 | *(lobby, home)* | the lobby and tab screens; no backdrop of its own | warm, festive "home base": Eb major (the only major-key track), drum-kit backbeat with claps, bass guitar, marimba, brass fanfare, the Clash leitmotif in a major variant; about 104 BPM |
 
+**Board themes** (`src/render/arenaThemes.ts`, both board views): the board keeps one structure
+and one readability contract everywhere (dark low-contrast cells, thin grid, blue / red home zones,
+the shared marker / FX palette), and each arena changes only its material: cell colours, grid
+colour, bezel, accent bars, corner brackets (with a small corner ornament), one procedural surface
+detail and a light ambient particle drift. moonrune is the original hologram look.
+
+| Arena | Cells / grid | Surface detail | Ambient |
+| --- | --- | --- | --- |
+| moonrune | deep navy, cyan grid, gold accents | faint rune circle with glyph band and hexagram, hex micro-texture | sparse silver mist motes |
+| emberforge | soot-brown iron, ember-orange grid, molten accents, rivets | glowing molten cracks, heat haze at the edges | rising embers |
+| blightmire | bog-black green, jade grid, witch-lantern amber brackets | moss and fog mottling, creeping roots, lichen, small lantern glows | drifting spores |
+| frostkeep | glacial slate, aurora-aqua grid, silver accents, ice shards | aurora veil, frost dendrites from the corners and edges, snow sparkles | falling snow |
+| madcrown | plum velvet, violet grid, crimson accents, gems | royal diamond lattice, corner filigree scrolls, crown sigil | violet / crimson demon-fire motes |
+| apex | night indigo, gold grid, white-gold accents, stars | starfield with glints and two faint constellations, cloud wisps | star twinkles |
+
+The match board takes the theme of the match arena (`GameParams.themeArena`, the same arena as the
+backdrop and the music). Ambient particles tick at about 20 fps and never run with reduced motion.
+
+**Developer arena picker:** with developer mode on, the lobby shows a "DEV · 전장 선택" strip under
+the arena card (자동 plus the six arenas). A picked arena (`Profile.devMode.arena`) makes every
+전장전, 견습전투 and 던전 match use that arena's backdrop, board and music, and 전장전 / 견습전투
+opponents are drawn from that arena (a rating inside it, its shop pool, its AI strength); the dungeon
+keeps its own difficulty tiers. The arena card previews the pick with a DEV tag. Switching dev mode
+off clears the pick; with dev mode off nothing changes.
+
 **Music module contract** (`src/audio/music.ts`):
 - `setMusicTrack(id: string | null)` crossfades to `public/audio/bgm/<id>.m4a` (an arena's `bgm`
   or `lobby`), loops seamlessly, and does nothing if that track is already playing.

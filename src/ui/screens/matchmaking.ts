@@ -6,7 +6,7 @@
 import { CHARACTERS, squadOf, validateFormation, type CharacterId, type Formation, type Level, type Rarity } from '../../engine';
 import { PACING } from '../../meta/economy';
 import { createOpponent, DIFFICULTY_LABEL, matchArenaId, type Opponent } from '../../meta/opponent';
-import { formationAllowed, getProfile, levelsOf } from '../../meta/profile';
+import { devArenaOf, formationAllowed, getProfile, levelsOf } from '../../meta/profile';
 import { DUNGEON_LABEL, MODE_LABEL, OPPONENT_BAND, arenaById, arenaForRating, clampRating } from '../../meta/progression';
 import { randInt, defaultRng } from '../../meta/rng';
 import { preloadArt } from '../backdrops';
@@ -55,14 +55,18 @@ export function matchmakingScreen(router: Router, params: MatchRequest): Screen 
   const myLead = leadUnit(mySquad, levels);
   const myRating = clampRating(profile.rating);
   const myArena = arenaForRating(myRating);
+  // Developer mode's arena picker: every mode plays in that arena (theme, music; ranked / casual
+  // opponents come from its pool). null = the normal rules.
+  const devArena = devArenaOf(profile);
   const opp: Opponent =
     mode === 'dungeon'
       ? createOpponent({ mode: 'dungeon', level: dungeonLevel! }, defaultRng)
-      : createOpponent({ mode, rating: myRating, playerGrades: (playerFormation ?? profile.formation).map((s) => s.level) }, defaultRng);
-  const themeArena = arenaById(matchArenaId(mode, myRating, opp.arena));
+      : createOpponent({ mode, rating: myRating, playerGrades: (playerFormation ?? profile.formation).map((s) => s.level), arena: devArena ?? undefined }, defaultRng);
+  const themeArena = arenaById(devArena ?? matchArenaId(mode, myRating, opp.arena));
   const modeChip = mode === 'dungeon' ? `${MODE_LABEL.dungeon} · ${DUNGEON_LABEL[dungeonLevel!]}` : MODE_LABEL[mode];
-  const searchLine =
-    mode === 'dungeon'
+  const searchLine = devArena
+    ? `DEV · ${themeArena.index} 전장 ${themeArena.name}`
+    : mode === 'dungeon'
       ? `AI · ${DIFFICULTY_LABEL[opp.difficulty]} 수읽기`
       : mode === 'ranked'
       ? `AI · ${myArena.index} 전장 · 레이팅 ${Math.max(myArena.min, myRating - OPPONENT_BAND.ranked)}–${myArena.max === null ? myRating + OPPONENT_BAND.ranked : Math.min(myArena.max, myRating + OPPONENT_BAND.ranked)}`

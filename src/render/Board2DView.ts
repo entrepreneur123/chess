@@ -33,7 +33,10 @@
  */
 import { BOARD_SIZE, STORM_FULL_STEPS, ZONE_DEPTH } from '../engine/types';
 import type { CharacterId, Level, Move, Piece, PlayerId, Pos, Trap } from '../engine/types';
-import type { BoardHighlights, IBoardView, ScreenRect, SkillPreview } from './types';
+import type { BoardHighlights, BoardViewOptions, IBoardView, ScreenRect, SkillPreview } from './types';
+import { AMBIENT_FRAME_MS, clearAmbientSprites, drawAmbient2D } from './ambient';
+import { DEFAULT_BOARD_THEME, boardTheme } from './arenaThemes';
+import type { BoardTheme } from './arenaThemes';
 import { ANIM, BOARD_COLORS, CHARACTER_FX, CHARACTER_RARITY, RAKAELI_AWAKE_FX, RARITY_RING, TEAM_COLORS, WASTE_COLORS } from './palette';
 import { STORM_COLORS } from './storm';
 import { wasteMask } from './waste';
@@ -89,8 +92,9 @@ import {
   shakeOffset,
   slideDuration,
   tileRgb,
+  tilePalette,
 } from './common';
-import type { HighlightIndex } from './common';
+import type { HighlightIndex, TilePalette } from './common';
 import {
   DOT_WHITEN,
   FIELD_OVERLAY_MARGIN,
@@ -310,6 +314,9 @@ export class Board2DView implements IBoardView {
   private resizeObserver: ResizeObserver | null = null;
   /** Bezel look for the current width (slim on phones). */
   private frameStyle: FrameStyle = FRAME_REGULAR;
+  /** Arena board theme (arenaThemes.ts) and its cell palette. */
+  private theme: BoardTheme = DEFAULT_BOARD_THEME;
+  private tilePal: TilePalette = tilePalette(DEFAULT_BOARD_THEME);
   /** Self-test notes for the ?diag=1 panel. */
   private readonly diagNotes: string[] = [];
   private down: { id: number; x: number; y: number } | null = null;
@@ -394,8 +401,10 @@ export class Board2DView implements IBoardView {
     this.requestRender();
   };
 
-  constructor(container: HTMLElement) {
+  constructor(container: HTMLElement, opts: Pick<BoardViewOptions, 'arena'> = {}) {
     this.container = container;
+    this.theme = boardTheme(opts.arena);
+    this.tilePal = tilePalette(this.theme);
     this.canvas = document.createElement('canvas');
     const ctx = ctx2d(this.canvas);
     if (!ctx) throw new Error('Canvas2D unavailable');
@@ -1247,7 +1256,7 @@ export class Board2DView implements IBoardView {
       css: [Math.round(this.cssW), Math.round(this.cssH)],
       frame: this.frameStyle.id,
       programs: [],
-      notes: [...this.diagNotes],
+      notes: [...this.diagNotes, `theme ${this.theme.id}`],
       nullCtx: canvasStats.nullCtx,
       canvases: canvasStats.created,
       fallbackReason: getFallbackReason(),
@@ -1313,6 +1322,7 @@ export class Board2DView implements IBoardView {
     this.sprites.clear();
     this.wasteSprites.clear();
     clearAwakenSprites();
+    clearAmbientSprites();
     this.canvas.remove();
     this.pieces = [];
     this.cellCb = null;
@@ -1338,10 +1348,10 @@ export class Board2DView implements IBoardView {
       const ox = x0 * d;
       const oy = y0 * d;
       g.clearRect(0, 0, cvs.width, cvs.height);
-      paintFrame(g, s, ox, oy, this.frameStyle);
+      paintFrame(g, s, ox, oy, this.frameStyle, this.theme);
       const base = indexHighlights({});
       for (let r = 0; r < BOARD_SIZE; r++) {
-        for (let c = 0; c < BOARD_SIZE; c++) paintTile(g, ox + c * s, oy + (BOARD_SIZE - 1 - r) * s, s, tileRgb(r, c, base));
+        for (let c = 0; c < BOARD_SIZE; c++) paintTile(g, ox + c * s, oy + (BOARD_SIZE - 1 - r) * s, s, tileRgb(r, c, base, this.tilePal));
       }
     }
     this.boardLayer = cvs;
@@ -1352,14 +1362,14 @@ export class Board2DView implements IBoardView {
     const og = ctx2d(ov);
     if (og) {
       og.clearRect(0, 0, ov.width, ov.height);
-      paintFieldOverlay(og, s, m, m);
+      paintFieldOverlay(og, s, m, m, { theme: this.theme });
       // Self-test: the field must stay see-through, or repaint without the hole-based shadow.
       const mid = (Math.floor(BOARD_SIZE / 2) - 0.5) * s + m;
       const a = alphaAt(og, mid, mid);
       if (a > SEE_THROUGH_MAX_ALPHA) {
         this.note(`overlay centre alpha ${a.toFixed(2)}: repainted without edge shadow`);
         og.clearRect(0, 0, ov.width, ov.height);
-        paintFieldOverlay(og, s, m, m, { edgeShadow: false });
+        paintFieldOverlay(og, s, m, m, { edgeShadow: false, theme: this.theme });
       }
     }
     this.overlayLayer = ov;
@@ -1393,6 +1403,25 @@ export class Board2DView implements IBoardView {
 
   private tShake = -1;
 
+  /** Ambient particles run while the theme has some, motion is allowed and the page is visible. */
+  private get ambientOn(): boolean {
+    return !!this.theme.ambient && !this.reducedMotion && !document.hidden;
+  }
+
+  /**
+   * Switch the arena board theme (arenaThemes.ts; unknown ids = moonrune): repaints the static
+   * layers into the same canvases (nothing new is allocated). Same theme: no-op.
+   */
+  setArenaTheme(id: string): void {
+    const next = boardTheme(id);
+    if (this.disposed || next === this.theme) return;
+    this.theme = next;
+    this.tilePal = tilePalette(next);
+    clearAmbientSprites();
+    this.buildBoardLayer();
+    this.requestRender();
+  }
+
   private readonly frame = (now: number): void => {
     this.rafId = 0;
     if (this.disposed) return;
@@ -1406,8 +1435,11 @@ export class Board2DView implements IBoardView {
     const wasteLoop = !this.reducedMotion && !document.hidden && (this.waste.size > 0 || this.traps.length > 0 || this.anchors.length > 0 || this.preview !== null);
     // Rakaeli's transform aura flickers at the same light rate (static with reduced motion).
     const awakeLoop = !this.reducedMotion && !document.hidden && this.awakeOnBoard;
-    const loop = this.pulsing || ringLoop || wasteLoop || awakeLoop || this.storm > 0 || (this.stormActive && this.stormNext !== null && this.stormNext <= 2);
-    if (!busy && loop && now - this.lastFrame < IDLE_FRAME_MS) {
+    const lightLoop = this.pulsing || ringLoop || wasteLoop || awakeLoop || this.storm > 0 || (this.stormActive && this.stormNext !== null && this.stormNext <= 2);
+    // Ambient arena particles alone tick at the lightest rate (~20 fps).
+    const ambientLoop = this.ambientOn;
+    const loop = lightLoop || ambientLoop;
+    if (!busy && loop && now - this.lastFrame < (lightLoop ? IDLE_FRAME_MS : AMBIENT_FRAME_MS)) {
       this.requestRender();
       return;
     }
@@ -1571,7 +1603,7 @@ export class Board2DView implements IBoardView {
         if (!storm && wk <= 0 && !tint) continue;
         const tx = x0 + c * cell;
         const ty = y0 + (BOARD_SIZE - 1 - r) * cell;
-        if (tint) paintTile(ctx, tx, ty, cell, tileRgb(r, c, hi));
+        if (tint) paintTile(ctx, tx, ty, cell, tileRgb(r, c, hi, this.tilePal));
         tileOuterPath(ctx, tx, ty, cell);
         if (storm) {
           ctx.fillStyle = hexAlpha(STORM_COLORS.tile, STORM_TILE_ALPHA);
@@ -1602,6 +1634,7 @@ export class Board2DView implements IBoardView {
       }
     }
 
+    if (this.ambientOn) drawAmbient2D(ctx, this.theme.ambient!, now / 1000, x0, y0, cell);
     this.drawWaste(now);
     this.drawZoneLines(now);
     this.drawStorm(now);

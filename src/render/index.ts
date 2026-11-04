@@ -3,6 +3,8 @@ import { BoardView } from './BoardView';
 import { Board2DView } from './Board2DView';
 import { diagEnabled, mountDiagPanel, setFallbackReason } from './diag';
 
+export { BOARD_THEMES, BOARD_THEME_IDS, boardTheme } from './arenaThemes';
+export type { BoardTheme, BoardThemeId } from './arenaThemes';
 export type { BoardHighlights, BoardViewMode, BoardViewOptions, IBoardView, ScreenRect, SkillPreview } from './types';
 export { BoardView } from './BoardView';
 export { Board2DView } from './Board2DView';
@@ -39,7 +41,7 @@ function pickBoardView(container: HTMLElement, opts: BoardViewOptions): IBoardVi
   const q = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
   if (q?.has('board2d') && (import.meta.env.DEV || diagEnabled())) {
     setFallbackReason('forced by ?board2d');
-    return new Board2DView(container);
+    return new Board2DView(container, opts);
   }
   if (!isWebGLAvailable()) setFallbackReason('no WebGL context');
   else {
@@ -54,5 +56,5 @@ function pickBoardView(container: HTMLElement, opts: BoardViewOptions): IBoardVi
       container.querySelectorAll('canvas').forEach((c) => c.remove());
     }
   }
-  return new Board2DView(container);
+  return new Board2DView(container, opts);
 }

@@ -15,7 +15,7 @@
  * moonrune is the original v6 "tactical hologram" look (values identical to palette.ts ARENA / HOLO
  * and BOARD_COLORS.tileLight / tileDark), and the fallback for any unknown id.
  *
- * Readability budget (checked on every theme): cells stay dark (luma < ~0.13) so the ice-cyan move
+ * Readability budget (checked on every theme): cells stay dark (sRGB luma < 0.15) so the ice-cyan move
  * dots, the red capture ring, the gold last-move tint, the green wasteland, the violet storm haze and
  * the team colours keep their contrast; surface details stay under ~0.2 alpha and are painted under
  * every marker. Pure data: no three.js, no DOM.
@@ -53,6 +53,8 @@ export interface BoardTheme {
   tileDark: string;
   /** Multiplier on HOME_TINT_STRENGTH: warm / tinted fields need a firmer blue / red home tint. */
   homeTint: number;
+  /** Brightness multiplier of the gold last-move tint (1 = original; warm / gold fields need more). */
+  lastMoveBoost: number;
   /** Field bed seen between the cells. */
   bed: string;
   /** Bezel: face, top light, lip / shadow tone, hairline. */
@@ -96,6 +98,7 @@ const MOONRUNE: BoardTheme = {
   tileLight: BOARD_COLORS.tileLight,
   tileDark: BOARD_COLORS.tileDark,
   homeTint: 1,
+  lastMoveBoost: 1,
   bed: ARENA.bed,
   bezel: { face: ARENA.bezel, top: ARENA.ironTop, lip: ARENA.ironLip, line: ARENA.line },
   grid: ARENA.grid,
@@ -119,7 +122,8 @@ const EMBERFORGE: BoardTheme = {
   // Soot-black iron plates with a warm brown cast.
   tileLight: '#1D1612',
   tileDark: '#17110E',
-  homeTint: 1.55,
+  homeTint: 1.4,
+  lastMoveBoost: 1.7,
   bed: '#070403',
   bezel: { face: '#1A110D', top: '#4A3022', lip: '#080403', line: '#5E3A24' },
   grid: '#FF8A3D',
@@ -140,27 +144,29 @@ const EMBERFORGE: BoardTheme = {
 
 const BLIGHTMIRE: BoardTheme = {
   id: 'blightmire',
-  // Murky jade-black swamp stone (kept apart from the wasteland's black-green + lime cracks).
-  tileLight: '#11201D',
-  tileDark: '#0D1917',
+  // Bog-black green stone (the wasteland stays apart: black-green ground split by bright lime cracks).
+  tileLight: '#13221A',
+  tileDark: '#0F1C15',
   homeTint: 1.45,
-  bed: '#030806',
-  bezel: { face: '#0C1613', top: '#24413A', lip: '#040907', line: '#2E5246' },
-  grid: '#4FE3B4',
-  gridCore: '#C8FFE9',
-  holo: { gridCore: 0.24, gridGlow: 0.08, gridMajor: 0.38, hex: 0, centreGlow: 0.045, zoneWashEdge: 0.16, zoneWashBack: 0.03, scan: 0.045 },
+  lastMoveBoost: 1.3,
+  bed: '#030805',
+  bezel: { face: '#0C1610', top: '#2A4632', lip: '#040906', line: '#38583E' },
+  // Murky jade grid.
+  grid: '#5ED89A',
+  gridCore: '#D2FFE4',
+  holo: { gridCore: 0.24, gridGlow: 0.08, gridMajor: 0.38, hex: 0, centreGlow: 0.03, zoneWashEdge: 0.16, zoneWashBack: 0.03, scan: 0.045 },
   zoneGridMix: [0.7, 0.75],
-  // Witch-lantern amber accents.
-  accent: '#D8E46A',
-  accentDeep: '#6F7A1E',
-  bracket: '#4FE3B4',
-  bracketCore: '#D2FFEE',
+  // Witch-lantern amber accents and brackets.
+  accent: '#E2D46A',
+  accentDeep: '#7A6A1E',
+  bracket: '#D8D46A',
+  bracketCore: '#FFF6C8',
   jewel: 'diamond',
-  // Moss and fog mottling with a few creeping roots.
+  // Moss and fog mottling, creeping roots and a few witch-lantern glows.
   detail: 'moss',
-  detailColors: ['#8FE8C0', '#0B1A12'],
+  detailColors: ['#9FE8C0', '#06120B'],
   detailStrength: 1,
-  ambient: { kind: 'spores', count: 18, colors: ['#BFF28A', '#8FE8C0'], size: 0.075, speed: 0.14, alpha: 0.5 },
+  ambient: { kind: 'spores', count: 22, colors: ['#C8F08A', '#9FE8C0'], size: 0.085, speed: 0.14, alpha: 0.6 },
 };
 
 const FROSTKEEP: BoardTheme = {
@@ -169,6 +175,7 @@ const FROSTKEEP: BoardTheme = {
   tileLight: '#15283A',
   tileDark: '#112131',
   homeTint: 1.15,
+  lastMoveBoost: 1.1,
   bed: '#040A12',
   bezel: { face: '#142235', top: '#46607E', lip: '#070D16', line: '#5A7898' },
   // Aurora aqua grid.
@@ -195,6 +202,7 @@ const MADCROWN: BoardTheme = {
   tileLight: '#1A1029',
   tileDark: '#150C22',
   homeTint: 1.3,
+  lastMoveBoost: 1.3,
   bed: '#07030D',
   bezel: { face: '#170C22', top: '#432653', lip: '#07030C', line: '#5E3A7C' },
   grid: '#B86CFF',
@@ -220,6 +228,7 @@ const APEX: BoardTheme = {
   tileLight: '#141834',
   tileDark: '#10132B',
   homeTint: 1.1,
+  lastMoveBoost: 1.5,
   bed: '#04050F',
   bezel: { face: '#12142A', top: '#4A4466', lip: '#06061A', line: '#7A6430' },
   // Gold and starlight.

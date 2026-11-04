@@ -6,11 +6,16 @@
  *
  * The static skeleton (arena art, figures) is built once so images and entrance animations don't
  * replay; only the data-driven slots re-render on profile changes.
+ *
+ * Developer mode adds a compact "DEV · 전장 선택" strip under the arena card: six arena chips (card
+ * art) plus 자동. A picked arena makes every match (전장전, 견습전투, 던전) play there (backdrop, board
+ * theme, music; ranked / casual opponents from its pool) and the arena card previews it. With dev
+ * mode off the strip is not in the DOM and the lobby is exactly as before.
  */
 import { CHARACTERS, CHARACTER_IDS, type CharacterId, type Level, type Rarity } from '../../engine';
 import { APP_NAME } from '../../meta/economy';
-import { getProfile, squadOfProfile, subscribeProfile } from '../../meta/profile';
-import { arenaProgress, dungeonRewardAvailable, type DungeonLevel } from '../../meta/progression';
+import { devArenaOf, getProfile, isDevMode, setDevArena, squadOfProfile, subscribeProfile, updateProfile } from '../../meta/profile';
+import { ARENA_DEFS, arenaById, arenaProgress, dungeonRewardAvailable, type ArenaDef, type ArenaId, type DungeonLevel } from '../../meta/progression';
 import { preloadArt } from '../backdrops';
 import { arenaBadge, topBar } from '../components/currency';
 import { artMissing } from '../components/piece';
@@ -66,6 +71,45 @@ function squadStage(levels: Record<CharacterId, Level>): HTMLElement {
   return h('div', { class: 'arena__stage', 'aria-hidden': 'true' }, fig(left, 'l', 1), fig(right, 'r', 2), fig(main, 'c', 0));
 }
 
+/**
+ * DEV · 전장 선택: 자동 (normal rules) plus one chip per arena (card art, number, name). Calls
+ * `pick` with the arena id, or null for 자동. `sync` marks the current choice.
+ */
+function devArenaPicker(pick: (id: ArenaId | null) => void): { el: HTMLElement; sync: (id: ArenaId | null) => void } {
+  const chip = (id: ArenaId | null, a: ArenaDef | null): HTMLButtonElement =>
+    h(
+      'button',
+      {
+        class: `devpick__chip pressable${a ? '' : ' devpick__chip--auto'}`,
+        type: 'button',
+        role: 'radio',
+        'aria-checked': 'false',
+        'aria-label': a ? `${a.index} 전장 ${a.name}` : '자동 (레이팅 기준)',
+        'data-action': 'dev-arena',
+        'data-arena': id ?? 'auto',
+        style: a ? `--chip-accent:${a.accent}` : undefined,
+        onclick: () => pick(id),
+      },
+      a ? arenaArt(a.card, 'devpick__art') : h('span', { class: 'devpick__auto', 'aria-hidden': 'true' }, icon('target', 18)),
+      h('span', { class: 'devpick__label' }, a ? h('b', null, String(a.index)) : null, a ? a.name.split(' ')[0] : '자동'),
+    );
+  const chips = [chip(null, null), ...ARENA_DEFS.map((a) => chip(a.id, a))];
+  const el = h(
+    'section',
+    { class: 'devpick enter', style: '--i:1', 'aria-label': '개발자 모드 · 전장 선택', 'data-dev': 'arena-picker' },
+    h('div', { class: 'devpick__head' }, h('span', { class: 'devpick__tag' }, 'DEV'), h('span', { class: 'devpick__title' }, '전장 선택'), h('span', { class: 'devpick__hint' }, '모든 대전 · 던전에 적용')),
+    h('div', { class: 'devpick__strip', role: 'radiogroup', 'aria-label': '전장' }, chips),
+  );
+  const sync = (id: ArenaId | null): void => {
+    for (const c of chips) {
+      const on = c.dataset.arena === (id ?? 'auto');
+      c.setAttribute('aria-checked', String(on));
+      c.classList.toggle('is-on', on);
+    }
+  };
+  return { el, sync };
+}
+
 export function lobbyScreen(router: Router): Screen {
   const bag = new Disposables();
   const el = h('main', { class: 'lobby' });
@@ -109,10 +153,13 @@ export function lobbyScreen(router: Router): Screen {
   );
 
   const pct = Math.round(prog.progress * 100);
+  const cardArt = arenaArt(arena.card, 'arena__art');
+  const cardEyebrow = h('span', { class: 'arena__eyebrow' }, arenaBadge(arena, 'sm'), `${arena.index} 전장`);
+  const cardName = h('span', { class: 'arena__name' }, arena.name);
   const arenaCard = h(
     'section',
     { class: 'arena enter', style: `--i:0;--arena-accent:${arena.accent}`, 'aria-label': `현재 전장 · ${arena.index} 전장 ${arena.name}`, 'data-arena': arena.id },
-    arenaArt(arena.card, 'arena__art'),
+    cardArt,
     h('div', { class: 'arena__floor', 'aria-hidden': 'true' }, h('div', { class: 'arena__grid' })),
     stageHost,
     h('div', { class: 'arena__shade', 'aria-hidden': 'true' }),
@@ -128,12 +175,7 @@ export function lobbyScreen(router: Router): Screen {
       h(
         'div',
         { class: 'arena__row' },
-        h(
-          'div',
-          { class: 'arena__plate' },
-          h('span', { class: 'arena__eyebrow' }, arenaBadge(arena, 'sm'), `${arena.index} 전장`),
-          h('span', { class: 'arena__name' }, arena.name),
-        ),
+        h('div', { class: 'arena__plate' }, cardEyebrow, cardName),
         h('div', { class: 'arena__rating', 'data-rating': getProfile().rating }, h('span', { class: 'arena__rating-label' }, '레이팅'), h('b', { class: 't-num' }, String(getProfile().rating))),
       ),
       h(
@@ -149,6 +191,45 @@ export function lobbyScreen(router: Router): Screen {
     ),
   );
 
+  // Developer mode: the arena picker (in the DOM only while dev mode is on).
+  const devHost = h('div', { class: 'devpick-host' });
+  let devPicker: ReturnType<typeof devArenaPicker> | null = null;
+  let shownArena: ArenaId = arena.id;
+  /** The arena card shows `a` (the player's own arena, or the DEV pick as a preview). */
+  const showArena = (a: ArenaDef, dev: boolean): void => {
+    arenaCard.classList.toggle('is-dev-preview', dev);
+    if (a.id === shownArena) return;
+    shownArena = a.id;
+    cardArt.src = a.card;
+    replaceChildren(cardEyebrow, arenaBadge(a, 'sm'), `${a.index} 전장`);
+    cardName.textContent = a.name;
+    arenaCard.style.setProperty('--arena-accent', a.accent);
+    arenaCard.dataset.arena = a.id;
+    arenaCard.setAttribute('aria-label', `${dev ? 'DEV 미리보기' : '현재 전장'} · ${a.index} 전장 ${a.name}`);
+  };
+  const renderDev = (): void => {
+    const p = getProfile();
+    const dev = isDevMode(p);
+    if (!dev) {
+      if (devPicker) {
+        devPicker.el.remove();
+        devPicker = null;
+      }
+      showArena(arenaProgress(p.rating).arena, false);
+      return;
+    }
+    if (!devPicker) {
+      devPicker = devArenaPicker((id) => {
+        updateProfile((q) => setDevArena(q, id));
+        if (id) void preloadArt(arenaById(id).backdrop);
+      });
+      devHost.append(devPicker.el);
+    }
+    const picked = devArenaOf(p);
+    devPicker.sync(picked);
+    showArena(picked ? arenaById(picked) : arenaProgress(p.rating).arena, picked !== null);
+  };
+
   replaceChildren(
     el,
     h('div', { class: 'lobby-bg', 'aria-hidden': 'true' }, h('div', { class: 'lobby-bg__aura' })),
@@ -157,6 +238,7 @@ export function lobbyScreen(router: Router): Screen {
       'div',
       { class: 'scroll-body lobby__body' },
       arenaCard,
+      devHost,
       h('section', { class: 'play enter', style: '--i:1', 'aria-label': 'AI 대전' }, playBtn, h('div', { class: 'mode-row' }, casualBtn, dungeonBtn)),
     ),
   );
@@ -178,6 +260,7 @@ export function lobbyScreen(router: Router): Screen {
     dungeonBadge.className = `mode-btn__badge${open ? ' is-open' : ''}`;
     dungeonBadge.dataset.dungeon = open ? 'open' : 'claimed';
     replaceChildren(dungeonBadge, open ? [h('i', { class: 'mode-btn__dot', 'aria-hidden': 'true' }), '오늘 보상 가능'] : [icon('check', 12), '오늘 받음']);
+    renderDev();
   };
 
   render();
@@ -186,8 +269,8 @@ export function lobbyScreen(router: Router): Screen {
     el,
     mount() {
       playHomeMusic();
-      // Warm the match backdrop of this arena so the board never pops in.
-      bag.timeout(() => void preloadArt(arena.backdrop), 1200);
+      // Warm the match backdrop of this arena (or the DEV pick) so the board never pops in.
+      bag.timeout(() => void preloadArt(arenaById(devArenaOf(getProfile()) ?? arena.id).backdrop), 1200);
       // First launch: open the how-to-play carousel once the lobby has faded in.
       if (!getProfile().onboarding.tutorialSeen) {
         bag.timeout(() => {

@@ -11,6 +11,7 @@ import {
   buyBlocker,
   buyCharacter,
   createDefaultProfile,
+  devArenaOf,
   disableDevMode,
   enableDevMode,
   getProfile,
@@ -18,6 +19,7 @@ import {
   loadProfile,
   persistProfile,
   sanitizeProfile,
+  setDevArena,
   setGrade,
   setProfile,
   settleMatch,
@@ -28,7 +30,7 @@ import {
   type KeyValueStorage,
   type Profile,
 } from '../src/meta/profile';
-import { arenaForRating } from '../src/meta/progression';
+import { ARENA_AI, ARENA_DEFS, arenaById, arenaForRating, shopPool } from '../src/meta/progression';
 import { createOpponent } from '../src/meta/opponent';
 import { seededRng } from '../src/meta/rng';
 
@@ -65,10 +67,10 @@ function memStorage(): KeyValueStorage & { text: string | null } {
 describe('developer mode', () => {
   it('starts locked and off; unlocking only reveals it', () => {
     const p = createDefaultProfile();
-    expect(p.devMode).toEqual({ unlocked: false, snapshot: null });
+    expect(p.devMode).toEqual({ unlocked: false, snapshot: null, arena: null });
     expect(isDevMode(p)).toBe(false);
     const u = unlockDevMode(p);
-    expect(u.devMode).toEqual({ unlocked: true, snapshot: null });
+    expect(u.devMode).toEqual({ unlocked: true, snapshot: null, arena: null });
     expect(isDevMode(u)).toBe(false);
     expect(unlockDevMode(u)).toBe(u);
   });
@@ -128,7 +130,7 @@ describe('developer mode', () => {
     expect(d.rating).not.toBe(DEV_RATING); // the rating may move while it is on
     const back = disableDevMode(d);
     expect(isDevMode(back)).toBe(false);
-    expect(back).toEqual({ ...real, devMode: { unlocked: true, snapshot: null } });
+    expect(back).toEqual({ ...real, devMode: { unlocked: true, snapshot: null, arena: null } });
     expect(disableDevMode(back)).toBe(back);
   });
 
@@ -155,22 +157,22 @@ describe('developer mode', () => {
     expect(isDevMode(loaded)).toBe(true);
     expect(loaded).toEqual(d);
     // And switching off after the reload still restores the real profile.
-    expect(disableDevMode(loaded)).toEqual({ ...real, devMode: { unlocked: true, snapshot: null } });
+    expect(disableDevMode(loaded)).toEqual({ ...real, devMode: { unlocked: true, snapshot: null, arena: null } });
     // The unlocked-but-off state persists too.
     persistProfile(disableDevMode(loaded), storage);
-    expect(loadProfile(storage).devMode).toEqual({ unlocked: true, snapshot: null });
+    expect(loadProfile(storage).devMode).toEqual({ unlocked: true, snapshot: null, arena: null });
   });
 
   it('the old v2 `dev` account flag never turns dev mode on', () => {
     const p = sanitizeProfile({ version: 2, dev: { snapshot: {}, unlocked: true }, coins: 5 });
-    expect(p.devMode).toEqual({ unlocked: false, snapshot: null });
+    expect(p.devMode).toEqual({ unlocked: false, snapshot: null, arena: null });
     expect('dev' in p).toBe(false);
   });
 
   it('profiles saved before dev mode existed read as locked and off', () => {
     const { devMode: _dev, ...old } = realProfile();
     const p = sanitizeProfile(JSON.parse(JSON.stringify(old)));
-    expect(p.devMode).toEqual({ unlocked: false, snapshot: null });
+    expect(p.devMode).toEqual({ unlocked: false, snapshot: null, arena: null });
     expect(p.tokens).toBe(37);
   });
 
@@ -203,7 +205,7 @@ describe('developer mode', () => {
     expect(off.owned.rakaeli).toBe(3);
     expect(off.owned.sad).toBe(1);
     expect(validateFormation(off.formation).ok).toBe(true);
-    expect(off.devMode).toEqual({ unlocked: true, snapshot: null });
+    expect(off.devMode).toEqual({ unlocked: true, snapshot: null, arena: null });
     // A nested snapshot inside the snapshot is never carried.
     expect('devMode' in (p.devMode.snapshot as object)).toBe(false);
 
@@ -248,5 +250,66 @@ describe('matchmaking at the dev rating', () => {
     const loss = settleMatch(d, { mode: 'ranked', result: 'loss', rng, now: new Date() });
     expect(loss.summary.arenaAfter).toBe('apex');
     expect(loss.summary.ratingDelta).toBeLessThanOrEqual(-20);
+  });
+});
+
+describe('dev arena picker', () => {
+  it('is ignored while dev mode is off and always null there', () => {
+    const p = unlockDevMode(createDefaultProfile());
+    expect(setDevArena(p, 'frostkeep')).toBe(p);
+    expect(devArenaOf(p)).toBeNull();
+    // A hand-edited save cannot force an arena while dev mode is off.
+    const raw = JSON.parse(JSON.stringify(p)) as Record<string, unknown>;
+    const s = sanitizeProfile({ ...raw, devMode: { unlocked: true, snapshot: null, arena: 'apex' } });
+    expect(s.devMode.arena).toBeNull();
+    expect(devArenaOf(s)).toBeNull();
+  });
+
+  it('picks, clears and survives a reload; switching dev mode off drops it', () => {
+    const storage = memStorage();
+    const d = enableDevMode(realProfile());
+    expect(d.devMode.arena).toBeNull();
+    const picked = setDevArena(d, 'blightmire');
+    expect(devArenaOf(picked)).toBe('blightmire');
+    expect(setDevArena(picked, 'blightmire')).toBe(picked);
+    // The snapshot (the real profile) is untouched by the pick.
+    expect(picked.devMode.snapshot).toEqual(d.devMode.snapshot);
+    persistProfile(picked, storage);
+    expect(devArenaOf(loadProfile(storage))).toBe('blightmire');
+    expect(devArenaOf(setDevArena(picked, null))).toBeNull();
+    // Off: the real profile comes back exactly, with no arena forced; on again: no arena either.
+    const off = disableDevMode(picked);
+    expect(off).toEqual({ ...realProfile(), devMode: { unlocked: true, snapshot: null, arena: null } });
+    expect(devArenaOf(enableDevMode(off))).toBeNull();
+  });
+
+  it('sanitizes a hostile arena value to null', () => {
+    const raw = JSON.parse(JSON.stringify(setDevArena(enableDevMode(realProfile()), 'apex'))) as Record<string, unknown>;
+    for (const bad of ['nowhere', 3, null, {}, ['apex'], '__proto__']) {
+      const p = sanitizeProfile({ ...raw, devMode: { ...(raw.devMode as object), arena: bad } });
+      expect(isDevMode(p)).toBe(true);
+      expect(p.devMode.arena).toBeNull();
+    }
+    expect(setDevArena(enableDevMode(realProfile()), 'nowhere' as never).devMode.arena).toBeNull();
+    for (const a of ARENA_DEFS) {
+      const p = sanitizeProfile({ ...raw, devMode: { ...(raw.devMode as object), arena: a.id } });
+      expect(devArenaOf(p)).toBe(a.id);
+    }
+  });
+
+  it('a picked arena draws ranked / casual opponents from that arena at the dev rating', () => {
+    const rng = seededRng(19);
+    for (const a of ARENA_DEFS) {
+      for (let i = 0; i < 40; i++) {
+        const mode = i % 2 ? 'ranked' : 'casual';
+        const opp = createOpponent({ mode, rating: DEV_RATING, playerGrades: [3, 3, 3], arena: a.id }, rng);
+        expect(opp.arena).toBe(a.id);
+        expect(arenaForRating(opp.rating).id).toBe(a.id);
+        expect(opp.difficulty).toBe(ARENA_AI[a.id]);
+        const pool = shopPool(arenaById(a.id));
+        for (const s of opp.formation) expect(pool).toContain(s.character);
+        expect(validateFormation(opp.formation).ok).toBe(true);
+      }
+    }
   });
 });
