@@ -3,7 +3,8 @@
  * boot splash, the player must never be left on an endless loading screen:
  *  - the app's own module script fails to load (e.g. a stale page after a deploy, or a network
  *    error): reload once automatically, then show a retry button;
- *  - the app has not started after BOOT_TIMEOUT_MS: show a retry button (no forced reload).
+ *  - the app has not started after BOOT_TIMEOUT_MS: if its main chunk did download (so start-up is
+ *    stuck, not slow) reload once with a cache-busting query, otherwise show a retry button.
  * External file because the CSP forbids inline scripts. Plain ES5, no dependencies.
  */
 (function () {
@@ -68,9 +69,34 @@
     true
   );
 
+  // The app's main chunk finished downloading (Resource Timing), so a still-visible splash means
+  // the start-up is stuck rather than slow: one automatic fresh reload is worth it. On a slow
+  // network (chunk still downloading) never reload: that would restart the download.
+  function mainChunkLoaded() {
+    try {
+      var list = performance.getEntriesByType('resource');
+      for (var i = 0; i < list.length; i++) {
+        var e = list[i];
+        if (/\/assets\/main-[^/]+\.js/.test(e.name) && e.responseEnd > 0) return true;
+      }
+    } catch (_) {
+      /* ignore */
+    }
+    return false;
+  }
+
   window.setTimeout(function () {
-    if (splash()) showRetry();
-    else {
+    if (splash()) {
+      var retried = true;
+      try {
+        retried = sessionStorage.getItem(RETRY_KEY) === '1';
+        if (!retried && mainChunkLoaded()) sessionStorage.setItem(RETRY_KEY, '1');
+      } catch (_) {
+        retried = true;
+      }
+      if (!retried && mainChunkLoaded()) freshReload();
+      else showRetry();
+    } else {
       try {
         sessionStorage.removeItem(RETRY_KEY);
       } catch (_) {

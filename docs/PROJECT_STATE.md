@@ -245,7 +245,9 @@ legendary.
   starts a silent buffer.
 - **Endless splash right after a deploy:** old hashed chunks 404 at once, and the CDN may serve a
   stale index for seconds. `public/boot-guard.js` reloads once with a cache-busting `?_r=`, then
-  shows 다시 시도; a 12 s timeout also shows the retry.
+  shows 다시 시도. After 12 s on the splash it reloads once if the main chunk already downloaded
+  (start-up stuck), otherwise it shows the retry. The exact first-load stall seen a few times right
+  after deploys was never reproduced with full request logging; the guard covers it either way.
 - **Michelle phantom trap in the fast engine:** "backward" was judged after the turn-around flip.
 - **CSP** (`vercel.json`) forbids inline scripts, so helpers live in external files
   (boot-guard.js, audition.js).
