@@ -4,7 +4,7 @@ import { ANIMATION_WATCHDOG_MS, GameController, type ControllerPorts } from '../
 import { makeState } from './helpers';
 
 /** Manual clock + timers so races can be driven deterministically. */
-function harness(initial: GameState, opts: { botMove?: (s: GameState) => Move | null | Promise<Move | null> } = {}) {
+function harness(initial: GameState, opts: { botMove?: (s: GameState) => Move | null | Promise<Move | null>; timerLagMs?: number | ((ms: number) => number) } = {}) {
   let t = 0;
   let nextId = 1;
   const timers = new Map<number, { at: number; fn: () => void }>();
@@ -22,7 +22,8 @@ function harness(initial: GameState, opts: { botMove?: (s: GameState) => Move | 
     turnTimeMs: 60_000,
     setTimer: (fn, ms) => {
       const id = nextId++;
-      timers.set(id, { at: t + ms, fn });
+      const lag = typeof opts.timerLagMs === 'function' ? opts.timerLagMs(ms) : (opts.timerLagMs ?? 0);
+      timers.set(id, { at: t + Math.max(0, ms + lag), fn });
       return id;
     },
     clearTimer: (id) => void timers.delete(id as number),
@@ -170,23 +171,59 @@ describe('GameController races', () => {
     expect(h.botCalls.length).toBe(0);
   });
 
-  it('pause freezes the clock and a bot reply waits for resume', async () => {
-    const h = harness(position());
+  it('a hidden page does not stop the clock: a deadline passed while timers were suspended forfeits on return', async () => {
+    // Suspended / throttled timers: nothing fires while "hidden" (the iOS app is suspended).
+    const h = harness(position(), { timerLagMs: 10 * 60_000 });
+    const ended: GameState[] = [];
+    h.ctrl.on((e) => e.type === 'ended' && ended.push(e.state));
+    h.ctrl.start();
+    expect(h.ctrl.phase).toBe('humanTurn');
+    await h.advance(30_000);
+    expect(h.ctrl.turnRemainingMs()).toBe(30_000); // the clock runs while hidden
+    h.ctrl.checkClock(); // back early: nothing happens
+    expect(h.ctrl.state.status).toBe('playing');
+    await h.advance(31_000); // the deadline passed while away; no timer fired
+    expect(h.ctrl.state.status).toBe('playing');
+    h.ctrl.checkClock(); // visibilitychange -> visible / pageshow / focus / appStateChange
+    expect(ended.length).toBe(1);
+    expect(ended[0].endReason).toBe('timeoutForfeit');
+    expect(ended[0].winner).toBe(1);
+    h.ctrl.checkClock();
+    expect(ended.length).toBe(1);
+  });
+
+  it('while hidden the bot still moves and the human clock starts and counts down', async () => {
+    const h = harness(position(), { botMove: () => ({ pieceId: 'p1-sad', from: { r: 9, c: 9 }, to: { r: 8, c: 9 } }) });
     h.ctrl.start();
     h.ctrl.tapCell({ r: 0, c: 0 });
     h.ctrl.tapCell({ r: 1, c: 0 });
-    await h.finishAnims();
-    h.ctrl.pause();
-    h.botCalls[0].resolve({ pieceId: 'p1-sad', from: { r: 9, c: 9 }, to: { r: 8, c: 9 } });
-    await h.advance(10 * 60_000);
-    expect(h.ctrl.phase).toBe('botThinking');
-    expect(h.ctrl.state.consecutiveTimeouts).toEqual([0, 0]);
-    expect(h.anims.length).toBe(0);
-    h.ctrl.resume();
-    await h.flush();
-    expect(h.anims.length).toBe(1);
+    await h.finishAnims(); // (the board settles animations at once while hidden)
+    await h.advance(0);
     await h.finishAnims();
     expect(h.ctrl.phase).toBe('humanTurn');
+    expect(h.ctrl.state.ply).toBe(2);
+    expect(h.ctrl.turnRemainingMs()).toBe(60_000);
+    await h.advance(20_000);
+    expect(h.ctrl.turnRemainingMs()).toBe(40_000);
+    await h.advance(40_000);
+    expect(h.ctrl.state.endReason).toBe('timeoutForfeit');
+  });
+
+  it('a late (throttled) timer still honours the deadline, and an early one does not forfeit', async () => {
+    const late = harness(position(), { timerLagMs: 45_000 });
+    late.ctrl.start();
+    await late.advance(60_000);
+    expect(late.ctrl.state.status).toBe('playing'); // the timer has not fired yet
+    expect(late.ctrl.turnRemainingMs()).toBe(0);
+    await late.advance(45_000); // it fires 45 s late: the timeout applies then
+    expect(late.ctrl.state.endReason).toBe('timeoutForfeit');
+
+    const early = harness(position(), { timerLagMs: (ms) => (ms > 30_000 ? -30_000 : 0) });
+    early.ctrl.start();
+    await early.advance(30_000); // fired 30 s early: re-armed, no forfeit
+    expect(early.ctrl.state.status).toBe('playing');
+    await early.advance(30_000);
+    expect(early.ctrl.state.endReason).toBe('timeoutForfeit');
   });
 
   it('one human timeout forfeits exactly once, and dispose stops everything', async () => {

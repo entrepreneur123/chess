@@ -86,6 +86,7 @@ import {
   isHopMove,
   mixRgb,
   posKey,
+  FRAME_STALL_MS,
   prefersReducedMotion,
   pulse01,
   rgbToCss,
@@ -366,6 +367,9 @@ export class Board2DView implements IBoardView {
   private readonly reducedMotion = prefersReducedMotion();
   /** A frame threw once already (logged once; see onFrameError). */
   private frameErrorLogged = false;
+  /** Frame-stall check for running animations (see watchFrames). */
+  private stallTimer = 0;
+  private lastRafAt = 0;
   private hasLegendary = false;
   /** Pre-rendered tokens keyed by look + pixel size. */
   private readonly sprites = new Map<string, HTMLCanvasElement>();
@@ -489,6 +493,7 @@ export class Board2DView implements IBoardView {
       this.awRuns.set(pieceId, { id: pieceId, phase, tl: awakenTimeline(phase, this.reducedMotion), start: now, face0, aura0, pulsed: false, smoked: false, resolve });
       this.awLook.set(pieceId, { face: face0, aura: aura0, burn: 0 });
       this.requestRender();
+      this.watchFrames();
     });
   }
 
@@ -889,6 +894,7 @@ export class Board2DView implements IBoardView {
         resolve,
       };
       this.requestRender();
+      this.watchFrames();
     });
   }
 
@@ -1037,6 +1043,7 @@ export class Board2DView implements IBoardView {
         resolve,
       };
       this.requestRender();
+      this.watchFrames();
     });
   }
 
@@ -1093,6 +1100,7 @@ export class Board2DView implements IBoardView {
         resolve,
       };
       this.requestRender();
+      this.watchFrames();
     });
   }
 
@@ -1303,6 +1311,8 @@ export class Board2DView implements IBoardView {
     this.finishAnimation(false);
     for (const run of [...this.awRuns.values()]) this.endRun(run, true);
     this.disposed = true;
+    if (this.stallTimer) clearTimeout(this.stallTimer);
+    this.stallTimer = 0;
     this.impactCb = null;
     faceWaiters.delete(this.onFaceLoaded);
     if (this.rafId) cancelAnimationFrame(this.rafId);
@@ -1446,6 +1456,32 @@ export class Board2DView implements IBoardView {
       this.frameErrorLogged = true;
       console.error('[render] frame failed; running animations settled:', err);
     }
+    this.settleRunning();
+  }
+
+  /**
+   * A move / cast / transform just started: never let it wait on frames that do not come. Hidden
+   * page: finished at once. Otherwise checked every FRAME_STALL_MS: no frame for that long (a
+   * hidden, starved or throttled page), finished at its end state.
+   */
+  private watchFrames(): void {
+    if (document.hidden) {
+      this.settleRunning();
+      return;
+    }
+    this.lastRafAt = performance.now();
+    if (!this.stallTimer) this.stallTimer = window.setTimeout(this.onStallCheck, FRAME_STALL_MS);
+  }
+
+  private readonly onStallCheck = (): void => {
+    this.stallTimer = 0;
+    if (this.disposed || (!this.anim && !this.skill && this.awRuns.size === 0)) return;
+    if (document.hidden || performance.now() - this.lastRafAt >= FRAME_STALL_MS) this.settleRunning();
+    else this.stallTimer = window.setTimeout(this.onStallCheck, FRAME_STALL_MS);
+  };
+
+  /** Finish every running move / cast / transform now, at its end state. */
+  private settleRunning(): void {
     try {
       this.finishAnimation(false);
     } catch (e) {
@@ -1461,6 +1497,7 @@ export class Board2DView implements IBoardView {
   }
 
   private renderFrame(now: number): void {
+    this.lastRafAt = performance.now();
     if (this.anim) this.tickAnim(now);
     this.tickSkill(now);
     this.tickAwaken(now);

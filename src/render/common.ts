@@ -210,6 +210,13 @@ export function faceUrl(character: CharacterId, level: Level): string {
 }
 
 /** True when the OS asks for reduced motion (safe outside browsers). */
+/**
+ * Board animations never wait on frames that do not come: when the page is hidden (no
+ * requestAnimationFrame at all) or no frame ran for this long, a running move / cast / transform
+ * is finished at once at its end state. The game awaits these animations.
+ */
+export const FRAME_STALL_MS = 500;
+
 export function prefersReducedMotion(): boolean {
   try {
     return typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;

@@ -104,6 +104,7 @@ import {
   makeRng,
   mixRgb,
   posKey,
+  FRAME_STALL_MS,
   prefersReducedMotion,
   pulse01,
   sameLook,
@@ -773,6 +774,9 @@ export class BoardView implements IBoardView {
   private readonly reducedMotion = prefersReducedMotion();
   /** A frame threw once already (logged once; see onFrameError). */
   private frameErrorLogged = false;
+  /** Frame-stall check for running animations (see watchFrames). */
+  private stallTimer = 0;
+  private lastRafAt = 0;
   private impactCb: ((move: Move) => void) | null = null;
   /** True while dispose() settles a running animation (no impact callback then). */
   private disposing = false;
@@ -1727,6 +1731,7 @@ export class BoardView implements IBoardView {
         resolve,
       };
       this.requestRender();
+      this.watchFrames();
     });
   }
 
@@ -1809,6 +1814,7 @@ export class BoardView implements IBoardView {
         resolve,
       };
       this.requestRender();
+      this.watchFrames();
     });
   }
 
@@ -1930,6 +1936,7 @@ export class BoardView implements IBoardView {
       }
       this.tickAwaken(now);
       this.requestRender();
+      this.watchFrames();
     });
   }
 
@@ -2427,6 +2434,7 @@ export class BoardView implements IBoardView {
     return new Promise<void>((resolve) => {
       this.skill = { start: now, caster: cv, from, centre, squares: squaresT, boltAt, duration, shook: false, resolve };
       this.requestRender();
+      this.watchFrames();
     });
   }
 
@@ -2591,6 +2599,8 @@ export class BoardView implements IBoardView {
     this.impactCb = null;
     if (this.rafId) cancelAnimationFrame(this.rafId);
     this.rafId = 0;
+    if (this.stallTimer) clearTimeout(this.stallTimer);
+    this.stallTimer = 0;
     if (this.scanTimer) clearTimeout(this.scanTimer);
     this.scanTimer = 0;
     this.resizeObserver?.disconnect();
@@ -3129,6 +3139,32 @@ export class BoardView implements IBoardView {
       this.frameErrorLogged = true;
       console.error('[render] frame failed; running animations settled:', err);
     }
+    this.settleRunning();
+  }
+
+  /**
+   * A move / cast / transform just started: never let it wait on frames that do not come. Hidden
+   * page: finished at once. Otherwise checked every FRAME_STALL_MS: no frame for that long (a
+   * starved or throttled page), finished at its end state.
+   */
+  private watchFrames(): void {
+    if (document.hidden) {
+      this.settleRunning();
+      return;
+    }
+    this.lastRafAt = performance.now();
+    if (!this.stallTimer) this.stallTimer = window.setTimeout(this.onStallCheck, FRAME_STALL_MS);
+  }
+
+  private readonly onStallCheck = (): void => {
+    this.stallTimer = 0;
+    if (this.disposed || (!this.anim && !this.skill && this.awakening.size === 0)) return;
+    if (document.hidden || performance.now() - this.lastRafAt >= FRAME_STALL_MS) this.settleRunning();
+    else this.stallTimer = window.setTimeout(this.onStallCheck, FRAME_STALL_MS);
+  };
+
+  /** Finish every running move / cast / transform now, at its end state. */
+  private settleRunning(): void {
     try {
       this.finishAnimation(false);
     } catch (e) {
@@ -3138,6 +3174,7 @@ export class BoardView implements IBoardView {
   }
 
   private renderFrame(now: number): void {
+    this.lastRafAt = performance.now();
     const moving = this.tickAnimation(now);
     const casting = this.tickSkill(now);
     const awakening = this.tickAwaken(now);
@@ -3213,6 +3250,8 @@ export class BoardView implements IBoardView {
       if (this.rafId) cancelAnimationFrame(this.rafId);
       this.rafId = 0;
       this.lastTick = 0;
+      // No frames while hidden: the game must not wait for a running animation.
+      this.settleRunning();
     } else {
       this.requestRender();
     }

@@ -138,4 +138,31 @@ describe('Board2DView animation loop robustness', () => {
     expect(done).toBe(true);
     board.dispose();
   });
+
+  it('a hidden page never waits on frames: the move finishes at once', async () => {
+    const board = await makeBoard();
+    board.setPieces([picker, victim]);
+    runFrames(performance.now());
+    (g.document as { hidden: boolean }).hidden = true;
+    let done = false;
+    const move: Move = { pieceId: picker.id, from: picker.pos, to: { r: 4, c: 4 }, captureId: victim.id, captureIds: [victim.id] };
+    void board.animateMove(move, [{ ...picker, pos: { r: 4, c: 4 } }]).then(() => (done = true));
+    await Promise.resolve();
+    expect(done).toBe(true); // no frame ran at all
+    board.dispose();
+  });
+
+  it('when animation frames stop coming, a running move is settled after FRAME_STALL_MS', async () => {
+    const { FRAME_STALL_MS } = await import('../src/render/common');
+    const board = await makeBoard();
+    board.setPieces([picker, victim]);
+    runFrames(performance.now());
+    let done = false;
+    void board.animateMove({ pieceId: picker.id, from: picker.pos, to: { r: 3, c: 2 } }, [{ ...picker, pos: { r: 3, c: 2 } }]).then(() => (done = true));
+    // No runFrames(): the page is starved / throttled / its rAF stopped without a visibilitychange.
+    await new Promise((r) => setTimeout(r, FRAME_STALL_MS + 150));
+    expect(done).toBe(true);
+    board.dispose();
+  });
 });
+
