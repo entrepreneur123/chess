@@ -67,7 +67,18 @@ describe('dungeon opponents (fixed tiers)', () => {
     expect([...starred].sort()).toEqual([...ALL].sort());
   });
 
-  for (const level of ['hard', 'extreme'] as const) {
+  it('extreme: all 3-star, every legendary fielded, the third member varies', () => {
+    const thirds = new Set<string>();
+    for (const opp of run('extreme', 43)) {
+      const ids = opp.formation.map((s) => s.character);
+      expect(opp.formation.every((s) => s.level === 3)).toBe(true);
+      for (const l of LEGENDS) expect(ids).toContain(l);
+      ids.filter((id) => !LEGENDS.includes(id)).forEach((id) => thirds.add(id));
+    }
+    expect([...thirds].sort()).toEqual(ALL.filter((id) => !LEGENDS.includes(id)).sort());
+  });
+
+  for (const level of ['hard'] as const) {
     it(`${level}: all 3-star, always at least one legendary, a second one only sometimes`, () => {
       let two = 0;
       const seen = new Set<string>();

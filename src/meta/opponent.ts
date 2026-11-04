@@ -7,8 +7,8 @@
  *    drawn only from characters opened up to that rating's arena (the cumulative shop pool); the
  *    grades track the player's fielded grades (rounded average ± 1, clamped to 1–3); the AI
  *    strength is set by the opponent's arena (`ARENA_AI`).
- *  - 던전: fixed tiers per difficulty (easy / normal / hard as before; extreme = three 3성 with at
- *    least one legendary, at extreme strength).
+ *  - 던전: fixed tiers per difficulty (easy / normal / hard as before; extreme = three 3성 with every
+ *    legendary, at extreme strength).
  */
 import type { Difficulty } from '../ai/bot';
 import {
@@ -64,12 +64,26 @@ function drawDistinct(rng: Rng, pool: readonly CharacterId[], n: number): Charac
 /**
  * The dungeon bot's three characters:
  *  - easy / normal: 3 distinct characters drawn uniformly from the whole roster (legendaries too);
- *  - hard / extreme: one legendary drawn at random, plus 2 distinct characters from the rest (a
- *    second legendary only by chance).
+ *  - hard: one legendary drawn at random, plus 2 distinct characters from the rest (a second
+ *    legendary only by chance);
+ *  - extreme: every legendary (Insaner and Brutile today) plus one other character.
  * `_playerSquad` is kept for call-site compatibility and ignored.
  */
 export function botSquad(difficulty: Difficulty, _playerSquad: readonly CharacterId[] = STARTER_IDS, rng: Rng = defaultRng): CharacterId[] {
-  if ((difficulty === 'hard' || difficulty === 'extreme') && LEGENDARY_IDS.length > 0) {
+  if (difficulty === 'extreme' && LEGENDARY_IDS.length > 0) {
+    // 극악 fields every legendary. A self-play check (8 games, 극악 vs 어려움 search with random
+    // squads) showed the stronger search alone is not measurably stronger, so the squad is.
+    const legends = LEGENDARY_IDS.slice(0, PIECES_PER_SIDE);
+    const rest = drawDistinct(
+      rng,
+      CHARACTER_IDS.filter((id) => !legends.includes(id)),
+      PIECES_PER_SIDE - legends.length,
+    );
+    const squad = [...rest];
+    for (const l of legends) squad.splice(Math.min(squad.length, Math.floor(rng() * (squad.length + 1))), 0, l);
+    return squad;
+  }
+  if (difficulty === 'hard' && LEGENDARY_IDS.length > 0) {
     const legend = LEGENDARY_IDS[Math.min(LEGENDARY_IDS.length - 1, Math.floor(rng() * LEGENDARY_IDS.length))];
     const rest = drawDistinct(
       rng,
