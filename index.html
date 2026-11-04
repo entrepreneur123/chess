@@ -137,6 +137,23 @@
         box-shadow: 0 0 10px #f2c14e;
         animation: boot-load 1.1s cubic-bezier(0.65, 0, 0.35, 1) infinite;
       }
+      .boot__note {
+        margin-top: 22px;
+        letter-spacing: 0.08em;
+        text-indent: 0;
+      }
+      .boot__retry {
+        position: relative;
+        margin-top: 12px;
+        padding: 10px 22px;
+        border: 0;
+        border-radius: 12px;
+        font: 800 15px/1 system-ui, -apple-system, 'Segoe UI', sans-serif;
+        color: #1d1402;
+        background: linear-gradient(180deg, #ffe08a, #f2b632);
+        box-shadow: 0 4px 0 #a8730f;
+        cursor: pointer;
+      }
       @keyframes boot-in {
         from {
           opacity: 0;
@@ -165,6 +182,8 @@
         }
       }
     </style>
+    <!-- Must run before the app module: shows a retry when the app fails to start. -->
+    <script src="./boot-guard.js"></script>
   </head>
   <body>
     <div id="app" aria-live="off">
