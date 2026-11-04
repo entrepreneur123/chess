@@ -1,5 +1,5 @@
 export * from './types';
-export { CHARACTERS, CHARACTER_IDS, STARTER_IDS, WASTE_SIZE, PICKER_RANGE, pieceValue, effectiveValue, absorbMaskOf, abilityBit } from './characters';
+export { CHARACTERS, CHARACTER_IDS, STARTER_IDS, WASTE_SIZE, PICKER_RANGE, pieceValue, effectiveValue, absorbMaskOf, abilityBit, skillKindOf } from './characters';
 export { forwardDir, formationToAbsolute, isInZone, isOnBoard, sqOf, posOf, genTargets, inStorm, canHop, trapBit, N_SQUARES } from './board';
 export { validateFormation, isCharacterId, defaultFormation, randomFormation, normalizeSquad, squadOf } from './formation';
 export {
@@ -30,6 +30,7 @@ export {
   wasteFlags,
   trapFlags,
   isStunned,
+  isAwake,
   trapAt,
   trapsLeft,
   capturedIds,

@@ -1,7 +1,7 @@
-import { SKILL_UNLOCK_PLY, SKILL_USES_PER_MATCH, STORM_INTERVAL_PLIES, SUDDEN_DEATH_PLY, TRAPS_PER_MICHELLE, TRAP_STUN, TURN_TIME_1_MS, TURN_TIME_2_MS, TURN_TIME_MS } from './types';
+import { AWAKEN_TURNS, SKILL_UNLOCK_PLY, STORM_INTERVAL_PLIES, SUDDEN_DEATH_PLY, TRAPS_PER_MICHELLE, TRAP_STUN, TURN_TIME_1_MS, TURN_TIME_2_MS, TURN_TIME_MS } from './types';
 import type { AbsorbedAbility, EndReason, Formation, GameState, HistoryEntry, Move, PassReason, Piece, PlayerId, Pos, SkillAction, Trap } from './types';
 import { BOARD_SIZE } from './types';
-import { CHARACTERS, CHAR_CODE, WASTE_SIZE, absorbMaskOf, effectiveValue, keepsDirection } from './characters';
+import { CHARACTERS, CHAR_CODE, WASTE_SIZE, absorbMaskOf, effectiveValue, keepsDirection, skillKindOf } from './characters';
 import { N_SQUARES, atTurnRow, canHop, formationToAbsolute, forwardDir, genTargets, inStorm, isOnBoard, posOf, sqOf, trapBit } from './board';
 import { validateFormation } from './formation';
 
@@ -95,6 +95,11 @@ export function isStunned(piece: Pick<Piece, 'stun'>): boolean {
   return (piece.stun ?? 0) > 0;
 }
 
+/** True while Rakaeli is transformed ("타천"): he moves with his transformed pattern. */
+export function isAwake(piece: Pick<Piece, 'awaken'>): boolean {
+  return (piece.awaken ?? 0) > 0;
+}
+
 /** Is there a doll trap of `owner` on `pos`? */
 export function trapAt(state: Pick<GameState, 'traps'>, pos: Pos, owner: PlayerId): boolean {
   const sq = sqOf(pos);
@@ -148,7 +153,7 @@ export function pieceDir(piece: Pick<Piece, 'owner' | 'dir'>): 1 | -1 {
 }
 
 function countTargets(occ: Int8Array, owners: Uint8Array, piece: Piece, storm: number, waste: Uint8Array | null, traps: Uint8Array | null): number {
-  return genTargets(occ, owners, piece.owner, CHAR_CODE[piece.character], piece.level, sqOf(piece.pos), tmpTargets, 0, false, pieceDir(piece), storm, absorbMaskOf(piece.absorbed), waste, traps);
+  return genTargets(occ, owners, piece.owner, CHAR_CODE[piece.character], piece.level, sqOf(piece.pos), tmpTargets, 0, false, pieceDir(piece), storm, absorbMaskOf(piece.absorbed), waste, traps, isAwake(piece));
 }
 
 function targetsWith(pieces: Piece[], occ: Int8Array, owners: Uint8Array, piece: Piece, storm: number, waste: Uint8Array | null, traps: Uint8Array | null): Move[] {
@@ -266,7 +271,7 @@ function end(state: GameState, winner: PlayerId | null, reason: GameState['endRe
 function switchTurn(state: GameState, entry: HistoryEntry, pliesSinceCapture: number): GameState {
   let next: GameState = {
     ...state,
-    pieces: countDownStuns(state.pieces, state.turn),
+    pieces: countDownTurnEnd(state.pieces, state.turn),
     turn: other(state.turn),
     ply: state.ply + 1,
     pliesSinceCapture,
@@ -301,14 +306,23 @@ function switchTurn(state: GameState, entry: HistoryEntry, pliesSinceCapture: nu
   return next;
 }
 
-/** The turn of `player` ends: each of its stunned pieces has one owner turn less to sit out. */
-function countDownStuns(pieces: Piece[], player: PlayerId): Piece[] {
-  if (!pieces.some((p) => p.owner === player && p.stun)) return pieces;
+/**
+ * The turn of `player` ends: each of its stunned pieces has one owner turn less to sit out, and a
+ * transformed Rakaeli one transformed turn less (a stun does not pause the transform).
+ */
+function countDownTurnEnd(pieces: Piece[], player: PlayerId): Piece[] {
+  if (!pieces.some((p) => p.owner === player && (p.stun || p.awaken))) return pieces;
   return pieces.map((p) => {
-    if (p.owner !== player || !p.stun) return p;
+    if (p.owner !== player || !(p.stun || p.awaken)) return p;
     const q: Piece = { ...p };
-    if (p.stun > 1) q.stun = p.stun - 1;
-    else delete q.stun;
+    if (p.stun) {
+      if (p.stun > 1) q.stun = p.stun - 1;
+      else delete q.stun;
+    }
+    if (p.awaken) {
+      if (p.awaken > 1) q.awaken = p.awaken - 1;
+      else delete q.awaken;
+    }
     return q;
   });
 }
@@ -332,7 +346,8 @@ function settle(state: GameState): GameState {
       state = switchTurn(state, { kind: 'pass', player: state.turn, reason: 'bonusSkip' }, state.pliesSinceCapture + 1);
       continue;
     }
-    // A side that cannot move but can still lay its wasteland is not passed: casting is its turn.
+    // A side that cannot move but can still cast a skill (lay its wasteland, or transform) is not
+    // passed: casting is its turn.
     if (hasAnyMove(state, state.turn) || sideCanCast(state, state.turn)) return state;
     // Stuns wear off, so the game is only stuck when neither side could act even without them.
     const selfLater = hasAnyMove(state, state.turn, null, true) || sideCanCast(state, state.turn, true);
@@ -453,12 +468,15 @@ export function wasteArea(level: number, anchor: Pos): number[] {
   return out;
 }
 
-export type SkillBlock = 'noSkill' | 'notYourTurn' | 'chain' | 'notYet' | 'used' | 'storm' | 'stunned' | 'ended';
+/** Why a skill cannot be cast now; 'active' = Rakaeli is transformed already. */
+export type SkillBlock = 'noSkill' | 'notYourTurn' | 'chain' | 'notYet' | 'used' | 'active' | 'storm' | 'stunned' | 'ended';
 
 /**
- * Why `pieceId` cannot use its skill right now, or null when it can. Brutile's wasteland unlocks at
- * SKILL_UNLOCK_PLY (each side has played 3 turns), SKILL_USES_PER_MATCH times per side, and is
- * forbidden once the storm has started closing in (storm >= 1).
+ * Why `pieceId` cannot use its skill right now, or null when it can. Every skill (Brutile's
+ * wasteland, Rakaeli's transform) unlocks at SKILL_UNLOCK_PLY (each side has played 3 turns), may
+ * be used once per match by each skill character (`Piece.skillUsed`), is forbidden during a chain
+ * move, while stunned and once the storm has started closing in (storm >= 1). A transformed
+ * Rakaeli cannot cast again ('active').
  */
 export function skillBlock(state: GameState, pieceId: string): SkillBlock | null {
   if (state.status !== 'playing') return 'ended';
@@ -466,8 +484,9 @@ export function skillBlock(state: GameState, pieceId: string): SkillBlock | null
   if (!p || !CHARACTERS[p.character].skill) return 'noSkill';
   if (p.owner !== state.turn) return 'notYourTurn';
   if (state.bonusPieceId !== null) return 'chain';
+  if (isAwake(p)) return 'active';
   if (state.storm > 0) return 'storm';
-  if (state.skillsUsed[p.owner] >= SKILL_USES_PER_MATCH) return 'used';
+  if (p.skillUsed) return 'used';
   if (state.ply < SKILL_UNLOCK_PLY) return 'notYet';
   // Checked last: 'stunned' means the skill would be usable once the doll trap lets go.
   if (isStunned(p)) return 'stunned';
@@ -480,21 +499,31 @@ export function skillUnlockIn(state: Pick<GameState, 'ply'>): number {
 }
 
 /**
- * Could `player` lay a wasteland on its turn (ignoring whose turn it is now)? `ignoreStun`: could it
- * once a doll trap lets its caster go.
+ * Could `player` cast a skill on its turn (ignoring whose turn it is now)? Every skill piece counts
+ * (a squad may field Brutile and Rakaeli). `ignoreStun`: could it once a doll trap lets the caster go.
  */
 function sideCanCast(state: GameState, player: PlayerId, ignoreStun = false): boolean {
   if (state.bonusPieceId !== null) return false;
-  const p = state.pieces.find((x) => x.owner === player && CHARACTERS[x.character].skill);
-  if (!p) return false;
-  const block = skillBlock({ ...state, turn: player }, p.id);
-  return (block === null || (ignoreStun && block === 'stunned')) && freeAnchors(state, p.level).length > 0;
+  let asPlayer: GameState | null = null;
+  for (const p of state.pieces) {
+    if (p.owner !== player || !CHARACTERS[p.character].skill) continue;
+    asPlayer ??= { ...state, turn: player };
+    const block = skillBlock(asPlayer, p.id);
+    if (block !== null && !(ignoreStun && block === 'stunned')) continue;
+    // A transform is always castable when unblocked (its anchor is his own square).
+    if (skillKindOf(p.character) === 'transform' || freeAnchors(state, p.level).length > 0) return true;
+  }
+  return false;
 }
 
-/** Valid anchors for `pieceId`'s wasteland: the whole area on the board and free of pieces. */
+/**
+ * Valid anchors for `pieceId`'s skill: for Brutile's wasteland every corner whose whole area is on
+ * the board and free of pieces; for Rakaeli's transform his own square only.
+ */
 export function skillAnchors(state: GameState, pieceId: string): Pos[] {
   if (skillBlock(state, pieceId) !== null) return [];
   const p = state.pieces.find((x) => x.id === pieceId)!;
+  if (skillKindOf(p.character) === 'transform') return [{ r: p.pos.r, c: p.pos.c }];
   return freeAnchors(state, p.level);
 }
 
@@ -518,18 +547,26 @@ export function isLegalSkill(state: GameState, action: SkillAction): boolean {
   return skillAnchors(state, action.pieceId).some((a) => samePos(a, action.anchor));
 }
 
-/** Pure: Brutile lays its wasteland; this is the player's action for the turn. Throws if illegal. */
+/**
+ * Pure: the skill is the player's action for the turn. Brutile lays its wasteland; Rakaeli
+ * transforms (`awaken` = AWAKEN_TURNS, which the turn change at once counts down to 2). Either way
+ * the caster's `skillUsed` is set. Throws if illegal.
+ */
 export function applySkill(state: GameState, action: SkillAction): GameState {
   if (!isLegalSkill(state, action)) throw new Error(`Illegal skill: ${JSON.stringify(action)}`);
   const p = state.pieces.find((x) => x.id === action.pieceId)!;
-  const squares = wasteArea(p.level, action.anchor);
-  const waste = [...new Set([...state.waste, ...squares])].sort((a, b) => a - b);
+  const transform = skillKindOf(p.character) === 'transform';
+  const squares = transform ? [] : wasteArea(p.level, action.anchor);
+  const waste = transform ? state.waste : [...new Set([...state.waste, ...squares])].sort((a, b) => a - b);
+  const pieces = state.pieces.map((x) => (x.id !== p.id ? x : transform ? { ...x, skillUsed: true as const, awaken: AWAKEN_TURNS } : { ...x, skillUsed: true as const }));
   const used: [number, number] = [state.skillsUsed[0], state.skillsUsed[1]];
   used[p.owner] += 1;
   const ct: [number, number] = [state.consecutiveTimeouts[0], state.consecutiveTimeouts[1]];
   ct[p.owner] = 0;
-  const entry: HistoryEntry = { kind: 'skill', player: p.owner, pieceId: p.id, squares };
-  return settle(switchTurn({ ...state, waste, skillsUsed: used, consecutiveTimeouts: ct }, entry, state.pliesSinceCapture + 1));
+  const entry: HistoryEntry = transform
+    ? { kind: 'skill', player: p.owner, pieceId: p.id, squares: [], transform: true }
+    : { kind: 'skill', player: p.owner, pieceId: p.id, squares };
+  return settle(switchTurn({ ...state, pieces, waste, skillsUsed: used, consecutiveTimeouts: ct }, entry, state.pliesSinceCapture + 1));
 }
 
 /** The player declines the pending chain move. No-op when none is pending. */

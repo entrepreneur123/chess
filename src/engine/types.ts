@@ -56,8 +56,17 @@ export const MAX_MATCH_PLIES = SUDDEN_DEATH_PLY + STORM_FULL_STEPS * STORM_INTER
  * `turnNumber` counts it) and is forbidden once the storm has started to close in (storm >= 1).
  */
 export const SKILL_UNLOCK_PLY = 6;
-/** How many times a side may use its skill per match. */
+/**
+ * How many times each skill character may use its skill per match. Use is tracked per piece
+ * (`Piece.skillUsed`), so a squad with two skill characters (Brutile and Rakaeli) can cast both.
+ */
 export const SKILL_USES_PER_MATCH = 1;
+/**
+ * Rakaeli's skill "타천" (transform): `Piece.awaken` is set to this on cast and counts down at the
+ * end of each of its owner's turns, the casting turn included, so he makes exactly
+ * AWAKEN_TURNS - 1 = 2 transformed moves.
+ */
+export const AWAKEN_TURNS = 3;
 /** Michelle's doll traps: the first this-many backward moves of a match each leave one. */
 export const TRAPS_PER_MICHELLE = 3;
 /**
@@ -67,7 +76,9 @@ export const TRAPS_PER_MICHELLE = 3;
 export const TRAP_STUN = 2;
 
 export type PlayerId = 0 | 1;
-export type CharacterId = 'sad' | 'marki' | 'walk' | 'insaner' | 'brutile' | 'michelle' | 'picker';
+/** What an active skill does: lay wasteland (Brutile) or transform (Rakaeli). */
+export type SkillKind = 'waste' | 'transform';
+export type CharacterId = 'sad' | 'marki' | 'walk' | 'insaner' | 'brutile' | 'michelle' | 'picker' | 'rakaeli';
 export type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
 export type Level = 1 | 2 | 3;
 
@@ -106,6 +117,15 @@ export interface Piece {
    * counts down by one, so it sits out exactly its owner's next turn. Absent / 0 = free.
    */
   stun?: number;
+  /**
+   * Rakaeli's transform ("타천"). While > 0 he moves with his transformed pattern. Set to
+   * AWAKEN_TURNS on cast; like `stun` it counts down by one at the end of each of its OWNER's turns
+   * (the casting turn included), so it reads 2 right after the cast and equals the transformed
+   * moves left. Deleted when it reaches 0. A stun does not pause it; the storm does not end it.
+   */
+  awaken?: number;
+  /** This piece has used its active skill this match (once per skill character). */
+  skillUsed?: true;
 }
 
 /** A doll trap Michelle left on square `sq` (r * BOARD_SIZE + c). It never disappears during a match. */
@@ -152,7 +172,10 @@ export interface Move {
   stunned?: true;
 }
 
-/** Brutile's skill: lay a k x k wasteland whose lowest-row, lowest-column square is `anchor`. */
+/**
+ * An active skill. Brutile: lay a k x k wasteland whose lowest-row, lowest-column square is
+ * `anchor`. Rakaeli: transform; `anchor` is his own square (the only legal anchor).
+ */
 export interface SkillAction {
   kind: 'skill';
   pieceId: string;
@@ -182,8 +205,11 @@ export type HistoryEntry =
   | { kind: 'pass'; player: PlayerId; reason: PassReason }
   /** The storm advanced to `storm` columns per side and removed the listed pieces. */
   | { kind: 'storm'; storm: number; killed: string[] }
-  /** `pieceId` (Brutile) laid wasteland on `squares` (square indices r * BOARD_SIZE + c). */
-  | { kind: 'skill'; player: PlayerId; pieceId: string; squares: number[] };
+  /**
+   * `pieceId` (Brutile) laid wasteland on `squares` (square indices r * BOARD_SIZE + c), or
+   * (`transform: true`, squares empty) `pieceId` (Rakaeli) transformed.
+   */
+  | { kind: 'skill'; player: PlayerId; pieceId: string; squares: number[]; transform?: true };
 
 export interface GameState {
   pieces: Piece[]; // only pieces still on the board
@@ -212,7 +238,10 @@ export interface GameState {
    * slides into it: slides end there) is destroyed. Wasteland never holds a piece.
    */
   waste: number[];
-  /** Skill uses so far per player. */
+  /**
+   * Skill uses so far per player (UI and stats). Whether a piece may still cast is tracked per
+   * piece (`Piece.skillUsed`).
+   */
   skillsUsed: [number, number];
   /** Michelle's doll traps on the board (sorted by square, then owner). Absent = none. */
   traps?: Trap[];
@@ -231,8 +260,13 @@ export interface CharacterDef {
   value: [number, number, number];
   /** Passive ability copy (UI only), if the character has one. */
   passiveKo?: string;
-  /** Active skill (UI copy), if the character has one; `descKo` per level. */
-  skill?: { nameKo: string; descKo: [string, string, string] };
+  /**
+   * Active skill, if the character has one: `kind` says what it does (Brutile's wasteland or
+   * Rakaeli's transform); `nameKo` / `descKo` (per level) are UI copy.
+   */
+  skill?: { kind: SkillKind; nameKo: string; descKo: [string, string, string] };
+  /** Transformed-form movement copy per level (Rakaeli's "타천"), index 0 = level 1. */
+  awakeDescKo?: [string, string, string];
   /** Always-on trait (UI copy), e.g. Michelle's doll trap or Picker's hop-through. */
   trait?: { nameKo: string; descKo: string };
 }

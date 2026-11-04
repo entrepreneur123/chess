@@ -286,16 +286,56 @@ def fx_picker(x):
     return hall(y, 0.45, 0.07, predelay=0.012, lp=3200, hp=200)
 
 
+def fx_rakaeli(x):
+    """Blindfolded fallen angel, base form: his own soft voice (never pitch-shifted), a touch of
+    chest so the light timbre is not thin, gentle compression and an airy, cool chapel hall."""
+    y = biquad(x, "hp", 80)
+    y = biquad(y, "lowshelf", 220, 0.8)
+    y = compress(y, -21, 2.0, attack=0.008, release=0.14)
+    return hall(y, 1.0, 0.13, predelay=0.03, lp=5000, hp=300)
+
+
+RAKAELI_AWAKE_PITCH = 2 ** (-2.0 / 12)  # -2 semitones on the main voice
+RAKAELI_AWAKE_FORMANT = 0.94            # vocal tract ~6 % longer: deeper, not a different person
+
+
+def fx_rakaeli_awake(x):
+    """Transformed ("타천") form: the same young man, deeper and colder, speaking as two.
+    - main voice 2 semitones down with formants -6 % (ffmpeg rubberband after a resample, the same
+      shifter insaner uses; a small shift on a low male voice keeps its contour);
+    - a detuned double: WORLD resynthesis of the shifted voice 22 cents sharp, envelope a further
+      -5 %, 17 ms late, about -7 dB - the 'second throat' that makes him sound possessed;
+    - a cold shadow one octave down (envelope x0.8, low-passed at 1.1 kHz, no flutter or ring
+      modulation, which are the minotaur's and the imp's), about -15 dB;
+    - a scooped low-mid (cold, hollow), a dark top, light saturation and a dark cathedral tail."""
+    y = pad(pitch_formant(x, RAKAELI_AWAKE_PITCH, RAKAELI_AWAKE_FORMANT, 1.0, "rb"), len(x))
+    y = biquad(y, "hp", 70)
+    n = len(y)
+    dbl = world_layer(y, 2 ** (22 / 1200), 0.95)
+    dbl = biquad(dbl, "lp", 5500)
+    dbl = np.concatenate([np.zeros(int(0.017 * SR)), dbl])[:n]
+    low = world_layer(y, 0.5, 0.8)
+    low = biquad(low, "lp", 1100)
+    mix = y + 0.45 * dbl * rms(y) / rms(dbl) + 0.18 * low * rms(y) / rms(low)
+    pk = np.abs(mix).max() + 1e-9
+    mix = 0.82 * mix + 0.18 * np.tanh(2.0 * mix / pk) * pk
+    mix = biquad(mix, "lowshelf", 140, 1.5)
+    mix = biquad(mix, "peak", 420, -1.5, 0.9)
+    mix = biquad(mix, "highshelf", 5500, -2.5)
+    mix = compress(mix, -22, 3.0, attack=0.005, release=0.1)
+    return hall(mix, 1.2, 0.17, predelay=0.035, lp=2600, hp=160)
+
+
 FX = {"sad": fx_sad, "marki": fx_marki, "walk": fx_walk, "insaner": fx_insaner, "brutile": fx_brutile,
-      "michelle": fx_michelle, "picker": fx_picker}
+      "michelle": fx_michelle, "picker": fx_picker, "rakaeli": fx_rakaeli, "rakaeli-awake": fx_rakaeli_awake}
 # Brightness target (voice_qa harsh_db) for the adaptive presence cut; ElevenLabs takes measure
 # about -6..-1 dB raw. Humans sit warmer, the witch keeps a little more rasp.
 HARSH_TARGET = {"sad": -9.0, "marki": -11.0, "walk": -10.0, "insaner": -8.0, "brutile": -7.0,
-                "michelle": -9.0, "picker": -10.0}
+                "michelle": -9.0, "picker": -10.0, "rakaeli": -9.5, "rakaeli-awake": -11.0}
 # De-esser threshold (share of the full-band envelope the >4.5 kHz band may carry before it is turned
 # down). walk's hard affricates ([ch] in 끝이다, [ss] in 쓰러뜨렸다) need a firmer hand.
 DEESS_THR = {"sad": 0.35, "marki": 0.35, "walk": 0.2, "insaner": 0.35, "brutile": 0.3,
-             "michelle": 0.3, "picker": 0.3}
+             "michelle": 0.3, "picker": 0.3, "rakaeli": 0.3, "rakaeli-awake": 0.28}
 
 
 # ------------------------------------------------------------------------------------------------
@@ -334,14 +374,14 @@ def normalise(x: np.ndarray) -> np.ndarray:
     return x
 
 
-def encode_tp(y: np.ndarray, path: str):
+def encode_tp(y: np.ndarray, path: str, bitrate: str = "64k"):
     """Encode and judge the decoded file: re-encode quieter while its true peak is above TP_MAX, and
     nudge the gain while its loudness is off target by > 0.2 LU (AAC padding shifts the gated
     loudness of sub-second clips by up to ~0.6 LU), never past the true-peak headroom. When the
     clip is too quiet only because AAC overshoots on one transient (decoded peak well above the
     PCM peak), that transient is limited harder instead of turning the whole clip down."""
     for _ in range(8):
-        encode_m4a(y, path, "64k", SR)
+        encode_m4a(y, path, bitrate, SR)
         z = vq.load(path)
         tp = vq.true_peak_db(z)
         if tp > TP_MAX:
@@ -359,7 +399,7 @@ def encode_tp(y: np.ndarray, path: str):
             break
         y = y * 10 ** (step / 20)
     else:  # gain changed on the last round: the file on disk must match y
-        encode_m4a(y, path, "64k", SR)
+        encode_m4a(y, path, bitrate, SR)
         z = vq.load(path)
     return y, z
 
@@ -421,6 +461,7 @@ def expand(x: np.ndarray, thr_db: float = -38.0, ratio: float = 2.5, max_gr: flo
 
 
 def render(x: np.ndarray, char: str) -> np.ndarray:
+    """char is the FX chain key: the character, or a line's "fx" (e.g. "rakaeli-awake")."""
     x = trim_lead(x)
     end = speech_end(x)
     x = x[: min(len(x), end + int(0.35 * SR))]  # keep the natural decay after the last word
@@ -472,6 +513,7 @@ def main() -> None:
         rawdir = os.path.join(a.raw, char)
         src = c.get("source", {})
         want = c.get("gender")  # "female" / "male": gate takes on the QA classifier when --gender is given
+        bitrate = c.get("bitrate", "64k")  # AAC bitrate (rakaeli: 48k, he has twice the lines)
         # Pass 1: ASR + pitch of every raw take (speech part only).
         cands = {}
         for line in c["lines"]:
@@ -508,10 +550,11 @@ def main() -> None:
             ranked = sorted(cands[line["id"]],
                             key=lambda k: k["cer"] + 0.5 * dev(k) + 0.3 * max(0.0, k["dur"] - 2.4))
             best = None
+            fx = line.get("fx", char)  # a second form of the character has its own chain
             for k in ranked[: a.shortlist]:
-                y = render(vq.load(os.path.join(rawdir, k["file"])), char)
+                y = render(vq.load(os.path.join(rawdir, k["file"])), fx)
                 tmp = os.path.join(a.out, f".tmp-{char}-{line['id']}.m4a")
-                y, z = encode_tp(y, tmp)
+                y, z = encode_tp(y, tmp, bitrate)
                 os.remove(tmp)
                 hyp = asr(z)
                 d = len(z) / SR
@@ -525,7 +568,7 @@ def main() -> None:
                 # a mild cost per dB above the character's harshness target + 2 dB and above -9 dB
                 # sibilance (about the roster's 90th percentile), so a duller equal take wins.
                 harsh, sib, _ = vq.band_stats(z, SR)
-                score += 0.05 * max(0.0, harsh - (HARSH_TARGET[char] + 2.0)) + 0.04 * max(0.0, sib + 9.0)
+                score += 0.05 * max(0.0, harsh - (HARSH_TARGET[fx] + 2.0)) + 0.04 * max(0.0, sib + 9.0)
                 fp = None
                 if gender is not None and want in ("female", "male"):
                     fp = gender(z)
@@ -541,8 +584,8 @@ def main() -> None:
                 os.makedirs(a.wav_out, exist_ok=True)
                 sf.write(os.path.join(a.wav_out, name + ".wav"), y.astype(np.float32), SR, subtype="FLOAT")
             path = os.path.join(a.out, name + ".m4a")
-            y, z = encode_tp(y, path)
-            rec = dict(file=f"vo/{name}.m4a", character=char, event=line["event"], text=line["text"], ref=ref,
+            y, z = encode_tp(y, path, bitrate)
+            rec = dict(file=f"vo/{name}.m4a", character=char, event=line["event"], text=line["text"], ref=ref, fx=fx,
                        source=src.get("engine", ""), voice=src.get("voice", ""),
                        take=k["file"], takes=len(cands[line["id"]]), take_asr=k["hyp"], take_cer=round(k["cer"], 3),
                        take_f0=round(k["f0"], 1), asr=hyp, cer=round(cer(ref, hyp), 3),

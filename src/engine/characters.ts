@@ -1,7 +1,7 @@
-import type { AbsorbedAbility, CharacterDef, CharacterId, Level } from './types';
+import type { AbsorbedAbility, CharacterDef, CharacterId, Level, SkillKind } from './types';
 
 /** Every character, in roster order. */
-export const CHARACTER_IDS: CharacterId[] = ['sad', 'marki', 'walk', 'insaner', 'brutile', 'michelle', 'picker'];
+export const CHARACTER_IDS: CharacterId[] = ['sad', 'marki', 'walk', 'insaner', 'brutile', 'michelle', 'picker', 'rakaeli'];
 /** The default squad of a new profile (every character is available to everyone). */
 export const STARTER_IDS: CharacterId[] = ['sad', 'marki', 'walk'];
 
@@ -51,6 +51,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     descKo: ['앞쪽 좌우 대각선 1칸', '앞쪽 좌우 대각선 1칸 + 뒤로 1칸', '주변 8칸 어디로든 1칸'],
     value: [4, 6, 8],
     skill: {
+      kind: 'waste',
       nameKo: '불모지',
       descKo: [
         '빈 칸 1칸을 불모지로 만듭니다. 불모지에 닿은 말은 소멸',
@@ -83,6 +84,28 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
       descKo: '칸마다 콩콩 뛰어 막히지 않습니다. 지나는 칸의 적은 모두 잡고 아군은 뛰어넘습니다. 상대 인형 함정에 닿으면 그 칸에서 멈춥니다',
     },
   },
+  rakaeli: {
+    id: 'rakaeli',
+    nameKo: '라카엘리',
+    nameEn: 'Rakaeli',
+    rarity: 'epic',
+    descKo: [
+      '앞줄 3칸 중 원하는 칸으로 점프 (뛰어넘기 가능 · 끝줄에서 방향 전환)',
+      '앞 2줄 × 3칸 중 원하는 칸으로 점프 (뛰어넘기 가능 · 끝줄에서 방향 전환)',
+      '앞 2줄 × 3칸 + 뒤로 1칸 점프 (뛰어넘기 가능 · 끝줄에서 방향 전환)',
+    ],
+    awakeDescKo: ['앞줄 5칸 중 원하는 칸으로 점프', '앞 2줄 × 5칸 중 원하는 칸으로 점프', '앞 3줄 × 5칸 + 뒤로 1칸 점프'],
+    value: [4, 6, 7],
+    skill: {
+      kind: 'transform',
+      nameKo: '타천',
+      descKo: [
+        '타천해 다음 2번 이동 동안 앞줄 5칸으로 범위 확장',
+        '타천해 다음 2번 이동 동안 앞 2줄 × 5칸으로 범위 확장',
+        '타천해 다음 2번 이동 동안 앞 3줄 × 5칸 + 뒤 1칸으로 범위 확장',
+      ],
+    },
+  },
 };
 
 /** Numeric character codes used by the fast move generator. */
@@ -93,6 +116,7 @@ export const CH_INSANER = 3;
 export const CH_BRUTILE = 4;
 export const CH_MICHELLE = 5;
 export const CH_PICKER = 6;
+export const CH_RAKAELI = 7;
 export const CHAR_CODE: Record<CharacterId, number> = {
   sad: CH_SAD,
   marki: CH_MARKI,
@@ -101,11 +125,12 @@ export const CHAR_CODE: Record<CharacterId, number> = {
   brutile: CH_BRUTILE,
   michelle: CH_MICHELLE,
   picker: CH_PICKER,
+  rakaeli: CH_RAKAELI,
 };
-export const CHAR_BY_CODE: CharacterId[] = ['sad', 'marki', 'walk', 'insaner', 'brutile', 'michelle', 'picker'];
+export const CHAR_BY_CODE: CharacterId[] = ['sad', 'marki', 'walk', 'insaner', 'brutile', 'michelle', 'picker', 'rakaeli'];
 /**
  * Number of character codes. Absorb masks hold 3 level bits per code, so they need N_CHARS * 3
- * bits: 21 today. They are stored in Uint32Array / int32 slots, which leaves room for 10 codes.
+ * bits: 24 today. They are stored in Uint32Array / int32 slots, which leaves room for 10 codes.
  */
 export const N_CHARS = CHAR_BY_CODE.length;
 if (N_CHARS * 3 > 30) throw new Error('absorb masks no longer fit in 31 bits: widen the storage');
@@ -123,6 +148,17 @@ export const MICHELLE_FORWARD_LEVEL = 3;
 /** Picker's diagonal hop range by level (index = level). */
 export const PICKER_RANGE = [0, 1, 2, 3];
 
+/**
+ * Rakaeli's jump block by level (index = level): rows ahead (`DEPTH`) x columns within `HALF` of
+ * his own; from RAKAELI_BACK_LEVEL he may also jump 1 square straight back. `AWAKE_*` is the
+ * transformed form (while `Piece.awaken` > 0). Every square is a jump, like Walk's.
+ */
+export const RAKAELI_DEPTH = [0, 1, 2, 2];
+export const RAKAELI_HALF = [0, 1, 1, 1];
+export const RAKAELI_AWAKE_DEPTH = [0, 1, 2, 3];
+export const RAKAELI_AWAKE_HALF = [0, 2, 2, 2];
+export const RAKAELI_BACK_LEVEL = 3;
+
 /** Sad orthogonal slide range by level (index = level). */
 export const SAD_RANGE = [0, 1, 2, 3];
 /** Marki forward slide range by level (index = level). */
@@ -134,6 +170,11 @@ export const INSANER_RANGE = [0, 2, 3, 3];
 export const INSANER_DIAG_LEVEL = 3;
 /** Brutile wasteland side length by level (index = level): 1x1, 2x2, 3x3. */
 export const WASTE_SIZE = [0, 1, 2, 3];
+
+/** What a character's active skill does, or null when it has none. */
+export function skillKindOf(character: CharacterId): SkillKind | null {
+  return CHARACTERS[character].skill?.kind ?? null;
+}
 
 export function pieceValue(character: CharacterId, level: Level): number {
   return CHARACTERS[character].value[level - 1];

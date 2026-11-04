@@ -6,6 +6,7 @@ import {
   CH_MARKI,
   CH_MICHELLE,
   CH_PICKER,
+  CH_RAKAELI,
   CH_SAD,
   INSANER_DIAG_LEVEL,
   INSANER_RANGE,
@@ -14,6 +15,11 @@ import {
   MICHELLE_RANGE,
   N_CHARS,
   PICKER_RANGE,
+  RAKAELI_AWAKE_DEPTH,
+  RAKAELI_AWAKE_HALF,
+  RAKAELI_BACK_LEVEL,
+  RAKAELI_DEPTH,
+  RAKAELI_HALF,
   SAD_RANGE,
   WALK_HALF,
 } from './characters';
@@ -171,6 +177,51 @@ function hop(
   return n;
 }
 
+/**
+ * Rakaeli: jump onto any square of the block `depth` rows ahead x columns c - half .. c + half (and,
+ * with `back`, the square straight behind). Like Walk's jump nothing in between blocks him; rows
+ * past the edge and storm columns are skipped; he may land on an enemy (capture), never on his own
+ * piece. Wasteland and doll traps act on the landing square (handled by the caller, like Walk).
+ */
+function jumpBlock(
+  occ: ArrayLike<number>,
+  owners: ArrayLike<number>,
+  owner: number,
+  r: number,
+  c: number,
+  dir: number,
+  depth: number,
+  half: number,
+  back: boolean,
+  out: { [i: number]: number },
+  n: number,
+  includeAllies: boolean,
+  storm: number,
+): number {
+  const c0 = c - half < 0 ? 0 : c - half;
+  const c1 = c + half >= BOARD_SIZE ? BOARD_SIZE - 1 : c + half;
+  for (let k = 1; k <= depth; k++) {
+    const nr = r + dir * k;
+    if (nr < 0 || nr >= BOARD_SIZE) break;
+    const base = nr * BOARD_SIZE;
+    for (let nc = c0; nc <= c1; nc++) {
+      if (inStorm(nc, storm)) continue;
+      const s = base + nc;
+      const o = occ[s];
+      if (o < 0 || includeAllies || owners[o] !== owner) out[n++] = s;
+    }
+  }
+  if (back) {
+    const nr = r - dir;
+    if (nr >= 0 && nr < BOARD_SIZE && !inStorm(c, storm)) {
+      const s = nr * BOARD_SIZE + c;
+      const o = occ[s];
+      if (o < 0 || includeAllies || owners[o] !== owner) out[n++] = s;
+    }
+  }
+  return n;
+}
+
 /** True when `absorb` (or the character itself) carries Picker's hop-through pattern. */
 export function canHop(ch: number, absorb: number): boolean {
   return ch === CH_PICKER || (absorb & (0b111 << (CH_PICKER * 3))) !== 0;
@@ -192,6 +243,7 @@ function genPattern(
   storm: number,
   waste: ArrayLike<number> | null,
   traps: ArrayLike<number> | null,
+  awake: boolean,
 ): number {
   if (ch === CH_SAD) return slide(occ, owners, owner, r, c, ORTHO_DIRS, SAD_RANGE[level], out, n, includeAllies, storm, waste);
   if (ch === CH_INSANER) {
@@ -209,6 +261,11 @@ function genPattern(
     return n;
   }
   if (ch === CH_PICKER) return hop(occ, owners, owner, r, c, PICKER_RANGE[level], out, n, includeAllies, storm, waste, traps);
+  if (ch === CH_RAKAELI) {
+    const depth = awake ? RAKAELI_AWAKE_DEPTH[level] : RAKAELI_DEPTH[level];
+    const half = awake ? RAKAELI_AWAKE_HALF[level] : RAKAELI_HALF[level];
+    return jumpBlock(occ, owners, owner, r, c, dir, depth, half, level >= RAKAELI_BACK_LEVEL, out, n, includeAllies, storm);
+  }
   const dr = dir;
   if (ch === CH_MARKI) {
     const L = MARKI_RANGE[level];
@@ -259,6 +316,8 @@ let stamp = 0;
  * @param absorb  bitmask of absorbed (character, level) patterns, see `abilityBit`
  * @param waste   optional length-N_SQUARES wasteland flags: slides end ON a wasteland square
  * @param traps   optional length-N_SQUARES doll-trap masks (see `trapBit`): Picker's hop stops on an enemy trap
+ * @param awake   the piece is transformed (Rakaeli's "타천", `Piece.awaken` > 0): its OWN pattern is
+ *                the transformed one. Absorbed patterns are always base patterns.
  * @returns new write offset into `out`
  */
 export function genTargets(
@@ -276,13 +335,14 @@ export function genTargets(
   absorb = 0,
   waste: ArrayLike<number> | null = null,
   traps: ArrayLike<number> | null = null,
+  awake = false,
 ): number {
   const r = (sq / BOARD_SIZE) | 0;
   const c = sq - r * BOARD_SIZE;
   // The piece can never be in the storm itself (it would have been removed), but when the
   // caller passes a storm the origin must still be a legal square: nothing to do here.
   const start = n;
-  n = genPattern(occ, owners, owner, ch, level, r, c, out, n, includeAllies, dir, storm, waste, traps);
+  n = genPattern(occ, owners, owner, ch, level, r, c, out, n, includeAllies, dir, storm, waste, traps, awake);
   if (absorb === 0) return n;
   stamp++;
   for (let k = start; k < n; k++) seenStamp[out[k]] = stamp;
@@ -292,7 +352,7 @@ export function genTargets(
     const alvl = (bit % 3) + 1;
     if (ach === ch && alvl === level) continue;
     const from = n;
-    n = genPattern(occ, owners, owner, ach, alvl, r, c, out, n, includeAllies, dir, storm, waste, traps);
+    n = genPattern(occ, owners, owner, ach, alvl, r, c, out, n, includeAllies, dir, storm, waste, traps, false);
     // Compact: drop squares already emitted.
     let w = from;
     for (let k = from; k < n; k++) {

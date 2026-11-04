@@ -724,6 +724,141 @@ def picker_hop_multi() -> np.ndarray:
     return finish(room(y, 0.3, 0.08, 0.006, 4000, 0.12))
 
 
+# --- rakaeli (blindfolded fallen angel; transforms into a flame-winged demon, "타천") ---------------
+
+def feather_flap(dur: float = 0.24, lo: float = 420, hi: float = 1500, flutter: float = 38.0,
+                 weight: float = 1.0) -> np.ndarray:
+    """One feathered wing stroke: a downward-swept air band (the stroke pushes air down), a fast
+    feather-vane flutter on its amplitude, a soft low air push and a few dry quill ticks. Unlike
+    cloak_swish (one slow 21 Hz fabric swish) the flutter is fast and the band falls."""
+    n = int(dur * SR)
+    t = t_axis(dur)
+    air = swept_band(noise(dur), hi, lo, 1.3) * bell_env(n, 0.3, 1.4)
+    air *= 1 + 0.5 * np.sin(2 * np.pi * flutter * t + rng.uniform(0, 6.28)) * np.exp(-t / (dur * 0.6))
+    push = lowpass(noise(dur), 260 * weight, 2) * env_ad(n, 0.02, dur * 0.3)
+    quills = highpass(crackle(dur, 140, 0.0012), 3500) * bell_env(n, 0.35, 1.0)
+    y = (air / (np.max(np.abs(air)) + 1e-9) + 0.45 * weight * push / (np.max(np.abs(push)) + 1e-9)
+         + 0.12 * quills)
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def halo_glint(f: float = 1975.5, dur: float = 0.55, crack: float = 1.0) -> np.ndarray:
+    """A dimmed, cracked halo: a thin glassy ring whose two near-unison partials beat against each
+    other (the crack), a dark low-passed body, and a tiny fracture tick at the onset."""
+    t = t_axis(dur)
+    y = (np.sin(2 * np.pi * f * t) + 0.8 * np.sin(2 * np.pi * f * 1.011 * t + 1.0)
+         + 0.25 * np.sin(2 * np.pi * f * 2.37 * t) * np.exp(-t / 0.05))
+    y = lowpass(y * env_ad(len(t), 0.003, dur * 0.35), 5000)
+    y = y / (np.max(np.abs(y)) + 1e-9)
+    if crack:
+        place(y, tick(5200, 0.002), 0.0, 0.3 * crack)
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def ember_crackle(dur: float, density: float = 60, thin: float = 1.0) -> np.ndarray:
+    """Sparse glowing embers: small pops whose density thins out over time (thin > 0)."""
+    n = int(dur * SR)
+    y = np.zeros(n)
+    for _ in range(int(density * dur)):
+        tpos = rng.uniform(0, 1) ** (1 + thin) * dur
+        L = int(rng.uniform(60, 500))
+        i = min(n - L - 1, int(tpos * SR))
+        y[i:i + L] += rng.uniform(0.2, 1.0) * rng.standard_normal(L) * np.exp(-np.arange(L) / (0.0018 * SR))
+    return bandpass(y, 1200, 9000) / (np.max(np.abs(bandpass(y, 1200, 9000))) + 1e-9)
+
+
+def flame_roar(dur: float, lo: float = 120, hi: float = 1400, peak: float = 0.4) -> np.ndarray:
+    """Low, wide fire roar: band-limited noise with slow turbulent amplitude, swelling then falling."""
+    t = t_axis(dur)
+    r = bandpass(noise(dur), lo, hi, 2)
+    turb = lowpass(rng.standard_normal(len(t)), 18, 2)
+    turb = 1 + 0.35 * turb / (np.std(turb) + 1e-9)
+    y = r * np.clip(turb, 0.2, 2.0) * bell_env(len(t), peak, 1.2)
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def rakaeli_select() -> np.ndarray:
+    # Folded wings stir (a small feather rustle) under the faint ring of the cracked halo.
+    y = mix(0.6, (feather_flap(0.2, 600, 2200, 44, 0.5), 0, 0.55), (halo_glint(1975.5, 0.45), 0.05, 0.38),
+            (halo_glint(2959.0, 0.35, 0.0), 0.09, 0.12))
+    return finish(room(y, 0.6, 0.2, 0.015, 5500, 0.15))
+
+
+def rakaeli_move() -> np.ndarray:
+    # Two soft feathered wing flaps, the second a touch lighter, then a quill settles.
+    y = mix(0.62, (feather_flap(0.26, 380, 1400, 36, 1.0), 0, 0.9), (feather_flap(0.24, 440, 1600, 41, 0.8), 0.22, 0.72),
+            (highpass(crackle(0.1, 120, 0.001), 4000), 0.46, 0.06))
+    return finish(room(y, 0.4, 0.1, 0.01, 4500, 0.15))
+
+
+def rakaeli_capture() -> np.ndarray:
+    # A pale strike: a quick feather-edged slash of air, a cold glass-like strike with a soft low
+    # body, and a falling minor-second halo sigh (no metal clang, no fire).
+    slash = whoosh(0.16, 1200, 5200, 2.2, 0.8)
+    t = t_axis(0.62)
+    glass = sum(g * np.sin(2 * np.pi * 1396.9 * r * t + rng.uniform(0, 6.28)) * np.exp(-t / d)
+                for r, g, d in ((1.0, 1.0, 0.22), (2.32, 0.5, 0.09), (4.25, 0.3, 0.04), (6.63, 0.15, 0.02)))
+    glass = glass * env_ad(len(t), 0.0006, 0.5)
+    body = lowpass(thud(0.3, 150, 70, 0.06), 1200)
+    sigh = sum(np.sin(2 * np.pi * np.cumsum(f * np.geomspace(1.0, 0.95, len(t))) / SR) for f in (1046.5, 1108.7))
+    sigh = lowpass(sigh, 3000) * bell_env(len(t), 0.2, 1.4)
+    y = mix(0.85, (slash, 0, 0.4), (glass / (np.max(np.abs(glass)) + 1e-9), 0.12, 0.6), (body, 0.12, 0.6),
+            (feather_flap(0.2, 500, 1800, 40, 0.4), 0.1, 0.25), (sigh / (np.max(np.abs(sigh)) + 1e-9), 0.18, 0.16))
+    return finish(room(y, 0.7, 0.2, 0.02, 6000, 0.18))
+
+
+def rakaeli_skill() -> np.ndarray:
+    # 타천 (the transform): the blindfold burns (a rising sizzle + flare whoosh), the cracked halo
+    # snaps, the wings unfurl in two big accelerating strokes as a dark choir swells - gliding DOWN,
+    # a fall from heaven - and a crimson flame bloom opens at the peak.
+    dur = 1.0
+    burn = mix(0.42, (highpass(crackle(0.42, 700, 0.002), 2800) * np.clip(t_axis(0.42) / 0.38, 0, 1) ** 1.5, 0, 0.5),
+               (whoosh(0.42, 900, 6000, 2.0, 0.85), 0, 0.6))
+    choir_l = choir(dur, notes=(73.42, 110.0, 146.83, 174.61, 207.65), rise=0.94, vowel=(520, 880, 2450))
+    choir_l *= np.clip(t_axis(dur) / 0.6, 0, 1) ** 1.4 * np.exp(-np.clip(t_axis(dur) - 0.82, 0, None) / 0.1)
+    sub = lowpass(np.sin(2 * np.pi * np.cumsum(np.geomspace(55, 41, int(dur * SR))) / SR), 200)
+    sub *= np.clip(t_axis(dur) / 0.7, 0, 1) ** 2 * np.exp(-np.clip(t_axis(dur) - 0.82, 0, None) / 0.1)
+    y = mix(dur, (burn / (np.max(np.abs(burn)) + 1e-9), 0, 0.6), (halo_glint(1975.5, 0.3), 0.3, 0.35),
+            (feather_flap(0.3, 260, 1300, 30, 1.2), 0.33, 0.75), (feather_flap(0.28, 220, 1100, 27, 1.4), 0.56, 0.85),
+            (choir_l, 0.0, 0.42), (sub, 0.0, 0.3), (flame_roar(0.36, 150, 1800, 0.25), 0.64, 0.55),
+            (ember_crackle(0.3, 80, 1.0), 0.68, 0.22))
+    return finish(room(y, 0.9, 0.2, 0.02, 4500, 0.22))
+
+
+def rakaeli_awake_move() -> np.ndarray:
+    # One heavy flame-wing beat: a deep downstroke whump, the fire roaring along the wing edge and
+    # a few embers shaken loose.
+    y = mix(0.75, (feather_flap(0.38, 160, 900, 24, 1.6), 0, 0.85), (thud(0.4, 75, 38, 0.12), 0.07, 0.6),
+            (flame_roar(0.5, 110, 1500, 0.3), 0.02, 0.55), (ember_crackle(0.45, 70, 1.0), 0.12, 0.2))
+    return finish(saturate(room(y, 0.6, 0.14, 0.012, 3500, 0.2), 1.3))
+
+
+def rakaeli_awake_capture() -> np.ndarray:
+    # A dark-flame impact: the air is sucked in (reversed swell), then a heavy blow with a low,
+    # out-of-tune bell strike (the broken crimson halo), a fire bloom and a trail of embers.
+    inhale = whoosh(0.3, 300, 2600, 1.6, 0.95)
+    boom = thud(0.6, 95, 30, 0.2)
+    t = t_axis(0.65)
+    bell = sum(g * np.sin(2 * np.pi * 207.65 * r * t + rng.uniform(0, 6.28)) * np.exp(-t / d)
+               for r, g, d in ((1.0, 1.0, 0.45), (1.41, 0.6, 0.3), (2.93, 0.35, 0.15), (4.1, 0.2, 0.08)))
+    bell = lowpass(bell * env_ad(len(t), 0.001, 0.35), 2400)
+    y = mix(0.95, (inhale, 0, 0.45), (boom, 0.26, 1.0), (bell / (np.max(np.abs(bell)) + 1e-9), 0.26, 0.4),
+            (flame_roar(0.5, 140, 2200, 0.15), 0.26, 0.8), (ember_crackle(0.5, 90, 1.2), 0.3, 0.3))
+    return finish(saturate(room(y, 0.6, 0.16, 0.012, 4000, 0.18), 1.6))
+
+
+def rakaeli_awake_end() -> np.ndarray:
+    # Turning back: the last embers pop and thin out over a fading glow, and the smoke leaves in a
+    # soft exhale (a breathy band whose filter falls), then a single faint halo ring returns.
+    dur = 0.9
+    glow = flame_roar(0.7, 90, 700, 0.1) * np.exp(-t_axis(0.7) / 0.25)
+    t = t_axis(0.75)
+    breath = swept_band(noise(0.75), 1800, 380, 0.9) * bell_env(len(t), 0.3, 1.5)
+    y = mix(dur + 0.05, (ember_crackle(0.8, 55, 2.0), 0, 0.35), (glow / (np.max(np.abs(glow)) + 1e-9), 0, 0.4),
+            (breath / (np.max(np.abs(breath)) + 1e-9), 0.1, 0.6), (halo_glint(1975.5, 0.35, 0.0), 0.5, 0.1))
+    return finish(room(y, 0.6, 0.16, 0.015, 4000, 0.15))
+
+
 SFX = {
     "sad-select": sad_select,
     "sad-move": sad_move,
@@ -760,6 +895,15 @@ SFX = {
     "picker-move": picker_move,
     "picker-capture": picker_capture,
     "picker-hop-multi": picker_hop_multi,
+    # 2026-11-04, appended after picker for the same reason. Rakaeli's transformed form ("타천") has
+    # its own move / capture effects and a revert effect (awake-end); awake-select falls back to select.
+    "rakaeli-select": rakaeli_select,
+    "rakaeli-move": rakaeli_move,
+    "rakaeli-capture": rakaeli_capture,
+    "rakaeli-skill": rakaeli_skill,
+    "rakaeli-awake-move": rakaeli_awake_move,
+    "rakaeli-awake-capture": rakaeli_awake_capture,
+    "rakaeli-awake-end": rakaeli_awake_end,
 }
 
 
