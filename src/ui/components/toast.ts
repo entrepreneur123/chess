@@ -1,7 +1,9 @@
 import { h } from '../dom';
-import { overlayRoot } from './overlay';
+import { overlayRoot, topOverlayKind } from './overlay';
 
 let host: HTMLElement | null = null;
+/** Second host above the scrims, used while a bottom sheet is open (it would hide the toast). */
+let topHost: HTMLElement | null = null;
 
 interface LiveToast {
   el: HTMLElement;
@@ -12,6 +14,13 @@ interface LiveToast {
 const live: LiveToast[] = [];
 
 function getHost(): HTMLElement {
+  if (topOverlayKind() === 'sheet') {
+    if (!topHost || !topHost.isConnected) {
+      topHost = h('div', { class: 'toast-host toast-host--top', role: 'status', 'aria-live': 'polite' });
+      overlayRoot().appendChild(topHost);
+    }
+    return topHost;
+  }
   if (!host || !host.isConnected) {
     host = h('div', { class: 'toast-host', role: 'status', 'aria-live': 'polite' });
     // Insert first so every scrim/dialog appended later paints above toasts.
@@ -66,4 +75,5 @@ export function toast(message: string, opts: { duration?: number; tone?: ToastTo
 export function clearToasts(): void {
   for (const t of live.slice()) drop(t, false);
   if (host) host.textContent = '';
+  if (topHost) topHost.textContent = '';
 }

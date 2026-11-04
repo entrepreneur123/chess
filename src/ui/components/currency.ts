@@ -5,7 +5,7 @@
  */
 import { haptic, sfx } from '../../audio/sfx';
 import { DUNGEON_LABEL, DUNGEON_LEVELS, DUNGEON_REWARD, ESSENCE_REWARD, arenaForRating, type ArenaDef } from '../../meta/progression';
-import { getProfile, subscribeProfile } from '../../meta/profile';
+import { getProfile, isDevMode, subscribeProfile, type Profile } from '../../meta/profile';
 import { h, prefersReducedMotion } from '../dom';
 import { icon } from '../icons';
 import type { Router } from '../router';
@@ -95,6 +95,11 @@ export function countUp(el: HTMLElement, from: number, to: number, ms = 900, fmt
   };
 }
 
+/** A currency balance as shown: "∞" while developer mode is on. */
+export function balanceText(p: Profile, n: number): string {
+  return isDevMode(p) ? '∞' : String(n);
+}
+
 let infoOpen = false;
 
 /** Short explainer of how a currency is earned and what it buys. */
@@ -121,7 +126,7 @@ export function showCurrencyInfo(kind: 'tokens' | 'essence', go?: (to: 'dungeon'
         'div',
         null,
         h('h2', { class: 'cur-info__title' }, tokens ? '토큰' : '에센셜'),
-        h('p', { class: 'cur-info__have' }, `보유 ${tokens ? p.tokens : p.essence}`),
+        h('p', { class: 'cur-info__have' }, `보유 ${balanceText(p, tokens ? p.tokens : p.essence)}`),
       ),
     ),
     h('p', { class: 'cur-info__lead' }, tokens ? '캐릭터 성급 강화(1성 → 2성 → 3성)에 써요. 던전에서 하루 한 번, 첫 승리 때 받아요.' : '상점에서 새 캐릭터를 영입할 때 써요. 전장전과 견습전투에서 매 판 받아요.'),
@@ -194,22 +199,33 @@ export function topBar(router: Router, opts: { onDungeon?: () => void } = {}): {
       },
       h('span', { class: 'tbar__pill' }, kind === 'tokens' ? tokenIcon(22) : essenceIcon(22), val),
     );
-  const el = h('header', { class: 'tbar' }, ratingBtn, h('div', { class: 'tbar__right' }, pill('tokens', tokens), pill('essence', essence), settingsButton(() => showSettings())));
+  // Developer mode marker, so screenshots are never mistaken for real progress.
+  const devChip = h('span', { class: 'tbar__dev', role: 'img', 'aria-label': '개발자 모드 켜짐', hidden: true }, 'DEV');
+  const el = h(
+    'header',
+    { class: 'tbar' },
+    ratingBtn,
+    devChip,
+    h('div', { class: 'tbar__right' }, pill('tokens', tokens), pill('essence', essence), settingsButton(() => showSettings())),
+  );
   let key = '';
   const render = () => {
     const p = getProfile();
     const a = arenaForRating(p.rating);
-    const k = `${p.rating}|${p.tokens}|${p.essence}`;
+    const dev = isDevMode(p);
+    const k = `${p.rating}|${p.tokens}|${p.essence}|${dev}`;
     if (k === key) return;
     key = k;
     rating.textContent = String(p.rating);
     badgeHost.replaceChildren(arenaBadge(a, 'md'));
     arenaName.textContent = `${a.index} 전장 · ${a.name}`;
-    tokens.textContent = String(p.tokens);
-    essence.textContent = String(p.essence);
+    tokens.textContent = balanceText(p, p.tokens);
+    essence.textContent = balanceText(p, p.essence);
+    devChip.hidden = !dev;
+    el.classList.toggle('is-dev', dev);
     ratingBtn.setAttribute('aria-label', `레이팅 ${p.rating}, ${a.index} 전장 ${a.name}. 전장 보기`);
-    tokens.parentElement?.parentElement?.setAttribute('aria-label', `토큰 ${p.tokens}개 · 안내 보기`);
-    essence.parentElement?.parentElement?.setAttribute('aria-label', `에센셜 ${p.essence}개 · 안내 보기`);
+    tokens.parentElement?.parentElement?.setAttribute('aria-label', `토큰 ${dev ? '무한' : `${p.tokens}개`} · 안내 보기`);
+    essence.parentElement?.parentElement?.setAttribute('aria-label', `에센셜 ${dev ? '무한' : `${p.essence}개`} · 안내 보기`);
   };
   render();
   const off = subscribeProfile(render);

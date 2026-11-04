@@ -595,14 +595,87 @@
   color: var(--text-3);
 }
 .settings__foot {
-  margin-top: var(--s-2);
+  display: flex;
+  justify-content: center;
+  margin-top: var(--s-1);
+}
+/* The version label (7 taps reveal the developer section). Quiet, but a real 48px target. */
+.settings__version {
+  min-height: var(--touch);
+  padding: 0 var(--s-4);
+  border: 0;
+  border-radius: var(--r-m);
+  background: transparent;
   color: var(--text-3);
   font-family: var(--font-logo);
   font-style: italic;
   font-size: var(--fs-micro);
   font-weight: 800;
   letter-spacing: var(--ls-caps);
-  text-align: center;
+  cursor: default;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.settings__version:active {
+  color: var(--text-2);
+}
+
+/* ---- Developer section (hidden until unlocked) ------------------------------------- */
+.settings__dev:empty {
+  display: none;
+}
+.set-group--dev {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 79, 163, 0.55),
+    0 3px 0 var(--panel-lip);
+}
+.set-group--dev.is-revealed {
+  animation: dev-reveal var(--dur-4) var(--ease-spring) both;
+}
+@keyframes dev-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+}
+.set-group__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px var(--s-4) 0;
+  color: #ff8ac4;
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.04em;
+}
+.set-group--dev .set-row + .set-row,
+.set-group--dev .set-group__head + .set-row {
+  border-top: 0;
+}
+.set-row__icon--dev {
+  background: radial-gradient(circle at 50% 30%, rgba(255, 79, 163, 0.45), rgba(150, 20, 90, 0.3) 60%, rgba(7, 10, 18, 0.6));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 170, 214, 0.4),
+    inset 0 0 0 1px rgba(255, 79, 163, 0.55),
+    0 2px 0 var(--panel-lip);
+  color: #ffb3da;
+}
+.set-row__icon--dev .icon {
+  filter: drop-shadow(0 0 4px rgba(255, 79, 163, 0.6));
+}
+.switch--dev[aria-checked='true'] {
+  background: linear-gradient(180deg, #8a1450, #d92f86);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.35),
+    0 0 14px -3px rgba(255, 79, 163, 0.7);
+}
+.switch--dev[aria-checked='true'] .switch__thumb {
+  color: #b0175f;
+}
+@media (prefers-reduced-motion: reduce) {
+  .set-group--dev.is-revealed {
+    animation: none;
+  }
 }
 
 /* ---- Result dialog: a ribbon banner on an obsidian card ------------------------------ */

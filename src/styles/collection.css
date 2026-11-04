@@ -1,21 +1,344 @@
 /* ==========================================================================
-   Character screen — obsidian unit cards: a framed illustration banner, the
-   trait / passive / skill notes, the reach bar, the 1성 · 2성 · 3성 grade
-   picker and the per-grade ability table.
+   Character screen — a portrait grid of the roster (rarity frames, stars on
+   the bottom edge, name underneath) and the full unit card in a bottom sheet:
+   a framed illustration banner, the trait / passive / skill notes, the reach
+   bar, the 1성 · 2성 · 3성 grade picker and the per-grade ability table.
    ========================================================================== */
 .collection__body {
-  gap: var(--s-5);
+  gap: var(--s-4);
 }
-.collection__body > .hint {
-  padding: var(--s-2) var(--s-3);
-  border-radius: var(--r-m);
-  background: rgba(7, 10, 18, 0.62);
-  box-shadow: inset 0 0 0 1px rgba(72, 88, 128, 0.7);
+
+/* ---- Portrait grid ----------------------------------------------------------------- */
+.cgrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 22px 12px;
+  padding-bottom: 6px;
+}
+.ctile {
+  --frame: 3px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 15px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
   color: var(--ink);
-  font-weight: var(--fw-semibold);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  animation: ctile-in var(--dur-4) var(--ease-emph) both;
+  animation-delay: calc(var(--i, 0) * 45ms);
 }
-.collection__body > .hint .icon {
+.cgrid.is-settled .ctile {
+  animation: none;
+}
+@keyframes ctile-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.94);
+  }
+}
+.ctile:focus-visible {
+  outline: none;
+}
+.ctile:focus-visible .ctile__frame {
+  outline: 3px solid var(--team-blue-glow);
+  outline-offset: 3px;
+}
+
+/* Frame: a metal rim in the rarity colour around the portrait (white / orange / purple /
+   rotating rainbow), a dark outline and a lip below. */
+.ctile__frame {
+  position: relative;
+  display: block;
+  aspect-ratio: 4 / 5;
+  padding: var(--frame);
+  border-radius: 14px;
+  background: linear-gradient(155deg, #ffffff 0%, var(--rar) 26%, var(--rar-deep) 62%, var(--rar) 100%);
+  box-shadow:
+    0 0 0 1.5px var(--outline),
+    0 5px 0 1.5px rgba(0, 0, 0, 0.55),
+    0 0 18px -4px var(--rar-glow);
+  transition: transform var(--dur-press) var(--ease-out);
+}
+.ctile:active .ctile__frame {
+  transform: translateY(2px) scale(0.97);
+}
+.ctile.rarity-common .ctile__frame {
+  background: linear-gradient(155deg, #ffffff 0%, #c9d2e8 30%, #7d89a8 62%, #e9eefb 100%);
+  box-shadow:
+    0 0 0 1.5px var(--outline),
+    0 5px 0 1.5px rgba(0, 0, 0, 0.55);
+}
+.ctile.rarity-legendary .ctile__frame {
+  --frame: 3.5px;
+  background: var(--rar-rainbow);
+  animation: rar-spin 3.2s linear infinite;
+  box-shadow:
+    0 0 0 1.5px var(--outline),
+    0 5px 0 1.5px rgba(0, 0, 0, 0.55),
+    0 0 20px -2px rgba(160, 120, 255, 0.55);
+}
+.ctile__art {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 11px;
+  background:
+    radial-gradient(90% 70% at 50% 30%, var(--rar-soft), transparent 75%),
+    linear-gradient(180deg, #1f2a48, #0b1020);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+.ctile__art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 30%;
+}
+/* Bottom shade so the stars always sit on a dark edge; a soft top sheen. */
+.ctile__art::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14), transparent 22%),
+    linear-gradient(180deg, transparent 62%, rgba(7, 10, 18, 0.78) 100%);
+  pointer-events: none;
+}
+/* Owned stars on the frame's bottom edge: gold with a dark outline, empty slots dark. */
+.ctile__stars {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  gap: 0;
+  transform: translate(-50%, 52%);
+  color: #2a3046;
+}
+.ctile__stars .icon {
+  width: clamp(18px, 6vw, 26px);
+  height: clamp(18px, 6vw, 26px);
+  margin: 0 -1.5px;
+  overflow: visible;
+}
+.ctile__stars .icon path {
+  stroke: var(--outline);
+  stroke-width: 2.6px;
+  stroke-linejoin: round;
+  paint-order: stroke;
+}
+.ctile__stars .icon.is-on {
   color: var(--gold);
+  filter: drop-shadow(0 0 4px rgba(242, 193, 78, 0.55));
+}
+/* The middle star rides a little higher: a crown-like arc. */
+.ctile__stars .icon:nth-child(2) {
+  transform: translateY(-3px) scale(1.12);
+}
+/* Locked: price or opening arena on the bottom edge. */
+.ctile__price {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 22px;
+  padding: 0 9px 0 6px;
+  transform: translate(-50%, 50%);
+  border-radius: var(--r-full);
+  background: linear-gradient(180deg, #232c46, #121829);
+  box-shadow:
+    0 0 0 1.5px var(--outline),
+    inset 0 0 0 1px rgba(169, 147, 255, 0.55);
+  color: var(--ink);
+  font-family: var(--font-num);
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+}
+.ctile__price b {
+  font-weight: 400;
+}
+.ctile__price--arena {
+  padding: 0 9px 0 7px;
+  box-shadow:
+    0 0 0 1.5px var(--outline),
+    inset 0 0 0 1px rgba(154, 166, 196, 0.5);
+  color: var(--text-2);
+  font-family: var(--font-display);
+  font-size: 12px;
+}
+.ctile__price.is-ready {
+  background: linear-gradient(180deg, #f7cf63, var(--gold-deep));
+  box-shadow:
+    0 0 0 1.5px var(--outline),
+    inset 0 1px 0 rgba(255, 240, 196, 0.7);
+  color: var(--gold-ink);
+}
+.ctile__name {
+  overflow: hidden;
+  padding: 0 2px;
+  font-family: var(--font-display);
+  font-size: 16px;
+  line-height: 1.15;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: var(--ink-outline-s);
+}
+
+/* Locked: desaturated, darkened portrait with a lock; the rarity rim stays readable. */
+.ctile.is-locked .ctile__art img {
+  filter: grayscale(1) brightness(0.42) contrast(1.05);
+}
+.ctile.is-locked .ctile__frame {
+  filter: saturate(0.75) brightness(0.85);
+}
+.ctile.is-locked .ctile__name {
+  color: var(--text-2);
+}
+.ctile__lock {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  transform: translate(-50%, -62%);
+  border-radius: 50%;
+  background: rgba(7, 10, 18, 0.72);
+  box-shadow:
+    inset 0 0 0 1.5px rgba(170, 190, 255, 0.35),
+    0 2px 8px rgba(0, 0, 0, 0.6);
+  color: var(--ink);
+}
+
+/* Status badges on the top-right corner ("강화 가능" / "구매 가능"). */
+.ctile__badge {
+  position: absolute;
+  top: -7px;
+  right: -6px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  height: 20px;
+  padding: 0 7px 0 5px;
+  border-radius: var(--r-full);
+  font-size: 11px;
+  font-weight: var(--fw-bold);
+  line-height: 1;
+  white-space: nowrap;
+  animation: badge-bob 2.4s var(--ease-in-out) infinite;
+}
+.ctile__badge--up {
+  background: linear-gradient(180deg, var(--positive-top), var(--positive-deep));
+  box-shadow:
+    0 0 0 1.5px var(--outline),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    0 0 10px rgba(60, 207, 122, 0.55);
+  color: #05200f;
+}
+.ctile__badge--buy {
+  padding: 0 7px;
+  background: linear-gradient(180deg, #ffe7a3, var(--gold) 45%, var(--gold-deep));
+  box-shadow:
+    0 0 0 1.5px var(--outline),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    0 0 10px rgba(242, 193, 78, 0.55);
+  color: var(--gold-ink);
+}
+@keyframes badge-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+/* A character that just joined pops in at its new place. */
+.ctile.is-new .ctile__frame {
+  animation: ctile-new 700ms var(--ease-spring) both;
+}
+.ctile.rarity-legendary.is-new .ctile__frame {
+  animation:
+    ctile-new 700ms var(--ease-spring) both,
+    rar-spin 3.2s linear infinite;
+}
+@keyframes ctile-new {
+  0% {
+    transform: scale(0.7);
+    filter: brightness(2);
+  }
+  100% {
+    transform: none;
+    filter: none;
+  }
+}
+
+/* Tablets: a wider column and four columns, so the roster of 8 is two even rows. */
+@media (min-width: 600px) {
+  .collection {
+    --column: 760px;
+  }
+  .cgrid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 30px 22px;
+  }
+  .ctile__name {
+    font-size: 20px;
+  }
+  .ctile__stars .icon {
+    width: 30px;
+    height: 30px;
+  }
+  .ctile__badge {
+    height: 24px;
+    font-size: 13px;
+  }
+  .ctile__price {
+    height: 26px;
+    font-size: 15px;
+  }
+}
+/* Short landscape screens: cap the tile size so both rows fit without scrolling. */
+@media (min-width: 600px) and (orientation: landscape) {
+  .cgrid {
+    width: min(100%, calc((100dvh - 290px) * 1.5));
+    margin: 0 auto;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ctile,
+  .ctile__badge,
+  .ctile.is-new .ctile__frame,
+  .ctile.rarity-legendary .ctile__frame {
+    animation: none;
+  }
+}
+
+/* ---- Detail sheet ------------------------------------------------------------------- */
+.sheet.sheet--detail {
+  width: min(100%, 560px);
+  max-height: 94%;
+  padding: 6px 10px calc(var(--s-3) + var(--sab));
+}
+.unit-detail {
+  padding-bottom: var(--s-2);
 }
 
 .unit-card {
@@ -542,4 +865,10 @@
 }
 .unit-card[data-form] .unit-card__skill b {
   color: #ffb3c1;
+}
+
+/* The unit card inside the detail sheet: the sheet is the panel, the card sits flat in it. */
+.unit-card.unit-card--sheet {
+  margin-bottom: 0;
+  animation: none;
 }

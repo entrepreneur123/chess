@@ -10,7 +10,7 @@ import { upgradeCost } from '../../meta/progression';
 import { h } from '../dom';
 import { icon } from '../icons';
 import { confirmDialog } from './dialog';
-import { essenceIcon, tokenIcon } from './currency';
+import { balanceText, essenceIcon, tokenIcon } from './currency';
 import { movementDiagram, unitArt } from './piece';
 import { toast } from './toast';
 
@@ -24,7 +24,7 @@ export async function confirmBuy(id: CharacterId): Promise<boolean> {
       { class: 'spend' },
       unitArt(id, 1, { size: 72 }),
       h('p', { class: 'spend__cost' }, essenceIcon(22), h('b', { class: 't-num' }, String(price)), '에센셜 사용'),
-      h('p', { class: 'spend__sub' }, `1성으로 합류 · 보유 ${getProfile().essence} → ${getProfile().essence - price}`),
+      h('p', { class: 'spend__sub' }, `1성으로 합류 · 보유 ${balanceText(getProfile(), getProfile().essence)} → ${balanceText(getProfile(), getProfile().essence - price)}`),
     ),
     confirmLabel: '영입',
   });
@@ -60,7 +60,7 @@ export async function confirmUpgrade(id: CharacterId): Promise<boolean> {
         h('div', { class: 'spend__lv is-next' }, movementDiagram(id, to, { cell: 6 }), h('span', null, `${to}성`)),
       ),
       h('p', { class: 'spend__cost' }, tokenIcon(22), h('b', { class: 't-num' }, String(cost)), '토큰 사용'),
-      h('p', { class: 'spend__sub' }, `${def.descKo[to - 1]} · 보유 ${getProfile().tokens} → ${getProfile().tokens - cost}`),
+      h('p', { class: 'spend__sub' }, `${def.descKo[to - 1]} · 보유 ${balanceText(getProfile(), getProfile().tokens)} → ${balanceText(getProfile(), getProfile().tokens - cost)}`),
     ),
     confirmLabel: '강화',
   });

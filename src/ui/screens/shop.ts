@@ -6,7 +6,7 @@
 import { CHARACTERS, CHARACTER_IDS, type CharacterId } from '../../engine';
 import { buyBlocker, getProfile, isOwned, priceOf, subscribeProfile } from '../../meta/profile';
 import { ARENA_DEFS, ESSENCE_REWARD, arenaForRating, unlockArenaOf } from '../../meta/progression';
-import { essenceIcon, showCurrencyInfo, topBar } from '../components/currency';
+import { balanceText, essenceIcon, showCurrencyInfo, topBar } from '../components/currency';
 import { confirmBuy } from '../components/purchase';
 import { rarityChip, unitArt } from '../components/piece';
 import { Disposables, h, replaceChildren } from '../dom';
@@ -75,7 +75,7 @@ export function shopScreen(router: Router): Screen {
     const p = getProfile();
     const arena = arenaForRating(p.rating);
     const notOwned = CHARACTER_IDS.filter((id) => !isOwned(p, id) && unlockArenaOf(id));
-    const k = `${p.essence}|${p.rating}|${CHARACTER_IDS.map((id) => p.owned[id]).join()}`;
+    const k = `${p.essence}|${p.rating}|${p.devMode.snapshot ? 1 : 0}|${CHARACTER_IDS.map((id) => p.owned[id]).join()}`;
     if (k === key) return;
     key = k;
     const top = list.scrollTop;
@@ -90,7 +90,7 @@ export function shopScreen(router: Router): Screen {
         'button',
         { class: 'wallet pressable', type: 'button', 'data-action': 'info-essence', onclick: () => showCurrencyInfo('essence', () => router.navigate('matchmaking', { mode: 'ranked' })) },
         essenceIcon(40),
-        h('span', { class: 'wallet__main' }, h('span', { class: 'wallet__label' }, '보유 에센셜'), h('b', { class: 'wallet__val t-num' }, String(p.essence))),
+        h('span', { class: 'wallet__main' }, h('span', { class: 'wallet__label' }, '보유 에센셜'), h('b', { class: 'wallet__val t-num' }, balanceText(p, p.essence))),
         h('span', { class: 'wallet__hint' }, `승리 +${ESSENCE_REWARD.win} · 무승부 +${ESSENCE_REWARD.draw}`, h('br'), '전장전 · 견습전투'),
       ),
       buyable.length ? h('h2', { class: 'section-title section-title--display' }, '영입 가능') : null,

@@ -133,6 +133,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  white-space: nowrap;
   color: var(--gold-text);
 }
 .tbar__rating-num {
@@ -215,6 +216,50 @@
   .tbar {
     padding-left: max(var(--s-2), calc((100% - var(--column)) / 2 - var(--s-2)));
     padding-right: max(var(--s-3), calc((100% - var(--column)) / 2));
+  }
+}
+
+/* Developer mode chip: a striped magenta tag no screenshot can mistake for real progress. */
+.tbar__dev {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 6px;
+  background: repeating-linear-gradient(135deg, #d92f86 0 6px, #b0175f 6px 12px);
+  box-shadow:
+    0 0 0 1.5px var(--outline),
+    inset 0 1px 0 rgba(255, 200, 228, 0.5),
+    0 0 12px rgba(255, 79, 163, 0.55);
+  color: #fff;
+  font-family: var(--font-logo);
+  font-size: 12px;
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+}
+.tbar__dev[hidden] {
+  display: none;
+}
+.tbar.is-dev .tbar__val {
+  font-size: 20px;
+  line-height: 1;
+}
+/* Narrow phones: the DEV chip tucks onto the arena shield instead of taking a column. */
+@media (max-width: 400px) {
+  .tbar__dev {
+    position: absolute;
+    left: calc(var(--s-2) + 2px);
+    bottom: 3px;
+    z-index: 1;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 4px;
+    font-size: 10px;
+    pointer-events: none;
   }
 }
 

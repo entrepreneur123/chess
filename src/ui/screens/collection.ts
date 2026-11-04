@@ -1,9 +1,16 @@
 /**
- * Character screen (캐릭터 tab): rarity-framed unit cards with every star grade's abilities.
- *  - Owned: the token upgrade button (disabled with the shortfall when tokens are short) and the
- *    grade picker limited to the owned stars; higher stars show locked with their cost.
- *  - Locked: the arena that opens it and its essence price (buy right here when available).
- * Cards update in place, so the scroll position and focus survive every pick or purchase.
+ * Character screen (캐릭터 tab): a portrait grid of the whole roster, one tile per character.
+ *  - Tile: the fielded grade's portrait in a rarity frame (white / orange / purple / animated
+ *    rainbow), the owned stars on its bottom edge and the name underneath. Locked characters are
+ *    dimmed with a lock, and show their essence price or the arena ("N 전장") that opens them.
+ *    Corner badges flag what can be done right now: "강화 가능" / "구매 가능".
+ *  - Order: owned first (roster order), then locked ones in the order their arenas open them,
+ *    the "found / not found" split collection screens of top mobile games use: what you can field
+ *    is on top, and the locked part reads as a progression path.
+ *  - Tap: the full unit card (upgrade, grade picker, movement diagrams, skill and trait copy,
+ *    Rakaeli's 기본 / 타천 switch) opens in a bottom sheet.
+ * Tiles and the open card update in place on every profile change, so scroll and focus survive
+ * every pick, upgrade or purchase.
  */
 import { haptic, sfx } from '../../audio/sfx';
 import { CHARACTERS, CHARACTER_IDS, type CharacterId, type Level } from '../../engine';
@@ -11,13 +18,13 @@ import { buyBlocker, getProfile, isOwned, priceOf, setGrade, subscribeProfile, u
 import { arenaForRating, unlockArenaOf, upgradeCost } from '../../meta/progression';
 import { essenceIcon, tokenIcon, topBar } from '../components/currency';
 import { confirmBuy, confirmUpgrade } from '../components/purchase';
-import { artMissing, cardArtUrl, movementDiagram, rarityChip, starsOf, unitArt } from '../components/piece';
-import { Disposables, h, replaceChildren } from '../dom';
+import { RARITY_LABEL, artMissing, cardArtUrl, faceUrl, movementDiagram, rarityChip, starsOf, unitArt } from '../components/piece';
+import { showBottomSheet, type SheetHandle } from '../components/sheet';
+import { Disposables, h, prefersReducedMotion, replaceChildren } from '../dom';
 import { icon } from '../icons';
 import { playHomeMusic } from '../musicBridge';
 import type { Router, Screen } from '../router';
 
-/** Short tactical role per character (UI copy only; rules live in the engine). */
 /** Per-level title shown on the card (UI copy only). */
 export const TIER_TITLE: Record<CharacterId, [string, string, string]> = {
   sad: ['견습 성기사', '은빛 성기사', '신성 성기사'],
@@ -61,7 +68,12 @@ const formShown = new Map<CharacterId, 'base' | 'awake'>();
 
 /** Everything a card's look depends on; a card is rebuilt only when its key changes. */
 function cardKey(p: Profile, id: CharacterId): string {
-  return `${p.owned[id]}|${p.grades[id]}|${upgradeBlocker(p, id) ?? 'ok'}|${buyBlocker(p, id) ?? 'ok'}|${formShown.get(id) ?? 'base'}`;
+  return `${tileKey(p, id)}|${formShown.get(id) ?? 'base'}`;
+}
+
+/** Everything a grid tile's look depends on. */
+function tileKey(p: Profile, id: CharacterId): string {
+  return `${p.owned[id]}|${p.grades[id]}|${upgradeBlocker(p, id) ?? 'ok'}|${buyBlocker(p, id) ?? 'ok'}`;
 }
 
 export function collectionScreen(router: Router): Screen {
@@ -69,10 +81,19 @@ export function collectionScreen(router: Router): Screen {
   formShown.clear();
   const bar = topBar(router);
   bag.add(bar.dispose);
-  const list = h('div', { class: 'scroll-body collection__body' });
+  const grid = h('div', { class: 'cgrid' });
+  const headSub = h('span', { class: 'page-head__sub' });
+  const list = h(
+    'div',
+    { class: 'scroll-body collection__body' },
+    h('div', { class: 'page-head' }, h('h1', { class: 'page-head__title' }, '캐릭터'), headSub),
+    grid,
+  );
   const el = h('div', { class: 'collection' }, bar.el, list);
   let justPicked: CharacterId | null = null;
   let busy = false;
+  /** The open detail sheet: which character, the card shown and the key it was built with. */
+  let detail: { id: CharacterId; sheet: SheetHandle; host: HTMLElement; key: string } | null = null;
 
   const pickGrade = (id: CharacterId, grade: Level) => {
     const p = getProfile();
@@ -90,6 +111,11 @@ export function collectionScreen(router: Router): Screen {
       await fn();
     } finally {
       busy = false;
+      // The confirm dialog took focus; hand it back to the card in the sheet.
+      if (detail && !detail.sheet.el.contains(document.activeElement)) {
+        const target = detail.host.querySelector<HTMLElement>('[data-action="upgrade"]:not([disabled]), .grade-pick__btn.is-active, [data-action="buy"]:not([disabled])');
+        (target ?? detail.sheet.el).focus({ preventScroll: true });
+      }
     }
   };
 
@@ -196,7 +222,7 @@ export function collectionScreen(router: Router): Screen {
     return h(
       'article',
       {
-        class: `unit-card rarity-${def.rarity} tier-${grade}${picked ? ' is-picked' : ''}${locked ? ' is-locked' : ''}${awake ? ' is-awake' : ''}`,
+        class: `unit-card unit-card--sheet rarity-${def.rarity} tier-${grade}${picked ? ' is-picked' : ''}${locked ? ' is-locked' : ''}${awake ? ' is-awake' : ''}`,
         'data-character': id,
         'data-level': grade,
         'data-owned': owned,
@@ -205,13 +231,13 @@ export function collectionScreen(router: Router): Screen {
       h(
         'header',
         { class: 'unit-card__banner' },
-        h('img', { class: 'unit-card__art', src: cardArtUrl(id, grade, awake), alt: '', loading: 'lazy', decoding: 'async', draggable: 'false', onerror: artMissing }),
+        h('img', { class: 'unit-card__art', src: cardArtUrl(id, grade, awake), alt: '', decoding: 'async', draggable: 'false', onerror: artMissing }),
         h('div', { class: 'unit-card__shine', 'aria-hidden': 'true' }),
         h(
           'div',
           { class: 'unit-card__title' },
           h('div', { class: 'unit-card__role' }, h('b', null, TIER_TITLE[id][grade - 1]), ' · ', ROLE[id].role),
-          h('div', { class: 'unit-card__name' }, def.nameKo, h('span', { class: 'unit-card__en' }, def.nameEn)),
+          h('h2', { class: 'unit-card__name', id: `unit-card-name-${id}` }, def.nameKo, h('span', { class: 'unit-card__en' }, def.nameEn)),
           h(
             'div',
             { class: 'unit-card__chips' },
@@ -258,11 +284,11 @@ export function collectionScreen(router: Router): Screen {
                     'aria-label': have ? `${lv}성` : `${lv}성 잠김 · 토큰 ${stepCost}`,
                     'data-action': 'pick-grade',
                     'data-grade': lv,
-                    onclick: () => {
+                    onclick: (e: Event) => {
                       if (have) pickGrade(id, lv);
                       else {
                         sfx('tap');
-                        el.querySelector<HTMLElement>(`[data-character="${id}"] [data-action="upgrade"]`)?.focus({ preventScroll: true });
+                        (e.currentTarget as HTMLElement).closest('.unit-card')?.querySelector<HTMLElement>('[data-action="upgrade"]')?.focus({ preventScroll: true });
                       }
                     },
                   },
@@ -294,8 +320,7 @@ export function collectionScreen(router: Router): Screen {
     );
   };
 
-  // Key each rendered card was built with, so a profile change only rebuilds the cards that changed.
-  const shown = new Map<CharacterId, string>();
+  // ---- Grid ------------------------------------------------------------------------------
 
   /** Owned first (roster order), then locked ones in the order their arenas open them. */
   const order = () => {
@@ -303,58 +328,183 @@ export function collectionScreen(router: Router): Screen {
     const lockIndex = (id: CharacterId) => unlockArenaOf(id)?.index ?? 99;
     return [...CHARACTER_IDS].sort((a, b) => Number(!isOwned(p, a)) - Number(!isOwned(p, b)) || (isOwned(p, a) ? 0 : lockIndex(a) - lockIndex(b)));
   };
-  let orderKey = '';
 
-  const render = () => {
+  /** One portrait tile (a button that opens the detail sheet). */
+  const tile = (id: CharacterId, index: number) => {
+    const p = getProfile();
+    const def = CHARACTERS[id];
+    const owned = p.owned[id];
+    const locked = owned === 0;
+    const grade = p.grades[id];
+    const canUpgrade = !locked && upgradeBlocker(p, id) === null;
+    const buy = locked ? buyBlocker(p, id) : null;
+    const canBuy = locked && buy === null;
+    const opens = unlockArenaOf(id);
+    const price = priceOf(id);
+    const levels: Level[] = [1, 2, 3];
+
+    // What sits on the frame's bottom edge: the owned stars, or what it takes to unlock.
+    let edge: HTMLElement;
+    let lockNote: string;
+    if (!locked) {
+      edge = h('span', { class: 'ctile__stars', 'aria-hidden': 'true' }, levels.map((lv) => icon('star', 20, lv <= owned ? 'is-on' : '')));
+      lockNote = '';
+    } else if (buy === 'arena' && opens) {
+      edge = h('span', { class: 'ctile__price ctile__price--arena', 'aria-hidden': 'true' }, icon('lock', 12), `${opens.index} 전장`);
+      lockNote = `${opens.index} 전장에서 열림`;
+    } else if (buy === 'unavailable' || !opens) {
+      edge = h('span', { class: 'ctile__price ctile__price--arena', 'aria-hidden': 'true' }, '곧 공개');
+      lockNote = '곧 공개';
+    } else {
+      edge = h('span', { class: `ctile__price${canBuy ? ' is-ready' : ''}`, 'aria-hidden': 'true' }, essenceIcon(15), h('b', { class: 't-num' }, String(price)));
+      lockNote = canBuy ? `구매 가능, 에센셜 ${price}` : `에센셜 ${price} 필요`;
+    }
+    const badge = canUpgrade
+      ? h('span', { class: 'ctile__badge ctile__badge--up', 'aria-hidden': 'true' }, icon('up', 12), '강화 가능')
+      : canBuy
+        ? h('span', { class: 'ctile__badge ctile__badge--buy', 'aria-hidden': 'true' }, '구매 가능')
+        : null;
+    const label = locked
+      ? `${def.nameKo}, ${RARITY_LABEL[def.rarity]}, 미보유, ${lockNote}`
+      : `${def.nameKo}, ${RARITY_LABEL[def.rarity]}, ${owned}성 보유${grade < owned ? `, ${grade}성 출전` : ''}${canUpgrade ? ', 강화 가능' : ''}`;
+    return h(
+      'button',
+      {
+        class: `ctile rarity-${def.rarity} tier-${owned || 1}${locked ? ' is-locked' : ''}`,
+        type: 'button',
+        style: `--i:${index}`,
+        'data-character': id,
+        'data-owned': owned,
+        'data-level': grade,
+        'aria-label': `${label}. 상세 보기`,
+        'aria-haspopup': 'dialog',
+        onclick: () => openDetail(id),
+      },
+      h(
+        'span',
+        { class: 'ctile__frame' },
+        h(
+          'span',
+          { class: 'ctile__art' },
+          h('img', { src: faceUrl(id, grade), alt: '', decoding: 'async', draggable: 'false', onerror: artMissing }),
+          locked ? h('span', { class: 'ctile__lock', 'aria-hidden': 'true' }, icon('lock', 22)) : null,
+        ),
+        edge,
+        badge,
+      ),
+      h('span', { class: 'ctile__name', 'aria-hidden': 'true' }, def.nameKo),
+    );
+  };
+
+  // Key each rendered tile was built with, so a profile change only rebuilds the tiles that changed.
+  const shown = new Map<CharacterId, string>();
+  let orderKey = '';
+  let ownedBefore = new Set<CharacterId>();
+
+  const syncHead = () => {
+    const p = getProfile();
+    const n = CHARACTER_IDS.filter((id) => isOwned(p, id)).length;
+    headSub.textContent = `보유 ${n} / ${CHARACTER_IDS.length} · ${arenaForRating(p.rating).index} 전장`;
+  };
+
+  const renderGrid = () => {
     const p = getProfile();
     const ids = order();
     orderKey = ids.join();
-    const ownedN = ids.filter((id) => isOwned(p, id)).length;
-    replaceChildren(
-      list,
-      h('div', { class: 'page-head' }, h('h1', { class: 'page-head__title' }, '캐릭터'), h('span', { class: 'page-head__sub' }, `보유 ${ownedN} / ${CHARACTER_IDS.length} · ${arenaForRating(p.rating).index} 전장`)),
-      h('p', { class: 'hint hint--pad hint--line' }, icon('up', 16), '토큰으로 성급 강화', h('span', { class: 'hint__sep', 'aria-hidden': 'true' }, '·'), icon('star', 16), '보유 성급까지 출전 선택'),
-      ids.map(card),
-    );
-    for (const id of CHARACTER_IDS) shown.set(id, cardKey(p, id));
-    justPicked = null;
+    const hadFocus = grid.contains(document.activeElement) ? (document.activeElement as HTMLElement).dataset.character : undefined;
+    replaceChildren(grid, ids.map((id, i) => tile(id, i)));
+    for (const id of CHARACTER_IDS) shown.set(id, tileKey(p, id));
+    // A character that just joined pops in at its new place.
+    for (const id of ids) if (isOwned(p, id) && ownedBefore.size > 0 && !ownedBefore.has(id)) grid.querySelector(`[data-character="${id}"]`)?.classList.add('is-new');
+    ownedBefore = new Set(ids.filter((id) => isOwned(p, id)));
+    syncHead();
+    if (hadFocus) grid.querySelector<HTMLElement>(`[data-character="${hadFocus}"]`)?.focus({ preventScroll: true });
     // Entrance animation only on first paint (later re-renders must not replay it).
-    if (!list.classList.contains('is-settled')) bag.timeout(() => list.classList.add('is-settled'), 900);
+    if (!grid.classList.contains('is-settled')) bag.timeout(() => grid.classList.add('is-settled'), 900);
+  };
+
+  // ---- Detail sheet ------------------------------------------------------------------------
+
+  const openDetail = (id: CharacterId) => {
+    if (detail) return;
+    sfx('page');
+    haptic('light');
+    const host = h('div', { class: 'unit-detail' }, card(id));
+    const sheet = showBottomSheet(host, { label: `${CHARACTERS[id].nameKo} 상세`, className: 'sheet--detail', closeButton: true, draggable: true });
+    const mine = { id, sheet, host, key: cardKey(getProfile(), id) };
+    detail = mine;
+    justPicked = null;
+    void sheet.closed.then(() => {
+      if (detail === mine) detail = null;
+      formShown.delete(id);
+      // The tile may have been rebuilt (a purchase re-sorts the grid): focus the current one.
+      if (!bag.isDisposed && !grid.contains(document.activeElement)) grid.querySelector<HTMLElement>(`[data-character="${id}"]`)?.focus({ preventScroll: true });
+    });
+  };
+  bag.add(() => detail?.sheet.close());
+
+  /** Rebuild the open card in place when what it shows changed (scroll and focus survive). */
+  const updateDetail = () => {
+    if (!detail) return;
+    const k = cardKey(getProfile(), detail.id);
+    if (k === detail.key) return;
+    const old = detail.host.firstElementChild as HTMLElement | null;
+    const scroller = detail.host.closest<HTMLElement>('.sheet__content');
+    const top = scroller?.scrollTop ?? 0;
+    // The control that had focus, found again in the rebuilt card by what it does.
+    const at = old && old.contains(document.activeElement) ? (document.activeElement as HTMLElement) : null;
+    const sel = at?.dataset.action
+      ? `[data-action="${at.dataset.action}"]${at.dataset.grade ? `[data-grade="${at.dataset.grade}"]` : ''}${at.dataset.form ? `[data-form="${at.dataset.form}"]` : ''}`
+      : null;
+    const next = card(detail.id);
+    if (old) old.replaceWith(next);
+    else detail.host.appendChild(next);
+    detail.key = k;
+    if (scroller) scroller.scrollTop = top;
+    if (at) {
+      // After an upgrade or purchase its button is gone: the active grade takes focus instead.
+      const target = (sel ? next.querySelector<HTMLElement>(`${sel}:not([disabled])`) : null) ?? next.querySelector<HTMLElement>('.grade-pick__btn.is-active');
+      if (target) target.focus({ preventScroll: true });
+      else detail.sheet.el.focus({ preventScroll: true });
+    }
   };
 
   /**
-   * Swap only the changed card(s) in place. Rebuilding the whole list emptied the scroller for a
-   * moment, which clamped its scroll position to the top on every grade pick, and dropped focus.
+   * Swap only the changed tile(s) in place, then the open card. Rebuilding everything would reset
+   * the scroll position and drop focus on every grade pick.
    */
   const update = () => {
     const p = getProfile();
     if (order().join() !== orderKey) {
-      // A purchase moved a card between the owned and locked groups.
+      // A purchase moved a tile from the locked group to the owned one.
       const top = list.scrollTop;
-      render();
+      renderGrid();
       list.scrollTop = top;
-      return;
-    }
-    const top = list.scrollTop;
-    for (const id of CHARACTER_IDS) {
-      const k = cardKey(p, id);
-      if (shown.get(id) === k) continue;
-      const old = list.querySelector<HTMLElement>(`[data-character="${id}"]`);
-      if (!old) {
-        render();
-        return;
+    } else {
+      for (const id of CHARACTER_IDS) {
+        const k = tileKey(p, id);
+        if (shown.get(id) === k) continue;
+        const old = grid.querySelector<HTMLElement>(`[data-character="${id}"]`);
+        if (!old) {
+          renderGrid();
+          break;
+        }
+        const hadFocus = old === document.activeElement;
+        const next = tile(id, Number(old.style.getPropertyValue('--i')) || 0);
+        if (old.dataset.owned === '0' && isOwned(p, id)) next.classList.add('is-new');
+        old.replaceWith(next);
+        shown.set(id, k);
+        if (hadFocus) next.focus({ preventScroll: true });
       }
-      const hadFocus = old.contains(document.activeElement);
-      const next = card(id);
-      old.replaceWith(next);
-      shown.set(id, k);
-      if (hadFocus) next.querySelector<HTMLElement>('.grade-pick__btn.is-active, [data-action="upgrade"]')?.focus({ preventScroll: true });
     }
-    list.scrollTop = top;
+    ownedBefore = new Set(CHARACTER_IDS.filter((id) => isOwned(p, id)));
+    syncHead();
+    updateDetail();
     justPicked = null;
   };
 
-  render();
+  renderGrid();
+  if (prefersReducedMotion()) grid.classList.add('is-settled');
   bag.add(subscribeProfile(update));
   return { el, mount: () => playHomeMusic(), dispose: () => bag.dispose() };
 }

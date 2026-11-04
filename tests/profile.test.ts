@@ -23,7 +23,7 @@ describe('match results', () => {
     p = applyMatchResult(p, 'win');
     expect(p.stats).toEqual({ wins: 2, losses: 1, draws: 1 });
     expect(Object.keys(p).sort()).toEqual([
-      'bestRating', 'dungeon', 'dungeonLevel', 'essence', 'formation', 'formationSaved', 'grades', 'onboarding', 'owned', 'rating', 'settings', 'stats', 'tokens', 'version',
+      'bestRating', 'devMode', 'dungeon', 'dungeonLevel', 'essence', 'formation', 'formationSaved', 'grades', 'onboarding', 'owned', 'rating', 'settings', 'stats', 'tokens', 'version',
     ]);
   });
 });

@@ -6,6 +6,8 @@
 export interface OverlayHandle {
   /** Called on back button / scrim tap. Return false to keep the overlay open. */
   requestClose(): boolean;
+  /** Bottom sheets say so: toasts shown over one move above the scrim (see toast.ts). */
+  kind?: 'sheet' | 'dialog';
 }
 
 const stack: OverlayHandle[] = [];
@@ -38,6 +40,17 @@ export function closeTopOverlay(): boolean {
 
 export function hasOverlay(): boolean {
   return stack.length > 0;
+}
+
+/** True when `h` is the top-most overlay (only it reacts to Escape). */
+export function isTopOverlay(h: OverlayHandle): boolean {
+  return stack[stack.length - 1] === h;
+}
+
+/** The kind of the top-most overlay, or null when none is open. */
+export function topOverlayKind(): 'sheet' | 'dialog' | null {
+  const top = stack[stack.length - 1];
+  return top ? (top.kind ?? 'dialog') : null;
 }
 
 /** Forcefully close everything (used when the router swaps screens). */

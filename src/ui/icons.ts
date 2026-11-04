@@ -51,6 +51,7 @@ const PATHS = {
   menu: 'M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z',
   card: 'M7 2h10a3 3 0 0 1 3 3v14a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V5a3 3 0 0 1 3-3zm5 5-3 5 3 5 3-5-3-5z',
   castle: 'M3 21V9h2V5h2v2h2V5h2v2h2V5h2v2h2V5h2v4h2v12h-7v-5a2 2 0 0 0-4 0v5H3zm4-9v2h2v-2H7zm8 0v2h2v-2h-2z',
+  code: 'M9.4 16.6 4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0 4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z',
   music: 'M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z',
   road: 'M11 3h2v3h-2V3zm0 5h2v3h-2V8zm0 5h2v3h-2v-3zm0 5h2v3h-2v-3zM4 21 7.5 3h2L6 21H4zm14 0L14.5 3h2L20 21h-2z',
   target:

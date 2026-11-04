@@ -8,6 +8,12 @@
  *  - `rating` moves only in 전장전 (ranked); the arena always follows it.
  *  - `dungeon.lastClaimDay` is the local day key of the last claimed dungeon reward.
  *
+ *  - `devMode` is the owner's hidden developer mode (see "Developer mode" below): while it is on,
+ *    the real profile waits in `devMode.snapshot` and comes back exactly as it was when it is switched off.
+ *    The field is additive: profiles saved without it read as "dev mode locked and off", so the
+ *    schema version did not need a bump. (It is not the v2 `dev` account flag, which the v2 -> v3
+ *    migration drops.)
+ *
  * Security note: all of this lives in localStorage and can be edited by the user. Real PvP,
  * leaderboards or purchases need server-side authority first.
  */
@@ -59,6 +65,21 @@ export interface Profile {
   stats: { wins: number; losses: number; draws: number };
   settings: Settings;
   onboarding: Onboarding;
+  /** Owner testing tool (hidden in settings). */
+  devMode: DevMode;
+}
+
+/** A profile without its developer-mode state: what a dev-mode snapshot holds. */
+export type ProfileBase = Omit<Profile, 'devMode'>;
+
+export interface DevMode {
+  /** The hidden settings section was revealed (7 taps on the version label). */
+  unlocked: boolean;
+  /**
+   * The real profile, saved the moment dev mode was switched on; null while dev mode is off.
+   * Dev mode is on exactly when this is non-null.
+   */
+  snapshot: ProfileBase | null;
 }
 
 export type ViewSetting = 'tilt' | 'top';
@@ -128,6 +149,10 @@ function allGrades(level: Level): Record<CharacterId, Level> {
 }
 
 export function createDefaultProfile(): Profile {
+  return { ...createDefaultBase(), devMode: { unlocked: false, snapshot: null } };
+}
+
+function createDefaultBase(): ProfileBase {
   const grades = allGrades(DEFAULT_GRADE);
   return {
     version: PROFILE_VERSION,
@@ -248,7 +273,21 @@ function migrate(raw: Record<string, unknown>): Record<string, unknown> {
 
 /** Turns arbitrary (possibly corrupt) data into a valid profile. Never throws. */
 export function sanitizeProfile(input: unknown): Profile {
-  const def = createDefaultProfile();
+  const base = sanitizeBase(input);
+  const rawDev = isObj(input) && isObj(input.devMode) ? input.devMode : {};
+  const rawSnap = rawDev.snapshot;
+  if (rawSnap === undefined || rawSnap === null) return { ...base, devMode: { unlocked: asBool(rawDev.unlocked, false), snapshot: null } };
+  // Dev mode is on. A snapshot that is an object is sanitized field by field like any saved
+  // profile. One that is not an object at all cannot be restored: dev mode stays on (the DEV chip
+  // keeps saying so) and switching it off lands on a fresh starter profile with the player's
+  // settings and onboarding, never on the inflated dev values.
+  const snapshot = isObj(rawSnap) ? sanitizeBase(rawSnap) : { ...createDefaultBase(), settings: base.settings, onboarding: base.onboarding };
+  return pinDevValues({ ...base, devMode: { unlocked: true, snapshot } });
+}
+
+/** `sanitizeProfile` without the dev-mode state (also used for the dev snapshot). */
+function sanitizeBase(input: unknown): ProfileBase {
+  const def = createDefaultBase();
   if (!isObj(input)) return def;
   let raw: Record<string, unknown>;
   try {
@@ -363,6 +402,9 @@ export function applyMatchResult(p: Profile, outcome: MatchOutcome): Profile {
   return { ...p, stats };
 }
 
+/** A currency balance after paying `cost` (dev mode never spends). */
+const spend = (p: Profile, have: number, cost: number): number => (isDevMode(p) ? have : have - cost);
+
 export type BuyRefusal = 'owned' | 'arena' | 'essence' | 'unavailable';
 export type UpgradeRefusal = 'locked' | 'max' | 'tokens';
 export interface ActionResult<R extends string> {
@@ -395,7 +437,7 @@ export function buyCharacter(p: Profile, id: CharacterId): ActionResult<BuyRefus
   if (reason) return { ok: false, profile: p, reason };
   return {
     ok: true,
-    profile: { ...p, essence: p.essence - priceOf(id), owned: { ...p.owned, [id]: 1 }, grades: { ...p.grades, [id]: 1 } },
+    profile: { ...p, essence: spend(p, p.essence, priceOf(id)), owned: { ...p.owned, [id]: 1 }, grades: { ...p.grades, [id]: 1 } },
   };
 }
 
@@ -422,7 +464,7 @@ export function upgradeCharacter(p: Profile, id: CharacterId): ActionResult<Upgr
   const grades = { ...p.grades, [id]: to };
   return {
     ok: true,
-    profile: { ...p, tokens: p.tokens - cost, owned: { ...p.owned, [id]: to }, grades, formation: syncFormationLevels(p.formation, grades) },
+    profile: { ...p, tokens: spend(p, p.tokens, cost), owned: { ...p.owned, [id]: to }, grades, formation: syncFormationLevels(p.formation, grades) },
   };
 }
 
@@ -514,6 +556,71 @@ export function settleMatch(p: Profile, input: SettleInput): { profile: Profile;
 }
 
 // ---------------------------------------------------------------------------------------------
+// Developer mode (owner testing tool, hidden behind 7 taps on the settings version label)
+// ---------------------------------------------------------------------------------------------
+
+/** Tokens and essence while dev mode is on (shown as ∞; never spent). */
+export const DEV_CURRENCY = 999_999;
+/** Rating dev mode starts at: deep inside the open-ended legend arena. */
+export const DEV_RATING = 10_000;
+
+export const isDevMode = (p: Pick<Profile, 'devMode'>): boolean => p.devMode.snapshot !== null;
+
+/** The profile without its dev-mode state, deep-copied so later edits can never reach it. */
+function baseOf(p: Profile): ProfileBase {
+  const { devMode: _dev, ...base } = p;
+  return JSON.parse(JSON.stringify(base)) as ProfileBase;
+}
+
+/**
+ * The values dev mode holds fixed: both currencies at DEV_CURRENCY and every character owned at
+ * 3성. Rating, grades and the formation stay free (matches still move the rating). Off: unchanged.
+ */
+export function pinDevValues(p: Profile): Profile {
+  if (!isDevMode(p)) return p;
+  const allMax = CHARACTER_IDS.every((id) => p.owned[id] === 3);
+  if (allMax && p.tokens === DEV_CURRENCY && p.essence === DEV_CURRENCY) return p;
+  const owned = {} as Record<CharacterId, Owned>;
+  for (const id of CHARACTER_IDS) owned[id] = 3;
+  return { ...p, owned, tokens: DEV_CURRENCY, essence: DEV_CURRENCY };
+}
+
+/** Reveal the hidden developer section in settings (stays revealed). */
+export function unlockDevMode(p: Profile): Profile {
+  return p.devMode.unlocked ? p : { ...p, devMode: { ...p.devMode, unlocked: true } };
+}
+
+/**
+ * Switch dev mode on: the real profile is saved as the snapshot, then currencies become
+ * DEV_CURRENCY, the rating DEV_RATING and every character is owned and fielded at 3성.
+ * Already on: unchanged (the first snapshot is never overwritten).
+ */
+export function enableDevMode(p: Profile): Profile {
+  if (isDevMode(p)) return p;
+  const snapshot = baseOf(p);
+  const grades = allGrades(3);
+  return pinDevValues({
+    ...p,
+    grades,
+    formation: syncFormationLevels(p.formation, grades),
+    rating: DEV_RATING,
+    bestRating: Math.max(p.bestRating, DEV_RATING),
+    devMode: { unlocked: true, snapshot },
+  });
+}
+
+/**
+ * Switch dev mode off: the snapshot comes back as it was saved (only the current settings are kept). Everything that happened
+ * while dev mode was on (rating changes, matches, picks) is discarded. Already off: unchanged.
+ */
+export function disableDevMode(p: Profile): Profile {
+  if (!p.devMode.snapshot) return p;
+  // Sound / music / voice / haptics preferences are not progress: the current ones are kept.
+  const real = JSON.parse(JSON.stringify(p.devMode.snapshot)) as ProfileBase;
+  return { ...real, settings: { ...p.settings }, devMode: { unlocked: true, snapshot: null } };
+}
+
+// ---------------------------------------------------------------------------------------------
 // Store
 // ---------------------------------------------------------------------------------------------
 
@@ -570,6 +677,8 @@ export function getProfile(): Profile {
 }
 
 export function setProfile(p: Profile): void {
+  // Dev mode pins its values on every write (e.g. essence won in a match never shows as 1,000,002).
+  p = pinDevValues(p);
   current = p;
   persistProfile(p);
   for (const l of listeners) l(p);
@@ -578,7 +687,7 @@ export function setProfile(p: Profile): void {
 export function updateProfile(fn: (p: Profile) => Profile): Profile {
   const next = fn(getProfile());
   if (next !== current) setProfile(next);
-  return next;
+  return getProfile();
 }
 
 export function subscribeProfile(l: Listener): () => void {
