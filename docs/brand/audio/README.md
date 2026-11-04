@@ -27,7 +27,7 @@ VIRTUAL_ENV=$W/venv uv pip install qwen-tts==0.1.1 pyworld pyloudnorm faster-whi
 $W/venv/bin/hf download Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign --local-dir $W/qwen-vd
 $W/venv/bin/hf download Qwen/Qwen3-TTS-12Hz-1.7B-Base --local-dir $W/qwen-base
 $W/venv/bin/hf download Systran/faster-whisper-medium --local-dir $W/fw-medium
-# QA only (gender plausibility gate for brutile, michelle and picker), Apache-2.0:
+# QA only (gender plausibility gate for brutile, michelle, picker and rakaeli), Apache-2.0:
 $W/venv/bin/hf download prithivMLmods/Common-Voice-Gender-Detection config.json model.safetensors preprocessor_config.json --local-dir $W/gender-w2v
 # QA only, second gender opinion (MIT, ECAPA-TDNN; needs the repo's model.py, run outside the repo):
 $W/venv/bin/hf download JaesungHuh/voice-gender-classifier --local-dir $W/gender-ecapa
@@ -103,6 +103,8 @@ walk's exclaimed lines are spoken with a period; the caption keeps the '!'). Per
 | brutile (witch) | green-skinned fanged witch: unmistakably female, aged, raspy, sneering, cackling | clone of an elderly-witch VoiceDesign take (167 Hz, raspy); takes gated on P(female) | never pitch-shifted (that is what made her male before), subtle slow 9 ms chorus, +1 dB low shelf, 2.5:1 compression, 1.2 s dark hall at 12 % wet |
 | michelle (gloomy girl) | little girl with bangs over her eyes and a doll: quiet, soft, slightly breathy, eerie; never cute, babyish or shrill | clone of a hushed "gloomy ten-year-old" VoiceDesign take (269 Hz, narrow 240-295 Hz range); `f0_target` 265; takes gated on P(female) | **never pitch-shifted**; HP 100 Hz, a whispered double of the same words (WORLD resynthesis with fully aperiodic excitation at the original pitch and envelope, band 0.7-5.5 kHz, 28 ms late, level drifting at 0.45 Hz, about -18 dB under the voice), +1 dB low shelf, 2:1 compression, 0.55 s small room at 11 % wet |
 | picker (frontier drifter) | lone cowboy, about 30, with a lasso: laconic, low, dry drawl, calm and confident, never shouted | clone of a "laconic frontier cowboy" VoiceDesign take (108 Hz, the sigh the model added before the line cut off); `f0_target` 105; takes gated on P(female) <= 0.4 | HP 65 Hz, +1.5 dB warmth at 200 Hz, -0.8 dB at 450 Hz (no boxiness), 10 % soft saturation, 2.5:1 compression, a dry wooden "saloon": four early reflections (6.5-23 ms, LP 3.2 kHz) plus a 0.45 s dark tail at 7 % wet |
+| rakaeli (fallen angel), base form | blindfolded pale youth, late teens: soft, calm, melancholic pretty-boy voice, elegant, quiet, sorrowful | clone of a "delicate, pretty young man of about seventeen ... light tenor" VoiceDesign take (160 Hz, warble 0.024, HNR 17.9 dB); `f0_target` 155; takes gated on P(female) <= 0.4 | never pitch-shifted; HP 80 Hz, +0.8 dB at 220 Hz, 2:1 compression, 0.85 s cool chapel hall (LP 5 kHz, HP 300 Hz) at 13 % wet |
+| rakaeli, transformed form (타천, lines with `"fx": "rakaeli-awake"`) | the same young man, deeper and colder, speaking as two (demonic) | the same cloned takes | main voice -2 semitones with formants -6 % (rubberband, as insaner's formant step); a detuned double (WORLD resynthesis +22 cents, envelope x0.95, 17 ms late, about -7 dB); a cold octave-down shadow (WORLD, envelope x0.8, LP 1.1 kHz, no flutter or ring modulation) at about -15 dB; 18 % soft saturation; +1.5 dB below 140 Hz, -1.5 dB at 420 Hz (hollow, cold), -2.5 dB above 5.5 kHz; 3:1 compression; 1.0 s dark cathedral tail (LP 2.6 kHz) at 17 % wet |
 
 Take selection (`post_voice.py`): every raw take is transcribed; the best `--shortlist` (3) per line
 by CER, distance from the character's pitch target (`f0_target`, else the median of its
@@ -196,3 +198,72 @@ skill, so they get no `skill` effect; their trait events have their own:
 **Budget.** vo + sfx = 1,424,699 B (vo 1,153,610 + sfx 271,089). The test budget was raised by the
 lead from 1.2 MiB to 1.5 MiB (1,572,864 B) because the roster grew from 5 to 7 characters
 (0.24 -> 0.21 MiB per character); headroom 148,165 B.
+
+## Rakaeli (2026-11-04)
+
+The 8th character, an epic with two forms (spec: `docs/design/new-character-rakaeli.md`). His
+transformed form ("타천") is the same cloned voice through a second chain (`fx_rakaeli_awake`),
+selected per line by `"fx": "rakaeli-awake"` in `lines.json`; `post_voice.py` now takes the FX
+chain, de-esser threshold and harshness target from that key, and the AAC bitrate from the
+character's `"bitrate"` (rakaeli: `48k`, every other character `64k`).
+
+Events: base `select` x2, `move` x2, `capture` x3, `skill` (the transform cast), `death`,
+`victory`; transformed `awake-select` x2, `awake-move` x2, `awake-capture` x2, `awake-death`, and
+`awake-end` (turning back, spoken with the base chain because he has already reverted).
+`write_manifest.py` emits the `awake-*` names in `CharAudioEvent`; `src/audio/voice.ts` falls each
+back to the base event (`awake-end` to `move`).
+
+**Reference.** 32 VoiceDesign takes over three prompts. The first prompt ("soft, calm ... young
+male voice ... never deep") gave only 77-125 Hz takes, deeper than picker, and was dropped; so were
+the takes of the "eighteen-year-old ... light, soft young tenor" prompt (85-155 Hz). Kept: the
+"delicate, pretty young man of about seventeen ... light tenor in a medium-high pitch" prompt,
+seed 11 take 4 of `눈을 가려도… 길은 보여요.`: 160 Hz (130-211), warble 0.024, HNR 17.9 dB,
+harshness -21.9 dB, CER 0, P(female) 0.001 / 0.015. A 1.6 s pause with a breath was cut to 0.4 s.
+
+**Takes.** 8 cloned takes per line, 6 (the replaced line: 8) fully processed and judged. The first
+`awake-move-2`, `재를 밟고 간다.`, was heard as the homophone 쟤 (or 죄를 받고) in every take
+(best CER 0.17), so it was replaced by `불길 속을 걷는다.` (7/8 takes CER 0). Over all processed
+transformed-form takes of the shipped lines, 37 of 44 had CER <= 0.14; the misses were `타 버려라` heard as `다 버려라`
+(4/6) and `구원은` heard as `구호는` (3/6); the shipped take of each line has CER 0. Results on
+the decoded .m4a (`qa-voice.json`):
+
+| Form | clips | dur s | F0 Hz | F2 Hz | centroid Hz | harsh dB | sib dB | tail dB | warble st | HNR dB | CER | P(female) w2v / ECAPA |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| base (median, incl. awake-end) | 11 | 2.26 (1.54-2.65) | 151 (145-162) | 1831 | 1623 | -15.5 | -15.0 | -59.3 | 0.056 | 10.1 | 0 (all) | 0.001 / 0.003 (max 0.013 / 0.009) |
+| transformed (median) | 7 | 1.75 (1.28-2.09) | 112 (102-139) | 1474 | 1448 | -15.6 | -18.2 | -60.8 | 0.091 | 3.5 | 0 (all) | 0.001 / 0.002 (max 0.001 / 0.007) |
+
+All 18 clips: -16.02..-16.15 LUFS, true peak <= -1.44 dBTP, tail <= -51.4 dB, 8.9-17.1 KB.
+The transformed form measures about 5 semitones lower in median F0 (the tracker partly follows the
+octave-down shadow; the shift on the main voice is 2 semitones), with a lower F2 (deeper vocal
+tract) and a much lower HNR (the doubled, detuned voice; the intended texture, not noise: hiss
+-58.3 dB vs -53.9 dB base). Base lines are 2.1-2.6 s with their tails: his `…` pauses are kept
+(the pipeline only tightens pauses over 0.4 s). `move-2` has the highest warble of the set (0.104,
+under the 0.12 penalty).
+
+**SFX.** Appended after picker in `gen_sfx.py` (all 32 earlier effects checked sample-identical,
+max difference 0.0). New building blocks: `feather_flap` (a falling air band with a fast 24-44 Hz
+feather flutter, a low air push and quill ticks), `halo_glint` (a dim, cracked glassy ring: two
+partials 1.1 % apart beating), `ember_crackle` (thinning pops) and `flame_roar` (turbulent
+low fire). There is no awake-select effect (it falls back to select).
+
+| File | Concept | dur s | LUFS | peak dBFS | bytes |
+| --- | --- | --- | --- | --- | --- |
+| rakaeli-select | folded wings stir (small feather rustle) under the faint ring of the cracked halo | 0.640 | -17.06 | -3.36 | 6276 |
+| rakaeli-move | two soft feathered wing flaps, then a quill settles | 0.597 | -17.03 | -2.12 | 6056 |
+| rakaeli-capture | a pale strike: feather-edged air slash, a cold glass-like strike with a soft low body, a falling minor-second halo sigh (no metal, no fire) | 0.853 | -17.05 | -1.53 | 8045 |
+| rakaeli-skill | 타천: the blindfold burns (rising sizzle + flare whoosh), the halo snaps, two big wing strokes unfurl over a dark choir swell gliding down (a fall), a crimson flame bloom at the peak | 1.195 | -17.12 | -2.26 | 10687 |
+| rakaeli-awake-move | one heavy flame-wing beat: deep downstroke whump, fire roaring along the wing, shaken embers | 0.725 | -17.05 | -2.20 | 6976 |
+| rakaeli-awake-capture | dark-flame impact: air sucked in (reversed swell), a heavy blow with a low out-of-tune bell (the broken crimson halo), a fire bloom and trailing embers | 0.960 | -17.13 | -3.76 | 8973 |
+| rakaeli-awake-end | turning back: embers pop and thin out over a fading glow, a soft smoky exhale (breathy band falling 1.8 kHz -> 380 Hz), one faint halo ring | 1.003 | -17.12 | -2.68 | 9295 |
+
+Distinctness (a coarse proxy, not a listening test): the cosine similarity of z-scored log-mel
+spectrograms to the nearest effect of another character is 0.79-0.94 (capture 0.79, select 0.81,
+skill 0.89, awake-end 0.92, move / awake-move 0.93, awake-capture 0.94 to marki-capture); for
+comparison the existing effects' nearest-neighbour similarity is 0.83 median, 0.97 max. The
+measure mostly sees broadband noise and low impacts, so heavy impacts score alike.
+
+**Budget.** vo + sfx = 1,717,578 B (vo 1,390,181 + sfx 327,397). Rakaeli alone is 292,879 B (vo
+236,571 at 48 kbps for 18 lines, sfx 56,308 for 7 effects), about 1.4x a one-form character. The
+test budget was raised from 1.5 MiB to 1.75 MiB (1,835,008 B, 0.21 MiB per character for 8
+characters); headroom 117,430 B. Nobody has listened to these files; every statement above is a
+measurement.

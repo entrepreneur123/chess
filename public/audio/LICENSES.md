@@ -16,12 +16,15 @@ music's only third-party material is the MIT-licensed FluidR3_GM SoundFont (see 
   have no separate LICENSE file). The `qwen-tts` 0.1.1 inference package (PyPI) ships the full
   Apache License 2.0 text. Apache-2.0 permits commercial use and places no restriction on
   generated audio.
-- **No real person's voice is used.** The seven references
-  `docs/brand/audio/refs/{sad,marki,walk,insaner,brutile,michelle,picker}-ref.flac` are themselves
+- **No real person's voice is used.** The eight references
+  `docs/brand/audio/refs/{sad,marki,walk,insaner,brutile,michelle,picker,rakaeli}-ref.flac` are themselves
   VoiceDesign outputs (designed from text prompts recorded in `lines.json`; michelle and picker added
-  2026-11-04).
+  2026-11-04, rakaeli later the same day). Rakaeli's transformed-form lines are his own cloned takes
+  through extra post-processing, not a second voice.
 - **Post-processing** (EQ, de-essing, reverb, WORLD-vocoder layers for marki's growl, insaner's
-  demon double and michelle's whispered double, loudness normalisation) is original numpy/scipy code plus ffmpeg 6.1, with the
+  demon double, michelle's whispered double and rakaeli's detuned / octave-down transformed-form
+  layers, ffmpeg's rubberband filter for insaner's formant step and rakaeli's transformed-form pitch
+  step, loudness normalisation) is original numpy/scipy code plus ffmpeg 6.1, with the
   `pyworld` 0.3.5 (MIT; wraps the WORLD vocoder) and `pyloudnorm` 0.2.0 (MIT) libraries, used as offline tools;
   nothing from them is embedded in the shipped files.
 - **QA only (never shipped, not in the repo):**

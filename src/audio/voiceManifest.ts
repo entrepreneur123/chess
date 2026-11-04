@@ -65,6 +65,17 @@ export const VOICE_CLIPS: Record<CharacterId, Partial<Record<CharAudioEvent, rea
     victory: ['vo/picker-victory-1.m4a'],
   },
   rakaeli: {
+    select: ['vo/rakaeli-select-1.m4a', 'vo/rakaeli-select-2.m4a'],
+    move: ['vo/rakaeli-move-1.m4a', 'vo/rakaeli-move-2.m4a'],
+    capture: ['vo/rakaeli-capture-1.m4a', 'vo/rakaeli-capture-2.m4a', 'vo/rakaeli-capture-3.m4a'],
+    skill: ['vo/rakaeli-skill-1.m4a'],
+    death: ['vo/rakaeli-death-1.m4a'],
+    victory: ['vo/rakaeli-victory-1.m4a'],
+    'awake-select': ['vo/rakaeli-awake-select-1.m4a', 'vo/rakaeli-awake-select-2.m4a'],
+    'awake-move': ['vo/rakaeli-awake-move-1.m4a', 'vo/rakaeli-awake-move-2.m4a'],
+    'awake-capture': ['vo/rakaeli-awake-capture-1.m4a', 'vo/rakaeli-awake-capture-2.m4a'],
+    'awake-death': ['vo/rakaeli-awake-death-1.m4a'],
+    'awake-end': ['vo/rakaeli-awake-end-1.m4a'],
   },
 };
 
@@ -143,6 +154,24 @@ export const VOICE_TEXT: Readonly<Record<string, string>> = {
   'vo/picker-hop-multi-1.m4a': "줄 서. 한 번에 간다.",
   'vo/picker-death-1.m4a': "여기까지인가… 석양이 좋군.",
   'vo/picker-victory-1.m4a': "해 지기 전에 끝났군.",
+  'vo/rakaeli-select-1.m4a': "눈을 가려도… 길은 보여요.",
+  'vo/rakaeli-select-2.m4a': "저를… 부르셨나요.",
+  'vo/rakaeli-move-1.m4a': "조용히… 내려앉을게요.",
+  'vo/rakaeli-move-2.m4a': "깃털처럼, 가볍게.",
+  'vo/rakaeli-capture-1.m4a': "미안해요… 편히 쉬어요.",
+  'vo/rakaeli-capture-2.m4a': "빛이 없는 곳으로.",
+  'vo/rakaeli-capture-3.m4a': "슬퍼하지 마요.",
+  'vo/rakaeli-skill-1.m4a': "하늘이여… 나를 놓아라.",
+  'vo/rakaeli-death-1.m4a': "드디어… 쉴 수 있겠네요.",
+  'vo/rakaeli-victory-1.m4a': "기도는… 끝났어요.",
+  'vo/rakaeli-awake-select-1.m4a': "이제야… 보이는군.",
+  'vo/rakaeli-awake-select-2.m4a': "날개가 타오른다.",
+  'vo/rakaeli-awake-move-1.m4a': "추락은 끝났다.",
+  'vo/rakaeli-awake-move-2.m4a': "불길 속을 걷는다.",
+  'vo/rakaeli-awake-capture-1.m4a': "타 버려라.",
+  'vo/rakaeli-awake-capture-2.m4a': "구원은 없다.",
+  'vo/rakaeli-awake-death-1.m4a': "또… 떨어지는군.",
+  'vo/rakaeli-awake-end-1.m4a': "불이… 꺼져 가요.",
 };
 
 /** Character-specific sound effects per event. */
@@ -154,7 +183,7 @@ export const CHAR_SFX: Record<CharacterId, Partial<Record<CharAudioEvent, string
   brutile: { select: 'sfx/brutile-select.m4a', move: 'sfx/brutile-move.m4a', capture: 'sfx/brutile-capture.m4a', skill: 'sfx/brutile-skill.m4a' },
   michelle: { select: 'sfx/michelle-select.m4a', move: 'sfx/michelle-move.m4a', capture: 'sfx/michelle-capture.m4a', 'trap-set': 'sfx/michelle-trap-set.m4a', 'trap-sprung': 'sfx/michelle-trap-sprung.m4a' },
   picker: { select: 'sfx/picker-select.m4a', move: 'sfx/picker-move.m4a', capture: 'sfx/picker-capture.m4a', 'hop-multi': 'sfx/picker-hop-multi.m4a' },
-  rakaeli: {},
+  rakaeli: { select: 'sfx/rakaeli-select.m4a', move: 'sfx/rakaeli-move.m4a', capture: 'sfx/rakaeli-capture.m4a', skill: 'sfx/rakaeli-skill.m4a', 'awake-move': 'sfx/rakaeli-awake-move.m4a', 'awake-capture': 'sfx/rakaeli-awake-capture.m4a', 'awake-end': 'sfx/rakaeli-awake-end.m4a' },
 };
 
 /** Shared effects used when a character has no specific one. */

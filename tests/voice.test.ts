@@ -72,8 +72,12 @@ const sfxEvents = (c: CharacterId): CharAudioEvent[] => [
  * vo + sfx payload budget. Raised from 1.2 MiB to 1.5 MiB on 2026-11-04 (lead decision) when the roster
  * grew from 5 to 7 characters, so the budget per character stays about the same (0.24 -> 0.21 MiB). Measured
  * then: 1,424,699 bytes (vo 1,153,610 + sfx 271,089).
+ * Raised again to 1.75 MiB on 2026-11-04 for Rakaeli, the 8th character, who has two forms: 18 voice lines
+ * (twice a normal set; encoded at 48 kbps instead of 64 to keep them compact) and 7 effects, together
+ * 292,879 bytes (vo 236,571 + sfx 56,308), about 1.4x a one-form character. Measured: 1,717,578 bytes
+ * (vo 1,390,181 + sfx 327,397), 0.21 MiB per character; headroom 117,430 bytes.
  */
-const AUDIO_BUDGET_BYTES = 1.5 * 1024 * 1024;
+const AUDIO_BUDGET_BYTES = 1.75 * 1024 * 1024;
 
 function allFiles(): string[] {
   const out = new Set<string>();
@@ -139,7 +143,7 @@ describe('character audio manifest', () => {
     }
   });
 
-  it('keeps the whole audio payload under the budget (1.5 MiB for 7 characters)', async () => {
+  it('keeps the whole audio payload under the budget (1.75 MiB for 8 characters)', async () => {
     const { readdirSync, statSync } = await fsP;
     let total = 0;
     for (const sub of ['vo', 'sfx']) {

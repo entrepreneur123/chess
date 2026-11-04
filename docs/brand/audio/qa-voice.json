@@ -3105,7 +3105,8 @@
   "shimmer": 1.35,
   "hnr_db": 13.1,
   "female_p": 0.001,
-  "bytes": 17109
+  "bytes": 17109,
+  "female_p_ecapa": 0.003
  },
  "rakaeli-select-2": {
   "file": "vo/rakaeli-select-2.m4a",
@@ -3147,7 +3148,8 @@
   "shimmer": 1.35,
   "hnr_db": 10.2,
   "female_p": 0.001,
-  "bytes": 16053
+  "bytes": 16053,
+  "female_p_ecapa": 0.002
  },
  "rakaeli-move-1": {
   "file": "vo/rakaeli-move-1.m4a",
@@ -3189,7 +3191,8 @@
   "shimmer": 1.18,
   "hnr_db": 10.1,
   "female_p": 0.001,
-  "bytes": 16358
+  "bytes": 16358,
+  "female_p_ecapa": 0.003
  },
  "rakaeli-move-2": {
   "file": "vo/rakaeli-move-2.m4a",
@@ -3231,7 +3234,8 @@
   "shimmer": 1.56,
   "hnr_db": 4.9,
   "female_p": 0.001,
-  "bytes": 13924
+  "bytes": 13924,
+  "female_p_ecapa": 0.002
  },
  "rakaeli-capture-1": {
   "file": "vo/rakaeli-capture-1.m4a",
@@ -3273,7 +3277,8 @@
   "shimmer": 0.99,
   "hnr_db": 10.4,
   "female_p": 0.001,
-  "bytes": 16279
+  "bytes": 16279,
+  "female_p_ecapa": 0.008
  },
  "rakaeli-capture-2": {
   "file": "vo/rakaeli-capture-2.m4a",
@@ -3315,7 +3320,8 @@
   "shimmer": 1.22,
   "hnr_db": 8.2,
   "female_p": 0.001,
-  "bytes": 10557
+  "bytes": 10557,
+  "female_p_ecapa": 0.009
  },
  "rakaeli-capture-3": {
   "file": "vo/rakaeli-capture-3.m4a",
@@ -3357,7 +3363,8 @@
   "shimmer": 1.25,
   "hnr_db": 10.1,
   "female_p": 0.001,
-  "bytes": 10433
+  "bytes": 10433,
+  "female_p_ecapa": 0.004
  },
  "rakaeli-skill-1": {
   "file": "vo/rakaeli-skill-1.m4a",
@@ -3399,7 +3406,8 @@
   "shimmer": 1.12,
   "hnr_db": 9.9,
   "female_p": 0.001,
-  "bytes": 14819
+  "bytes": 14819,
+  "female_p_ecapa": 0.008
  },
  "rakaeli-death-1": {
   "file": "vo/rakaeli-death-1.m4a",
@@ -3441,7 +3449,8 @@
   "shimmer": 1.43,
   "hnr_db": 5.7,
   "female_p": 0.001,
-  "bytes": 15034
+  "bytes": 15034,
+  "female_p_ecapa": 0.003
  },
  "rakaeli-victory-1": {
   "file": "vo/rakaeli-victory-1.m4a",
@@ -3483,7 +3492,8 @@
   "shimmer": 1.2,
   "hnr_db": 11.0,
   "female_p": 0.013,
-  "bytes": 13665
+  "bytes": 13665,
+  "female_p_ecapa": 0.001
  },
  "rakaeli-awake-select-1": {
   "file": "vo/rakaeli-awake-select-1.m4a",
@@ -3525,7 +3535,8 @@
   "shimmer": 1.68,
   "hnr_db": 5.6,
   "female_p": 0.001,
-  "bytes": 13635
+  "bytes": 13635,
+  "female_p_ecapa": 0.001
  },
  "rakaeli-awake-select-2": {
   "file": "vo/rakaeli-awake-select-2.m4a",
@@ -3567,7 +3578,8 @@
   "shimmer": 1.42,
   "hnr_db": 3.5,
   "female_p": 0.001,
-  "bytes": 11840
+  "bytes": 11840,
+  "female_p_ecapa": 0.004
  },
  "rakaeli-awake-move-1": {
   "file": "vo/rakaeli-awake-move-1.m4a",
@@ -3609,49 +3621,51 @@
   "shimmer": 1.44,
   "hnr_db": 1.9,
   "female_p": 0.001,
-  "bytes": 11638
+  "bytes": 11638,
+  "female_p_ecapa": 0.002
  },
  "rakaeli-awake-move-2": {
   "file": "vo/rakaeli-awake-move-2.m4a",
   "character": "rakaeli",
   "event": "awake-move",
-  "text": "재를 밟고 간다.",
-  "ref": "재를 밟고 간다.",
+  "text": "불길 속을 걷는다.",
+  "ref": "불길 속을 걷는다.",
   "fx": "rakaeli-awake",
   "source": "",
   "voice": "",
-  "take": "awake-move-2_s11-4.wav",
+  "take": "awake-move-2_s11-0.wav",
   "takes": 8,
-  "take_asr": "쟤를 밟고 간다",
-  "take_cer": 0.167,
-  "take_f0": 139.6,
-  "asr": "쟤를 밟고 간다",
-  "cer": 0.167,
-  "dur": 1.835,
-  "lufs": -16.04,
-  "tp_db": -2.85,
-  "f0": 116.3,
-  "f0_p10": 91.4,
-  "f0_p90": 157.2,
-  "voiced": 0.72,
-  "f1": 784,
-  "f2": 2061,
-  "f3": 3258,
-  "centroid": 1455,
-  "harsh_db": -13.8,
-  "sib_db": -15.8,
-  "tail_db": -64.4,
-  "end_db": -120.9,
-  "lead_ms": 19,
-  "trail_ms": 206,
-  "hf_flat": 0.24,
-  "hiss_db": -57.4,
-  "jitter": 1.28,
+  "take_asr": "불길 속을 걷는다.",
+  "take_cer": 0.0,
+  "take_f0": 152.9,
+  "asr": "불길 속을 걷는다",
+  "cer": 0.0,
+  "dur": 1.963,
+  "lufs": -16.02,
+  "tp_db": -3.35,
+  "f0": 116.7,
+  "f0_p10": 73.7,
+  "f0_p90": 171.3,
+  "voiced": 0.75,
+  "f1": 707,
+  "f2": 1892,
+  "f3": 3248,
+  "centroid": 1285,
+  "harsh_db": -18.5,
+  "sib_db": -17.3,
+  "tail_db": -55.6,
+  "end_db": -102.9,
+  "lead_ms": 1,
+  "trail_ms": 132,
+  "hf_flat": 0.323,
+  "hiss_db": -55.7,
+  "jitter": 1.07,
   "warble": 0.11,
-  "shimmer": 1.74,
-  "hnr_db": 1.6,
+  "shimmer": 1.55,
+  "hnr_db": 6.0,
   "female_p": 0.001,
-  "bytes": 12226
+  "bytes": 13195,
+  "female_p_ecapa": 0.001
  },
  "rakaeli-awake-capture-1": {
   "file": "vo/rakaeli-awake-capture-1.m4a",
@@ -3693,7 +3707,8 @@
   "shimmer": 1.38,
   "hnr_db": 2.5,
   "female_p": 0.001,
-  "bytes": 8966
+  "bytes": 8966,
+  "female_p_ecapa": 0.007
  },
  "rakaeli-awake-capture-2": {
   "file": "vo/rakaeli-awake-capture-2.m4a",
@@ -3735,7 +3750,8 @@
   "shimmer": 1.53,
   "hnr_db": 0.7,
   "female_p": 0.001,
-  "bytes": 9947
+  "bytes": 9947,
+  "female_p_ecapa": 0.001
  },
  "rakaeli-awake-death-1": {
   "file": "vo/rakaeli-awake-death-1.m4a",
@@ -3777,7 +3793,8 @@
   "shimmer": 1.39,
   "hnr_db": 4.4,
   "female_p": 0.001,
-  "bytes": 11693
+  "bytes": 11693,
+  "female_p_ecapa": 0.002
  },
  "rakaeli-awake-end-1": {
   "file": "vo/rakaeli-awake-end-1.m4a",
@@ -3819,6 +3836,7 @@
   "shimmer": 1.41,
   "hnr_db": 7.1,
   "female_p": 0.001,
-  "bytes": 11426
+  "bytes": 11426,
+  "female_p_ecapa": 0.006
  }
 }
