@@ -1,5 +1,6 @@
 """
-GRID CLASH arena scores (original compositions, 2026). One function per arena returns a `Song`.
+GRID CLASH scores (original compositions, 2026): one function per arena, plus the lobby/home theme,
+returns a `Song`.
 
 Shared production family:
   - The "Clash" leitmotif (MOTIF below), a four-bar minor-mode phrase that every arena quotes on a
@@ -691,6 +692,167 @@ def apex() -> Song:
     return s
 
 
+# =============================================================================================
+# 7. lobby: F major, 104 BPM, 32 bars. The home base: warm, festive, a little playful. Not an
+#    arena: it is the one major-key track, the only one with a drum-kit backbeat (snare + claps on
+#    2 and 4), a bass-guitar line and marimba, so it is told apart from every battle loop at once.
+# =============================================================================================
+
+# The Clash leitmotif in a major, heroic variant: the same contour (1 - 5 - 6 | 5 - 4 - 3 |
+# 6 - 5 - 4 - 3 | 2) with a fanfare pickup on the tonic, over I | I | IV | V.
+MOTIF_MAJ = [
+    (0, 0, 0.75), (0.75, 0, 0.25), (1, 7, 1.0), (2, 9, 2.0),
+    (4, 7, 1.0), (5, 5, 1.0), (6, 4, 1.5), (7.5, 5, 0.5),
+    (8, 9, 1.5), (9.5, 7, 0.5), (10, 5, 1.0), (11, 4, 1.0),
+    (12, 2, 2.5), (14.5, 7, 0.5), (15, 7, 0.5), (15.5, 7, 0.5),
+]
+# Answer (over I | vi | IV | V): climbs to the upper tonic and ends on the leading tone (the 3rd of
+# V), which pulls into the next section's tonic.
+MOTIF_MAJ_B = [
+    (0, 0, 0.75), (0.75, 0, 0.25), (1, 7, 1.0), (2, 9, 2.0),
+    (4, 12, 1.0), (5, 14, 0.5), (5.5, 12, 0.5), (6, 9, 2.0),
+    (8, 5, 1.0), (9, 9, 0.5), (9.5, 12, 1.5), (11, 14, 1.0),
+    (12, 12, 1.0), (13, 14, 1.0), (14, 11, 2.0),
+]
+
+
+def lobby() -> Song:
+    s = Song('lobby', 104, 32, 'F major', hall_rt=2.3, seed=77)
+    A = ['F', 'F', 'Bb', 'C', 'F', 'Dm', 'Bb', 'C']
+    Bp = ['F', 'F', 'Bb', 'C', 'F', 'Dm', 'Bb', 'C']
+    C = ['Bb', 'C', 'Am', 'Dm', 'Gm', 'C', 'F', 'C']
+    D = ['F', 'Am', 'Bb', 'C', 'F', 'Dm', 'Gm', 'C']
+    prog = A + Bp + C + D
+
+    # Bouncy bass guitar: root, octave pops and the fifth, never a sustained drone.
+    bass = s.part('bass', 32, gens={GEN_VOLENVRELEASE: 300}, gain_db=-5, hall=0.08, room=0.15, hp=35, lp=2600)
+    bpat = [(0, 0, 0.45, 104), (1, 12, 0.3, 74), (1.5, 0, 0.4, 88), (2, 7, 0.45, 94), (3, 12, 0.3, 74), (3.5, 7, 0.35, 84)]
+    bassline(bass, A, 1, [x for x in bpat if x[0] in (0, 1.5, 2, 3.5)], 28)
+    bassline(bass, Bp + C + D, 9, bpat, 28)
+
+    # Marimba hook: syncopated chord-tone 8ths with rests, the "bounce" of the theme.
+    mar = s.part('marimba', 12, gain_db=-6, pan=0.25, width=1.2, hall=0.3, room=0.2, hp=180, lp=9000)
+    hook = [0, 3, -1, 2, 4, 3, -1, 1]
+    arp(mar, A + Bp, 1, hook, 0.5, 76, 60, dur=0.6, accent=12, seed=2)
+    arp(mar, C, 17, [0, -1, 2, 3, -1, 2, 4, -1], 0.5, 64, 60, dur=0.6, accent=8, seed=3)
+    arp(mar, D, 25, hook, 0.5, 80, 60, dur=0.6, accent=12, seed=4)
+
+    # Warm strings bed with smooth voice leading.
+    strings = s.part('strings', 48, gens={GEN_VOLENVATTACK: 1200, GEN_VOLENVRELEASE: 1300}, gain_db=-9, width=1.4, hall=0.4, hp=110, lp=7000)
+    pads(strings, prog, 1, 62, 55, 77, 4, seed=5)
+    strings.cc(0, 11, 92)
+    strings.ramp(B(17), B(18), 11, 92, 108)
+    strings.ramp(B(24, 2), B(25), 11, 108, 116)
+    strings.ramp(B(32, 2), B(33) - 0.125, 11, 116, 92)
+
+    # Brass: a tutti chord on the loop downbeat, anticipation stabs ("and" of 4), punches in C.
+    brass = s.part('brass', 61, gens={GEN_VOLENVRELEASE: 700, GEN_FILTERFC: -500}, gain_db=-6, pan=-0.1, width=1.3, hall=0.4, room=0.15, hp=120, lp=6500)
+    for bar in range(1, 33):
+        ch = prog[bar - 1]
+        nxt = prog[bar % 32]
+        vs = voice(None, ch, 58, 74, 4)
+        vn = voice(None, nxt, 58, 74, 4)
+        if bar in (1, 9, 17, 25):
+            brass.ch(B(bar), vs, 1.2, 100)
+        if 17 <= bar <= 24:
+            brass.ch(B(bar, 3), vs, 0.35, 82)
+            brass.ch(B(bar, 3.5), vn, 0.45, 90)
+        elif bar % 2 == 0 and bar != 32:
+            brass.ch(B(bar, 3.5), vn, 0.5, 86)
+    # Horns hold warm two-voice chords under the motif, then answer it in D.
+    horns = s.part('horns', 60, gens={GEN_VOLENVATTACK: 9600, GEN_VOLENVRELEASE: 1300}, gain_db=-8, pan=0.2, hall=0.5, hp=100, lp=5000)
+    pads(horns, Bp, 9, 70, 53, 65, 2, seed=6)
+    pads(horns, D, 25, 76, 53, 65, 2, seed=7)
+
+    # The leitmotif, major: trumpet over horns an octave down (B), then trumpets + brass tutti (D).
+    tpt = s.part('trumpet', 56, gens={GEN_VOLENVRELEASE: 800, GEN_FILTERFC: -700}, gain_db=-4, pan=0.05, hall=0.45, room=0.1, hp=180, lp=6500)
+    motif(tpt, 9, p('F4'), MOTIF_MAJ, vel=88, rng_seed=8)
+    motif(tpt, 13, p('F4'), MOTIF_MAJ_B, vel=92, rng_seed=9)
+    motif(tpt, 25, p('F4'), MOTIF_MAJ, vel=96, rng_seed=10)
+    motif(tpt, 29, p('F4'), MOTIF_MAJ_B, vel=100, rng_seed=11)
+    hlead = s.part('horn_lead', 60, gens={GEN_VOLENVRELEASE: 1100}, gain_db=-9, pan=-0.2, hall=0.5, hp=100, lp=5000)
+    motif(hlead, 9, p('F3'), MOTIF_MAJ, vel=80, rng_seed=12)
+    motif(hlead, 13, p('F3'), MOTIF_MAJ_B, vel=82, rng_seed=13)
+    tbn = s.part('trombones', 57, gens={GEN_VOLENVRELEASE: 700, GEN_FILTERFC: -500}, gain_db=-8, pan=0.25, hall=0.35, room=0.15, hp=70, lp=4500)
+    for i, ch in enumerate(D):
+        r = root_note(ch, 41)
+        tbn.ch(B(25 + i), [r, r + 7], 0.9, 92)
+        tbn.ch(B(25 + i, 1.5), [r, r + 7], 0.45, 76)
+        tbn.ch(B(25 + i, 2), [r + 7, r + 12], 0.9, 86)
+
+    # C: a new playful tune on flute, doubled an octave up on glockenspiel; brass punches answer.
+    tune = [
+        (17, 0, 'D5', 0.5), (17, 0.5, 'F5', 0.5), (17, 1, 'G5', 1.0), (17, 2, 'F5', 0.5), (17, 2.5, 'D5', 0.5), (17, 3, 'C5', 1.0),
+        (18, 0, 'E5', 0.5), (18, 0.5, 'G5', 0.5), (18, 1, 'C6', 1.0), (18, 2, 'Bb5', 0.5), (18, 2.5, 'G5', 0.5), (18, 3, 'E5', 1.0),
+        (19, 0, 'C5', 0.5), (19, 0.5, 'E5', 0.5), (19, 1, 'A5', 1.0), (19, 2, 'G5', 0.5), (19, 2.5, 'E5', 0.5), (19, 3, 'C5', 0.5), (19, 3.5, 'D5', 0.5),
+        (20, 0, 'F5', 1.5), (20, 1.5, 'E5', 0.5), (20, 2, 'D5', 1.0), (20, 3, 'A4', 1.0),
+        (21, 0, 'Bb4', 0.5), (21, 0.5, 'D5', 0.5), (21, 1, 'G5', 1.0), (21, 2, 'F5', 0.5), (21, 2.5, 'D5', 0.5), (21, 3, 'Bb4', 1.0),
+        (22, 0, 'C5', 0.5), (22, 0.5, 'E5', 0.5), (22, 1, 'G5', 1.0), (22, 2, 'Bb5', 0.5), (22, 2.5, 'A5', 0.5), (22, 3, 'G5', 1.0),
+        (23, 0, 'A5', 1.5), (23, 1.5, 'G5', 0.5), (23, 2, 'F5', 0.5), (23, 2.5, 'G5', 0.5), (23, 3, 'A5', 1.0),
+        (24, 0, 'G5', 2.0), (24, 2, 'E5', 0.5), (24, 2.5, 'F5', 0.5), (24, 3, 'G5', 1.0),
+    ]
+    flute = s.part('flute', 73, gens={GEN_VOLENVRELEASE: 600}, gain_db=-6, pan=-0.2, hall=0.45, hp=250, lp=9000)
+    glock = s.part('glock', 9, gain_db=-15, pan=0.3, hall=0.6, hp=900, lp=11000)
+    rng = random.Random(14)
+    for bar, beat, key, dur in tune:
+        v = 84 + (8 if beat == int(beat) else 0) + rng.randint(-5, 5)
+        flute.n(B(bar, beat), key, dur * 0.9, v)
+        if beat == int(beat):
+            glock.n(B(bar, beat), p(key) + 12, 1.0, 58)
+    for bar in range(25, 33):  # sparkle on the motif's downbeats in D
+        glock.n(B(bar), root_note(prog[bar - 1], 84) + 7, 1.5, 54)
+
+    # Drum kit (standard GM kit): the backbeat no arena has.
+    kit = s.part('kit', 0, drum=True, gain_db=-6, room=0.35, hall=0.12, hp=35, lp=9000)
+    claps = s.part('claps', 0, drum=True, gain_db=-12, room=0.4, hall=0.25, hp=300, lp=9000, width=1.3)
+    hats = s.part('hats', 0, drum=True, gain_db=-17, room=0.25, hall=0.1, hp=3000, lp=12000, pan=0.3)
+    tamb = s.part('tambourine', 0, drum=True, gain_db=-21, room=0.3, hall=0.2, hp=2500, lp=12000, pan=-0.35)
+    cym = s.part('cymbals', 0, drum=True, gain_db=-15, room=0.2, hall=0.45, hp=400, lp=11000, width=1.4)
+    for bar in range(1, 33):
+        sec = (bar - 1) // 8
+        kicks = [(0, 104), (2, 96)] if sec == 0 else [(0, 108), (1.5, 72), (2, 100), (2.5, 80)]
+        for beat, v in kicks:
+            kit.n(B(bar, beat), 36, 0.4, v)
+        last = bar % 8 == 0
+        for beat in (1, 3):
+            if bar == 32 and beat == 3:
+                continue
+            kit.n(B(bar, beat), 38, 0.4, 92 if sec else 84)
+            if sec >= 1:
+                claps.n(B(bar, beat), 39, 0.4, 88)
+        for k in range(8):
+            if bar == 32 and k >= 4:
+                break
+            hats.n(B(bar, k * 0.5), 42, 0.2, 66 if k % 2 else 50)
+        if sec >= 2:
+            hats.n(B(bar, 3.5), 46, 0.45, 70)
+            for k in range(16):
+                if bar == 32 and k >= 8:
+                    break
+                tamb.n(B(bar, k * 0.25), 54, 0.2, (78 if k % 4 == 0 else 52) + (10 if k in (4, 12) else 0))
+        if last and bar != 32:  # one-beat snare pickup into the next section
+            for k in range(4):
+                kit.n(B(bar, 3 + k * 0.25), 38, 0.2, 60 + k * 10)
+    for k in range(8):  # snare roll into the loop restart
+        kit.n(B(32, 2 + k * 0.25), 38, 0.2, 58 + k * 6)
+    for k in range(4):
+        claps.n(B(32, 3 + k * 0.25), 39, 0.2, 70 + k * 8)
+    for bar in (1, 9, 17, 25):
+        cym.n(B(bar), 49, 4, 96 if bar != 1 else 90)
+    cym.n(B(21), 57, 3, 70)
+
+    # Family core: taiko + sub boom under section downbeats, swells into each section.
+    boom = s.synth('boom', sub_boom, gain_db=-12, hall=0.04, lp=170)
+    tk = s.part('taiko', 116, gain_db=-9, room=0.35, hall=0.25, hp=35, lp=5000)
+    for bar in (1, 9, 17, 25):
+        taiko_hits(tk, boom, bar, [(0, 'F2', 108)], boom_vel=0.8)
+    taiko_hits(tk, boom, 32, [(3, 'C2', 84), (3.5, 'C2', 96)], boom_vel=0.6)
+    sw = s.synth('swell', swell, gain_db=-14, hall=0.5)
+    sw.hit(B(9), 1.8, 0.7).hit(B(17), 1.8, 0.7).hit(B(25), 2.0, 0.8).hit(B(33), 2.0, 0.7)
+    s.synth('sun_air', wind_bed(700, 6000, seed=91, cycles=4), periodic=True, gain_db=-24, hall=0.4, hp=600)
+    return s
+
+
 SONGS = {
     'moonrune': moonrune,
     'emberforge': emberforge,
@@ -698,4 +860,5 @@ SONGS = {
     'frostkeep': frostkeep,
     'madcrown': madcrown,
     'apex': apex,
+    'lobby': lobby,
 }
