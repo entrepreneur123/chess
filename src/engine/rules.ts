@@ -134,9 +134,9 @@ export function hopPath(from: Pos, to: Pos): Pos[] {
 }
 
 /**
- * Enemies a piece of `owner` hops onto on the way from `from` to `to`. Only a hop-through
- * (Picker's pattern) can reach a diagonal square past pieces, so for any LEGAL move of a piece that
- * can hop these are exactly the pieces it captures before landing.
+ * Enemies a piece of `owner` hops onto on the way from `from` to `to`. Only a hop-through (a real
+ * Picker: an absorbed Picker pattern slides) can reach a diagonal square past pieces, so for any
+ * LEGAL move of a Picker these are exactly the pieces it captures before landing.
  */
 function hopVictims(pieces: Piece[], occ: Int8Array, owner: PlayerId, from: Pos, to: Pos): string[] {
   const out: string[] = [];
@@ -222,7 +222,8 @@ function countTargets(occ: Int8Array, owners: Uint8Array, piece: Piece, storm: n
 
 function targetsWith(pieces: Piece[], occ: Int8Array, owners: Uint8Array, piece: Piece, storm: number, waste: Uint8Array | null, traps: Uint8Array | null): Move[] {
   const n = countTargets(occ, owners, piece, storm, waste, traps);
-  const hopper = canHop(CHAR_CODE[piece.character], absorbMaskOf(piece.absorbed));
+  // Only a real Picker hops through (an Insaner's absorbed Picker pattern is a plain slide).
+  const hopper = canHop(CHAR_CODE[piece.character]);
   const moves: Move[] = [];
   for (let i = 0; i < n; i++) {
     const s = tmpTargets[i];
@@ -352,14 +353,15 @@ function switchTurn(state: GameState, entry: HistoryEntry, pliesSinceCapture: nu
       const storm = next.storm + 1;
       const killed: string[] = [];
       const pieces = next.pieces.filter((p) => {
-        if (!inStorm(p.pos.c, storm)) return true;
+        if (!inStorm(p.pos.r, p.pos.c, storm)) return true;
         killed.push(p.id);
         return false;
       });
       next = { ...next, storm, stormIn: STORM_INTERVAL_PLIES, pieces, history: [...next.history, { kind: 'storm', storm, killed }] };
       const left0 = countPieces(pieces, 0);
       const left1 = countPieces(pieces, 1);
-      // The storm swallowed the last pieces of BOTH sides at once: decided by what was lost.
+      // The storm (columns, and rows from step 3) swallowed the last pieces of BOTH sides at once:
+      // decided by what was lost.
       if (left0 === 0 && left1 === 0) {
         const gone = state.pieces.filter((p) => killed.includes(p.id));
         return end(next, adjudicate({ ...next, pieces: gone }), 'storm');
@@ -582,7 +584,7 @@ function sideCanCast(state: GameState, player: PlayerId, ignoreStun = false): bo
 
 /**
  * Valid anchors for `pieceId`'s skill: for Brutile's wasteland every corner whose whole area is on
- * the board and free of pieces; for Rakaeli's transform his own square only.
+ * the board, free of pieces and out of the storm; for Rakaeli's transform his own square only.
  */
 export function skillAnchors(state: GameState, pieceId: string): Pos[] {
   if (skillBlock(state, pieceId) !== null) return [];
@@ -595,6 +597,8 @@ function freeAnchors(state: GameState, level: number): Pos[] {
   const k = WASTE_SIZE[level];
   const occupied = new Uint8Array(N_SQUARES);
   for (const q of state.pieces) occupied[sqOf(q.pos)] = 1;
+  // Storm squares are never a target (skills are forbidden once it closes in: a safety net).
+  if (state.storm > 0) for (let s = 0; s < N_SQUARES; s++) if (inStorm((s / BOARD_SIZE) | 0, s % BOARD_SIZE, state.storm)) occupied[s] = 1;
   const out: Pos[] = [];
   for (let r = 0; r + k <= BOARD_SIZE; r++) {
     for (let c = 0; c + k <= BOARD_SIZE; c++) {

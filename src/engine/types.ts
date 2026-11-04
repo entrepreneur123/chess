@@ -29,15 +29,16 @@ export const TURN_TIME_1_MS = 20_000;
  */
 export const MAX_CONSECUTIVE_TIMEOUTS = 1;
 /**
- * Storm ("자기장"): once active, every STORM_INTERVAL_PLIES turn changes (3 moves each) the
- * outermost left AND right columns become storm. A piece standing in a storm column is removed at
+ * Storm ("자기장"): once active, every STORM_INTERVAL_PLIES turn changes (2 moves each) the
+ * outermost left AND right columns become storm; from step STORM_ROWS_FROM on the outermost top AND
+ * bottom rows close in too (see `stormRows`). A piece standing on a storm square is removed at
  * once; nothing may move into or through the storm.
  */
-export const STORM_INTERVAL_PLIES = 6;
+export const STORM_INTERVAL_PLIES = 4;
 /**
  * Sudden death: the storm activates when either side is down to its last piece, or on its own once
  * this many plies were played: at the start of turn 20 (`turnNumber`: turn 20 starts at ply 38,
- * after 19 turns each). From then on it closes in every STORM_INTERVAL_PLIES = 6 plies = 3 turns.
+ * after 19 turns each). From then on it closes in every STORM_INTERVAL_PLIES = 4 plies = 2 turns.
  */
 export const SUDDEN_DEATH_PLY = 38;
 /**
@@ -46,9 +47,18 @@ export const SUDDEN_DEATH_PLY = 38;
  */
 export const STORM_FULL_STEPS = Math.ceil(BOARD_SIZE / 2);
 /**
+ * From this storm step on (3 columns per side), the storm also closes in from the top and bottom:
+ * one row on each end at step 3, one more per later step (`stormRows`).
+ */
+export const STORM_ROWS_FROM = 3;
+/** Rows swallowed at EACH end (top and bottom) by a storm of `storm` columns per side. */
+export function stormRows(storm: number): number {
+  return storm >= STORM_ROWS_FROM ? storm - STORM_ROWS_FROM + 1 : 0;
+}
+/**
  * Upper bound on the turn changes of a match: the storm starts at SUDDEN_DEATH_PLY at the latest
  * and swallows the board STORM_FULL_STEPS * STORM_INTERVAL_PLIES turn changes later, so
- * 38 + 5 * 6 = 68 plies (34 turns each). Only a level-3 Insaner's chain moves (an extra ply that is
+ * 38 + 5 * 4 = 58 plies (29 turns each). Only a level-3 Insaner's chain moves (an extra ply that is
  * not a turn change) can push `GameState.ply` past it, by one ply per chain move.
  */
 export const MAX_MATCH_PLIES = SUDDEN_DEATH_PLY + STORM_FULL_STEPS * STORM_INTERVAL_PLIES;
@@ -109,7 +119,9 @@ export interface Piece {
   dir?: 1 | -1;
   /**
    * Movement abilities absorbed from captured enemies (Insaner only). The piece moves with the
-   * union of its own pattern and every absorbed pattern. Absent or empty for everyone else.
+   * union of its own pattern and every absorbed pattern's RANGE, never the victim's traits or
+   * skills: an absorbed Picker pattern is a plain diagonal slide (no hop-through), Michelle's traps,
+   * Brutile's wasteland and Rakaeli's transform stay with them. Absent or empty for everyone else.
    */
   absorbed?: AbsorbedAbility[];
   /**
@@ -161,7 +173,8 @@ export interface Move {
   /** Set on recorded moves: `to` was wasteland, so the mover was destroyed there. */
   wasted?: true;
   /**
-   * Picker's hop-through: every enemy captured by this move in path order (the ones hopped onto on
+   * Picker's hop-through (a real Picker only, never an Insaner that absorbed his pattern): every
+   * enemy captured by this move in path order (the ones hopped onto on
    * the way, then the one on `to`). Only set when something was captured on the way; `captureId`
    * is then the piece on `to`, or the first piece hopped onto when `to` was empty, so `captureId`
    * stays the "is this a capture" flag for every consumer. See `capturedIds`.
@@ -204,7 +217,7 @@ export type PassReason =
 export type HistoryEntry =
   | { kind: 'move'; player: PlayerId; move: Move }
   | { kind: 'pass'; player: PlayerId; reason: PassReason }
-  /** The storm advanced to `storm` columns per side and removed the listed pieces. */
+  /** The storm advanced to step `storm` (columns per side, rows via `stormRows`) and removed the listed pieces. */
   | { kind: 'storm'; storm: number; killed: string[] }
   /**
    * `pieceId` (Brutile) laid wasteland on `squares` (square indices r * BOARD_SIZE + c), or
@@ -227,7 +240,10 @@ export interface GameState {
    * piece (one extra move per turn). Null when no chain move is pending.
    */
   bonusPieceId: string | null;
-  /** Columns swallowed by the storm on each side (0 = none; 2 = columns 0,1 and 8,9 are gone on 10 columns). */
+  /**
+   * Storm step: columns swallowed on each side (0 = none; 2 = columns 0,1 and 8,9 are gone on 10
+   * columns). From step STORM_ROWS_FROM the top and bottom rows go too: `stormRows(storm)` per end.
+   */
   storm: number;
   /**
    * Turn changes until the storm advances next; null while the storm is not active yet. The storm

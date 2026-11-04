@@ -1,4 +1,4 @@
-import { BOARD_SIZE, ZONE_DEPTH } from './types';
+import { BOARD_SIZE, ZONE_DEPTH, stormRows } from './types';
 import type { PlayerId, Pos } from './types';
 import {
   CH_BRUTILE,
@@ -65,9 +65,16 @@ export function posOf(sq: number): Pos {
   return { r, c: sq - r * BOARD_SIZE };
 }
 
-/** True when column `c` is swallowed by a storm of `storm` columns per side. */
-export function inStorm(c: number, storm: number): boolean {
-  return c < storm || c >= BOARD_SIZE - storm;
+/**
+ * True when square (r, c) is swallowed by a storm at step `storm`: the outer `storm` columns on
+ * each side and, from step STORM_ROWS_FROM, the outer `stormRows(storm)` rows at the top and bottom.
+ * The open area is always a rectangle, so a straight path between two open squares stays open.
+ */
+export function inStorm(r: number, c: number, storm: number): boolean {
+  if (storm <= 0) return false;
+  if (c < storm || c >= BOARD_SIZE - storm) return true;
+  const rows = stormRows(storm);
+  return r < rows || r >= BOARD_SIZE - rows;
 }
 
 const ORTHO_DIRS = [1, 0, -1, 0, 0, 1, 0, -1];
@@ -93,7 +100,11 @@ export function trapBit(owner: number): number {
   return owner === 0 ? 1 : 2;
 }
 
-/** True when a forward-only mover standing on row `r` with direction `dir` has no row ahead: it turns around. */
+/**
+ * True when a forward-only mover standing on row `r` with direction `dir` has no row ahead: it turns
+ * around. Only the real board edge counts: storm rows are NOT an edge, so a piece facing them can
+ * never reach a turn row and stays facing the storm.
+ */
 export function atTurnRow(r: number, dir: number): boolean {
   const next = r + dir;
   return next < 0 || next >= BOARD_SIZE;
@@ -125,7 +136,7 @@ function slide(
     for (let k = 0; k < L; k++) {
       nr += dr;
       nc += dc;
-      if (nr < 0 || nr >= BOARD_SIZE || nc < 0 || nc >= BOARD_SIZE || inStorm(nc, storm)) break;
+      if (nr < 0 || nr >= BOARD_SIZE || nc < 0 || nc >= BOARD_SIZE || inStorm(nr, nc, storm)) break;
       const s = nr * BOARD_SIZE + nc;
       const o = occ[s];
       if (o < 0) {
@@ -170,7 +181,7 @@ function hop(
     for (let k = 0; k < L; k++) {
       nr += dr;
       nc += dc;
-      if (nr < 0 || nr >= BOARD_SIZE || nc < 0 || nc >= BOARD_SIZE || inStorm(nc, storm)) break;
+      if (nr < 0 || nr >= BOARD_SIZE || nc < 0 || nc >= BOARD_SIZE || inStorm(nr, nc, storm)) break;
       const s = nr * BOARD_SIZE + nc;
       const o = occ[s];
       if (o < 0 || includeAllies || owners[o] !== owner) out[n++] = s;
@@ -209,7 +220,7 @@ function jumpBlock(
     if (nr < 0 || nr >= BOARD_SIZE) break;
     const base = nr * BOARD_SIZE;
     for (let nc = c0; nc <= c1; nc++) {
-      if (inStorm(nc, storm)) continue;
+      if (inStorm(nr, nc, storm)) continue;
       const s = base + nc;
       const o = occ[s];
       if (o < 0 || includeAllies || owners[o] !== owner) out[n++] = s;
@@ -217,7 +228,7 @@ function jumpBlock(
   }
   if (back) {
     const nr = r - dir;
-    if (nr >= 0 && nr < BOARD_SIZE && !inStorm(c, storm)) {
+    if (nr >= 0 && nr < BOARD_SIZE && !inStorm(nr, c, storm)) {
       const s = nr * BOARD_SIZE + c;
       const o = occ[s];
       if (o < 0 || includeAllies || owners[o] !== owner) out[n++] = s;
@@ -226,9 +237,12 @@ function jumpBlock(
   return n;
 }
 
-/** True when `absorb` (or the character itself) carries Picker's hop-through pattern. */
-export function canHop(ch: number, absorb: number): boolean {
-  return ch === CH_PICKER || (absorb & (0b111 << (CH_PICKER * 3))) !== 0;
+/**
+ * True when a piece of character code `ch` hops through (Picker's trait "콩콩"). Only a real Picker
+ * does: an Insaner that absorbed Picker's pattern gets its diagonal RANGE as a plain slide.
+ */
+export function canHop(ch: number): boolean {
+  return ch === CH_PICKER;
 }
 
 /** One movement pattern (a character at a level) from square (r, c). */
@@ -276,7 +290,7 @@ function genPattern(
     let nr = r;
     for (let k = 0; k < L; k++) {
       nr += dr;
-      if (nr < 0 || nr >= BOARD_SIZE) break;
+      if (nr < 0 || nr >= BOARD_SIZE || inStorm(nr, c, storm)) break;
       const s = nr * BOARD_SIZE + c;
       const o = occ[s];
       if (o < 0) {
@@ -299,7 +313,7 @@ function genPattern(
   const c1 = c + w >= BOARD_SIZE ? BOARD_SIZE - 1 : c + w;
   const base = nr * BOARD_SIZE;
   for (let nc = c0; nc <= c1; nc++) {
-    if (inStorm(nc, storm)) continue;
+    if (inStorm(nr, nc, storm)) continue;
     const s = base + nc;
     const o = occ[s];
     if (o < 0 || includeAllies || owners[o] !== owner) out[n++] = s;
@@ -318,10 +332,11 @@ let stamp = 0;
  * @param owners  owner of each piece index
  * @param includeAllies if true, squares occupied by allies are also emitted (attack/defence maps)
  * @param dir     forward direction of this piece (+1 toward r = BOARD_SIZE - 1); defaults to the owner's base direction
- * @param storm   columns swallowed by the storm per side (blocked squares)
- * @param absorb  bitmask of absorbed (character, level) patterns, see `abilityBit`
+ * @param storm   storm step (blocked squares, see `inStorm`: outer columns, from step 3 outer rows too)
+ * @param absorb  bitmask of absorbed (character, level) patterns, see `abilityBit`: their movement
+ *                range only (Picker's absorbed pattern slides, it does not hop)
  * @param waste   optional length-N_SQUARES wasteland flags: slides end ON a wasteland square
- * @param traps   optional length-N_SQUARES doll-trap masks (see `trapBit`): Picker's hop stops on an enemy trap
+ * @param traps   optional length-N_SQUARES doll-trap masks (see `trapBit`): a real Picker's hop stops on an enemy trap
  * @param awake   the piece is transformed (Rakaeli's "타천", `Piece.awaken` > 0): its OWN pattern is
  *                the transformed one. Absorbed patterns are always base patterns.
  * @returns new write offset into `out`
@@ -358,7 +373,12 @@ export function genTargets(
     const alvl = (bit % 3) + 1;
     if (ach === ch && alvl === level) continue;
     const from = n;
-    n = genPattern(occ, owners, owner, ach, alvl, r, c, out, n, includeAllies, dir, storm, waste, traps, false);
+    // Only the movement RANGE is absorbed, never a trait: Picker's pattern becomes a plain diagonal
+    // slide (blocked by pieces, captures on the landing square only, ends on wasteland).
+    n =
+      ach === CH_PICKER
+        ? slide(occ, owners, owner, r, c, DIAG_DIRS, PICKER_RANGE[alvl], out, n, includeAllies, storm, waste)
+        : genPattern(occ, owners, owner, ach, alvl, r, c, out, n, includeAllies, dir, storm, waste, traps, false);
     // Compact: drop squares already emitted.
     let w = from;
     for (let k = from; k < n; k++) {

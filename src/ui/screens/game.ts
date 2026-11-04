@@ -8,6 +8,7 @@ import {
   BOARD_SIZE,
   CHARACTERS,
   SKILL_UNLOCK_PLY,
+  STORM_ROWS_FROM,
   WASTE_SIZE,
   capturedIds,
   createGame,
@@ -54,7 +55,7 @@ import { Disposables, h, replaceChildren } from '../dom';
 import { icon } from '../icons';
 import type { Router, Screen } from '../router';
 import { BOT, GameController, HUMAN, type ControllerSnapshot, type Phase } from '../game/GameController';
-import { CRITICAL_MS, createRoster, endReasonText, setText, TimerRing, turnPillContent } from '../game/hud';
+import { CRITICAL_MS, createRoster, endReasonText, setText, stormStatusText, TimerRing, turnPillContent } from '../game/hud';
 import { createFieldPanel } from '../game/fieldPanel';
 import { createHand, handModel, selectFromHand } from '../game/hand';
 import { CUTIN_MS, cutInEl, preloadCutIns } from '../game/cutin';
@@ -191,9 +192,11 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       1000,
     );
   };
-  const showStormFx = (killed: number) => {
+  /** `rowsNow`: this shrink is the first that also closes the top and bottom rows. */
+  const showStormFx = (killed: number, rowsNow = false) => {
     spawnFx(h('div', { class: 'storm-flash' }), 700);
-    spawnFx(h('div', { class: 'float-text float-text--storm' }, killed > 0 ? `자기장 축소 · ${killed}개 소멸` : '자기장 축소!'), 1300);
+    const head = rowsNow ? '위아래도 자기장!' : '자기장 축소';
+    spawnFx(h('div', { class: 'float-text float-text--storm' }, killed > 0 ? `${head} · ${killed}개 소멸` : rowsNow ? head : '자기장 축소!'), 1300);
     boardWrap.classList.remove('is-shake');
     void boardWrap.offsetWidth;
     boardWrap.classList.add('is-shake');
@@ -693,7 +696,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     if (s.stormIn !== null) {
       const inTurns = pliesToTurns(s.stormIn);
       const skillLeft = s.storm === 0 && s.pieces.some((p) => CHARACTERS[p.character].skill && !p.skillUsed);
-      setText(stormText, s.storm > 0 ? `자기장 · 좌우 ${s.storm}줄 소멸 · ${inTurns}턴 후 축소` : `자기장 활성 · ${inTurns}턴 후 축소${skillLeft ? ' · 이후 스킬 금지' : ''}`);
+      setText(stormText, `${stormStatusText(s.storm, inTurns)}${s.storm === 0 && skillLeft ? ' · 이후 스킬 금지' : ''}`);
       stormChip.classList.toggle('is-soon', inTurns <= 1);
     } else if (sd !== null && sdSoon) {
       setText(stormText, sd > 0 ? `${sd}턴 후 자기장 발동 · 좌우부터 좁혀와요` : '이번 턴부터 자기장 발동');
@@ -1116,9 +1119,9 @@ export function gameScreen(router: Router, params: GameParams): Screen {
             if (e.player === HUMAN) haptic('win');
           } else if (e.type === 'absorb') {
             const who = e.player === HUMAN ? '내 인세이너가' : '상대 인세이너가';
-            toast(`${who} ${CHARACTERS[e.character].nameKo}의 이동 능력을 흡수했어요`, { tone: e.player === HUMAN ? 'success' : 'warn', duration: 2400 });
+            toast(`${who} ${CHARACTERS[e.character].nameKo}의 이동 범위를 흡수했어요`, { tone: e.player === HUMAN ? 'success' : 'warn', duration: 2400 });
           } else if (e.type === 'storm') {
-            showStormFx(e.killed.length);
+            showStormFx(e.killed.length, e.storm === STORM_ROWS_FROM);
             // Pieces swallowed by the storm: their death sound, and one last word from the first.
             const gone = e.lost;
             gone.forEach((p) => playCharSfx(p.character, deathEvent(p)));

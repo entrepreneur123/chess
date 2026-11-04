@@ -12,6 +12,7 @@ import { movementDiagram, rarityChip, starsOf, unitArt } from '../components/pie
 import { overlayRoot, pushOverlay, registerForceClose } from '../components/overlay';
 import { h, replaceChildren } from '../dom';
 import { dirChip, setArrow } from './hand';
+import { stormStatusText } from './hud';
 import { icon } from '../icons';
 
 /** Column letters, one per board column (A..J on 10 columns). */
@@ -53,7 +54,7 @@ function miniMap(s: GameState, focus: string | null, onPick: (id: string) => voi
     for (let c = 0; c < BOARD_SIZE; c++) {
       const p = byPos.get(r * BOARD_SIZE + c);
       const trap = (s.traps ?? []).find((t) => t.sq === r * BOARD_SIZE + c);
-      const cls = `fmap__cell${(r + c) % 2 === 0 ? ' is-dark' : ''}${inStorm(c, s.storm) ? ' is-storm' : ''}${s.waste.includes(r * BOARD_SIZE + c) ? ' is-waste' : ''}${trap ? ` is-trap trap-${trap.owner}` : ''}${r < ZONE_DEPTH ? ' is-home-0' : r >= BOARD_SIZE - ZONE_DEPTH ? ' is-home-1' : ''}`;
+      const cls = `fmap__cell${(r + c) % 2 === 0 ? ' is-dark' : ''}${inStorm(r, c, s.storm) ? ' is-storm' : ''}${s.waste.includes(r * BOARD_SIZE + c) ? ' is-waste' : ''}${trap ? ` is-trap trap-${trap.owner}` : ''}${r < ZONE_DEPTH ? ' is-home-0' : r >= BOARD_SIZE - ZONE_DEPTH ? ' is-home-1' : ''}`;
       if (p) {
         grid.appendChild(
           h(
@@ -190,7 +191,7 @@ export function createFieldPanel(opts: FieldPanelOptions): FieldPanel {
         render(s, true);
         body?.querySelector(`[data-piece="${id}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       }),
-      s.stormIn !== null ? h('p', { class: 'fpanel__storm' }, icon('bolt', 14), s.storm > 0 ? `자기장: 좌우 ${s.storm}줄 소멸 · ${Math.ceil(s.stormIn / 2)}턴 후 축소` : `자기장 활성 · ${Math.ceil(s.stormIn / 2)}턴 후 축소`) : null,
+      s.stormIn !== null ? h('p', { class: 'fpanel__storm' }, icon('bolt', 14), stormStatusText(s.storm, Math.ceil(s.stormIn / 2))) : null,
       list(1),
       list(0),
     );

@@ -259,16 +259,14 @@ describe('storm', () => {
     expect(b.storm).toBe(0);
   });
 
-  it('advances every 6 turn changes, removes pieces in the new columns and blocks moves into the storm', () => {
+  it('advances every 4 turn changes, removes pieces in the new columns and blocks moves into the storm', () => {
     let s = endgame();
     s = { ...s, stormIn: STORM_INTERVAL_PLIES };
-    // Walk the red marki to the edge column 0 (it stays there) and shuffle the sads for 6 plies.
+    // Walk the red marki to the edge column 0 (it stays there) and shuffle the sads for 4 plies.
     const seq: [string, number, number][] = [
       ['p0-sad', 5, 6],
       ['p1-sad', 8, 7],
       ['p0-sad', 5, 5],
-      ['p1-sad', 8, 8],
-      ['p0-sad', 5, 6],
       ['p1-marki', 8, 0],
     ];
     for (const [id, r, c] of seq) {
@@ -283,7 +281,7 @@ describe('storm', () => {
     expect(s.status).toBe('playing');
     // Columns 0 and 9 are gone: nothing may enter them.
     s = applyMove(s, mv(s, 'p0-sad', 5, 3));
-    s = applyMove(s, mv(s, 'p1-sad', 8, 7));
+    s = applyMove(s, mv(s, 'p1-sad', 8, 6));
     expect(targetKeys(getLegalMoves(s, 'p0-sad'))).not.toContain('5,0');
     expect(targetKeys(getLegalMoves(s, 'p0-sad'))).toContain('5,1');
     s = applyMove(s, mv(s, 'p0-sad', 5, 1));

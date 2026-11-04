@@ -1,10 +1,22 @@
 /** DOM pieces of the in-game HUD (player bars, timer ring, turn pill, end-reason copy). */
-import { CHARACTERS, isDirectional, screenArrow, type EndReason, type FormationSlot, type GameState, type PlayerId } from '../../engine';
+import { CHARACTERS, isDirectional, screenArrow, stormRows, type EndReason, type FormationSlot, type GameState, type PlayerId } from '../../engine';
 import { PACING } from '../../meta/economy';
 import { pieceToken } from '../components/piece';
 import { h } from '../dom';
 import type { ControllerSnapshot } from './GameController';
 import { dirChip, setArrow } from './hand';
+
+/**
+ * Storm status once it is active (HUD chip and field panel): what it has swallowed and when it
+ * shrinks next, e.g. '자기장 · 좌우 3줄 · 위아래 1줄 소멸 · 2턴 후 축소'. Before the first shrink:
+ * '자기장 활성 · 2턴 후 축소'. The shrink that first brings in the rows says so ('위아래도 축소').
+ */
+export function stormStatusText(storm: number, inTurns: number): string {
+  if (storm <= 0) return `자기장 활성 · ${inTurns}턴 후 축소`;
+  const rows = stormRows(storm);
+  const gone = rows > 0 ? `좌우 ${storm}줄 · 위아래 ${rows}줄 소멸` : `좌우 ${storm}줄 소멸`;
+  return `자기장 · ${gone} · ${inTurns}턴 후 ${rows === 0 && stormRows(storm + 1) > 0 ? '위아래도 축소' : '축소'}`;
+}
 
 const RING_R = 18;
 /** Last seconds of a turn: running out is an immediate forfeit, so the ring pulses red. */

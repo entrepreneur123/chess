@@ -67,6 +67,20 @@ function basePieces(): Piece[] {
   ];
 }
 
+/** Storm scene pieces: both teams spread over the middle (the storm scene drops those in the storm). */
+function stormPieces(): Piece[] {
+  return [
+    P('p0-sad', 0, 'sad', 2, 3, 4),
+    P('p0-marki', 0, 'marki', 2, 2, 5),
+    P('p0-brutile', 0, 'brutile', 3, 4, 6),
+    P('p0-insaner', 0, 'insaner', 3, 1, 3),
+    P('p1-sad', 1, 'sad', 3, 6, 5),
+    P('p1-walk', 1, 'walk', 2, 7, 4),
+    P('p1-picker', 1, 'picker', 2, 5, 3),
+    P('p1-michelle', 1, 'michelle', 1, 8, 6),
+  ];
+}
+
 /**
  * Rakaeli scene: p0 Rakaeli (Lv3) at (3, 4) with `awaken` (undefined = base form), an enemy Rakaeli
  * (Lv2, transformed with `enemyAwaken`) at (6, 6), a stunned walk and a few others around.
@@ -286,6 +300,37 @@ const lab = {
       });
     impacts = 0;
     (window as unknown as { moveDone: unknown }).moveDone = view.animateMove(move, after).then(() => 'done');
+  },
+  /**
+   * Storm scene at `step` (columns per side; rows from step 3) with `nextIn` plies to the next
+   * shrink: the open-area pieces of `stormPieces`, plus (with `closing`) a piece on each square that
+   * this step swallowed, removed right after so they dissolve like the game's storm kills.
+   */
+  storm(step: number, nextIn: number | null = 2, closing = false): void {
+    impacts = 0;
+    const rows = step >= 3 ? step - 2 : 0;
+    const open = (r: number, c: number): boolean => c >= step && c < BOARD_SIZE - step && r >= rows && r < BOARD_SIZE - rows;
+    const keep = stormPieces().filter((p) => open(p.pos.r, p.pos.c));
+    view.setWaste?.([]);
+    view.setHighlights({});
+    if (closing && step > 0) {
+      // Pieces standing on the band this step closes (the previous step's open edge).
+      const prevRows = step - 1 >= 3 ? step - 3 : 0;
+      const prevOpen = (r: number, c: number): boolean => c >= step - 1 && c < BOARD_SIZE - step + 1 && r >= prevRows && r < BOARD_SIZE - prevRows;
+      const doomed = [
+        P('p0-doom-a', 0, 'sad', 2, Math.max(prevRows, 3), step - 1),
+        P('p1-doom-b', 1, 'marki', 1, BOARD_SIZE - 1 - prevRows, 5),
+        P('p0-doom-c', 0, 'walk', 1, prevRows, 4),
+      ].filter((p) => prevOpen(p.pos.r, p.pos.c) && !open(p.pos.r, p.pos.c));
+      view.setStorm?.(step - 1, 1);
+      view.setPieces([...keep, ...doomed]);
+      view.setStorm?.(step, nextIn);
+      view.setPieces(keep);
+    } else {
+      view.setStorm?.(step, nextIn);
+      view.setPieces(keep);
+    }
+    log(`${mode} storm step=${step} next=${nextIn} closing=${closing}`);
   },
   sleep,
   step,

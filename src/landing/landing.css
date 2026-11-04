@@ -1013,8 +1013,8 @@ p {
   opacity: 0.75;
   box-shadow: inset 0 0 0 1px rgba(255, 138, 128, 0.6);
 }
-.storm-board i.is-zone:nth-child(12n + 1),
-.storm-board i.is-zone:nth-child(12n) {
+.storm-board i.is-zone:nth-child(10n + 1),
+.storm-board i.is-zone:nth-child(10n) {
   opacity: 0.95;
 }
 .storm-board i.is-blue {

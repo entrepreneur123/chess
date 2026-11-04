@@ -41,7 +41,7 @@ import { GameController, type ControllerEvent, type ControllerPorts } from '../s
 import { handModel, skillReadiness } from '../src/ui/game/hand';
 import { movementSpan } from '../src/ui/components/piece';
 import { chainPlies, keys, makeState, rngFrom, targetKeys } from './helpers';
-import { MAX_MATCH_PLIES } from '../src/engine';
+import { MAX_MATCH_PLIES, STORM_ROWS_FROM } from '../src/engine';
 
 const R = 'p0-rakaeli';
 const reach = (s: GameState, id = R) => targetKeys(getTargetsForPiece(s, s.pieces.find((p) => p.id === id)!));
@@ -332,6 +332,7 @@ describe('FastBoard parity with the engine (Rakaeli)', () => {
     let casts = 0;
     let awakeMoves = 0;
     let reverts = 0;
+    let rowStorm = 0;
     for (let g = 0; g < 50; g++) {
       let s = createGame(randomFormation(rng, randLv(rng), SQUADS[g % SQUADS.length]), randomFormation(rng, randLv(rng), SQUADS[(g + 2) % SQUADS.length]), (g % 2) as 0 | 1);
       for (let ply = 0; ply < 120 && s.status === 'playing'; ply++) {
@@ -341,6 +342,7 @@ describe('FastBoard parity with the engine (Rakaeli)', () => {
         expect(Array.from(buf.subarray(0, n)).map((m) => `${b.ids[(m >> 8) & 255]}>${m & 255}`).sort()).toEqual(legal.map((m) => `${m.pieceId}>${m.to.r * BOARD_SIZE + m.to.c}`).sort());
         const before = fastSig(b);
         expect(before).toBe(sig(s));
+        if (s.storm >= STORM_ROWS_FROM) rowStorm++; // storm rows are on the board
         for (let k = 0; k < n; k++) {
           const eng = applyMove(s, fastMoveToMove(b, buf[k]));
           const undo = fastMake(b, buf[k]);
@@ -384,6 +386,8 @@ describe('FastBoard parity with the engine (Rakaeli)', () => {
     expect(casts).toBeGreaterThan(10);
     expect(awakeMoves).toBeGreaterThan(5);
     expect(reverts).toBeGreaterThan(5);
+    // Positions where the storm is at (or about to reach) its row steps were checked too.
+    expect(rowStorm).toBeGreaterThan(20);
   }, 120_000);
 });
 

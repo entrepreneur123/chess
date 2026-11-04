@@ -8,7 +8,8 @@
  * (anchor = the area's lowest corner) or Rakaeli's transform (anchor = his own square; it sets
  * `awaken`, which counts down at the end of each of its owner's turns like `stun`).
  * A move whose target is wasteland destroys the mover (WASTE_BIT in the undo token).
- * Picker's hop-through captures the enemies on its path too, Michelle's backward moves lay doll
+ * Picker's hop-through captures the enemies on its path too (a real Picker only: an Insaner's
+ * absorbed Picker pattern is a plain slide), Michelle's backward moves lay doll
  * traps and a mover ending on an enemy trap is stunned: all of it is undone from the LIFO history.
  */
 import { AWAKEN_TURNS, BOARD_SIZE, SKILL_UNLOCK_PLY, STORM_INTERVAL_PLIES, SUDDEN_DEATH_PLY, TRAPS_PER_MICHELLE, TRAP_STUN } from './types';
@@ -36,7 +37,7 @@ export interface FastBoard {
   turn: PlayerId;
   /** Piece index that must play a pending chain move, or -1. */
   bonus: number;
-  /** Storm columns per side. */
+  /** Storm step: columns per side (and, from STORM_ROWS_FROM, rows per end: `stormRows`). */
   storm: number;
   /** Turn changes until the storm advances; -1 while inactive. */
   stormIn: number;
@@ -132,12 +133,15 @@ export function fastCanSkill(b: FastBoard, i: number): boolean {
   );
 }
 
-/** Is the k x k area with lowest corner `anchor` on the board and free of pieces? */
+/**
+ * Is the k x k area with lowest corner `anchor` on the board, free of pieces and out of the storm?
+ * (Skills are forbidden once the storm has closed in at all, so the storm check is a safety net.)
+ */
 export function fastSkillFits(b: FastBoard, k: number, anchor: number): boolean {
   const r0 = (anchor / BOARD_SIZE) | 0;
   const c0 = anchor - r0 * BOARD_SIZE;
   if (r0 + k > BOARD_SIZE || c0 + k > BOARD_SIZE) return false;
-  for (let r = r0; r < r0 + k; r++) for (let c = c0; c < c0 + k; c++) if (b.occ[r * BOARD_SIZE + c] >= 0) return false;
+  for (let r = r0; r < r0 + k; r++) for (let c = c0; c < c0 + k; c++) if (b.occ[r * BOARD_SIZE + c] >= 0 || inStorm(r, c, b.storm)) return false;
   return true;
 }
 
@@ -182,7 +186,7 @@ export function fastHasMoves(b: FastBoard, side: number, ignoreStun = false): bo
  * hop-through; 0 for every other move). Only valid for a legal move, before it is made.
  */
 export function fastHopGain(b: FastBoard, pi: number, to: number): number {
-  if (!canHop(b.ch[pi], b.absorb[pi])) return 0;
+  if (!canHop(b.ch[pi])) return 0;
   const from = b.sq[pi];
   const fr = (from / BOARD_SIZE) | 0;
   const tr = (to / BOARD_SIZE) | 0;
@@ -214,8 +218,8 @@ function kill(b: FastBoard, i: number): void {
 }
 
 /**
- * Hand the move to the other side: clears the chain move, ticks the storm (killing pieces in the
- * new storm columns) and activates the storm when a side is down to one piece. Pushes its own
+ * Hand the move to the other side: clears the chain move, ticks the storm (killing pieces on the
+ * new storm squares: columns, and rows from step 3) and activates the storm when a side is down to one piece. Pushes its own
  * undo record; `undoSwitch` reverses it.
  */
 function switchSide(b: FastBoard): void {
@@ -250,7 +254,8 @@ function switchSide(b: FastBoard): void {
       for (let i = 0; i < b.n; i++) {
         const s = b.sq[i];
         if (s < 0) continue;
-        if (inStorm(s % BOARD_SIZE, b.storm)) {
+        const r = (s / BOARD_SIZE) | 0;
+        if (inStorm(r, s - r * BOARD_SIZE, b.storm)) {
           if (killed === 0) b.wipe = b.material[0] - b.material[1];
           kill(b, i);
           killed++;
@@ -304,10 +309,10 @@ export function fastMake(b: FastBoard, mv: number): number {
   const from = b.sq[pi];
   const own = b.owner[pi];
   const h = b.hist;
-  // Picker's hop-through: every enemy on the squares between `from` and `to` is captured first.
+  // Picker's hop-through (a real Picker only): every enemy between `from` and `to` is captured first.
   let gain = 0;
   let hopN = 0;
-  if (canHop(b.ch[pi], b.absorb[pi])) {
+  if (canHop(b.ch[pi])) {
     const fr = (from / BOARD_SIZE) | 0;
     const tr = (to / BOARD_SIZE) | 0;
     const dr = tr - fr;

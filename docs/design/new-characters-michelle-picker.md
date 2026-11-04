@@ -74,8 +74,10 @@ character)
 - **Enemy traps.** His hop stops at the first enemy doll trap on his path. He may land on it and
   is stunned, but he cannot hop past it. **(lead default:** he touches every square, so the doll
   catches him.)
-- **Insaner.** If 인세이너 captures Picker, he absorbs Picker's diagonal movement along with its
-  hop-through rule, because that is how the movement works.
+- **Insaner.** If 인세이너 captures Picker, he absorbs Picker's diagonal RANGE only, as a plain
+  slide: blocked by any piece, captures on the landing square only, ends on wasteland, and doll
+  traps catch him only where he lands. **(owner rule, 2026-11-04:** 이동 범위만 흡수, 특성·스킬은
+  흡수 안 함. It replaces the earlier default that let him absorb the hop-through trait.)
 - **Insaner's 3성 extra move.** A multi-capture counts as one capture for that rule.
 
 **Motion**

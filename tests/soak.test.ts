@@ -14,12 +14,14 @@ import { DIFFICULTIES, chooseAction, fallbackAction, isSkillAction, type BotActi
 import {
   CHARACTER_IDS,
   MAX_MATCH_PLIES,
+  STORM_ROWS_FROM,
   applyMove,
   applySkill,
   createGame,
   fastFromState,
   fastGenMoves,
   getLegalMoves,
+  inStorm,
   isLegalMove,
   isLegalSkill,
   randomFormation,
@@ -59,7 +61,7 @@ describe('soak: bot self-play through the worker entry point', () => {
   it('plays 96 full games at every difficulty: legal actions, bounded length, skills cast', () => {
     const rng = rngFrom(20261104);
     const buf = new Int32Array(256);
-    const stats = { waste: 0, transform: 0, storms: 0, reasons: {} as Record<string, number> };
+    const stats = { waste: 0, transform: 0, storms: 0, rowStorms: 0, reasons: {} as Record<string, number> };
     for (let i = 0; i < 96; i++) {
       const [f0, f1] = formations(rng, i);
       let g = createGame(f0, f1, (i % 2) as 0 | 1);
@@ -89,8 +91,13 @@ describe('soak: bot self-play through the worker entry point', () => {
         for (const e of g.history.slice(before)) {
           if (e.kind === 'skill' && e.transform) stats.transform++;
           else if (e.kind === 'skill') stats.waste++;
-          else if (e.kind === 'storm') stats.storms++;
+          else if (e.kind === 'storm') {
+            stats.storms++;
+            if (e.storm >= STORM_ROWS_FROM) stats.rowStorms++;
+          }
         }
+        // Nothing ever stands in the storm (columns, and rows from step 3).
+        for (const p of g.pieces) expect(inStorm(p.pos.r, p.pos.c, g.storm), `game ${i}: ${p.id} in the storm`).toBe(false);
       }
       expect(g.ply - chainPlies(g.history), `game ${i} too long`).toBeLessThanOrEqual(MAX_MATCH_PLIES);
       stats.reasons[g.endReason!] = (stats.reasons[g.endReason!] ?? 0) + 1;
@@ -98,6 +105,8 @@ describe('soak: bot self-play through the worker entry point', () => {
     expect(stats.waste).toBeGreaterThan(0);
     expect(stats.transform).toBeGreaterThan(0);
     expect(stats.storms).toBeGreaterThan(0);
+    // The storm reaches its row steps (top / bottom rows) in some of these games.
+    expect(stats.rowStorms).toBeGreaterThan(0);
     expect(stats.reasons.timeoutForfeit ?? 0).toBe(0);
   }, 120_000);
 });

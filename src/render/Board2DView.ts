@@ -31,7 +31,7 @@
  * idle, static with reduced motion) and the countdown badge; his moves leave crimson feathers and
  * a crimson ribbon, captures burst in a dark flame. playAwaken plays the transform / revert.
  */
-import { BOARD_SIZE, STORM_FULL_STEPS, ZONE_DEPTH } from '../engine/types';
+import { BOARD_SIZE, STORM_FULL_STEPS, ZONE_DEPTH, stormRows } from '../engine/types';
 import type { CharacterId, Level, Move, Piece, PlayerId, Pos, Trap } from '../engine/types';
 import type { BoardHighlights, BoardViewOptions, IBoardView, ScreenRect, SkillPreview } from './types';
 import { AMBIENT_FRAME_MS, clearAmbientSprites, drawAmbient2D } from './ambient';
@@ -92,6 +92,7 @@ import {
   rgbToCss,
   shakeOffset,
   slideDuration,
+  stormSquare,
   tileRgb,
   tilePalette,
 } from './common';
@@ -813,9 +814,10 @@ export class Board2DView implements IBoardView {
   }
 
   /**
-   * Storm state: `storm` columns consumed per side (0 = none), `nextIn` plies until the next shrink
-   * (null = inactive). Storm columns get a purple field, a glowing boundary line and dimmed tiles;
-   * with nextIn <= 2 the next columns pulse a warning frame.
+   * Storm state: step `storm` = columns consumed per side (0 = none; from step 3 also
+   * `stormRows(storm)` rows at the top and bottom), `nextIn` plies until the next shrink (null =
+   * inactive). Storm columns and rows get a purple field, a glowing boundary line and dimmed tiles;
+   * with nextIn <= 2 the next columns (and rows, once they close in) pulse a warning frame.
    */
   setStorm(storm: number, nextIn: number | null): void {
     if (this.disposed) return;
@@ -943,9 +945,9 @@ export class Board2DView implements IBoardView {
     return this.storm > 0 || this.stormNext !== null;
   }
 
-  private stormColumn(c: number, slack = 0): boolean {
-    const n = this.storm + slack;
-    return c < n || c >= BOARD_SIZE - n;
+  /** Square in the storm, or (slack 1) in the next band to be consumed (vanish detection tolerates call order). */
+  private stormAt(r: number, c: number, slack = 0): boolean {
+    return stormSquare(r, c, this.storm, slack);
   }
 
   /** Pieces missing from `next` (other than `skipId`) that stood near the storm edge dissolve. */
@@ -955,7 +957,7 @@ export class Board2DView implements IBoardView {
     if (skip !== null) for (const id of typeof skip === 'string' ? [skip] : skip) seen.add(id);
     const now = performance.now();
     for (const p of this.pieces) {
-      if (seen.has(p.id) || !this.stormColumn(p.pos.c, 1)) continue;
+      if (seen.has(p.id) || !this.stormAt(p.pos.r, p.pos.c, 1)) continue;
       this.fading.push({ piece: { ...p, pos: { ...p.pos } }, start: now });
     }
   }
@@ -1680,7 +1682,7 @@ export class Board2DView implements IBoardView {
     for (let r = 0; r < BOARD_SIZE; r++) {
       for (let c = 0; c < BOARD_SIZE; c++) {
         const k = r * BOARD_SIZE + c;
-        const storm = this.storm > 0 && this.stormColumn(c);
+        const storm = this.storm > 0 && this.stormAt(r, c);
         const wk = this.wasteK(k);
         const tint = tinted(k, r);
         if (!storm && wk <= 0 && !tint) continue;
@@ -2030,7 +2032,10 @@ export class Board2DView implements IBoardView {
     ctx.restore();
   }
 
-  /** Storm field over the consumed columns, crackling boundary line, warning frame on the next column. */
+  /**
+   * Storm field over the consumed columns (and, from step 3, the top and bottom rows), crackling
+   * boundary lines around the open rectangle, warning frames on the next column / row to go.
+   */
   private drawStorm(now: number): void {
     if (this.storm <= 0 && !(this.stormActive && this.stormNext !== null && this.stormNext <= 2)) return;
     const ctx = this.ctx;
@@ -2038,70 +2043,108 @@ export class Board2DView implements IBoardView {
     const size = cell * BOARD_SIZE;
     const t = now / 1000;
     const warn = this.stormActive && this.stormNext !== null && this.stormNext <= 2 && this.storm < STORM_FULL_STEPS;
+    const cols = this.storm;
+    const rows = stormRows(cols);
+    const rowsNext = warn && stormRows(cols + 1) > rows;
+    // The open rectangle: columns [ox0, ox1], rows [oy0, oy1] on screen.
+    const ox0 = x0 + cols * cell;
+    const ox1 = x0 + size - cols * cell;
+    const oy0 = y0 + rows * cell;
+    const oy1 = y0 + size - rows * cell;
+    const pulse = 0.5 + 0.5 * Math.sin(t * 7);
     ctx.save();
     for (const side of [-1, 1] as const) {
-      // Consumed band: [x0, xIn] on the left, [xIn, x0 + size] on the right.
-      const xIn = side < 0 ? x0 + this.storm * cell : x0 + size - this.storm * cell;
-      if (this.storm > 0) {
-        const bx = side < 0 ? x0 : xIn;
-        const bw = this.storm * cell;
-        const g = ctx.createLinearGradient(side < 0 ? x0 : x0 + size, 0, xIn, 0);
-        // Violet haze added over the dark tiles (as the WebGL storm floor), brighter toward the
-        // boundary.
-        ctx.globalCompositeOperation = 'lighter';
-        g.addColorStop(0, hexAlpha(STORM_COLORS.field, 0.2));
-        g.addColorStop(1, hexAlpha(STORM_COLORS.field, 0.36));
-        ctx.fillStyle = g;
-        ctx.fillRect(bx, y0, bw, size);
-        // Drifting veins.
-        ctx.strokeStyle = hexAlpha(STORM_COLORS.edge, 0.3);
-        ctx.lineWidth = Math.max(1, cell * 0.035);
-        for (let k = 0; k < this.storm * 2; k++) {
-          const ph = t * 0.6 + k * 1.7;
-          ctx.beginPath();
-          for (let i = 0; i <= 12; i++) {
-            const yy = y0 + (i / 12) * size;
-            const xx = bx + bw * (0.5 + 0.42 * Math.sin(ph + i * 0.9 + k) * Math.cos(t * 0.8 + i * 0.5 + k * 2.1));
-            if (i === 0) ctx.moveTo(xx, yy);
-            else ctx.lineTo(xx, yy);
-          }
-          ctx.stroke();
-        }
-        // Boundary wall: glowing line + crackling arcs.
-        ctx.shadowColor = STORM_COLORS.edge;
-        ctx.shadowBlur = cell * 0.5;
-        ctx.strokeStyle = hexAlpha(STORM_COLORS.core, 0.75);
-        ctx.lineWidth = Math.max(2, cell * 0.06);
-        ctx.beginPath();
-        ctx.moveTo(xIn, y0);
-        ctx.lineTo(xIn, y0 + size);
-        ctx.stroke();
-        ctx.shadowBlur = 0;
-        ctx.strokeStyle = hexAlpha(STORM_COLORS.edge, 0.55);
-        ctx.lineWidth = Math.max(1, cell * 0.03);
-        for (let k = 0; k < 2; k++) {
-          ctx.beginPath();
-          for (let i = 0; i <= 24; i++) {
-            const yy = y0 + (i / 24) * size;
-            const xx = xIn + side * cell * 0.3 * Math.sin(i * 2.3 + t * (7 + k * 3) + k * 4) * Math.sin(i * 0.7 - t * 2);
-            if (i === 0) ctx.moveTo(xx, yy);
-            else ctx.lineTo(xx, yy);
-          }
-          ctx.stroke();
-        }
-        ctx.globalCompositeOperation = 'source-over';
+      // Columns: consumed band [x0, ox0] on the left, [ox1, x0 + size] on the right, full height
+      // (the corners belong to the columns); the wall runs along the open rows only.
+      const xIn = side < 0 ? ox0 : ox1;
+      if (cols > 0) this.drawStormBand(side < 0 ? x0 : x0 + size, xIn, y0, y0 + size, oy0, oy1, cols, side, t, cell);
+      if (warn) this.drawStormWarn(side < 0 ? xIn : xIn - cell, oy0, oy1, cell, pulse);
+    }
+    if (rows > 0 || rowsNext) {
+      // Rows: the same band drawn with x and y swapped (a reflection across the diagonal), between
+      // the open columns. side -1 = the screen bottom (row 0), +1 = the top (row BOARD_SIZE - 1).
+      ctx.save();
+      ctx.transform(0, 1, 1, 0, 0, 0);
+      for (const side of [-1, 1] as const) {
+        const yIn = side < 0 ? oy1 : oy0;
+        const yEdge = side < 0 ? y0 + size : y0;
+        if (rows > 0) this.drawStormBand(yEdge, yIn, ox0, ox1, ox0, ox1, rows, -side as -1 | 1, t, cell);
+        // The next row to go spans the columns that are still open after the next step.
+        if (rowsNext) this.drawStormWarn(side < 0 ? yIn - cell : yIn, ox0 + cell, ox1 - cell, cell, pulse);
       }
-      if (warn) {
-        const pulse = 0.5 + 0.5 * Math.sin(t * 7);
-        const wx = side < 0 ? xIn : xIn - cell;
-        ctx.fillStyle = hexAlpha(STORM_COLORS.edge, 0.06 + 0.12 * pulse);
-        ctx.fillRect(wx, y0, cell, size);
-        ctx.strokeStyle = hexAlpha(STORM_COLORS.edge, 0.55 + 0.45 * pulse);
-        ctx.lineWidth = Math.max(1.5, cell * 0.06);
-        ctx.strokeRect(wx + ctx.lineWidth / 2, y0 + ctx.lineWidth / 2, cell - ctx.lineWidth, size - ctx.lineWidth);
-      }
+      ctx.restore();
     }
     ctx.restore();
+  }
+
+  /**
+   * One consumed storm band in a frame where "across" is x (from the board edge `xEdge` to the
+   * boundary `xIn`) and "along" is y: the violet haze and drifting veins over [a0, a1] and the
+   * glowing, crackling boundary wall over [w0, w1]. `side` = -1 when the band lies left of `xIn`.
+   */
+  private drawStormBand(xEdge: number, xIn: number, a0: number, a1: number, w0: number, w1: number, lines: number, side: -1 | 1, t: number, cell: number): void {
+    const ctx = this.ctx;
+    const bx = Math.min(xEdge, xIn);
+    const bw = Math.abs(xIn - xEdge);
+    const len = a1 - a0;
+    const g = ctx.createLinearGradient(xEdge, 0, xIn, 0);
+    // Violet haze added over the dark tiles (as the WebGL storm floor), brighter toward the boundary.
+    ctx.globalCompositeOperation = 'lighter';
+    g.addColorStop(0, hexAlpha(STORM_COLORS.field, 0.2));
+    g.addColorStop(1, hexAlpha(STORM_COLORS.field, 0.36));
+    ctx.fillStyle = g;
+    ctx.fillRect(bx, a0, bw, len);
+    // Drifting veins.
+    ctx.strokeStyle = hexAlpha(STORM_COLORS.edge, 0.3);
+    ctx.lineWidth = Math.max(1, cell * 0.035);
+    for (let k = 0; k < lines * 2; k++) {
+      const ph = t * 0.6 + k * 1.7;
+      ctx.beginPath();
+      for (let i = 0; i <= 12; i++) {
+        const yy = a0 + (i / 12) * len;
+        const xx = bx + bw * (0.5 + 0.42 * Math.sin(ph + i * 0.9 + k) * Math.cos(t * 0.8 + i * 0.5 + k * 2.1));
+        if (i === 0) ctx.moveTo(xx, yy);
+        else ctx.lineTo(xx, yy);
+      }
+      ctx.stroke();
+    }
+    // Boundary wall: glowing line + crackling arcs.
+    ctx.shadowColor = STORM_COLORS.edge;
+    ctx.shadowBlur = cell * 0.5;
+    ctx.strokeStyle = hexAlpha(STORM_COLORS.core, 0.75);
+    ctx.lineWidth = Math.max(2, cell * 0.06);
+    ctx.beginPath();
+    ctx.moveTo(xIn, w0);
+    ctx.lineTo(xIn, w1);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = hexAlpha(STORM_COLORS.edge, 0.55);
+    ctx.lineWidth = Math.max(1, cell * 0.03);
+    const wl = w1 - w0;
+    const segs = Math.max(4, Math.round((24 * wl) / (cell * BOARD_SIZE)));
+    for (let k = 0; k < 2; k++) {
+      ctx.beginPath();
+      for (let i = 0; i <= segs; i++) {
+        const yy = w0 + (i / segs) * wl;
+        const q = (i * 24) / segs;
+        const xx = xIn + side * cell * 0.3 * Math.sin(q * 2.3 + t * (7 + k * 3) + k * 4) * Math.sin(q * 0.7 - t * 2);
+        if (i === 0) ctx.moveTo(xx, yy);
+        else ctx.lineTo(xx, yy);
+      }
+      ctx.stroke();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  /** Pulsing warning frame on the next storm line: x in [wx, wx + cell], y in [a0, a1] (same frame as drawStormBand). */
+  private drawStormWarn(wx: number, a0: number, a1: number, cell: number, pulse: number): void {
+    if (a1 <= a0) return;
+    const ctx = this.ctx;
+    ctx.fillStyle = hexAlpha(STORM_COLORS.edge, 0.06 + 0.12 * pulse);
+    ctx.fillRect(wx, a0, cell, a1 - a0);
+    ctx.strokeStyle = hexAlpha(STORM_COLORS.edge, 0.55 + 0.45 * pulse);
+    ctx.lineWidth = Math.max(1.5, cell * 0.06);
+    ctx.strokeRect(wx + ctx.lineWidth / 2, a0 + ctx.lineWidth / 2, cell - ctx.lineWidth, a1 - a0 - ctx.lineWidth);
   }
 
   /** Pieces the storm is taking: shrink + fade with an expanding magenta ring, then forget them. */

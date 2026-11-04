@@ -42,7 +42,7 @@ export const ROLE: Record<CharacterId, { role: string; trait: string; trait3?: s
   sad: { role: '수비형 탱커', trait: '상하좌우 자유 이동 · 유일하게 후퇴 가능' },
   marki: { role: '돌격형 공격수', trait: '앞으로만 일직선 돌진 · 사거리 최장', trait3: '앞으로 일직선 돌진 · 사거리 최장 · 좌우 1칸 이동도 가능' },
   walk: { role: '기습형 점퍼', trait: '사이의 말을 뛰어넘는 점프 · 넓은 앞줄 커버' },
-  insaner: { role: '흡수형 광전사', trait: '적을 잡으면 그 말의 이동 능력을 흡수', trait3: '적을 잡으면 그 말의 이동 능력을 흡수 · 잡은 뒤 한 번 더 이동 (턴당 1번)' },
+  insaner: { role: '흡수형 광전사', trait: '적을 잡으면 그 말의 이동 범위만 흡수 (특성·스킬은 흡수 안 함)', trait3: '적을 잡으면 그 말의 이동 범위만 흡수 · 잡은 뒤 한 번 더 이동 (턴당 1번)' },
   brutile: { role: '저주형 마녀', trait: '한 칸씩 걷는 느린 마녀 · 성급이 오를수록 사방으로' },
   michelle: { role: '함정형 견제수', trait: '뒤로 물러날 때 인형 함정(한 판 3개) · 밟은 상대는 1턴 속박' },
   picker: { role: '돌파형 사냥꾼', trait: '대각선 콩콩 점프 · 막히지 않고 지나는 적을 모두 잡음 · 상대 함정에서 멈춤' },

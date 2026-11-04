@@ -25,7 +25,7 @@
  * screen). Top-down view: units cross-fade into illustrated tokens (face art, team rim, star pips).
  * Enemy reach previews (BoardHighlights.tone 'enemy') draw red dots and a red selection ring.
  *
- * Storm (setStorm): consumed outer columns get the storm.ts energy field (one additive draw), their
+ * Storm (setStorm): consumed outer columns (and rows from step 3) get the storm.ts energy field (one draw), their
  * tiles are dimmed, and pieces that vanish from the piece list while the storm is active (not a
  * move's capture) dissolve with a magenta storm edge instead of popping out.
  *
@@ -110,6 +110,7 @@ import {
   sameLook,
   shakeOffset,
   slideDuration,
+  stormSquare,
   tileRgb,
   tilePalette,
 } from './common';
@@ -2332,9 +2333,10 @@ export class BoardView implements IBoardView {
   }
 
   /**
-   * Storm state: `storm` columns consumed per side (0 = none), `nextIn` plies until the next shrink
-   * (null = inactive). Consumed columns get the energy field and dimmed tiles; with nextIn <= 2 the
-   * next columns pulse a warning frame. Storm tiles stay tappable (the engine rejects moves there).
+   * Storm state: step `storm` = columns consumed per side (0 = none; from step 3 also
+   * `stormRows(storm)` rows at the top and bottom), `nextIn` plies until the next shrink (null =
+   * inactive). Consumed columns and rows get the energy field and dimmed tiles; with nextIn <= 2 the
+   * next columns (and rows, once they close in) pulse a warning frame. Storm tiles stay tappable (the engine rejects moves there).
    */
   setStorm(storm: number, nextIn: number | null): void {
     if (this.disposed) return;
@@ -2507,10 +2509,9 @@ export class BoardView implements IBoardView {
     return this.storm > 0 || this.stormNext !== null;
   }
 
-  /** Column inside the storm, or the next band to be consumed (vanish detection tolerates call order). */
-  private stormColumn(c: number, slack = 0): boolean {
-    const n = this.storm + slack;
-    return c < n || c >= BOARD_SIZE - n;
+  /** Square inside the storm (columns, and rows from step 3), or (slack 1) the next band to be consumed (vanish detection tolerates call order). */
+  private stormAt(r: number, c: number, slack = 0): boolean {
+    return stormSquare(r, c, this.storm, slack);
   }
 
   resize(): void {
@@ -2698,7 +2699,7 @@ export class BoardView implements IBoardView {
     for (const [id, v] of this.visuals) {
       if (!seen.has(id)) {
         this.visuals.delete(id);
-        if (dissolve && this.stormActive && this.stormColumn(v.piece.pos.c, 1) && v.actor && this.units) this.startStormFade(v);
+        if (dissolve && this.stormActive && this.stormAt(v.piece.pos.r, v.piece.pos.c, 1) && v.actor && this.units) this.startStormFade(v);
         else this.removeVisual(v);
       }
     }
@@ -2898,7 +2899,7 @@ export class BoardView implements IBoardView {
     for (let r = 0; r < BOARD_SIZE; r++) {
       for (let c = 0; c < BOARD_SIZE; c++) {
         let rgb = tileRgb(r, c, hi, this.tilePal);
-        if (this.storm > 0 && this.stormColumn(c)) rgb = mixRgb(rgb, STORM_TILE, STORM_TILE_STRENGTH);
+        if (this.storm > 0 && this.stormAt(r, c)) rgb = mixRgb(rgb, STORM_TILE, STORM_TILE_STRENGTH);
         const wk = this.wasteFx.openOf(r * BOARD_SIZE + c);
         if (wk > 0) rgb = mixRgb(rgb, WASTE_TILE, 0.85 * wk);
         this.tmpC.setRGB(rgb[0], rgb[1], rgb[2], THREE.SRGBColorSpace);

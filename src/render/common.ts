@@ -1,5 +1,5 @@
 /** Helpers shared by the WebGL and Canvas2D board views. */
-import { BOARD_SIZE, ZONE_DEPTH } from '../engine/types';
+import { BOARD_SIZE, ZONE_DEPTH, stormRows } from '../engine/types';
 import type { CharacterId, Level, Move, Piece, PlayerId, Pos } from '../engine/types';
 import { isDirectional, screenArrow } from '../engine/rules';
 import type { BoardHighlights } from './types';
@@ -225,6 +225,19 @@ export function prefersReducedMotion(): boolean {
   }
 }
 
+/**
+ * Is square (r, c) inside a storm at step `storm` (both boards)? `storm` columns per side and, from
+ * step 3, `stormRows(storm)` rows at the top and bottom (the engine's `inStorm`). `slack` widens it
+ * by that many steps (vanish detection: the next band to be consumed counts too).
+ */
+export function stormSquare(r: number, c: number, storm: number, slack = 0): boolean {
+  const n = storm + slack;
+  if (n <= 0) return false;
+  if (c < n || c >= BOARD_SIZE - n) return true;
+  const rows = stormRows(n);
+  return r < rows || r >= BOARD_SIZE - rows;
+}
+
 export function moveDistance(m: Move): number {
   return Math.hypot(m.to.r - m.from.r, m.to.c - m.from.c);
 }
@@ -234,13 +247,14 @@ export function slideDuration(m: Move): number {
 }
 
 /**
- * Picker's hop-through plays as square-by-square hops (both boards): every Picker move, and any
- * diagonal move that captured pieces on the way (an Insaner using Picker's absorbed hop).
+ * Picker's hop-through plays as square-by-square hops (both boards): every diagonal Picker move.
+ * Only a real Picker hops: an Insaner that absorbed Picker's pattern gets its range as a plain
+ * slide, so its diagonal moves animate as normal slides.
  */
 export function isHopMove(p: Pick<Piece, 'character'>, m: Move): boolean {
   const dr = Math.abs(m.to.r - m.from.r);
   if (dr === 0 || dr !== Math.abs(m.to.c - m.from.c)) return false;
-  return p.character === 'picker' || (m.captureIds?.length ?? 0) > 0;
+  return p.character === 'picker';
 }
 
 /** The squares a hop lands on in order, `to` included (`from` excluded). */

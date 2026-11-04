@@ -45,7 +45,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
       '상하좌우 최대 3칸 직진 + 대각선 1칸 · 적을 잡으면 한 번 더 이동 (추가 이동은 턴당 1번, 연속 추가 이동 없음)',
     ],
     value: [5, 6, 8],
-    passiveKo: '적을 잡으면 그 말의 이동 능력을 흡수해 자신의 이동에 더합니다',
+    passiveKo: '적을 잡으면 그 말의 이동 범위를 자신의 이동에 더합니다. 이동 범위만 흡수 (특성·스킬은 흡수 안 함)',
   },
   brutile: {
     id: 'brutile',
@@ -140,8 +140,6 @@ export const CHAR_BY_CODE: CharacterId[] = ['sad', 'marki', 'walk', 'insaner', '
  */
 export const N_CHARS = CHAR_BY_CODE.length;
 if (N_CHARS * 3 > 30) throw new Error('absorb masks no longer fit in 31 bits: widen the storage');
-/** All three level bits of Picker's pattern in an absorb mask (a hop-through pattern). */
-export const PICKER_BITS = 0b111 << (CH_PICKER * 3);
 
 /**
  * Game rule: a piece that reaches the far edge in its forward direction (the enemy's back rank)

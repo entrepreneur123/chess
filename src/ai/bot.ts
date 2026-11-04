@@ -19,7 +19,7 @@ import type { FastBoard } from '../engine';
 import { SKILL_FLAG, fastCanSkill, fastHopGain, fastSkillFits, fastSkillSize } from '../engine/fast';
 import { CHARACTERS, CHAR_BY_CODE, CH_BRUTILE, CH_INSANER, CH_MARKI, CH_MICHELLE, CH_PICKER, CH_RAKAELI, CH_SAD, CH_WALK, MARKI_RANGE, MARKI_SIDE_LEVEL, N_CHARS } from '../engine/characters';
 import { trapBit } from '../engine/board';
-import { BOARD_SIZE, TRAPS_PER_MICHELLE } from '../engine/types';
+import { BOARD_SIZE, STORM_ROWS_FROM, TRAPS_PER_MICHELLE, stormRows } from '../engine/types';
 
 /** Bot strength. `extreme` (극악) is the dungeon's top tier and the AI of the top arena. */
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'extreme';
@@ -163,6 +163,10 @@ function buildAttackMaps(b: FastBoard): number[] {
 export function evaluate(b: FastBoard, side: number): number {
   const mob = buildAttackMaps(b);
   const score = [0, 0];
+  // Open rows: from storm step STORM_ROWS_FROM the top and bottom rows are storm too (no turn-around
+  // there: a forward-only piece facing them is stuck once it reaches them).
+  const rowsGone = stormRows(b.storm);
+  const top = LAST - rowsGone;
   for (let i = 0; i < b.n; i++) {
     const s = b.sq[i];
     if (s < 0) continue;
@@ -172,7 +176,8 @@ export function evaluate(b: FastBoard, side: number): number {
     const c = s - r * BOARD_SIZE;
     let sc = v;
     const dir = b.dir[i];
-    const room = dir > 0 ? LAST - r : r; // rows left in front of the piece (it turns around at 0)
+    // Rows left in front of the piece before the board edge (it turns around there) or the storm.
+    const room = dir > 0 ? top - r : r - rowsGone;
     // Facing the enemy side is worth more than walking back home after a turn-around.
     const facingEnemy = dir === (p === 0 ? 1 : -1);
     const centerC = MID - Math.abs(c - MID); // 0.5..4.5 on 10 columns
@@ -222,9 +227,10 @@ export function evaluate(b: FastBoard, side: number): number {
       else if (b.storm === 0 && b.used[i] === 0) sc += TRANSFORM_POTENTIAL[b.lvl[i]];
     }
     if (b.stun[i] > 0) sc -= v * STUN_PENALTY;
-    // storm: standing next to (or on) the columns that vanish next is a liability
+    // storm: standing next to (or on) the columns / rows that vanish next is a liability. Column c
+    // closes at step min(c, LAST - c) + 1, row r at step min(r, LAST - r) + STORM_ROWS_FROM.
     if (b.stormIn >= 0) {
-      const dist = Math.min(c - b.storm, LAST - b.storm - c);
+      const dist = Math.min(Math.min(c, LAST - c) - b.storm, Math.min(r, LAST - r) + STORM_ROWS_FROM - 1 - b.storm);
       const urgency = b.stormIn <= 2 ? 1 : 0.5;
       if (dist <= 0) sc -= v * 0.6 * urgency;
       else if (dist === 1) sc -= v * 0.25 * urgency;

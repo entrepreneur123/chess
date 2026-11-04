@@ -29,6 +29,7 @@ import {
   type Move,
   type Trap,
 } from '../src/engine';
+import { fastHopGain } from '../src/engine/fast';
 import { chainPlies, makeState, keys, rngFrom, targetKeys } from './helpers';
 
 const mv = (state: GameState, pieceId: string, r: number, c: number): Move => {
@@ -314,33 +315,74 @@ describe('Insaner absorbs the new characters', () => {
     expect(s.traps ?? []).toEqual([]);
   });
 
-  it('absorbs Picker\'s hop-through: it then captures everything on a hop', () => {
+  it("absorbs Picker's diagonal RANGE only: a plain slide that is blocked and captures on landing only", () => {
     let s = makeState([[0, 'insaner', 1, 2, 2], [1, 'picker', 3, 2, 3], [1, 'sad', 1, 4, 4], [1, 'marki', 1, 5, 5], [1, 'walk', 1, 9, 0]]);
     s = play(s, 'p0-insaner', 2, 3);
     expect(s.pieces.find((p) => p.id === 'p0-insaner')!.absorbed).toEqual([{ character: 'picker', level: 3 }]);
     s = play(s, 'p1-walk', 8, 0);
-    // From (2,3) the hop up-right goes (3,4) (4,5) (5,6): put victims there.
+    // Empty diagonals: the full 3-square range, like Picker's own reach.
+    const open: GameState = { ...s, pieces: s.pieces.filter((p) => p.owner === 0 || p.id === 'p1-walk') };
+    expect(targetKeys(getLegalMoves(open, 'p0-insaner')).filter((k) => k !== '2,3')).toEqual(
+      keys([
+        [3, 4], [4, 5], [5, 6], [3, 2], [4, 1], [5, 0], [1, 4], [0, 5], [1, 2], [0, 1],
+        // its own orthogonal slides (1성: up to 2)
+        [3, 3], [4, 3], [1, 3], [0, 3], [2, 4], [2, 5], [2, 2], [2, 1],
+      ]),
+    );
+    // From (2,3) up-right: (3,4) holds an enemy. A slide stops there (capture on landing only).
     const s2: GameState = {
       ...s,
       pieces: s.pieces.map((p) => (p.id === 'p1-sad' ? { ...p, pos: { r: 3, c: 4 } } : p.id === 'p1-marki' ? { ...p, pos: { r: 4, c: 5 } } : p)),
     };
-    const m = mv(s2, 'p0-insaner', 5, 6);
-    expect(capturedIds(m).sort()).toEqual(['p1-marki', 'p1-sad']);
-    const s3 = applyMove(s2, m);
-    const ins = s3.pieces.find((p) => p.id === 'p0-insaner')!;
-    expect(ins.absorbed?.map((a) => a.character).sort()).toEqual(['marki', 'picker', 'sad']);
+    const moves = getLegalMoves(s2, 'p0-insaner');
+    expect(targetKeys(moves)).toContain('3,4');
+    expect(targetKeys(moves)).not.toContain('4,5');
+    expect(targetKeys(moves)).not.toContain('5,6');
+    // Never a multi-capture: no move carries captureIds.
+    expect(moves.every((m) => m.captureIds === undefined)).toBe(true);
+    expect(mv(s2, 'p0-insaner', 3, 4).captureId).toBe('p1-sad');
+    const s3 = play(s2, 'p0-insaner', 3, 4);
+    expect(s3.pieces.map((p) => p.id).sort()).toEqual(['p0-insaner', 'p1-marki', 'p1-walk']);
+    expect(s3.pieces.find((p) => p.id === 'p0-insaner')!.absorbed?.map((a) => a.character).sort()).toEqual(['picker', 'sad']);
+    // An own piece blocks the slide too (a real Picker would hop over it).
+    const blocked: GameState = { ...open, pieces: [...open.pieces, { id: 'p0-sad', owner: 0, character: 'sad', level: 1, pos: { r: 3, c: 4 } }] };
+    expect(targetKeys(getLegalMoves(blocked, 'p0-insaner'))).not.toContain('4,5');
+    expect(targetKeys(getLegalMoves(blocked, 'p0-insaner'))).not.toContain('3,4');
   });
 
-  it('a 3성 Insaner\'s hop multi-capture earns one chain move, like any capture', () => {
+  it('an absorbed Picker slide passes enemy doll traps (only the landing square catches) and ends on wasteland', () => {
+    const base = makeState([[0, 'insaner', 1, 2, 3], [1, 'walk', 1, 9, 0]], 0);
+    const ins: GameState = { ...base, pieces: base.pieces.map((p) => (p.id === 'p0-insaner' ? { ...p, absorbed: [{ character: 'picker', level: 3 }] } : p)) };
+    // An enemy trap on (3,4): a real Picker would stop there; the slide goes on to (4,5) and (5,6).
+    const trapped: GameState = { ...ins, traps: [{ sq: 3 * BOARD_SIZE + 4, owner: 1 }] };
+    expect(targetKeys(getLegalMoves(trapped, 'p0-insaner'))).toEqual(expect.arrayContaining(['3,4', '4,5', '5,6']));
+    expect(isStunned(play(trapped, 'p0-insaner', 5, 6).pieces.find((p) => p.id === 'p0-insaner')!)).toBe(false);
+    expect(isStunned(play(trapped, 'p0-insaner', 3, 4).pieces.find((p) => p.id === 'p0-insaner')!)).toBe(true);
+    // Wasteland on (4,5): the slide ends ON it (the mover dies there), like every slide.
+    const wasted: GameState = { ...ins, waste: [4 * BOARD_SIZE + 5] };
+    const t = targetKeys(getLegalMoves(wasted, 'p0-insaner'));
+    expect(t).toContain('4,5');
+    expect(t).not.toContain('5,6');
+  });
+
+  it("a 3성 Insaner with Picker's absorbed range captures one piece per move (a slide) and still chains", () => {
     const s = makeState(
       [[0, 'insaner', 3, 2, 2], [1, 'sad', 1, 3, 3], [1, 'marki', 1, 4, 4], [1, 'walk', 1, 9, 0]],
       0,
     );
-    const withHop: GameState = { ...s, pieces: s.pieces.map((p) => (p.id === 'p0-insaner' ? { ...p, absorbed: [{ character: 'picker', level: 3 }] } : p)) };
-    const after = play(withHop, 'p0-insaner', 5, 5);
-    expect(after.pieces.filter((p) => p.owner === 1).map((p) => p.id)).toEqual(['p1-walk']);
+    const withAbs: GameState = { ...s, pieces: s.pieces.map((p) => (p.id === 'p0-insaner' ? { ...p, absorbed: [{ character: 'picker', level: 3 }] } : p)) };
+    // The sad on (3,3) blocks the diagonal: (5,5) is out of reach.
+    expect(targetKeys(getLegalMoves(withAbs, 'p0-insaner'))).not.toContain('5,5');
+    const after = play(withAbs, 'p0-insaner', 3, 3);
+    expect(after.pieces.filter((p) => p.owner === 1).map((p) => p.id).sort()).toEqual(['p1-marki', 'p1-walk']);
     expect(after.bonusPieceId).toBe('p0-insaner');
     expect(after.turn).toBe(0);
+  });
+
+  it('a real Picker still hops through and captures everything on the way', () => {
+    const s = makeState([[0, 'picker', 3, 2, 2], [1, 'sad', 1, 3, 3], [1, 'marki', 1, 4, 4], [1, 'walk', 1, 9, 0]], 0);
+    const m = mv(s, 'p0-picker', 5, 5);
+    expect(capturedIds(m).sort()).toEqual(['p1-marki', 'p1-sad']);
   });
 });
 
@@ -411,9 +453,16 @@ describe('FastBoard parity with the engine (new characters)', () => {
     multi += checkPosition(makeState([[0, 'picker', 3, 2, 2], [0, 'sad', 1, 3, 3], [1, 'marki', 2, 4, 4], [1, 'walk', 2, 5, 5]]));
     multi += checkPosition(makeState([[0, 'picker', 3, 2, 2], [1, 'sad', 1, 3, 3], [1, 'marki', 1, 4, 4], [1, 'walk', 1, 9, 0]], 0, { waste: [5 * BOARD_SIZE + 5] }));
     multi += checkPosition(makeState([[0, 'picker', 3, 2, 2], [1, 'sad', 1, 3, 3], [1, 'marki', 1, 4, 4], [1, 'walk', 1, 9, 0]], 0, { traps: [{ sq: 4 * BOARD_SIZE + 4, owner: 1 }] }));
-    const ins = makeState([[0, 'insaner', 3, 2, 2], [1, 'sad', 1, 3, 3], [1, 'marki', 1, 4, 4], [1, 'walk', 1, 9, 0]]);
-    multi += checkPosition({ ...ins, pieces: ins.pieces.map((p) => (p.id === 'p0-insaner' ? { ...p, absorbed: [{ character: 'picker', level: 3 }] } : p)) });
     expect(multi).toBeGreaterThanOrEqual(5);
+    // An Insaner with Picker's absorbed range slides: the same positions, never a multi-capture,
+    // and the fast board agrees (no hop gain, no hop kills).
+    const ins = makeState([[0, 'insaner', 3, 2, 2], [1, 'sad', 1, 3, 3], [1, 'marki', 1, 4, 4], [1, 'walk', 1, 9, 0]]);
+    const withAbs = (s: GameState): GameState => ({ ...s, pieces: s.pieces.map((p) => (p.id === 'p0-insaner' ? { ...p, absorbed: [{ character: 'picker', level: 3 }] } : p)) });
+    expect(checkPosition(withAbs(ins))).toBe(0);
+    expect(checkPosition(withAbs(makeState([[0, 'insaner', 2, 2, 2], [0, 'sad', 1, 3, 3], [1, 'marki', 2, 4, 4], [1, 'walk', 2, 5, 5]])))).toBe(0);
+    expect(checkPosition({ ...withAbs(ins), traps: [{ sq: 4 * BOARD_SIZE + 4, owner: 1 }], waste: [6 * BOARD_SIZE + 6] })).toBe(0);
+    const b = fastFromState(withAbs(makeState([[0, 'insaner', 1, 2, 2], [1, 'sad', 1, 3, 3], [1, 'marki', 1, 4, 4], [1, 'walk', 1, 9, 0]])));
+    expect(fastHopGain(b, 0, 4 * BOARD_SIZE + 4)).toBe(0);
   });
 
   it('generates the same moves and makes / unmakes them exactly, over random games', () => {

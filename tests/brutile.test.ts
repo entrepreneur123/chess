@@ -15,7 +15,7 @@ import {
   type GameState,
   type SkillAction,
 } from '../src/engine';
-import { fastFromState, fastGenMoves, fastMake, fastMoveToMove, fastUnmake, SKILL_FLAG, fastCanSkill } from '../src/engine/fast';
+import { fastFromState, fastGenMoves, fastMake, fastMoveToMove, fastPass, fastUnmake, SKILL_FLAG, fastCanSkill } from '../src/engine/fast';
 import { chooseAction, isSkillAction } from '../src/ai/bot';
 import { keys, makeState, rngFrom, spendSkill, targetKeys } from './helpers';
 
@@ -272,6 +272,9 @@ describe('fast board and bot with Brutile', () => {
         const next = applyMove(g, pick);
         const rec = next.history[g.history.length];
         if (rec?.kind === 'move' && rec.move.wasted) deaths++;
+        // The engine auto-passes a side left without a move (e.g. a Marki facing the storm rows):
+        // the search does the same with fastPass.
+        for (const e of next.history.slice(g.history.length + 1)) if (e.kind === 'pass') fastPass(b);
         if (next.status === 'playing') {
           expect(b.alive[0] + b.alive[1]).toBe(next.pieces.length);
           expect(b.ply).toBe(next.ply);

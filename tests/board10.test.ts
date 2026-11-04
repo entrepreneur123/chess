@@ -98,28 +98,32 @@ describe('character reach on 10 columns', () => {
 describe('storm on 10 columns', () => {
   it('5 advances swallow the whole board', () => {
     expect(STORM_FULL_STEPS).toBe(5);
-    for (let c = 0; c < BOARD_SIZE; c++) expect(inStorm(c, STORM_FULL_STEPS)).toBe(true);
-    const open = Array.from({ length: BOARD_SIZE }, (_, c) => c).filter((c) => !inStorm(c, STORM_FULL_STEPS - 1));
+    for (let r = 0; r < BOARD_SIZE; r++) for (let c = 0; c < BOARD_SIZE; c++) expect(inStorm(r, c, STORM_FULL_STEPS)).toBe(true);
+    const open = Array.from({ length: BOARD_SIZE }, (_, c) => c).filter((c) => !inStorm(5, c, STORM_FULL_STEPS - 1));
     expect(open).toEqual([4, 5]);
+    // Step 4 also closes rows 0..1 and 8..9 (rows close in from step 3).
+    const openRows = Array.from({ length: BOARD_SIZE }, (_, r) => r).filter((r) => !inStorm(r, 4, STORM_FULL_STEPS - 1));
+    expect(openRows).toEqual([2, 3, 4, 5, 6, 7]);
   });
 
-  it('a capture-free game in the centre columns ends at exactly MAX_MATCH_PLIES = 68 by the storm (engine and FastBoard agree)', () => {
+  it('a capture-free game in the centre ends at exactly MAX_MATCH_PLIES = 58 by the storm (engine and FastBoard agree)', () => {
     expect(MAX_MATCH_PLIES).toBe(SUDDEN_DEATH_PLY + STORM_FULL_STEPS * STORM_INTERVAL_PLIES);
-    expect(MAX_MATCH_PLIES).toBe(68);
-    // Two pieces a side (so the one-piece trigger never fires), shuffling in columns 4..5 of their
-    // own half without ever capturing: only sudden death and the storm can end it.
+    expect(MAX_MATCH_PLIES).toBe(58);
+    // Two pieces a side (so the one-piece trigger never fires), shuffling in columns 4..5 of rows
+    // 2..4 (player 0) / 5..7 (player 1), out of reach of the storm rows until the last step, never
+    // capturing: only sudden death and the storm can end it.
     let s = makeState([
-      [0, 'sad', 1, 1, 4],
-      [0, 'marki', 1, 0, 5],
-      [1, 'sad', 1, 8, 5],
-      [1, 'marki', 1, 9, 4],
+      [0, 'sad', 1, 3, 4],
+      [0, 'insaner', 1, 3, 5],
+      [1, 'sad', 1, 6, 5],
+      [1, 'insaner', 1, 6, 4],
     ]);
     const b = fastFromState(s);
     const buf = new Int32Array(128);
     const advances: number[] = [];
     while (s.status === 'playing') {
       expect(s.ply).toBeLessThan(MAX_MATCH_PLIES);
-      const own = (r: number) => (s.turn === 0 ? r <= 3 : r >= 6);
+      const own = (r: number) => (s.turn === 0 ? r >= 2 && r <= 4 : r >= 5 && r <= 7);
       const legal = getLegalMoves(s);
       const m = legal.find((x) => !x.captureId && x.to.c >= 4 && x.to.c <= 5 && own(x.to.r)) ?? legal.find((x) => !x.captureId)!;
       const n = fastGenMoves(b, b.turn, buf, 0);
@@ -131,8 +135,8 @@ describe('storm on 10 columns', () => {
       expect(b.storm).toBe(s.storm);
       expect(b.ply).toBe(s.ply);
     }
-    // Storm from ply 38 (turn 20), one advance every 6 turn changes (3 turns): plies 44 .. 68.
-    expect(advances).toEqual([44, 50, 56, 62, 68]);
+    // Storm from ply 38 (turn 20), one advance every 4 turn changes (2 turns): plies 42 .. 58.
+    expect(advances).toEqual([42, 46, 50, 54, 58]);
     expect(s.ply).toBe(MAX_MATCH_PLIES);
     expect(s.storm).toBe(STORM_FULL_STEPS);
     expect(s.endReason).toBe('storm');
@@ -140,15 +144,15 @@ describe('storm on 10 columns', () => {
     expect(b.alive[0] + b.alive[1]).toBe(0);
   });
 
-  it('the one-piece trigger resolves within 5 * 6 = 30 turn changes', () => {
+  it('the one-piece trigger resolves within 5 * 4 = 20 turn changes', () => {
     let s = makeState([
-      [0, 'sad', 1, 1, 4],
-      [1, 'sad', 1, 8, 5],
+      [0, 'sad', 1, 3, 4],
+      [1, 'sad', 1, 6, 5],
     ], 0, { ply: 10 });
     let start: number | null = null;
     while (s.status === 'playing') {
       const legal = getLegalMoves(s);
-      const own = (r: number) => (s.turn === 0 ? r <= 3 : r >= 6);
+      const own = (r: number) => (s.turn === 0 ? r >= 2 && r <= 4 : r >= 5 && r <= 7);
       s = applyMove(s, legal.find((x) => !x.captureId && x.to.c >= 4 && x.to.c <= 5 && own(x.to.r)) ?? legal[0]);
       // A hand-built position is settled by its first move: that is when the storm starts.
       if (start === null && s.stormIn !== null) start = s.ply;
