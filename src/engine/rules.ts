@@ -1,8 +1,8 @@
-import { SKILL_UNLOCK_PLY, SKILL_USES_PER_MATCH, STORM_INTERVAL_PLIES, SUDDEN_DEATH_PLY, TURN_TIME_1_MS, TURN_TIME_2_MS, TURN_TIME_MS } from './types';
-import type { AbsorbedAbility, EndReason, Formation, GameState, HistoryEntry, Move, Piece, PlayerId, Pos, SkillAction } from './types';
+import { SKILL_UNLOCK_PLY, SKILL_USES_PER_MATCH, STORM_INTERVAL_PLIES, SUDDEN_DEATH_PLY, TRAPS_PER_MICHELLE, TRAP_STUN, TURN_TIME_1_MS, TURN_TIME_2_MS, TURN_TIME_MS } from './types';
+import type { AbsorbedAbility, EndReason, Formation, GameState, HistoryEntry, Move, PassReason, Piece, PlayerId, Pos, SkillAction, Trap } from './types';
 import { BOARD_SIZE } from './types';
-import { CHARACTERS, CHAR_CODE, WASTE_SIZE, absorbMaskOf, effectiveValue } from './characters';
-import { N_SQUARES, atTurnRow, formationToAbsolute, forwardDir, genTargets, inStorm, isOnBoard, posOf, sqOf } from './board';
+import { CHARACTERS, CHAR_CODE, WASTE_SIZE, absorbMaskOf, effectiveValue, keepsDirection } from './characters';
+import { N_SQUARES, atTurnRow, canHop, formationToAbsolute, forwardDir, genTargets, inStorm, isOnBoard, posOf, sqOf, trapBit } from './board';
 import { validateFormation } from './formation';
 
 const other = (p: PlayerId): PlayerId => (p === 0 ? 1 : 0);
@@ -77,32 +77,109 @@ export function wasteFlags(waste: readonly number[] | undefined): Uint8Array | n
   return wasteScratch;
 }
 
+/** Length-144 doll-trap masks (bit `trapBit(owner)` per trap) for a state's `traps` (shared scratch). */
+const trapScratch = new Uint8Array(N_SQUARES);
+let trapScratchKey: readonly Trap[] | null = null;
+export function trapFlags(traps: readonly Trap[] | undefined): Uint8Array | null {
+  if (!traps || traps.length === 0) return null;
+  if (trapScratchKey !== traps) {
+    trapScratch.fill(0);
+    for (const t of traps) trapScratch[t.sq] |= trapBit(t.owner);
+    trapScratchKey = traps;
+  }
+  return trapScratch;
+}
+
+/** True while a doll trap holds the piece (no moves, no skill). */
+export function isStunned(piece: Pick<Piece, 'stun'>): boolean {
+  return (piece.stun ?? 0) > 0;
+}
+
+/** Is there a doll trap of `owner` on `pos`? */
+export function trapAt(state: Pick<GameState, 'traps'>, pos: Pos, owner: PlayerId): boolean {
+  const sq = sqOf(pos);
+  return (state.traps ?? []).some((t) => t.sq === sq && t.owner === owner);
+}
+
+/** Doll traps `owner`'s Michelle can still lay this match. */
+export function trapsLeft(state: Pick<GameState, 'trapsLaid'>, owner: PlayerId): number {
+  return Math.max(0, TRAPS_PER_MICHELLE - (state.trapsLaid?.[owner] ?? 0));
+}
+
+/** Every piece a move captures, in path order (Picker's hop-through can take several). */
+export function capturedIds(move: Pick<Move, 'captureId' | 'captureIds'>): string[] {
+  if (move.captureIds && move.captureIds.length) return move.captureIds;
+  return move.captureId ? [move.captureId] : [];
+}
+
+/**
+ * Squares strictly between `from` and `to` of a diagonal hop (Picker's hop-through), or [] when the
+ * move is not a diagonal of two or more squares.
+ */
+export function hopPath(from: Pos, to: Pos): Pos[] {
+  const dr = to.r - from.r;
+  const dc = to.c - from.c;
+  const n = Math.abs(dr);
+  if (n < 2 || n !== Math.abs(dc)) return [];
+  const sr = Math.sign(dr);
+  const sc = Math.sign(dc);
+  const out: Pos[] = [];
+  for (let k = 1; k < n; k++) out.push({ r: from.r + sr * k, c: from.c + sc * k });
+  return out;
+}
+
+/**
+ * Enemies a piece of `owner` hops onto on the way from `from` to `to`. Only a hop-through
+ * (Picker's pattern) can reach a diagonal square past pieces, so for any LEGAL move of a piece that
+ * can hop these are exactly the pieces it captures before landing.
+ */
+function hopVictims(pieces: Piece[], occ: Int8Array, owner: PlayerId, from: Pos, to: Pos): string[] {
+  const out: string[] = [];
+  for (const q of hopPath(from, to)) {
+    const o = occ[sqOf(q)];
+    if (o >= 0 && pieces[o].owner !== owner) out.push(pieces[o].id);
+  }
+  return out;
+}
+
 /** Current forward direction of a piece (forward-only movers turn around at the far edge). */
 export function pieceDir(piece: Pick<Piece, 'owner' | 'dir'>): 1 | -1 {
   return piece.dir ?? forwardDir(piece.owner);
 }
 
-function countTargets(occ: Int8Array, owners: Uint8Array, piece: Piece, storm: number, waste: Uint8Array | null): number {
-  return genTargets(occ, owners, piece.owner, CHAR_CODE[piece.character], piece.level, sqOf(piece.pos), tmpTargets, 0, false, pieceDir(piece), storm, absorbMaskOf(piece.absorbed), waste);
+function countTargets(occ: Int8Array, owners: Uint8Array, piece: Piece, storm: number, waste: Uint8Array | null, traps: Uint8Array | null): number {
+  return genTargets(occ, owners, piece.owner, CHAR_CODE[piece.character], piece.level, sqOf(piece.pos), tmpTargets, 0, false, pieceDir(piece), storm, absorbMaskOf(piece.absorbed), waste, traps);
 }
 
-function targetsWith(pieces: Piece[], occ: Int8Array, owners: Uint8Array, piece: Piece, storm: number, waste: Uint8Array | null): Move[] {
-  const n = countTargets(occ, owners, piece, storm, waste);
+function targetsWith(pieces: Piece[], occ: Int8Array, owners: Uint8Array, piece: Piece, storm: number, waste: Uint8Array | null, traps: Uint8Array | null): Move[] {
+  const n = countTargets(occ, owners, piece, storm, waste, traps);
+  const hopper = canHop(CHAR_CODE[piece.character], absorbMaskOf(piece.absorbed));
   const moves: Move[] = [];
   for (let i = 0; i < n; i++) {
     const s = tmpTargets[i];
     const m: Move = { pieceId: piece.id, from: { r: piece.pos.r, c: piece.pos.c }, to: posOf(s) };
     const o = occ[s];
     if (o >= 0) m.captureId = pieces[o].id;
+    if (hopper) {
+      const on = hopVictims(pieces, occ, piece.owner, m.from, m.to);
+      if (on.length) {
+        m.captureIds = m.captureId ? [...on, m.captureId] : on;
+        m.captureId ??= on[0];
+      }
+    }
     moves.push(m);
   }
   return moves;
 }
 
-/** Pseudo-moves for ANY piece regardless of whose turn it is (for previewing reach). */
+/**
+ * Pseudo-moves for ANY piece regardless of whose turn it is (for previewing reach). A stunned piece
+ * has none: it cannot act on its owner's next turn.
+ */
 export function getTargetsForPiece(state: GameState, piece: Piece): Move[] {
+  if (isStunned(piece)) return [];
   const { occ, owners } = buildOccupancy(state.pieces);
-  return targetsWith(state.pieces, occ, owners, piece, state.storm, wasteFlags(state.waste));
+  return targetsWith(state.pieces, occ, owners, piece, state.storm, wasteFlags(state.waste), trapFlags(state.traps));
 }
 
 /** True when moving to `to` touches wasteland (the mover is destroyed there). */
@@ -122,18 +199,23 @@ export function getLegalMoves(state: GameState, pieceId?: string): Move[] {
     if (p.owner !== state.turn) continue;
     if (pieceId !== undefined && p.id !== pieceId) continue;
     if (state.bonusPieceId !== null && p.id !== state.bonusPieceId) continue;
-    for (const m of targetsWith(state.pieces, occ, owners, p, state.storm, wasteFlags(state.waste))) out.push(m);
+    if (isStunned(p)) continue;
+    for (const m of targetsWith(state.pieces, occ, owners, p, state.storm, wasteFlags(state.waste), trapFlags(state.traps))) out.push(m);
   }
   return out;
 }
 
-function hasAnyMove(pieces: Piece[], player: PlayerId, storm: number, waste: number[], onlyPieceId: string | null = null): boolean {
+/** Does `player` have a move? `ignoreStun` asks whether it would have one once its stuns wear off. */
+function hasAnyMove(state: GameState, player: PlayerId, onlyPieceId: string | null = null, ignoreStun = false): boolean {
+  const pieces = state.pieces;
   const { occ, owners } = buildOccupancy(pieces);
-  const wf = wasteFlags(waste);
+  const wf = wasteFlags(state.waste);
+  const tf = trapFlags(state.traps);
   for (const p of pieces) {
     if (p.owner !== player) continue;
     if (onlyPieceId !== null && p.id !== onlyPieceId) continue;
-    if (countTargets(occ, owners, p, storm, wf) > 0) return true;
+    if (!ignoreStun && isStunned(p)) continue;
+    if (countTargets(occ, owners, p, state.storm, wf, tf) > 0) return true;
   }
   return false;
 }
@@ -184,6 +266,7 @@ function end(state: GameState, winner: PlayerId | null, reason: GameState['endRe
 function switchTurn(state: GameState, entry: HistoryEntry, pliesSinceCapture: number): GameState {
   let next: GameState = {
     ...state,
+    pieces: countDownStuns(state.pieces, state.turn),
     turn: other(state.turn),
     ply: state.ply + 1,
     pliesSinceCapture,
@@ -218,6 +301,18 @@ function switchTurn(state: GameState, entry: HistoryEntry, pliesSinceCapture: nu
   return next;
 }
 
+/** The turn of `player` ends: each of its stunned pieces has one owner turn less to sit out. */
+function countDownStuns(pieces: Piece[], player: PlayerId): Piece[] {
+  if (!pieces.some((p) => p.owner === player && p.stun)) return pieces;
+  return pieces.map((p) => {
+    if (p.owner !== player || !p.stun) return p;
+    const q: Piece = { ...p };
+    if (p.stun > 1) q.stun = p.stun - 1;
+    else delete q.stun;
+    return q;
+  });
+}
+
 /**
  * Post-ply bookkeeping: elimination (by capture or storm), storm activation (one piece left or
  * sudden death), chain moves that cannot be played, and automatic passes when the side to move has
@@ -232,15 +327,18 @@ function settle(state: GameState): GameState {
     if (n0 === 0 || n1 === 0) return end(state, n0 > 0 ? 0 : n1 > 0 ? 1 : null, eliminationReason(state, n0 === 0 && n1 === 0 ? null : n0 === 0 ? 0 : 1));
     if (state.stormIn === null && (n0 <= 1 || n1 <= 1 || state.ply >= SUDDEN_DEATH_PLY)) state = { ...state, stormIn: STORM_INTERVAL_PLIES };
     if (state.bonusPieceId !== null) {
-      if (hasAnyMove(state.pieces, state.turn, state.storm, state.waste, state.bonusPieceId)) return state;
+      if (hasAnyMove(state, state.turn, state.bonusPieceId)) return state;
       // The chaining piece is boxed in: the chain move lapses.
       state = switchTurn(state, { kind: 'pass', player: state.turn, reason: 'bonusSkip' }, state.pliesSinceCapture + 1);
       continue;
     }
     // A side that cannot move but can still lay its wasteland is not passed: casting is its turn.
-    if (hasAnyMove(state.pieces, state.turn, state.storm, state.waste) || sideCanCast(state, state.turn)) return state;
-    if (!hasAnyMove(state.pieces, other(state.turn), state.storm, state.waste) && !sideCanCast(state, other(state.turn))) return end(state, adjudicate(state), 'stalemate');
-    state = switchTurn(state, { kind: 'pass', player: state.turn, reason: 'noMoves' }, state.pliesSinceCapture + 1);
+    if (hasAnyMove(state, state.turn) || sideCanCast(state, state.turn)) return state;
+    // Stuns wear off, so the game is only stuck when neither side could act even without them.
+    const selfLater = hasAnyMove(state, state.turn, null, true) || sideCanCast(state, state.turn, true);
+    if (!selfLater && !hasAnyMove(state, other(state.turn), null, true) && !sideCanCast(state, other(state.turn), true)) return end(state, adjudicate(state), 'stalemate');
+    const reason: PassReason = selfLater ? 'stunned' : 'noMoves';
+    state = switchTurn(state, { kind: 'pass', player: state.turn, reason }, state.pliesSinceCapture + 1);
   }
 }
 
@@ -289,23 +387,32 @@ export function applyMove(state: GameState, move: Move): GameState {
   if (!legal) throw new Error(`Illegal move: ${JSON.stringify(move)}`);
   const player = state.turn;
   const mover = state.pieces.find((p) => p.id === legal.pieceId)!;
-  const victim = legal.captureId ? state.pieces.find((p) => p.id === legal.captureId) : undefined;
-  // Touching wasteland destroys the mover (wasteland never holds a piece, so nothing is captured).
+  // Everything the move captures: the piece on `to`, plus every enemy Picker hops onto on the way.
+  const victimIds = capturedIds(legal);
+  const victims = victimIds.map((id) => state.pieces.find((p) => p.id === id)!);
+  // Touching wasteland destroys the mover (wasteland never holds a piece). A hop still takes the
+  // enemies it landed on before reaching the wasteland square.
   const wasted = isWasteMove(state, legal.to);
+  const d = pieceDir(mover);
+  // Michelle's doll trap: her first TRAPS_PER_MICHELLE backward moves leave one on `from`.
+  const laysTrap = mover.character === 'michelle' && !wasted && (legal.to.r - legal.from.r) * d < 0 && trapsLeft(state, player) > 0;
+  // Ending a move on an ENEMY doll trap stuns the mover (its own side's traps never catch it).
+  const caught = !wasted && trapAt(state, legal.to, other(player));
   const pieces: Piece[] = [];
-  let moved: Piece | null = null;
   for (const p of state.pieces) {
-    if (victim && p.id === victim.id) continue;
+    if (victimIds.includes(p.id)) continue;
     if (p.id === legal.pieceId && wasted) continue;
     if (p.id === legal.pieceId) {
-      moved = { ...p, pos: { r: legal.to.r, c: legal.to.c } };
+      const moved: Piece = { ...p, pos: { r: legal.to.r, c: legal.to.c } };
       // Forward-only movers turn around when they reach the last row in their direction.
-      if (p.character !== 'sad') {
-        const d = pieceDir(p);
-        if (atTurnRow(moved.pos.r, d)) moved.dir = d === 1 ? -1 : 1;
+      if (!keepsDirection(CHAR_CODE[p.character]) && atTurnRow(moved.pos.r, d)) moved.dir = d === 1 ? -1 : 1;
+      // Insaner steals the movement pattern of whatever it captures (every victim of a hop).
+      if (p.character === 'insaner' && victims.length) {
+        let holder: Piece = moved;
+        for (const v of victims) holder = { ...holder, absorbed: absorbInto(holder, v) };
+        moved.absorbed = holder.absorbed;
       }
-      // Insaner steals the movement pattern of whatever it captures.
-      if (p.character === 'insaner' && victim) moved.absorbed = absorbInto(p, victim);
+      if (caught) moved.stun = TRAP_STUN;
       pieces.push(moved);
     } else pieces.push(p);
   }
@@ -313,12 +420,26 @@ export function applyMove(state: GameState, move: Move): GameState {
   ct[player] = 0;
   const recorded: Move = { pieceId: legal.pieceId, from: { ...legal.from }, to: { ...legal.to } };
   if (legal.captureId) recorded.captureId = legal.captureId;
+  if (legal.captureIds) recorded.captureIds = [...legal.captureIds];
   if (wasted) recorded.wasted = true;
+  if (laysTrap) recorded.trap = true;
+  if (caught) recorded.stunned = true;
   const entry: HistoryEntry = { kind: 'move', player, move: recorded };
-  const psc = legal.captureId ? 0 : state.pliesSinceCapture + 1;
+  const psc = victims.length ? 0 : state.pliesSinceCapture + 1;
   const base: GameState = { ...state, pieces, consecutiveTimeouts: ct };
-  // Chain move: a Level-3 Insaner that captures moves once more (one extra move per turn).
-  if (victim && mover.character === 'insaner' && mover.level === 3 && state.bonusPieceId === null) {
+  if (laysTrap) {
+    const sq = sqOf(legal.from);
+    const traps = state.traps ?? [];
+    base.traps = traps.some((t) => t.sq === sq && t.owner === player)
+      ? traps
+      : [...traps, { sq, owner: player }].sort((a, b) => a.sq - b.sq || a.owner - b.owner);
+    const laid: [number, number] = [state.trapsLaid?.[0] ?? 0, state.trapsLaid?.[1] ?? 0];
+    laid[player] += 1;
+    base.trapsLaid = laid;
+  }
+  // Chain move: a Level-3 Insaner that captures moves once more (one extra move per turn; a
+  // multi-capture is still one capture). A doll trap that catches it ends the turn instead.
+  if (victims.length && mover.character === 'insaner' && mover.level === 3 && state.bonusPieceId === null && !caught && !wasted) {
     return settle({ ...base, ply: state.ply + 1, pliesSinceCapture: psc, bonusPieceId: mover.id, history: [...state.history, entry] });
   }
   return settle(switchTurn(base, entry, psc));
@@ -332,7 +453,7 @@ export function wasteArea(level: number, anchor: Pos): number[] {
   return out;
 }
 
-export type SkillBlock = 'noSkill' | 'notYourTurn' | 'chain' | 'notYet' | 'used' | 'storm' | 'ended';
+export type SkillBlock = 'noSkill' | 'notYourTurn' | 'chain' | 'notYet' | 'used' | 'storm' | 'stunned' | 'ended';
 
 /**
  * Why `pieceId` cannot use its skill right now, or null when it can. Brutile's wasteland unlocks at
@@ -348,6 +469,8 @@ export function skillBlock(state: GameState, pieceId: string): SkillBlock | null
   if (state.storm > 0) return 'storm';
   if (state.skillsUsed[p.owner] >= SKILL_USES_PER_MATCH) return 'used';
   if (state.ply < SKILL_UNLOCK_PLY) return 'notYet';
+  // Checked last: 'stunned' means the skill would be usable once the doll trap lets go.
+  if (isStunned(p)) return 'stunned';
   return null;
 }
 
@@ -356,12 +479,16 @@ export function skillUnlockIn(state: Pick<GameState, 'ply'>): number {
   return Math.max(0, Math.ceil((SKILL_UNLOCK_PLY - state.ply) / 2));
 }
 
-/** Could `player` lay a wasteland on its turn (ignoring whose turn it is now)? */
-function sideCanCast(state: GameState, player: PlayerId): boolean {
+/**
+ * Could `player` lay a wasteland on its turn (ignoring whose turn it is now)? `ignoreStun`: could it
+ * once a doll trap lets its caster go.
+ */
+function sideCanCast(state: GameState, player: PlayerId, ignoreStun = false): boolean {
   if (state.bonusPieceId !== null) return false;
   const p = state.pieces.find((x) => x.owner === player && CHARACTERS[x.character].skill);
   if (!p) return false;
-  return skillBlock({ ...state, turn: player }, p.id) === null && freeAnchors(state, p.level).length > 0;
+  const block = skillBlock({ ...state, turn: player }, p.id);
+  return (block === null || (ignoreStun && block === 'stunned')) && freeAnchors(state, p.level).length > 0;
 }
 
 /** Valid anchors for `pieceId`'s wasteland: the whole area on the board and free of pieces. */

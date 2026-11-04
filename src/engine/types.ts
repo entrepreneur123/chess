@@ -43,9 +43,16 @@ export const SUDDEN_DEATH_PLY = 80;
 export const SKILL_UNLOCK_PLY = 6;
 /** How many times a side may use its skill per match. */
 export const SKILL_USES_PER_MATCH = 1;
+/** Michelle's doll traps: the first this-many backward moves of a match each leave one. */
+export const TRAPS_PER_MICHELLE = 3;
+/**
+ * A piece caught by an enemy doll trap gets this many "owner turns" of stun; the turn it was caught
+ * in counts down at once (see `Piece.stun`), so it sits out exactly its owner's next turn.
+ */
+export const TRAP_STUN = 2;
 
 export type PlayerId = 0 | 1;
-export type CharacterId = 'sad' | 'marki' | 'walk' | 'insaner' | 'brutile';
+export type CharacterId = 'sad' | 'marki' | 'walk' | 'insaner' | 'brutile' | 'michelle' | 'picker';
 export type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
 export type Level = 1 | 2 | 3;
 
@@ -78,6 +85,18 @@ export interface Piece {
    * union of its own pattern and every absorbed pattern. Absent or empty for everyone else.
    */
   absorbed?: AbsorbedAbility[];
+  /**
+   * Doll-trap stun (Michelle's trait). While > 0 the piece generates no moves and cannot cast.
+   * Set to TRAP_STUN when it ends a move on an enemy trap; every time its OWNER's turn ends it
+   * counts down by one, so it sits out exactly its owner's next turn. Absent / 0 = free.
+   */
+  stun?: number;
+}
+
+/** A doll trap Michelle left on square `sq` (r * 12 + c). It never disappears during a match. */
+export interface Trap {
+  sq: number;
+  owner: PlayerId;
 }
 
 /**
@@ -104,6 +123,17 @@ export interface Move {
   captureId?: string;
   /** Set on recorded moves: `to` was wasteland, so the mover was destroyed there. */
   wasted?: true;
+  /**
+   * Picker's hop-through: every enemy captured by this move in path order (the ones hopped onto on
+   * the way, then the one on `to`). Only set when something was captured on the way; `captureId`
+   * is then the piece on `to`, or the first piece hopped onto when `to` was empty, so `captureId`
+   * stays the "is this a capture" flag for every consumer. See `capturedIds`.
+   */
+  captureIds?: string[];
+  /** Set on recorded moves: Michelle moved backward and left a doll trap on `from`. */
+  trap?: true;
+  /** Set on recorded moves: the mover ended on an enemy doll trap and is stunned. */
+  stunned?: true;
 }
 
 /** Brutile's skill: lay a k x k wasteland whose lowest-row, lowest-column square is `anchor`. */
@@ -127,7 +157,9 @@ export type PassReason =
   | 'timeout'
   | 'noMoves'
   /** The player declined (or could not use) a chain move after a capture. */
-  | 'bonusSkip';
+  | 'bonusSkip'
+  /** Every piece that could move is held by a doll trap (it would have a move otherwise). */
+  | 'stunned';
 
 export type HistoryEntry =
   | { kind: 'move'; player: PlayerId; move: Move }
@@ -166,6 +198,10 @@ export interface GameState {
   waste: number[];
   /** Skill uses so far per player. */
   skillsUsed: [number, number];
+  /** Michelle's doll traps on the board (sorted by square, then owner). Absent = none. */
+  traps?: Trap[];
+  /** Backward moves that laid a trap so far, per player (at most TRAPS_PER_MICHELLE). */
+  trapsLaid?: [number, number];
 }
 
 export interface CharacterDef {
@@ -181,4 +217,6 @@ export interface CharacterDef {
   passiveKo?: string;
   /** Active skill (UI copy), if the character has one; `descKo` per level. */
   skill?: { nameKo: string; descKo: [string, string, string] };
+  /** Always-on trait (UI copy), e.g. Michelle's doll trap or Picker's hop-through. */
+  trait?: { nameKo: string; descKo: string };
 }

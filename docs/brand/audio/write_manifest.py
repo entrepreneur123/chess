@@ -2,24 +2,47 @@
 
 Usage:  python3 write_manifest.py   (run from anywhere; paths are resolved from this file)
 Only files that exist on disk are listed, so a partial regeneration never ships dead URLs.
+The character list is read from the `CharacterId` union in src/engine/types.ts, so the generated
+records always match the engine type: a character without clips gets an empty entry, and voiced
+characters the engine does not know yet are left out (with a warning).
 """
 import json
 import os
+import re
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
 PUB = os.path.join(ROOT, "public", "audio")
 OUT = os.path.join(ROOT, "src", "audio", "voiceManifest.ts")
-CHARS = ("sad", "marki", "walk", "insaner", "brutile")
-EVENTS = ("select", "move", "capture", "skill", "chain", "death", "victory")
+TYPES = os.path.join(ROOT, "src", "engine", "types.ts")
+# Every event a clip can be keyed by. trap-set / trap-sprung: michelle's doll trap is laid / catches
+# a piece; hop-multi: picker captures more than one piece in a single hop.
+EVENTS = ("select", "move", "capture", "skill", "chain", "trap-set", "trap-sprung", "hop-multi", "death", "victory")
+
+
+def character_ids() -> tuple:
+    m = re.search(r"export type CharacterId\s*=\s*([^;]+);", open(TYPES, encoding="utf-8").read())
+    if not m:
+        raise SystemExit(f"CharacterId union not found in {TYPES}")
+    return tuple(re.findall(r"'([a-z0-9_]+)'", m.group(1)))
+
+
+def key(ev: str) -> str:
+    return ev if re.fullmatch(r"[a-z_][a-z0-9_]*", ev) else f"'{ev}'"
 
 
 def main() -> None:
     spec = json.load(open(os.path.join(HERE, "lines.json"), encoding="utf-8"))
+    CHARS = character_ids()
     voice: dict = {c: {} for c in CHARS}
     texts: dict = {}
     for char, c in spec["characters"].items():
+        if char not in CHARS:
+            print(f"WARNING: {char} is not a CharacterId in {TYPES}; its clips are left out")
+            continue
         for line in c["lines"]:
+            if line["event"] not in EVENTS:
+                raise SystemExit(f"{char}:{line['id']}: unknown event {line['event']!r}")
             rel = f"vo/{char}-{line['id']}.m4a"
             if os.path.exists(os.path.join(PUB, rel)):
                 voice[char].setdefault(line["event"], []).append(rel)
@@ -38,7 +61,7 @@ def main() -> None:
         "// Paths are relative to public/audio/ (served at `${import.meta.env.BASE_URL}audio/`).",
         "import type { CharacterId } from '../engine/types';",
         "",
-        "export type CharAudioEvent = 'select' | 'move' | 'capture' | 'skill' | 'chain' | 'death' | 'victory';",
+        "export type CharAudioEvent = " + " | ".join(f"'{e}'" for e in EVENTS) + ";",
         "",
         "/** Voice-line variants per character and event (one is picked at random, avoiding repeats). */",
         "export const VOICE_CLIPS: Record<CharacterId, Partial<Record<CharAudioEvent, readonly string[]>>> = {",
@@ -48,7 +71,7 @@ def main() -> None:
         for ev in EVENTS:
             if ev in voice[char]:
                 items = ", ".join(f"'{p}'" for p in voice[char][ev])
-                lines.append(f"    {ev}: [{items}],")
+                lines.append(f"    {key(ev)}: [{items}],")
         lines.append("  },")
     lines += [
         "};",
@@ -65,7 +88,7 @@ def main() -> None:
         "export const CHAR_SFX: Record<CharacterId, Partial<Record<CharAudioEvent, string>>> = {",
     ]
     for char in CHARS:
-        inner = ", ".join(f"{ev}: '{p}'" for ev, p in sfx[char].items())
+        inner = ", ".join(f"{key(ev)}: '{p}'" for ev, p in sfx[char].items())
         lines.append(f"  {char}: {{ {inner} }},")
     lines += [
         "};",

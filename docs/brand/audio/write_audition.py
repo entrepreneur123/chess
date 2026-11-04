@@ -13,8 +13,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
 PUB = os.path.join(ROOT, "public", "audio")
 NAMES = {"sad": ("사드", "Paladin"), "marki": ("마르키", "Minotaur"), "walk": ("월크", "Shield soldier"),
-         "insaner": ("인세이너", "Imp"), "brutile": ("브루타일", "Witch")}
+         "insaner": ("인세이너", "Imp"), "brutile": ("브루타일", "Witch"),
+         "michelle": ("미셸", "Gloomy girl with a doll"), "picker": ("피커", "Frontier drifter")}
 EVENT_KO = {"select": "선택", "move": "이동", "capture": "잡기", "skill": "스킬", "chain": "연속",
+            "trap-set": "함정 설치", "trap-sprung": "함정 발동", "hop-multi": "연속 잡기",
             "death": "사망", "victory": "승리"}
 
 CSS = """
@@ -51,7 +53,7 @@ def main() -> None:
            "<title>GRID CLASH Voice Audition</title>", f"<style>{CSS}</style></head><body><main>",
            "<h1>GRID CLASH 보이스 오디션</h1>",
            '<p class="sub">캐릭터별 전체 대사. 각 줄 오른쪽 값: 길이 · 라우드니스(LUFS) · 중앙 피치(F0) · 음성인식 오류율(CER).</p>',
-           "<nav>" + "".join(f'<a href="#{c}">{NAMES[c][0]}</a>' for c in spec["characters"]) + "</nav>"]
+           "<nav>" + "".join(f'<a href="#{c}">{NAMES.get(c, (c,))[0]}</a>' for c in spec["characters"]) + "</nav>"]
     for char, c in spec["characters"].items():
         ko, en = NAMES.get(char, (char, ""))
         out.append(f'<section id="{char}"><h2>{ko} <span class="meta">{char}</span></h2>')

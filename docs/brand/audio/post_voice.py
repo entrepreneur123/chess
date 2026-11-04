@@ -17,8 +17,8 @@ Per take:
      take measures (2-8 kHz vs 0.1-2 kHz energy) against the character's target; the cut is applied
      again after the FX. No bit-crushing anywhere.
   3. Character FX (fx_* below). Pitch is never shifted on the main voice (insaner only gets +10 %
-     formants). Extra layers (marki's sub-octave growl, insaner's octave-down demon double) are
-     resynthesised with the WORLD vocoder.
+     formants). Extra layers (marki's sub-octave growl, insaner's octave-down demon double,
+     michelle's whispered double at the original pitch) are resynthesised with the WORLD vocoder.
   4. Reverb tails are rendered in full and the clip ends only where its level has fallen 55 dB
      below the peak, then gets a >= 150 ms cosine fade, so no tail is ever cut.
   5. Loudness -16 LUFS (BS.1770) with a smooth 4x-oversampled true-peak limiter at -2 dBTP; after
@@ -26,7 +26,8 @@ Per take:
   6. Every raw take is transcribed first; the best few per line (CER, closeness to the character's
      pitch target - shouted takes sit far above it - and length) are fully processed and judged on
      what actually ships (decoded .m4a): Whisper CER, pitch deviation, length, warble, and for
-     characters marked "gender": "female" a gate on the classifier's P(female) when --gender is given.
+     characters marked "gender": "female" / "male" a gate on the classifier's P(female) when
+     --gender is given (female: P >= 0.6 preferred, male: P <= 0.4).
 """
 import argparse
 import json
@@ -239,13 +240,62 @@ def fx_brutile(x):
     return hall(y, 1.2, 0.12, predelay=0.03, lp=4000)
 
 
-FX = {"sad": fx_sad, "marki": fx_marki, "walk": fx_walk, "insaner": fx_insaner, "brutile": fx_brutile}
+def whisper_layer(x: np.ndarray) -> np.ndarray:
+    """WORLD resynthesis of x with the same pitch and spectral envelope but fully aperiodic
+    excitation: the same words, whispered. Nothing is pitch-shifted."""
+    f0, t = pw.harvest(x, SR, f0_floor=55, f0_ceil=1000, frame_period=5)
+    sp = pw.cheaptrick(x, f0, t, SR)
+    ap = np.ones_like(sp) * 0.999  # noise excitation everywhere
+    y = pw.synthesize(np.ascontiguousarray(f0), np.ascontiguousarray(sp), np.ascontiguousarray(ap), SR, 5)
+    return pad(y, len(x))
+
+
+def fx_michelle(x):
+    """Gloomy little girl: her own voice (never pitch-shifted), a very quiet whispered double of the
+    same words a few ms behind (slowly drifting in level, band-limited so it adds breath, not hiss)
+    and a small, close room."""
+    y = biquad(x, "hp", 100)
+    n = len(y)
+    t = np.arange(n) / SR
+    w = whisper_layer(y)
+    w = biquad(biquad(w, "hp", 700), "lp", 5500)
+    w = np.concatenate([np.zeros(int(0.028 * SR)), w])[:n]      # 28 ms behind: a second presence
+    w *= 0.75 + 0.25 * np.sin(2 * math.pi * 0.45 * t + 1.3)     # drifts in and out
+    y = y + 0.16 * w * rms(y) / rms(w)
+    y = biquad(y, "lowshelf", 250, 1.0)
+    y = compress(y, -22, 2.0, attack=0.008, release=0.15)
+    return hall(y, 0.55, 0.11, predelay=0.008, lp=4500, hp=220)
+
+
+def fx_picker(x):
+    """Laconic frontier drifter: light chest warmth, a breath of tape-style saturation and a short,
+    dry wooden "saloon" room (a few early reflections plus a 0.45 s dark tail)."""
+    y = biquad(x, "hp", 65)
+    y = biquad(y, "lowshelf", 200, 1.5)
+    y = biquad(y, "peak", 450, -0.8, 1.0)                      # keep the warmth clear of boxiness
+    pk = np.abs(y).max() + 1e-9
+    y = 0.9 * y + 0.1 * np.tanh(1.5 * y / pk) * pk
+    y = compress(y, -21, 2.5, attack=0.006, release=0.1)
+    n = len(y)
+    er = np.zeros(n + int(0.03 * SR))                           # wooden walls: early reflections
+    for ms, g in ((6.5, 0.16), (11.0, 0.11), (17.5, 0.08), (23.0, 0.05)):
+        d = int(ms / 1000 * SR)
+        er[d:d + n] += g * y
+    er = biquad(biquad(er, "lp", 3200), "hp", 200)
+    y = np.concatenate([y, np.zeros(len(er) - n)]) + er
+    return hall(y, 0.45, 0.07, predelay=0.012, lp=3200, hp=200)
+
+
+FX = {"sad": fx_sad, "marki": fx_marki, "walk": fx_walk, "insaner": fx_insaner, "brutile": fx_brutile,
+      "michelle": fx_michelle, "picker": fx_picker}
 # Brightness target (voice_qa harsh_db) for the adaptive presence cut; ElevenLabs takes measure
 # about -6..-1 dB raw. Humans sit warmer, the witch keeps a little more rasp.
-HARSH_TARGET = {"sad": -9.0, "marki": -11.0, "walk": -10.0, "insaner": -8.0, "brutile": -7.0}
+HARSH_TARGET = {"sad": -9.0, "marki": -11.0, "walk": -10.0, "insaner": -8.0, "brutile": -7.0,
+                "michelle": -9.0, "picker": -10.0}
 # De-esser threshold (share of the full-band envelope the >4.5 kHz band may carry before it is turned
 # down). walk's hard affricates ([ch] in 끝이다, [ss] in 쓰러뜨렸다) need a firmer hand.
-DEESS_THR = {"sad": 0.35, "marki": 0.35, "walk": 0.2, "insaner": 0.35, "brutile": 0.3}
+DEESS_THR = {"sad": 0.35, "marki": 0.35, "walk": 0.2, "insaner": 0.35, "brutile": 0.3,
+             "michelle": 0.3, "picker": 0.3}
 
 
 # ------------------------------------------------------------------------------------------------
@@ -415,7 +465,7 @@ def main() -> None:
             continue
         rawdir = os.path.join(a.raw, char)
         src = c.get("source", {})
-        want_female = c.get("gender") == "female"
+        want = c.get("gender")  # "female" / "male": gate takes on the QA classifier when --gender is given
         # Pass 1: ASR + pitch of every raw take (speech part only).
         cands = {}
         for line in c["lines"]:
@@ -466,9 +516,9 @@ def main() -> None:
                 score = (cer(ref, hyp) + 0.5 * dev(k) + 0.15 * max(0.0, d - 2.6)
                          + 0.1 * max(0.0, k["dur"] / natural - 1.2) + 1.5 * max(0.0, art["warble"] - 0.12))
                 fp = None
-                if gender is not None and want_female:
+                if gender is not None and want in ("female", "male"):
                     fp = gender(z)
-                    score += 2.0 * max(0.0, 0.6 - fp)
+                    score += 2.0 * max(0.0, (0.6 - fp) if want == "female" else (fp - 0.4))
                 print(f"  {char}:{line['id']} {k['file']} -> {hyp!r} cer={cer(ref, hyp):.2f} dur={d:.2f} "
                       f"f0={k['f0']:.0f} warble={art['warble']} fem={fp} ({score:.3f})", flush=True)
                 if best is None or score < best[0]:

@@ -1,6 +1,6 @@
 export * from './types';
-export { CHARACTERS, CHARACTER_IDS, STARTER_IDS, WASTE_SIZE, pieceValue, effectiveValue, absorbMaskOf, abilityBit } from './characters';
-export { forwardDir, formationToAbsolute, isInZone, isOnBoard, sqOf, posOf, genTargets, inStorm, N_SQUARES } from './board';
+export { CHARACTERS, CHARACTER_IDS, STARTER_IDS, WASTE_SIZE, PICKER_RANGE, pieceValue, effectiveValue, absorbMaskOf, abilityBit } from './characters';
+export { forwardDir, formationToAbsolute, isInZone, isOnBoard, sqOf, posOf, genTargets, inStorm, canHop, trapBit, N_SQUARES } from './board';
 export { validateFormation, isCharacterId, defaultFormation, randomFormation, normalizeSquad, squadOf } from './formation';
 export {
   createGame,
@@ -28,6 +28,12 @@ export {
   isLegalSkill,
   isWasteMove,
   wasteFlags,
+  trapFlags,
+  isStunned,
+  trapAt,
+  trapsLeft,
+  capturedIds,
+  hopPath,
 } from './rules';
 export type { FastBoard } from './fast';
 export type { SkillBlock } from './rules';

@@ -1,6 +1,22 @@
 import { BOARD_SIZE, ZONE_DEPTH } from './types';
 import type { PlayerId, Pos } from './types';
-import { CH_BRUTILE, CH_INSANER, CH_MARKI, CH_SAD, INSANER_DIAG_LEVEL, INSANER_RANGE, MARKI_RANGE, N_CHARS, SAD_RANGE, WALK_HALF } from './characters';
+import {
+  CH_BRUTILE,
+  CH_INSANER,
+  CH_MARKI,
+  CH_MICHELLE,
+  CH_PICKER,
+  CH_SAD,
+  INSANER_DIAG_LEVEL,
+  INSANER_RANGE,
+  MARKI_RANGE,
+  MICHELLE_FORWARD_LEVEL,
+  MICHELLE_RANGE,
+  N_CHARS,
+  PICKER_RANGE,
+  SAD_RANGE,
+  WALK_HALF,
+} from './characters';
 
 export const N_SQUARES = BOARD_SIZE * BOARD_SIZE;
 
@@ -53,6 +69,18 @@ const BRUTILE_DIRS: Record<number, [number[], number[], number[]]> = {
   [-1]: [[], [-1, -1, -1, 1], [-1, -1, -1, 1, 1, 0]],
 };
 
+/** Michelle: left, right and straight back (by direction); the 3-star forward step is separate. */
+const MICHELLE_DIRS: Record<number, number[]> = {
+  1: [0, 1, 0, -1, -1, 0],
+  [-1]: [0, 1, 0, -1, 1, 0],
+};
+const MICHELLE_FWD: Record<number, number[]> = { 1: [1, 0], [-1]: [-1, 0] };
+
+/** Trap flag bit of `owner`'s doll traps in a per-square trap mask (bit 0 = player 0, bit 1 = player 1). */
+export function trapBit(owner: number): number {
+  return owner === 0 ? 1 : 2;
+}
+
 /** True when a forward-only mover standing on row `r` with direction `dir` has no row ahead: it turns around. */
 export function atTurnRow(r: number, dir: number): boolean {
   const next = r + dir;
@@ -100,6 +128,52 @@ function slide(
   return n;
 }
 
+/**
+ * Picker's hop-through along the four diagonals, up to `L` squares. He lands on every square on the
+ * way, so nothing blocks him: enemies on the way are captured (their squares are emitted and the hop
+ * goes on), his own pieces are hopped over (never a landing square). Edges and the storm end the
+ * path before the square; wasteland ends it ON the square (he dies there, like a slide); the first
+ * ENEMY doll trap ends it on the trap square (he may land there and is caught).
+ */
+function hop(
+  occ: ArrayLike<number>,
+  owners: ArrayLike<number>,
+  owner: number,
+  r: number,
+  c: number,
+  L: number,
+  out: { [i: number]: number },
+  n: number,
+  includeAllies: boolean,
+  storm: number,
+  waste: ArrayLike<number> | null,
+  traps: ArrayLike<number> | null,
+): number {
+  const enemyTrap = owner === 0 ? 2 : 1;
+  for (let d = 0; d < 8; d += 2) {
+    const dr = DIAG_DIRS[d];
+    const dc = DIAG_DIRS[d + 1];
+    let nr = r;
+    let nc = c;
+    for (let k = 0; k < L; k++) {
+      nr += dr;
+      nc += dc;
+      if (nr < 0 || nr >= BOARD_SIZE || nc < 0 || nc >= BOARD_SIZE || inStorm(nc, storm)) break;
+      const s = nr * BOARD_SIZE + nc;
+      const o = occ[s];
+      if (o < 0 || includeAllies || owners[o] !== owner) out[n++] = s;
+      if (waste !== null && waste[s]) break;
+      if (traps !== null && traps[s] & enemyTrap) break;
+    }
+  }
+  return n;
+}
+
+/** True when `absorb` (or the character itself) carries Picker's hop-through pattern. */
+export function canHop(ch: number, absorb: number): boolean {
+  return ch === CH_PICKER || (absorb & (0b111 << (CH_PICKER * 3))) !== 0;
+}
+
 /** One movement pattern (a character at a level) from square (r, c). */
 function genPattern(
   occ: ArrayLike<number>,
@@ -115,6 +189,7 @@ function genPattern(
   dir: number,
   storm: number,
   waste: ArrayLike<number> | null,
+  traps: ArrayLike<number> | null,
 ): number {
   if (ch === CH_SAD) return slide(occ, owners, owner, r, c, ORTHO_DIRS, SAD_RANGE[level], out, n, includeAllies, storm, waste);
   if (ch === CH_INSANER) {
@@ -126,6 +201,12 @@ function genPattern(
     const dirs = level >= 3 ? KING_DIRS : BRUTILE_DIRS[dir][level];
     return slide(occ, owners, owner, r, c, dirs, 1, out, n, includeAllies, storm, waste);
   }
+  if (ch === CH_MICHELLE) {
+    n = slide(occ, owners, owner, r, c, MICHELLE_DIRS[dir], MICHELLE_RANGE[level], out, n, includeAllies, storm, waste);
+    if (level >= MICHELLE_FORWARD_LEVEL) n = slide(occ, owners, owner, r, c, MICHELLE_FWD[dir], 1, out, n, includeAllies, storm, waste);
+    return n;
+  }
+  if (ch === CH_PICKER) return hop(occ, owners, owner, r, c, PICKER_RANGE[level], out, n, includeAllies, storm, waste, traps);
   const dr = dir;
   if (ch === CH_MARKI) {
     const L = MARKI_RANGE[level];
@@ -175,6 +256,7 @@ let stamp = 0;
  * @param storm   columns swallowed by the storm per side (blocked squares)
  * @param absorb  bitmask of absorbed (character, level) patterns, see `abilityBit`
  * @param waste   optional length-144 wasteland flags: slides end ON a wasteland square
+ * @param traps   optional length-144 doll-trap masks (see `trapBit`): Picker's hop stops on an enemy trap
  * @returns new write offset into `out`
  */
 export function genTargets(
@@ -191,13 +273,14 @@ export function genTargets(
   storm = 0,
   absorb = 0,
   waste: ArrayLike<number> | null = null,
+  traps: ArrayLike<number> | null = null,
 ): number {
   const r = (sq / BOARD_SIZE) | 0;
   const c = sq - r * BOARD_SIZE;
   // The piece can never be in the storm itself (it would have been removed), but when the
   // caller passes a storm the origin must still be a legal square: nothing to do here.
   const start = n;
-  n = genPattern(occ, owners, owner, ch, level, r, c, out, n, includeAllies, dir, storm, waste);
+  n = genPattern(occ, owners, owner, ch, level, r, c, out, n, includeAllies, dir, storm, waste, traps);
   if (absorb === 0) return n;
   stamp++;
   for (let k = start; k < n; k++) seenStamp[out[k]] = stamp;
@@ -207,7 +290,7 @@ export function genTargets(
     const alvl = (bit % 3) + 1;
     if (ach === ch && alvl === level) continue;
     const from = n;
-    n = genPattern(occ, owners, owner, ach, alvl, r, c, out, n, includeAllies, dir, storm, waste);
+    n = genPattern(occ, owners, owner, ach, alvl, r, c, out, n, includeAllies, dir, storm, waste, traps);
     // Compact: drop squares already emitted.
     let w = from;
     for (let k = from; k < n; k++) {
