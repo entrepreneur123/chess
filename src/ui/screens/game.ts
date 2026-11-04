@@ -12,6 +12,7 @@ import {
   capturedIds,
   createGame,
   AWAKEN_TURNS,
+  getLegalMoves,
   getPieceById,
   getTargetsForPiece,
   isAwake,
@@ -35,7 +36,7 @@ import {
   type SkillAction,
   type SkillBlock,
 } from '../../engine';
-import { createBoardView, type IBoardView } from '../../render';
+import { createBoardView, diagEnabled, type IBoardView } from '../../render';
 import type { VoiceEvent } from '../../audio/voice';
 import { PACING } from '../../meta/economy';
 import { getProfile, setProfile, settleMatch, updateProfile, type MatchOutcome, type MatchSummary } from '../../meta/profile';
@@ -1129,6 +1130,23 @@ export function gameScreen(router: Router, params: GameParams): Screen {
         w.__game = { controller: c, board, params };
         bag.add(() => {
           if ((w.__game as { controller?: unknown } | undefined)?.controller === c) delete w.__game;
+        });
+      }
+      if (import.meta.env.DEV || diagEnabled()) {
+        // Read-only probe for automated soak tests (`?diag=1`, also in production): copies of what
+        // the screen already shows (the game has no hidden information) and square geometry. It
+        // cannot act: tests play through the real UI.
+        const w = window as unknown as Record<string, unknown>;
+        const probe = {
+          snapshot: () => JSON.parse(JSON.stringify(c.snapshot())) as ControllerSnapshot,
+          legalMoves: () => (c.phase === 'humanTurn' && !c.paused ? JSON.parse(JSON.stringify(getLegalMoves(c.state))) as Move[] : []),
+          skillAnchors: (pieceId: string) => (c.phase === 'humanTurn' && !c.paused ? skillAnchors(c.state, pieceId) : []),
+          cellRect: (pos: Pos) => board?.cellRect?.(pos) ?? null,
+          renderer: board?.getDiagnostics?.()?.renderer ?? null,
+        };
+        w.__gridclash = probe;
+        bag.add(() => {
+          if (w.__gridclash === probe) delete w.__gridclash;
         });
       }
 

@@ -10,6 +10,7 @@ export { BoardView } from './BoardView';
 export { Board2DView } from './Board2DView';
 export * from './palette';
 export type { RenderDiagnostics } from './diag';
+export { diagEnabled } from './diag';
 
 /** True if the browser can create a WebGL context at all (cheap probe, context released). */
 export function isWebGLAvailable(): boolean {
