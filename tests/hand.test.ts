@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BOARD_SIZE, SKILL_UNLOCK_PLY, type FormationSlot, type GameState, type Move } from '../src/engine';
 import { GameController, type ControllerPorts } from '../src/ui/game/GameController';
 import { handModel, selectFromHand, skillReadiness } from '../src/ui/game/hand';
-import { makeState } from './helpers';
+import { makeState, spendSkill } from './helpers';
 
 const ports = (): ControllerPorts => ({
   requestBotMove: () => new Promise<Move | null>(() => {}),
@@ -93,7 +93,7 @@ describe('hand model', () => {
     expect(skillReadiness(position({ ply: 0 }), 'p0-brutile')?.label).toMatch(/턴 후$/);
     expect(skillReadiness(position({ ply: SKILL_UNLOCK_PLY }), 'p0-brutile')).toMatchObject({ state: 'ready' });
     expect(skillReadiness(position({ ply: SKILL_UNLOCK_PLY + 1, turn: 1 }), 'p0-brutile')).toMatchObject({ state: 'ready' });
-    expect(skillReadiness(position({ ply: SKILL_UNLOCK_PLY, skillsUsed: [1, 0] }), 'p0-brutile')).toMatchObject({ state: 'used' });
+    expect(skillReadiness(spendSkill(position({ ply: SKILL_UNLOCK_PLY }), 'p0-brutile'), 'p0-brutile')).toMatchObject({ state: 'used' });
     expect(skillReadiness(position({ ply: SKILL_UNLOCK_PLY, storm: 1, stormIn: 6 }), 'p0-brutile')).toMatchObject({ state: 'sealed' });
     expect(skillReadiness(position(), 'p0-sad')).toBeNull();
   });

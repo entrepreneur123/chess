@@ -2,7 +2,7 @@
 // Paths are relative to public/audio/ (served at `${import.meta.env.BASE_URL}audio/`).
 import type { CharacterId } from '../engine/types';
 
-export type CharAudioEvent = 'select' | 'move' | 'capture' | 'skill' | 'chain' | 'trap-set' | 'trap-sprung' | 'hop-multi' | 'death' | 'victory';
+export type CharAudioEvent = 'select' | 'move' | 'capture' | 'skill' | 'chain' | 'trap-set' | 'trap-sprung' | 'hop-multi' | 'death' | 'victory' | 'awake-select' | 'awake-move' | 'awake-capture' | 'awake-death' | 'awake-end';
 
 /** Voice-line variants per character and event (one is picked at random, avoiding repeats). */
 export const VOICE_CLIPS: Record<CharacterId, Partial<Record<CharAudioEvent, readonly string[]>>> = {
@@ -63,6 +63,8 @@ export const VOICE_CLIPS: Record<CharacterId, Partial<Record<CharAudioEvent, rea
     'hop-multi': ['vo/picker-hop-multi-1.m4a'],
     death: ['vo/picker-death-1.m4a'],
     victory: ['vo/picker-victory-1.m4a'],
+  },
+  rakaeli: {
   },
 };
 
@@ -152,6 +154,7 @@ export const CHAR_SFX: Record<CharacterId, Partial<Record<CharAudioEvent, string
   brutile: { select: 'sfx/brutile-select.m4a', move: 'sfx/brutile-move.m4a', capture: 'sfx/brutile-capture.m4a', skill: 'sfx/brutile-skill.m4a' },
   michelle: { select: 'sfx/michelle-select.m4a', move: 'sfx/michelle-move.m4a', capture: 'sfx/michelle-capture.m4a', 'trap-set': 'sfx/michelle-trap-set.m4a', 'trap-sprung': 'sfx/michelle-trap-sprung.m4a' },
   picker: { select: 'sfx/picker-select.m4a', move: 'sfx/picker-move.m4a', capture: 'sfx/picker-capture.m4a', 'hop-multi': 'sfx/picker-hop-multi.m4a' },
+  rakaeli: {},
 };
 
 /** Shared effects used when a character has no specific one. */

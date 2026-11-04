@@ -547,6 +547,137 @@
           "style": "Calm, dry satisfaction."
         }
       ]
+    },
+    "rakaeli": {
+      "concept": "A beautiful, pale blindfolded fallen angel in his late teens (black silk blindfold, cracked dim halo, ash-grey wings) who transforms (타천) into a demon with crimson eyes, horns and flame wings. Base form: a soft, calm, melancholic young male voice with a pretty-boy timbre, elegant, quiet and sorrowful. Transformed form: the same young man, deeper and colder, speaking with a doubled, demonic voice.",
+      "gender": "male",
+      "voice": "A delicate, pretty young man of about seventeen, a fallen angel. A youthful, light tenor voice in a medium-high pitch, soft and silky, gentle and refined, with a quiet sadness. He speaks calmly and slowly with clear pronunciation. Never low or gravelly, never shouting, never a child.",
+      "clone": {
+        "ref": "refs/rakaeli-ref.flac",
+        "text": "눈을 가려도… 길은 보여요.",
+        "style": "Soft, calm and melancholic, quiet and elegant.",
+        "_from": "VoiceDesign take (seed 11, take 4) of 32 over three prompts; trimmed, a 1.6 s pause with a breath cut to 0.4 s. F0 160 Hz (130-211 Hz), warble 0.024, HNR 17.9 dB, harshness -21.9 dB (soft), CER 0, P(female) 0.001 / 0.015. A first prompt (\"soft ... young male voice ... never deep\") gave only 77-125 Hz takes, deeper than the cowboy, and was rejected; the second prompt (\"eighteen-year-old ... light, soft young tenor\") reached 155 Hz on one take of 16, with a creakier 0.05 warble."
+      },
+      "f0_target": 155,
+      "bitrate": "48k",
+      "_note": "Lines with \"fx\": \"rakaeli-awake\" are the transformed form (타천): the same cloned takes, processed by post_voice.fx_rakaeli_awake (2 semitones down, formants -6 %, a detuned WORLD double, a quiet octave-down shadow, saturation, a dark tail). awake-end is spoken as he turns back, so it keeps the base chain. 48 kbps AAC: he has about twice the lines of other characters.",
+      "lines": [
+        {
+          "id": "select-1",
+          "event": "select",
+          "text": "눈을 가려도… 길은 보여요.",
+          "style": "Soft, calm and melancholic, quiet and elegant."
+        },
+        {
+          "id": "select-2",
+          "event": "select",
+          "text": "저를… 부르셨나요.",
+          "style": "Gentle and quiet, a little sad."
+        },
+        {
+          "id": "move-1",
+          "event": "move",
+          "text": "조용히… 내려앉을게요.",
+          "style": "Soft and calm, almost weightless."
+        },
+        {
+          "id": "move-2",
+          "event": "move",
+          "text": "깃털처럼, 가볍게.",
+          "style": "Quiet and graceful."
+        },
+        {
+          "id": "capture-1",
+          "event": "capture",
+          "text": "미안해요… 편히 쉬어요.",
+          "style": "Sorrowful, gentle, apologetic."
+        },
+        {
+          "id": "capture-2",
+          "event": "capture",
+          "text": "빛이 없는 곳으로.",
+          "style": "Calm and melancholic, quietly final."
+        },
+        {
+          "id": "capture-3",
+          "event": "capture",
+          "text": "슬퍼하지 마요.",
+          "style": "Soft and tender, a little sad."
+        },
+        {
+          "id": "skill-1",
+          "event": "skill",
+          "text": "하늘이여… 나를 놓아라.",
+          "style": "A slow, intense, sorrowful vow as he tears off the blindfold and falls; rising in resolve, never shouted."
+        },
+        {
+          "id": "death-1",
+          "event": "death",
+          "text": "드디어… 쉴 수 있겠네요.",
+          "style": "Weak, relieved and fading."
+        },
+        {
+          "id": "victory-1",
+          "event": "victory",
+          "text": "기도는… 끝났어요.",
+          "style": "Calm, quiet and sad."
+        },
+        {
+          "id": "awake-select-1",
+          "event": "awake-select",
+          "text": "이제야… 보이는군.",
+          "style": "Cold, low and menacing, slow.",
+          "fx": "rakaeli-awake"
+        },
+        {
+          "id": "awake-select-2",
+          "event": "awake-select",
+          "text": "날개가 타오른다.",
+          "style": "Cold and low, quietly exultant.",
+          "fx": "rakaeli-awake"
+        },
+        {
+          "id": "awake-move-1",
+          "event": "awake-move",
+          "text": "추락은 끝났다.",
+          "style": "Cold and controlled.",
+          "fx": "rakaeli-awake"
+        },
+        {
+          "id": "awake-move-2",
+          "event": "awake-move",
+          "text": "재를 밟고 간다.",
+          "style": "Low, cold and slow.",
+          "fx": "rakaeli-awake"
+        },
+        {
+          "id": "awake-capture-1",
+          "event": "awake-capture",
+          "text": "타 버려라.",
+          "style": "Cold, low and merciless.",
+          "fx": "rakaeli-awake"
+        },
+        {
+          "id": "awake-capture-2",
+          "event": "awake-capture",
+          "text": "구원은 없다.",
+          "style": "Cold and final.",
+          "fx": "rakaeli-awake"
+        },
+        {
+          "id": "awake-death-1",
+          "event": "awake-death",
+          "text": "또… 떨어지는군.",
+          "style": "Weary, cold and fading.",
+          "fx": "rakaeli-awake"
+        },
+        {
+          "id": "awake-end-1",
+          "event": "awake-end",
+          "text": "불이… 꺼져 가요.",
+          "style": "Weary and soft, as the transformation fades."
+        }
+      ]
     }
   }
 }

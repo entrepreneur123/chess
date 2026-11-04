@@ -30,6 +30,14 @@ export function makeState(specs: Spec[], turn: PlayerId = 0, extra: Partial<Game
   };
 }
 
+/** The same state with `pieceId`'s skill marked as used this match (skills are tracked per piece). */
+export function spendSkill(state: GameState, pieceId: string): GameState {
+  const owner = state.pieces.find((p) => p.id === pieceId)?.owner ?? 0;
+  const used: [number, number] = [state.skillsUsed[0], state.skillsUsed[1]];
+  used[owner] += 1;
+  return { ...state, skillsUsed: used, pieces: state.pieces.map((p) => (p.id === pieceId ? { ...p, skillUsed: true as const } : p)) };
+}
+
 export const key = (p: Pos) => `${p.r},${p.c}`;
 export const targetKeys = (moves: Move[]) => moves.map((m) => key(m.to)).sort();
 export const keys = (ps: [number, number][]) => ps.map(([r, c]) => `${r},${c}`).sort();

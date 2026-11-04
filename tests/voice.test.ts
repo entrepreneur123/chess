@@ -22,8 +22,14 @@ const fsP: Promise<Fs> = import(/* @vite-ignore */ nodeFs);
 const audioDir = decodeURIComponent(new URL('../public/audio/', import.meta.url).pathname);
 const join = (...parts: string[]) => parts.join('/').replace(/\/+/g, '/');
 // Typed as a full record so adding a CharacterId without listing it here fails to compile.
-const CHAR_SET: Record<CharacterId, true> = { sad: true, marki: true, walk: true, insaner: true, brutile: true, michelle: true, picker: true };
-const CHARS = Object.keys(CHAR_SET) as CharacterId[];
+const CHAR_SET: Record<CharacterId, true> = { sad: true, marki: true, walk: true, insaner: true, brutile: true, michelle: true, picker: true, rakaeli: true };
+const ROSTER = Object.keys(CHAR_SET) as CharacterId[];
+/**
+ * Characters the generated manifest already voices. A character ships before its recordings (the
+ * game then stays silent for it, see 'degrades to silence' below); once its manifest entry lands
+ * every requirement here applies to it automatically.
+ */
+const CHARS = ROSTER.filter((c) => (VOICE_CLIPS as Partial<typeof VOICE_CLIPS>)[c] !== undefined);
 /** The five original characters: every requirement they had before the roster grew still applies. */
 const ORIGINAL: CharacterId[] = ['sad', 'marki', 'walk', 'insaner', 'brutile'];
 /**
@@ -36,13 +42,32 @@ const TRAIT_EVENTS: Partial<Record<CharacterId, CharAudioEvent[]>> = {
   michelle: ['trap-set', 'trap-sprung'],
   picker: ['hop-multi'],
 };
+/**
+ * Second-form events and their owner: Rakaeli's transformed form (타천) has its own lines for every
+ * moment plus the line and effect for turning back (awake-end). He keeps his 'skill' (the transform
+ * cast). There is no awake-select effect: it falls back to his select effect, like awake-death to death.
+ */
+const FORM_VOICE_EVENTS: Partial<Record<CharacterId, CharAudioEvent[]>> = {
+  rakaeli: ['awake-select', 'awake-move', 'awake-capture', 'awake-death', 'awake-end'],
+};
+const FORM_SFX_EVENTS: Partial<Record<CharacterId, CharAudioEvent[]>> = {
+  rakaeli: ['awake-move', 'awake-capture', 'awake-end'],
+};
 const usesTraitsInsteadOfSkill = (c: CharacterId): boolean => !CHARACTERS[c].skill && !!CHARACTERS[c].trait;
 const BASE_VOICE_EVENTS: CharAudioEvent[] = ['select', 'move', 'capture', 'death', 'victory'];
 const BASE_SFX_EVENTS: CharAudioEvent[] = ['select', 'move', 'capture'];
-const voiceEvents = (c: CharacterId): CharAudioEvent[] =>
-  [...BASE_VOICE_EVENTS, ...(usesTraitsInsteadOfSkill(c) ? [] : (['skill'] as CharAudioEvent[])), ...(TRAIT_EVENTS[c] ?? [])];
-const sfxEvents = (c: CharacterId): CharAudioEvent[] =>
-  [...BASE_SFX_EVENTS, ...(usesTraitsInsteadOfSkill(c) ? [] : (['skill'] as CharAudioEvent[])), ...(TRAIT_EVENTS[c] ?? [])];
+const voiceEvents = (c: CharacterId): CharAudioEvent[] => [
+  ...BASE_VOICE_EVENTS,
+  ...(usesTraitsInsteadOfSkill(c) ? [] : (['skill'] as CharAudioEvent[])),
+  ...(TRAIT_EVENTS[c] ?? []),
+  ...(FORM_VOICE_EVENTS[c] ?? []),
+];
+const sfxEvents = (c: CharacterId): CharAudioEvent[] => [
+  ...BASE_SFX_EVENTS,
+  ...(usesTraitsInsteadOfSkill(c) ? [] : (['skill'] as CharAudioEvent[])),
+  ...(TRAIT_EVENTS[c] ?? []),
+  ...(FORM_SFX_EVENTS[c] ?? []),
+];
 /**
  * vo + sfx payload budget. Raised from 1.2 MiB to 1.5 MiB on 2026-11-04 (lead decision) when the roster
  * grew from 5 to 7 characters, so the budget per character stays about the same (0.24 -> 0.21 MiB). Measured
@@ -79,9 +104,11 @@ describe('character audio manifest', () => {
     // A character without a skill has no skill line, and trait events belong to their owner only.
     for (const c of CHARS) {
       if (usesTraitsInsteadOfSkill(c)) expect(VOICE_CLIPS[c].skill, `${c}.skill`).toBeUndefined();
-      for (const [owner, evs] of Object.entries(TRAIT_EVENTS))
+      for (const [owner, evs] of Object.entries({ ...TRAIT_EVENTS, ...FORM_VOICE_EVENTS }))
         if (owner !== c) for (const e of evs ?? []) expect(VOICE_CLIPS[c][e], `${c}.${e}`).toBeUndefined();
     }
+    // The transformed form captures often too: two variants.
+    if (CHARS.includes('rakaeli')) expect(VOICE_CLIPS.rakaeli['awake-capture']?.length ?? 0).toBeGreaterThanOrEqual(2);
   });
 
   it('captions every voice clip', () => {
@@ -92,6 +119,9 @@ describe('character audio manifest', () => {
   it('has character sound effects for select/move/capture/skill (or traits), a chain chime and a shared death', () => {
     for (const c of CHARS) for (const e of sfxEvents(c)) expect(CHAR_SFX[c][e], `${c}.${e}`).toBeTruthy();
     for (const c of CHARS) if (usesTraitsInsteadOfSkill(c)) expect(CHAR_SFX[c].skill, `${c}.skill sfx`).toBeUndefined();
+    for (const c of CHARS)
+      for (const [owner, evs] of Object.entries(FORM_SFX_EVENTS))
+        if (owner !== c) for (const e of evs ?? []) expect(CHAR_SFX[c][e], `${c}.${e} sfx`).toBeUndefined();
     expect(CHAR_SFX.insaner.chain).toBeTruthy();
     expect(GENERIC_SFX.death).toBeTruthy();
     expect(WASTE_DEATH_SFX).toBe('sfx/waste-death.m4a');
@@ -126,6 +156,20 @@ describe('character audio manifest', () => {
     expect(() => playWasteDeath()).not.toThrow();
     expect(() => stopVoice()).not.toThrow();
     await expect(preloadCharacterAudio(CHARS)).resolves.toBeUndefined();
+  });
+
+  it('every character of the roster is voiced (the five originals, michelle, picker and rakaeli)', () => {
+    for (const c of ROSTER) expect(CHARS, c).toContain(c);
+  });
+
+  it("Rakaeli's transformed-form events never throw, and degrade to silence without recordings", async () => {
+    for (const e of ['select', 'move', 'capture', 'skill', 'death', 'victory', 'awake-select', 'awake-move', 'awake-capture', 'awake-death', 'awake-end'] as const) {
+      expect(() => playVoice('rakaeli', e, { level: 3, owner: 1 })).not.toThrow();
+      expect(() => playCharSfx('rakaeli', e)).not.toThrow();
+      // Node has no Web Audio: nothing is ever chosen to play.
+      expect(playVoice('rakaeli', e)).toBeNull();
+    }
+    await expect(preloadCharacterAudio(['rakaeli'])).resolves.toBeUndefined();
   });
 
   it('new characters and their trait events never throw', async () => {

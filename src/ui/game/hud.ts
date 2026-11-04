@@ -73,8 +73,10 @@ export function rosterChips(slots: FormationSlot[], owner: PlayerId, state: Game
     'div',
     { class: 'pbar__roster', 'aria-label': '남은 기물' },
     slots.map((s) => {
-      const alive = state.pieces.some((p) => p.id === `p${owner}-${s.character}`);
-      const t = pieceToken(s.character, s.level, owner, 'xs');
+      const piece = state.pieces.find((p) => p.id === `p${owner}-${s.character}`);
+      const alive = !!piece;
+      // A transformed Rakaeli shows his transformed face.
+      const t = pieceToken(s.character, s.level, owner, 'xs', !!piece?.awaken);
       return h('span', { class: `roster-chip${alive ? '' : ' is-captured'}`, title: CHARACTERS[s.character].nameKo }, t);
     }),
   );

@@ -85,6 +85,8 @@ const SKILL_POTENTIAL = [0, 15, 25, 35];
  * cast; a transformed Rakaeli is worth AWAKE_BONUS per transformed move left, on top of the wider
  * reach the attack maps already credit. The potential is above the bonus of a fresh transform, so
  * casting only pays when the search finds captures or threats within the two transformed moves.
+ * Self-play (2026-11-04): these scored 0.52 against no potential / bonus at all and 0.52 against a
+ * cast-happy bonus (0 / 20, 30, 40) over 120 games each: within noise, so the conservative pair stays.
  */
 const TRANSFORM_POTENTIAL = [0, 20, 30, 40];
 const AWAKE_BONUS = [0, 8, 12, 16];

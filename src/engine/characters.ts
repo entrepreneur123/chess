@@ -95,6 +95,8 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
       '앞 2줄 × 3칸 + 뒤로 1칸 점프 (뛰어넘기 가능 · 끝줄에서 방향 전환)',
     ],
     awakeDescKo: ['앞줄 5칸 중 원하는 칸으로 점프', '앞 2줄 × 5칸 중 원하는 칸으로 점프', '앞 3줄 × 5칸 + 뒤로 1칸 점프'],
+    // Self-play (2026-11-04, hard search at 25 ms): a bot valuing him [4, 6, 7] beat one valuing
+    // him [3, 7, 8] 0.59 over 300 games and [4, 6, 8] 0.53 over 120, so the spec's start stays.
     value: [4, 6, 7],
     skill: {
       kind: 'transform',

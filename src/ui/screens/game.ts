@@ -64,6 +64,9 @@ const SUDDEN_DEATH_WARN_TURNS = 10;
 /** Plies -> turns as the player counts them (one move each = one turn). */
 const pliesToTurns = (plies: number) => Math.ceil(plies / 2);
 
+/** 'name' with the particle that fits the name, e.g. '타천'을 / '불모지'를. */
+const quoted = (name: string, pair: '을/를'): string => `'${name}'${josa(name, pair).slice(name.length)}`;
+
 /** The board's optional transform FX (Rakaeli's "타천"); boards without it simply skip it. */
 interface AwakenFxView {
   playAwaken?(pieceId: string, phase: 'on' | 'off'): Promise<void>;
@@ -531,7 +534,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     const p = c && id ? getPieceById(c.state, id) : undefined;
     if (!c || !p) return;
     if (!c.trySkill({ kind: 'skill', pieceId: p.id, anchor: { ...p.pos } })) {
-      toast(`지금은 ${CHARACTERS[p.character].skill?.nameKo ?? '스킬'}을 쓸 수 없어요`, { tone: 'warn' });
+      toast(`지금은 ${josa(CHARACTERS[p.character].skill?.nameKo ?? '스킬', '을/를')} 쓸 수 없어요`, { tone: 'warn' });
       renderSnapshot(c.snapshot());
     }
   };
@@ -618,15 +621,15 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       const last = names[names.length - 1];
       toast(
         mine.length === 1
-          ? `${names[0]}의 스킬 '${CHARACTERS[mine[0].character].skill!.nameKo}'를 쓸 수 있어요! ${josa(last, '을/를')} 탭하세요`
+          ? `${names[0]}의 스킬 ${quoted(CHARACTERS[mine[0].character].skill!.nameKo, '을/를')} 쓸 수 있어요! ${josa(last, '을/를')} 탭하세요`
           : `스킬을 쓸 수 있어요! ${names.slice(0, -1).join('·')}·${josa(last, '을/를')} 탭하세요`,
         { tone: 'success', duration: 2800 },
       );
     }
     if (!notified.storm && mine.length && s.stormIn !== null) {
       notified.storm = true;
-      const what = mine.length === 1 ? `'${CHARACTERS[mine[0].character].skill!.nameKo}'` : '스킬';
-      toast(`자기장이 ${pliesToTurns(s.stormIn)}턴 후 좁혀와요. 그 전에만 ${what}를 쓸 수 있어요`, { tone: 'warn', duration: 3000 });
+      const what = mine.length === 1 ? quoted(CHARACTERS[mine[0].character].skill!.nameKo, '을/를') : '스킬을';
+      toast(`자기장이 ${pliesToTurns(s.stormIn)}턴 후 좁혀와요. 그 전에만 ${what} 쓸 수 있어요`, { tone: 'warn', duration: 3000 });
     }
   };
 
@@ -718,9 +721,10 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     }
     skillNotices(snap);
     // HUD
-    // Pieces only disappear through captures, so the count is a sufficient change key.
-    if (s.pieces.length !== rosterKey) {
-      rosterKey = s.pieces.length;
+    // Pieces only disappear through captures; a transform swaps a face. Both make the change key.
+    const rk = s.pieces.length * 8 + s.pieces.filter((p) => p.owner === BOT && p.awaken).length;
+    if (rk !== rosterKey) {
+      rosterKey = rk;
       replaceChildren(topRoster, rosterChips(params.botFormation, BOT, s));
     }
     hand.update(handModel(params.playerFormation, HUMAN, snap));

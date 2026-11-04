@@ -229,6 +229,76 @@
   "trail_ms": 32,
   "bytes": 5955
  },
+ "rakaeli-awake-capture": {
+  "file": "sfx/rakaeli-awake-capture.m4a",
+  "dur": 0.96,
+  "lufs": -17.13,
+  "peak_db": -3.76,
+  "centroid": 2174,
+  "lead_ms": 8,
+  "trail_ms": 21,
+  "bytes": 8973
+ },
+ "rakaeli-awake-end": {
+  "file": "sfx/rakaeli-awake-end.m4a",
+  "dur": 1.003,
+  "lufs": -17.12,
+  "peak_db": -2.68,
+  "centroid": 3308,
+  "lead_ms": 0,
+  "trail_ms": 48,
+  "bytes": 9295
+ },
+ "rakaeli-awake-move": {
+  "file": "sfx/rakaeli-awake-move.m4a",
+  "dur": 0.725,
+  "lufs": -17.05,
+  "peak_db": -2.2,
+  "centroid": 1863,
+  "lead_ms": 1,
+  "trail_ms": 39,
+  "bytes": 6976
+ },
+ "rakaeli-capture": {
+  "file": "sfx/rakaeli-capture.m4a",
+  "dur": 0.853,
+  "lufs": -17.05,
+  "peak_db": -1.53,
+  "centroid": 1839,
+  "lead_ms": 6,
+  "trail_ms": 30,
+  "bytes": 8045
+ },
+ "rakaeli-move": {
+  "file": "sfx/rakaeli-move.m4a",
+  "dur": 0.597,
+  "lufs": -17.03,
+  "peak_db": -2.12,
+  "centroid": 2016,
+  "lead_ms": 1,
+  "trail_ms": 37,
+  "bytes": 6056
+ },
+ "rakaeli-select": {
+  "file": "sfx/rakaeli-select.m4a",
+  "dur": 0.64,
+  "lufs": -17.06,
+  "peak_db": -3.36,
+  "centroid": 2274,
+  "lead_ms": 1,
+  "trail_ms": 44,
+  "bytes": 6276
+ },
+ "rakaeli-skill": {
+  "file": "sfx/rakaeli-skill.m4a",
+  "dur": 1.195,
+  "lufs": -17.12,
+  "peak_db": -2.26,
+  "centroid": 1879,
+  "lead_ms": 8,
+  "trail_ms": 36,
+  "bytes": 10687
+ },
  "sad-capture": {
   "file": "sfx/sad-capture.m4a",
   "dur": 1.259,

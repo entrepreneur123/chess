@@ -103,7 +103,7 @@ export function shopScreen(router: Router): Screen {
             'p',
             { class: 'hint hint--pad shop__soon' },
             icon('castle', 16),
-            // Only arena 6 still waits for a character: name it.
+            // Arenas still waiting for a character (none today): a single one is named.
             emptyArenas.length === 1 ? `${emptyArenas[0].index} 전장 ${emptyArenas[0].name} · 신규 캐릭터 준비 중` : `${emptyArenas.map((a) => a.index).join('·')} 전장 신규 캐릭터 준비 중`,
           )
         : null,

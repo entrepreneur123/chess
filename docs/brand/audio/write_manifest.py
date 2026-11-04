@@ -16,8 +16,10 @@ PUB = os.path.join(ROOT, "public", "audio")
 OUT = os.path.join(ROOT, "src", "audio", "voiceManifest.ts")
 TYPES = os.path.join(ROOT, "src", "engine", "types.ts")
 # Every event a clip can be keyed by. trap-set / trap-sprung: michelle's doll trap is laid / catches
-# a piece; hop-multi: picker captures more than one piece in a single hop.
-EVENTS = ("select", "move", "capture", "skill", "chain", "trap-set", "trap-sprung", "hop-multi", "death", "victory")
+# a piece; hop-multi: picker captures more than one piece in a single hop; awake-*: rakaeli's
+# transformed form (타천), awake-end: he turns back (src/audio/voice.ts falls each back to the base event).
+EVENTS = ("select", "move", "capture", "skill", "chain", "trap-set", "trap-sprung", "hop-multi", "death", "victory",
+          "awake-select", "awake-move", "awake-capture", "awake-death", "awake-end")
 
 
 def character_ids() -> tuple:

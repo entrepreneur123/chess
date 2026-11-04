@@ -14,10 +14,13 @@ ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
 PUB = os.path.join(ROOT, "public", "audio")
 NAMES = {"sad": ("사드", "Paladin"), "marki": ("마르키", "Minotaur"), "walk": ("월크", "Shield soldier"),
          "insaner": ("인세이너", "Imp"), "brutile": ("브루타일", "Witch"),
-         "michelle": ("미셸", "Gloomy girl with a doll"), "picker": ("피커", "Frontier drifter")}
+         "michelle": ("미셸", "Gloomy girl with a doll"), "picker": ("피커", "Frontier drifter"),
+         "rakaeli": ("라카엘리", "Blindfolded fallen angel; transformed form 타천")}
 EVENT_KO = {"select": "선택", "move": "이동", "capture": "잡기", "skill": "스킬", "chain": "연속",
             "trap-set": "함정 설치", "trap-sprung": "함정 발동", "hop-multi": "연속 잡기",
-            "death": "사망", "victory": "승리"}
+            "death": "사망", "victory": "승리",
+            "awake-select": "타천 · 선택", "awake-move": "타천 · 이동", "awake-capture": "타천 · 잡기",
+            "awake-death": "타천 · 사망", "awake-end": "타천 해제"}
 
 CSS = """
 :root{color-scheme:dark;--bg:#0f1117;--card:#181b24;--line:#272b38;--text:#e8eaf0;--mute:#9aa1b2;--acc:#8fb3ff}

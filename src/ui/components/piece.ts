@@ -109,16 +109,17 @@ export function pieceToken(
   level: Level,
   owner: PlayerId = 0,
   size: 'xs' | 'sm' | 'md' | 'lg' = 'md',
+  awake = false,
 ): HTMLElement {
   const def = CHARACTERS[character];
   return h(
     'span',
     {
-      class: `token token--${size} owner-${owner} rarity-${def.rarity}`,
-      'aria-label': `${def.nameKo} ${level}성`,
+      class: `token token--${size} owner-${owner} rarity-${def.rarity}${awake ? ' is-awake' : ''}`,
+      'aria-label': `${def.nameKo} ${level}성${awake ? ` · ${def.skill?.nameKo ?? ''}` : ''}`,
       role: 'img',
     },
-    h('img', { class: 'token__art', src: faceUrl(character, level), alt: '', decoding: 'async', draggable: 'false', onerror: artMissing }),
+    h('img', { class: 'token__art', src: faceUrl(character, level, awake), alt: '', decoding: 'async', draggable: 'false', onerror: artMissing }),
     size === 'xs' ? null : h('span', { class: 'token__lv', 'aria-hidden': 'true' }, starsOf(level)),
   );
 }

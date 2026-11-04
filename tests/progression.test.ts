@@ -59,8 +59,8 @@ describe('migration v3 -> v4 (-> v5)', () => {
     const storage: KeyValueStorage = { getItem: () => saved, setItem: (_k, v) => void (saved = v) };
     const p = loadProfile(storage);
     expect(p.version).toBe(PROFILE_VERSION);
-    expect(p.owned).toEqual({ sad: 1, marki: 1, walk: 1, insaner: 0, brutile: 0, michelle: 0, picker: 0 });
-    expect(Object.values(p.grades)).toEqual([1, 1, 1, 1, 1, 1, 1]);
+    expect(p.owned).toEqual({ sad: 1, marki: 1, walk: 1, insaner: 0, brutile: 0, michelle: 0, picker: 0, rakaeli: 0 });
+    expect(Object.values(p.grades)).toEqual([1, 1, 1, 1, 1, 1, 1, 1]);
     expect([p.tokens, p.essence, p.rating, p.bestRating]).toEqual([0, 0, 0, 0]);
     expect(p.dungeon.lastClaimDay).toBeNull();
     expect(p.dungeonLevel).toBe('easy');
@@ -111,8 +111,8 @@ describe('v4 sanitizing', () => {
       dungeon: { lastClaimDay: 'yesterday' },
       dungeonLevel: 'nightmare',
     });
-    expect(p.owned).toEqual({ sad: 1, marki: 1, walk: 2, insaner: 3, brutile: 0, michelle: 0, picker: 0 });
-    expect(p.grades).toEqual({ sad: 1, marki: 1, walk: 2, insaner: 2, brutile: 1, michelle: 1, picker: 1 });
+    expect(p.owned).toEqual({ sad: 1, marki: 1, walk: 2, insaner: 3, brutile: 0, michelle: 0, picker: 0, rakaeli: 0 });
+    expect(p.grades).toEqual({ sad: 1, marki: 1, walk: 2, insaner: 2, brutile: 1, michelle: 1, picker: 1, rakaeli: 1 });
     expect([p.tokens, p.essence, p.rating, p.bestRating]).toEqual([0, 12, 0, 0]);
     expect(p.dungeon.lastClaimDay).toBeNull();
     expect(p.dungeonLevel).toBe('easy');
@@ -126,7 +126,7 @@ describe('v4 sanitizing', () => {
 });
 
 describe('essence shop', () => {
-  it('pool per arena is cumulative: starters, + Brutile (2), + Insaner (3), + Michelle (4), + Picker (5), then nothing new', () => {
+  it('pool per arena is cumulative: starters, + Brutile (2), + Insaner (3), + Michelle (4), + Picker (5), + Rakaeli (6)', () => {
     const starters = ['sad', 'marki', 'walk'];
     expect(ARENA_DEFS.map((a) => shopPool(a))).toEqual([
       starters,
@@ -134,7 +134,7 @@ describe('essence shop', () => {
       [...starters, 'brutile', 'insaner'],
       [...starters, 'brutile', 'insaner', 'michelle'],
       [...starters, 'brutile', 'insaner', 'michelle', 'picker'],
-      [...starters, 'brutile', 'insaner', 'michelle', 'picker'],
+      [...starters, 'brutile', 'insaner', 'michelle', 'picker', 'rakaeli'],
     ]);
   });
 
@@ -146,8 +146,20 @@ describe('essence shop', () => {
     expect([upgradeCost('michelle', 1), upgradeCost('michelle', 2)]).toEqual([5, 50]);
     expect([upgradeCost('picker', 1), upgradeCost('picker', 2)]).toEqual([10, 100]);
     expect(UNREACHABLE).toEqual([]);
-    // Only arena 6 still waits for a character.
-    expect(ARENA_DEFS.filter((a) => a.unlocks.length === 0).map((a) => a.index)).toEqual([6]);
+    // Every arena opens a character now (Rakaeli fills arena 6).
+    expect(ARENA_DEFS.filter((a) => a.unlocks.length === 0).map((a) => a.index)).toEqual([]);
+  });
+
+  it('Rakaeli opens in arena 6 (apex) for 100 essence (epic); upgrades cost 20 then 150 tokens', () => {
+    expect(unlockArenaOf('rakaeli')?.id).toBe('apex');
+    expect(CHARACTERS.rakaeli.rarity).toBe('epic');
+    expect(UNLOCK_PRICE[CHARACTERS.rakaeli.rarity]).toBe(100);
+    expect([upgradeCost('rakaeli', 1), upgradeCost('rakaeli', 2), upgradeCost('rakaeli', 3)]).toEqual([20, 150, null]);
+    // Below arena 6 he is locked by the arena; at 2001 he can be bought.
+    expect(buyCharacter(withP({ rating: 2000, essence: 999 }), 'rakaeli')).toMatchObject({ ok: false, reason: 'arena' });
+    const r = buyCharacter(withP({ rating: 2001, essence: 100 }), 'rakaeli');
+    expect(r.ok).toBe(true);
+    expect([r.profile.owned.rakaeli, r.profile.grades.rakaeli, r.profile.essence]).toEqual([1, 1, 0]);
   });
 
   it('buying: locked below the arena, short of essence, then bought at 1성; never negative', () => {

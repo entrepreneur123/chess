@@ -292,7 +292,7 @@ def fx_rakaeli(x):
     y = biquad(x, "hp", 80)
     y = biquad(y, "lowshelf", 220, 0.8)
     y = compress(y, -21, 2.0, attack=0.008, release=0.14)
-    return hall(y, 1.0, 0.13, predelay=0.03, lp=5000, hp=300)
+    return hall(y, 0.85, 0.13, predelay=0.03, lp=5000, hp=300)
 
 
 RAKAELI_AWAKE_PITCH = 2 ** (-2.0 / 12)  # -2 semitones on the main voice
@@ -323,7 +323,7 @@ def fx_rakaeli_awake(x):
     mix = biquad(mix, "peak", 420, -1.5, 0.9)
     mix = biquad(mix, "highshelf", 5500, -2.5)
     mix = compress(mix, -22, 3.0, attack=0.005, release=0.1)
-    return hall(mix, 1.2, 0.17, predelay=0.035, lp=2600, hp=160)
+    return hall(mix, 1.0, 0.17, predelay=0.035, lp=2600, hp=160)
 
 
 FX = {"sad": fx_sad, "marki": fx_marki, "walk": fx_walk, "insaner": fx_insaner, "brutile": fx_brutile,

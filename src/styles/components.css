@@ -1261,3 +1261,18 @@ img.is-art-missing {
     radial-gradient(circle at 50% 34%, var(--rar-soft, rgba(154, 166, 196, 0.22)), transparent 72%),
     linear-gradient(180deg, var(--night-1, #141a2e), var(--night-0, #0a0e1a));
 }
+
+/* Rakaeli's transformed ("타천") pattern: crimson reach. */
+.move-diagram.is-awake {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 58, 92, 0.6),
+    0 2px 0 rgba(0, 0, 0, 0.45);
+}
+.move-diagram.is-awake .md-cell.is-target {
+  background: #ff5a78;
+  box-shadow: 0 0 5px rgba(255, 58, 92, 0.8);
+}
+/* A missing transformed illustration shows the base art with a crimson tint. */
+img.is-awake-fallback {
+  filter: sepia(0.35) saturate(1.6) hue-rotate(-28deg) brightness(0.92) contrast(1.08);
+}

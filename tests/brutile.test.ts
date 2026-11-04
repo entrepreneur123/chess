@@ -17,7 +17,7 @@ import {
 } from '../src/engine';
 import { fastFromState, fastGenMoves, fastMake, fastMoveToMove, fastUnmake, SKILL_FLAG, fastCanSkill } from '../src/engine/fast';
 import { chooseAction, isSkillAction } from '../src/ai/bot';
-import { keys, makeState, rngFrom, targetKeys } from './helpers';
+import { keys, makeState, rngFrom, spendSkill, targetKeys } from './helpers';
 
 const sk = (pieceId: string, r: number, c: number): SkillAction => ({ kind: 'skill', pieceId, anchor: { r, c } });
 
@@ -207,7 +207,7 @@ describe('no auto-pass while the wasteland can still be cast', () => {
     const a = chooseAction(after, 'normal', { timeBudgetMs: 20, rng: rngFrom(1) });
     expect(isSkillAction(a)).toBe(true);
     // With the skill spent the same position passes automatically.
-    const spent = applyMove(boxed({ skillsUsed: [1, 0] }), m);
+    const spent = applyMove(spendSkill(boxed(), 'p0-brutile'), m);
     expect(spent.turn).toBe(1);
     expect(spent.history.some((e) => e.kind === 'pass' && e.reason === 'noMoves')).toBe(true);
   });
@@ -298,7 +298,7 @@ describe('fast board and bot with Brutile', () => {
     let casts = 0;
     for (let i = 0; i < 6; i++) {
       for (const d of ['easy', 'normal', 'hard'] as const) {
-        const a = chooseAction({ ...s, skillsUsed: [0, 1] }, d, { timeBudgetMs: 20, rng });
+        const a = chooseAction(spendSkill(s, 'p1-brutile'), d, { timeBudgetMs: 20, rng });
         expect(a).not.toBeNull();
         if (isSkillAction(a)) throw new Error('used a spent skill');
         expect(s.waste.includes(a!.to.r * BOARD_SIZE + a!.to.c)).toBe(false);

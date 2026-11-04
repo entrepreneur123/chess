@@ -470,3 +470,76 @@
     animation: none;
   }
 }
+
+/* ---- Two-form characters (Rakaeli): 기본 / 타천 switch ----------------------------------- */
+.form-toggle {
+  display: flex;
+  gap: 4px;
+  margin: 10px 12px 0;
+  padding: 3px;
+  border-radius: var(--r-full);
+  background: var(--night-0);
+  box-shadow: inset 0 0 0 1px rgba(72, 88, 128, 0.8);
+}
+.form-toggle__btn {
+  flex: 1;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--r-full);
+  background: transparent;
+  color: var(--text-2);
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition:
+    background var(--dur-1) var(--ease-out),
+    color var(--dur-1) var(--ease-out),
+    box-shadow var(--dur-1) var(--ease-out);
+}
+.form-toggle__btn.is-active {
+  background: linear-gradient(180deg, #2b3654, #1c2438);
+  box-shadow: inset 0 0 0 1px rgba(140, 194, 255, 0.55);
+  color: var(--ink);
+}
+.form-toggle__btn--awake.is-active {
+  background: linear-gradient(180deg, #5a1630, #2a0c1c);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 58, 92, 0.85),
+    0 0 14px -4px rgba(255, 58, 92, 0.8);
+  color: #ffd0d9;
+}
+.unit-card.is-awake .unit-card__banner {
+  box-shadow:
+    inset 0 0 0 1.5px rgba(255, 58, 92, 0.6),
+    0 0 26px -10px rgba(255, 58, 92, 0.85);
+}
+.unit-card.is-awake .unit-card__art {
+  animation: unit-awake-in 420ms var(--ease-out) both;
+}
+@keyframes unit-awake-in {
+  from {
+    filter: brightness(1.8) saturate(0.4);
+  }
+  to {
+    filter: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .unit-card.is-awake .unit-card__art {
+    animation: none;
+  }
+}
+/* Rakaeli's skill row: crimson (the toxic green is Brutile's wasteland). */
+.unit-card[data-form] .unit-card__skill {
+  background: linear-gradient(90deg, rgba(150, 20, 56, 0.32), rgba(60, 10, 34, 0.22));
+  box-shadow: inset 0 0 0 1px rgba(255, 58, 92, 0.45);
+  color: #ffe0e6;
+}
+.unit-card[data-form] .unit-card__skill svg {
+  color: #ff5a78;
+}
+.unit-card[data-form] .unit-card__skill b {
+  color: #ffb3c1;
+}

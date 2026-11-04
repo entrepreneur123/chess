@@ -738,7 +738,8 @@ def feather_flap(dur: float = 0.24, lo: float = 420, hi: float = 1500, flutter: 
     push = lowpass(noise(dur), 260 * weight, 2) * env_ad(n, 0.02, dur * 0.3)
     quills = highpass(crackle(dur, 140, 0.0012), 3500) * bell_env(n, 0.35, 1.0)
     y = (air / (np.max(np.abs(air)) + 1e-9) + 0.45 * weight * push / (np.max(np.abs(push)) + 1e-9)
-         + 0.12 * quills)
+         + 0.08 * quills)
+    y = lowpass(y, 5000)  # soft feathers, not a hiss
     return y / (np.max(np.abs(y)) + 1e-9)
 
 
@@ -854,7 +855,7 @@ def rakaeli_awake_end() -> np.ndarray:
     glow = flame_roar(0.7, 90, 700, 0.1) * np.exp(-t_axis(0.7) / 0.25)
     t = t_axis(0.75)
     breath = swept_band(noise(0.75), 1800, 380, 0.9) * bell_env(len(t), 0.3, 1.5)
-    y = mix(dur + 0.05, (ember_crackle(0.8, 55, 2.0), 0, 0.35), (glow / (np.max(np.abs(glow)) + 1e-9), 0, 0.4),
+    y = mix(dur + 0.05, (lowpass(ember_crackle(0.8, 55, 2.0), 6000), 0, 0.28), (glow / (np.max(np.abs(glow)) + 1e-9), 0, 0.4),
             (breath / (np.max(np.abs(breath)) + 1e-9), 0.1, 0.6), (halo_glint(1975.5, 0.35, 0.0), 0.5, 0.1))
     return finish(room(y, 0.6, 0.16, 0.015, 4000, 0.15))
 

@@ -43,7 +43,7 @@ them elsewhere. Any number not given by the owner is marked **(lead default)** a
 | 3 | 독초 늪 신전 (blightmire) | 601–1000 | 20–22 | 15–17 | 인세이너 |
 | 4 | 서리 성채 (frostkeep) | 1001–1500 | 18–22 | 17–20 | 미셸 (Michelle) |
 | 5 | 광기의 왕좌 (madcrown) | 1501–2000 | 15–17 | 19–21 | 피커 (Picker) |
-| 6 | 천공의 정점 · 전설 (apex) | 2001+ | 14–16 | 20–22 | (slot) |
+| 6 | 천공의 정점 · 전설 (apex) | 2001+ | 14–16 | 20–22 | 라카엘리 (Rakaeli) |
 
 - **Gain and loss.** The amount is a random integer in the range of the arena the player was in
   when the match started.
@@ -171,7 +171,8 @@ sits there.
 1. Rating on a draw: no change.
 2. Rating 2000 is arena 5; the legend arena starts at 2001.
 3. Brutile opens in arena 2 and Insaner in arena 3; Michelle opens in arena 4 and Picker in arena 5
-   (docs/design/new-characters-michelle-picker.md); arena 6 still waits for a new character.
+   (docs/design/new-characters-michelle-picker.md); Rakaeli opens in arena 6 for 100 essence
+   (docs/design/new-character-rakaeli.md).
 4. Players can field a lower grade than they own.
 5. The dungeon is playable after the daily claim (no reward), gives no essence and no rating, and
    resets at device midnight.
