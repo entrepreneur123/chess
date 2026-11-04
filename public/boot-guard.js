@@ -9,6 +9,23 @@
 (function () {
   var BOOT_TIMEOUT_MS = 12000;
   var RETRY_KEY = 'gc-boot-retry';
+  var BUST = '_r';
+
+  // A deploy removes the previous build's hashed files at once. A page that got a stale cached
+  // index.html (the CDN can serve one for a few seconds after a deploy) then asks for a main chunk
+  // that no longer exists. Reloading with a unique query string misses every cache and fetches the
+  // current index.html. The marker is stripped again here so the address bar stays clean.
+  function freshReload() {
+    var u = location.pathname + '?' + BUST + '=' + Date.now() + location.hash;
+    location.replace(u);
+  }
+  try {
+    if (location.search.indexOf(BUST + '=') !== -1 && history.replaceState) {
+      history.replaceState(history.state, '', location.pathname + location.hash);
+    }
+  } catch (_) {
+    /* ignore */
+  }
 
   function splash() {
     var app = document.getElementById('app');
@@ -26,7 +43,7 @@
     b.className = 'boot__retry';
     b.textContent = '다시 시도';
     b.addEventListener('click', function () {
-      location.reload();
+      freshReload();
     });
     s.appendChild(p);
     s.appendChild(b);
@@ -45,7 +62,7 @@
       } catch (_) {
         retried = true; // no storage: never risk a reload loop
       }
-      if (!retried) location.reload();
+      if (!retried) freshReload();
       else showRetry();
     },
     true
