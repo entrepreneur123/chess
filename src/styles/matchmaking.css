@@ -372,7 +372,7 @@
   font-size: var(--fs-caption);
   font-weight: var(--fw-bold);
   white-space: nowrap;
-  animation: vs-first 520ms var(--ease-pop) 900ms both;
+  animation: vs-first 480ms var(--ease-pop) 560ms both;
 }
 @keyframes vs-first {
   from {
@@ -474,6 +474,17 @@
 }
 .mm__order[data-first-turn='opp'] {
   color: var(--team-red-light);
+}
+/* Short phones (360 x 640): a smaller gem so it never touches the bottom plate's tags. */
+@media (max-height: 700px) {
+  .versus__vs {
+    width: 88px;
+    height: 88px;
+    margin: -44px 0 0 -44px;
+  }
+  .versus__vs span {
+    font-size: 38px;
+  }
 }
 @media (min-width: 720px) {
   .versus {

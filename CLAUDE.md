@@ -6,3 +6,4 @@
 - Product priorities: for this mobile game, UI, visual design and marketing appeal are the top priorities, on top of correct rules.
 - Every change is reviewed for optimization, efficiency, bugs, and gaps versus top-tier commercial mobile apps; never report unverified claims as facts.
 - Keep `npx tsc --noEmit -p .`, `npx vitest run` and `npm run build` green before committing.
+- Start every session by reading `docs/PROJECT_STATE.md` (compressed state: rules, progression, deploy routine, past bugs, open decisions). Keep it updated when rules or the routine change.
