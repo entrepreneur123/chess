@@ -27,7 +27,7 @@ const mv = (s: GameState, id: string, r: number, c: number): Move => {
 };
 
 describe('insaner movement', () => {
-  it('Lv1 slides up to 2 orthogonally, Lv2 up to 3, Lv3 adds 1 diagonal square', () => {
+  it('Lv1 slides up to 2 orthogonally, Lv2 and Lv3 up to 3; no diagonal at any grade', () => {
     const l1 = makeState([[0, 'insaner', 1, 5, 5]]);
     expect(targetKeys(getLegalMoves(l1))).toEqual(
       keys([[6, 5], [7, 5], [4, 5], [3, 5], [5, 6], [5, 7], [5, 4], [5, 3]]),
@@ -36,31 +36,22 @@ describe('insaner movement', () => {
     expect(getLegalMoves(l2)).toHaveLength(12);
     const l3 = makeState([[0, 'insaner', 3, 5, 5]]);
     const t = targetKeys(getLegalMoves(l3));
-    // Orthogonal up to 3 (12) + the 4 diagonal neighbours.
-    expect(t).toHaveLength(16);
+    // Orthogonal up to 3 (12); the 3-star diagonal step was removed (owner nerf).
     expect(t).toEqual(
-      keys([
-        [6, 5], [7, 5], [8, 5], [4, 5], [3, 5], [2, 5], [5, 6], [5, 7], [5, 8], [5, 4], [5, 3], [5, 2],
-        [6, 6], [6, 4], [4, 6], [4, 4],
-      ]),
+      keys([[6, 5], [7, 5], [8, 5], [4, 5], [3, 5], [2, 5], [5, 6], [5, 7], [5, 8], [5, 4], [5, 3], [5, 2]]),
     );
-    expect(t).not.toContain('7,7');
-    expect(t).not.toContain('3,3');
+    for (const d of ['6,6', '6,4', '4,6', '4,4']) expect(t).not.toContain(d);
   });
 
-  it('Lv3 diagonal step captures an enemy on the diagonal neighbour and is blocked by an ally there', () => {
+  it('Lv3 cannot capture diagonally (no diagonal reach of its own)', () => {
     const s = makeState([
       [0, 'insaner', 3, 5, 5],
-      [0, 'sad', 1, 4, 4],
       [1, 'walk', 1, 6, 6],
-      [1, 'sad', 1, 7, 7],
+      [1, 'sad', 1, 4, 4],
     ]);
-    const moves = getLegalMoves(s, 'p0-insaner');
-    const t = targetKeys(moves);
-    expect(t).toContain('6,6');
-    expect(t).not.toContain('7,7');
+    const t = targetKeys(getLegalMoves(s, 'p0-insaner'));
+    expect(t).not.toContain('6,6');
     expect(t).not.toContain('4,4');
-    expect(moves.find((m) => m.to.r === 6 && m.to.c === 6)!.captureId).toBe('p1-walk');
   });
 
   it('is blocked by allies and captures the first enemy on a line', () => {
@@ -149,16 +140,16 @@ describe('insaner chain move (Lv3)', () => {
     ]);
   });
 
-  it('a diagonal capture chains too; the chain is once per turn and comes back the next turn', () => {
+  it('a capture chains; the chain is once per turn and comes back the next turn', () => {
     let s = makeState([
       [0, 'insaner', 3, 5, 5],
-      [1, 'walk', 1, 6, 6],
+      [1, 'walk', 1, 6, 5],
       [1, 'sad', 1, 6, 8],
       [1, 'michelle', 1, 9, 9],
       [1, 'picker', 1, 9, 0],
       [0, 'sad', 1, 0, 0],
     ]);
-    s = applyMove(s, mv(s, 'p0-insaner', 6, 6)); // diagonal capture
+    s = applyMove(s, mv(s, 'p0-insaner', 6, 5)); // orthogonal capture
     expect(s.turn).toBe(0);
     expect(s.bonusPieceId).toBe('p0-insaner');
     s = applyMove(s, mv(s, 'p0-insaner', 6, 8)); // the chain move captures again: no second chain
@@ -392,7 +383,7 @@ describe('fast board mirrors the engine with the new rules', () => {
     expect(storms).toBeGreaterThan(0);
   });
 
-  it('3-star Marki (side step) and 3-star Insaner (diagonal 1, chain once): fast moves, make / unmake match the engine', () => {
+  it('3-star Marki (side step) and 3-star Insaner (orthogonal only, chain once): fast moves, make / unmake match the engine', () => {
     const rng = rngFrom(4242);
     const lv3 = { sad: 3, marki: 3, walk: 3, insaner: 3 } as const;
     const buf = new Int32Array(256);
@@ -412,8 +403,8 @@ describe('fast board mirrors the engine with the new rules', () => {
           const p = getPieceById(g, m.pieceId)!;
           if (p.character === 'marki' && m.to.r === m.from.r) sideSteps++;
           if (p.character === 'insaner' && m.to.r !== m.from.r && m.to.c !== m.from.c) {
-            // Diagonal reach is 1 (absorbed patterns aside).
-            if (!p.absorbed?.length) expect(Math.abs(m.to.r - m.from.r)).toBe(1);
+            // No diagonal of his own: only absorbed patterns (e.g. Walk's jump) move him diagonally.
+            expect(p.absorbed?.length ?? 0).toBeGreaterThan(0);
             diagSteps++;
           }
         }

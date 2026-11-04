@@ -8,8 +8,6 @@ import {
   CH_PICKER,
   CH_RAKAELI,
   CH_SAD,
-  INSANER_DIAG_LEVEL,
-  INSANER_DIAG_RANGE,
   INSANER_RANGE,
   MARKI_RANGE,
   MARKI_SIDE_LEVEL,
@@ -264,11 +262,9 @@ function genPattern(
   awake: boolean,
 ): number {
   if (ch === CH_SAD) return slide(occ, owners, owner, r, c, ORTHO_DIRS, SAD_RANGE[level], out, n, includeAllies, storm, waste);
-  if (ch === CH_INSANER) {
-    n = slide(occ, owners, owner, r, c, ORTHO_DIRS, INSANER_RANGE[level], out, n, includeAllies, storm, waste);
-    if (level >= INSANER_DIAG_LEVEL) n = slide(occ, owners, owner, r, c, DIAG_DIRS, INSANER_DIAG_RANGE, out, n, includeAllies, storm, waste);
-    return n;
-  }
+  // Insaner: orthogonal slides only at every grade (owner nerf, 2026-11-04: no diagonal at 3성);
+  // absorbed patterns are added by the caller, and 3성 keeps the once-per-turn chain move.
+  if (ch === CH_INSANER) return slide(occ, owners, owner, r, c, ORTHO_DIRS, INSANER_RANGE[level], out, n, includeAllies, storm, waste);
   if (ch === CH_BRUTILE) {
     const dirs = level >= 3 ? KING_DIRS : BRUTILE_DIRS[dir][level];
     return slide(occ, owners, owner, r, c, dirs, 1, out, n, includeAllies, storm, waste);

@@ -87,7 +87,7 @@ describe('character reach on 10 columns', () => {
     expect(reach('sad')).toEqual([4, 8, 12]);
     expect(reach('marki')).toEqual([3, 4, 7]);
     expect(reach('walk')).toEqual([5, 7, 9]);
-    expect(reach('insaner')).toEqual([8, 12, 16]);
+    expect(reach('insaner')).toEqual([8, 12, 12]);
     expect(reach('brutile')).toEqual([2, 3, 8]);
     expect(reach('michelle')).toEqual([3, 7, 8]);
     expect(reach('picker')).toEqual([4, 8, 12]);

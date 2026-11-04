@@ -115,7 +115,7 @@ quoting a number.
 | 사드 sad | common | orthogonal slide 1 / 2 / 3 | never turns |
 | 마르키 marki | rare | forward slide 3 / 4 / 5; 3성 adds left/right 1 | turns at the edge |
 | 월크 walk | epic | jump to the front row, width 5 / 7 / 9 | |
-| 인세이너 insaner | legendary | orthogonal 2 / 3 / 3; 3성 adds diagonal 1 | see below |
+| 인세이너 insaner | legendary | orthogonal 2 / 3 / 3 (no diagonal at any grade) | see below |
 | 브루타일 brutile | legendary | forward diagonals 1; 2성 + back 1; 3성 all 8 around | skill 불모지 |
 | 미셸 michelle | common | left/right/back 1 / ≤2 / ≤2; forward 0 / 1 / ≤2 (slides) | trait 인형 함정 |
 | 피커 picker | rare | diagonal 1 / 2 / 3 | trait 콩콩 |
