@@ -2094,14 +2094,15 @@ export class Board2DView implements IBoardView {
     g.addColorStop(1, hexAlpha(STORM_COLORS.field, 0.36));
     ctx.fillStyle = g;
     ctx.fillRect(bx, a0, bw, len);
-    // Drifting veins.
+    // Drifting veins (one segment per 10/12 cell whatever the band's length: same look on short row bands).
     ctx.strokeStyle = hexAlpha(STORM_COLORS.edge, 0.3);
     ctx.lineWidth = Math.max(1, cell * 0.035);
+    const vsegs = Math.max(3, Math.round((12 * len) / (cell * BOARD_SIZE)));
     for (let k = 0; k < lines * 2; k++) {
       const ph = t * 0.6 + k * 1.7;
       ctx.beginPath();
-      for (let i = 0; i <= 12; i++) {
-        const yy = a0 + (i / 12) * len;
+      for (let i = 0; i <= vsegs; i++) {
+        const yy = a0 + (i / vsegs) * len;
         const xx = bx + bw * (0.5 + 0.42 * Math.sin(ph + i * 0.9 + k) * Math.cos(t * 0.8 + i * 0.5 + k * 2.1));
         if (i === 0) ctx.moveTo(xx, yy);
         else ctx.lineTo(xx, yy);
@@ -2126,8 +2127,7 @@ export class Board2DView implements IBoardView {
       ctx.beginPath();
       for (let i = 0; i <= segs; i++) {
         const yy = w0 + (i / segs) * wl;
-        const q = (i * 24) / segs;
-        const xx = xIn + side * cell * 0.3 * Math.sin(q * 2.3 + t * (7 + k * 3) + k * 4) * Math.sin(q * 0.7 - t * 2);
+        const xx = xIn + side * cell * 0.3 * Math.sin(i * 2.3 + t * (7 + k * 3) + k * 4) * Math.sin(i * 0.7 - t * 2);
         if (i === 0) ctx.moveTo(xx, yy);
         else ctx.lineTo(xx, yy);
       }

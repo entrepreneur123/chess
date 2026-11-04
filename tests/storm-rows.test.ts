@@ -306,3 +306,14 @@ describe('FastBoard parity with storm rows', () => {
     expect(rowSteps).toBeGreaterThan(0);
   }, 60_000);
 });
+
+describe('storm status copy (HUD chip / field panel)', () => {
+  it('mentions 위아래 once rows are in the storm, and warns the step before', async () => {
+    const { stormStatusText } = await import('../src/ui/game/hud');
+    expect(stormStatusText(0, 2)).toBe('자기장 활성 · 2턴 후 축소');
+    expect(stormStatusText(1, 2)).toBe('자기장 · 좌우 1줄 소멸 · 2턴 후 축소');
+    expect(stormStatusText(2, 1)).toBe('자기장 · 좌우 2줄 소멸 · 1턴 후 위아래도 축소');
+    expect(stormStatusText(3, 2)).toBe('자기장 · 좌우 3줄 · 위아래 1줄 소멸 · 2턴 후 축소');
+    expect(stormStatusText(4, 2)).toBe('자기장 · 좌우 4줄 · 위아래 2줄 소멸 · 2턴 후 축소');
+  });
+});
