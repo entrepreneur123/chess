@@ -528,6 +528,202 @@ def waste_death() -> np.ndarray:
     return finish(room(y, 0.5, 0.12))
 
 
+# --- michelle (gloomy girl with a doll; lays doll traps) ------------------------------------------
+
+def music_box_note(f: float, dur: float = 0.6, decay: float = 0.32, flat: float = 0.996) -> np.ndarray:
+    """A worn music-box tine: pure fundamental, a quick inharmonic 'ping' partial, a slight
+    sagging vibrato (an old, slow-running mechanism) and slightly flat tuning for unease."""
+    t = t_axis(dur)
+    wob = flat * (1 + 0.004 * np.sin(2 * np.pi * 4.6 * t + rng.uniform(0, 6.28)))
+    ph = 2 * np.pi * np.cumsum(f * wob) / SR
+    y = (np.sin(ph) + 0.16 * np.sin(2 * ph) * np.exp(-t / (decay * 0.5))
+         + 0.12 * np.sin(5.43 * ph) * np.exp(-t / 0.03))
+    return y * env_ad(len(t), 0.0008, decay)
+
+
+def doll_squeak(dur: float = 0.14, f0: float = 950) -> np.ndarray:
+    """Squeezed rubber doll: a reedy tone that bends up and back down with a fast flutter."""
+    t = t_axis(dur)
+    f = f0 * (1 + 0.55 * np.sin(np.pi * t / dur) ** 1.5) * (1 + 0.03 * np.sin(2 * np.pi * 34 * t))
+    y = signal.sawtooth(2 * np.pi * np.cumsum(f) / SR, 0.3)
+    y = bandpass(y, 700, 4200, 2) * bell_env(len(t), 0.35, 1.2)
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def soft_step(weight: float = 1.0) -> np.ndarray:
+    """A small, soft footstep (slipper on a wooden floor)."""
+    pad = lowpass(noise(0.09), 700 * weight) * env_ad(int(0.09 * SR), 0.005, 0.02)
+    body = thud(0.1, 190 * weight, 95 * weight, 0.03)
+    y = mix(0.11, (pad / (np.max(np.abs(pad)) + 1e-9), 0, 0.8), (body, 0.001, 0.45))
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def tick(f: float = 3600, decay: float = 0.004) -> np.ndarray:
+    """A small mechanical click: a noise snap with a short resonant ping."""
+    n = int(0.04 * SR)
+    snap = bandpass(noise(0.04), 1800, 7000) * env_ad(n, 0.0002, decay)
+    ping = np.sin(2 * np.pi * f * t_axis(0.04)) * env_ad(n, 0.0002, decay * 2.5)
+    y = snap / (np.max(np.abs(snap)) + 1e-9) + 0.35 * ping
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def spring_boing(f0: float = 260, dur: float = 0.35, depth: float = 0.35, rate: float = 9.0) -> np.ndarray:
+    """A coil spring settling: a tone whose pitch wobbles and dies down, with a metallic 2nd partial."""
+    t = t_axis(dur)
+    f = f0 * (1 + depth * np.exp(-t / 0.09) * np.sin(2 * np.pi * rate * t))
+    ph = 2 * np.pi * np.cumsum(f) / SR
+    y = (np.sin(ph) + 0.35 * np.sin(2.02 * ph) + 0.12 * np.sin(3.1 * ph)) * env_ad(len(t), 0.002, dur * 0.35)
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def michelle_select() -> np.ndarray:
+    # Three slow, slightly flat music-box notes (a falling minor figure) and a faint doll squeak.
+    y = mix(0.9, (music_box_note(1318.5), 0, 0.5), (music_box_note(1046.5), 0.11, 0.42),
+            (music_box_note(880.0, 0.7, 0.4), 0.22, 0.45), (doll_squeak(0.13, 900), 0.3, 0.12))
+    return finish(room(y, 0.6, 0.2, 0.01, 5000, 0.25))
+
+
+def michelle_move() -> np.ndarray:
+    # Two small soft footsteps and a faint dress rustle; no metal, no weight.
+    y = mix(0.5, (soft_step(1.0), 0, 0.9), (soft_step(1.08), 0.2, 0.75), (cloak_swish(0.3), 0.02, 0.22))
+    return finish(room(y, 0.35, 0.12, 0.008, 4500, 0.15))
+
+
+def michelle_capture() -> np.ndarray:
+    # A stitched snip (two scissor blade clicks around a short blade slide), a muffled cloth thump
+    # and a lone music-box note sinking flat.
+    slide = bandpass(noise(0.05), 3000, 8000) * bell_env(int(0.05 * SR), 0.6, 1.2)
+    snip = mix(0.12, (tick(4200, 0.003), 0, 0.7), (slide / (np.max(np.abs(slide)) + 1e-9), 0.012, 0.25),
+               (tick(3400, 0.004), 0.06, 0.9))
+    cloth = lowpass(thud(0.3, 140, 55, 0.07), 900)
+    t = t_axis(0.8)
+    sink = np.sin(2 * np.pi * np.cumsum(1046.5 * np.geomspace(1.0, 0.94, len(t))) / SR) * env_ad(len(t), 0.001, 0.3)
+    y = mix(0.95, (snip, 0, 0.7), (cloth, 0.07, 0.9), (cloak_swish(0.22), 0.05, 0.2), (sink, 0.12, 0.22))
+    return finish(room(y, 0.5, 0.16, 0.01, 4500, 0.25))
+
+
+def michelle_trap_set() -> np.ndarray:
+    # A wind-up toy being set: four ratchet clicks slowing down, then a creaky spring settles,
+    # and one soft music-box note.
+    y = silence(1.0)
+    at, gap = 0.0, 0.055
+    for k in range(4):
+        place(y, tick(3000 + 250 * k, 0.003), at, 0.55 + 0.08 * k)
+        at += gap
+        gap *= 1.22
+    creak = lowpass(sweep_tone(0.22, 160, 230, "saw", 0.12, 0.01) * (1 + 0.6 * np.sin(2 * np.pi * 37 * t_axis(0.22))), 1800)
+    place(y, creak / (np.max(np.abs(creak)) + 1e-9), at - 0.02, 0.18)
+    place(y, spring_boing(240, 0.4, 0.3, 8.0), at, 0.4)
+    place(y, music_box_note(1568.0, 0.5, 0.25), at + 0.08, 0.2)
+    return finish(room(y, 0.5, 0.16, 0.01, 5000, 0.25))
+
+
+def michelle_trap_sprung() -> np.ndarray:
+    # The trap catches: a sharp wooden toy snap, a string pulled tight (rising, creaking pitch)
+    # and a small low thump.
+    n = int(0.06 * SR)
+    clack = (bandpass(noise(0.06), 1000, 6000) * env_ad(n, 0.0002, 0.004)
+             + 0.5 * np.sin(2 * np.pi * 1850 * t_axis(0.06)) * env_ad(n, 0.0002, 0.012)
+             + 0.3 * np.sin(2 * np.pi * 3150 * t_axis(0.06)) * env_ad(n, 0.0002, 0.008))
+    t = t_axis(0.32)
+    f = np.geomspace(190, 420, len(t))
+    string = signal.sawtooth(2 * np.pi * np.cumsum(f * (1 + 0.01 * np.sin(2 * np.pi * 31 * t))) / SR)
+    string = lowpass(string, 2600) * bell_env(len(t), 0.75, 1.0)
+    fibre = lowpass(crackle(0.3, 500, 0.002), 3500) * bell_env(int(0.3 * SR), 0.7, 1.0)
+    y = mix(0.8, (clack / (np.max(np.abs(clack)) + 1e-9), 0, 0.9), (thud(0.25, 150, 70, 0.05), 0.0, 0.35),
+            (string / (np.max(np.abs(string)) + 1e-9), 0.05, 0.28), (fibre, 0.06, 0.15),
+            (tick(2600, 0.003), 0.37, 0.3))
+    return finish(room(y, 0.45, 0.14, 0.008, 5000, 0.2))
+
+
+# --- picker (frontier drifter with a lasso; hops through every square) ----------------------------
+
+def spur_jingle(n: int = 4, base: float = 3400) -> np.ndarray:
+    """Spur rowels: a few small, quickly decaying metal rings in a short loose cluster."""
+    y = silence(0.35)
+    at = 0.0
+    for k in range(n):
+        f = base * rng.uniform(0.88, 1.12)
+        place(y, metal(0.2, f, (1.0, 1.48, 2.21, 3.1), decay=0.07, bright=0.55), at, 0.9 * 0.8 ** k)
+        at += rng.uniform(0.03, 0.06)
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def rope_rub(dur: float = 0.35, lo: float = 400, hi: float = 1300) -> np.ndarray:
+    """Hemp rope sliding through a hand: fibrous mid-band friction noise with a grainy texture."""
+    fric = swept_band(noise(dur), lo, hi, 1.4)
+    grain = 0.55 + 0.45 * lowpass(np.abs(crackle(dur, 900, 0.003)), 60)
+    y = fric * grain * bell_env(int(dur * SR), 0.45, 1.1)
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def sand_step(weight: float = 1.0) -> np.ndarray:
+    """A boot on sand: a soft low heel thud plus a short granular crunch."""
+    heel = thud(0.16, 115 * weight, 55 * weight, 0.04)
+    crunch = bandpass(crackle(0.12, 2200, 0.0015), 1200, 7000) * env_ad(int(0.12 * SR), 0.004, 0.035)
+    y = mix(0.18, (heel, 0, 0.75), (crunch / (np.max(np.abs(crunch)) + 1e-9), 0.003, 0.45))
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def whip_crack() -> np.ndarray:
+    """A lasso tip snapping: a very short, thin, bright crack (high-passed, no low body, so it never
+    reads as a gunshot) with a tiny falling chirp."""
+    n = int(0.03 * SR)
+    snap = highpass(noise(0.03), 1800, 2) * env_ad(n, 0.0002, 0.0025)
+    chirp = sweep_tone(0.012, 7000, 2500, "sine", 0.004, 0.0002)
+    y = mix(0.03, (snap / (np.max(np.abs(snap)) + 1e-9), 0, 1.0), (chirp, 0, 0.3))
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def hop_boing(f0: float = 300) -> np.ndarray:
+    """A light springy hop: a quick downward pitch glide with a little wobble (cartoon spring)."""
+    t = t_axis(0.16)
+    f = f0 * (1 + 0.9 * np.exp(-t / 0.035)) * (1 + 0.05 * np.sin(2 * np.pi * 15 * t))
+    ph = 2 * np.pi * np.cumsum(f) / SR
+    y = (np.sin(ph) + 0.25 * np.sin(2 * ph)) * env_ad(len(t), 0.002, 0.06)
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def picker_select() -> np.ndarray:
+    # Spur jingle as he shifts his weight, then the lasso coil slides through his hand.
+    y = mix(0.75, (spur_jingle(4, 3400), 0, 0.5), (rope_rub(0.4, 350, 1100), 0.12, 0.6),
+            (sand_step(0.9), 0.0, 0.25))
+    return finish(room(y, 0.3, 0.08, 0.006, 3500, 0.12))
+
+
+def picker_move() -> np.ndarray:
+    # Two unhurried boot steps on sand, each with a faint spur ring.
+    y = mix(0.6, (sand_step(1.0), 0, 0.9), (spur_jingle(2, 3600), 0.005, 0.12),
+            (sand_step(0.95), 0.25, 0.8), (spur_jingle(2, 3300), 0.255, 0.1))
+    return finish(room(y, 0.3, 0.07, 0.006, 3500, 0.12))
+
+
+def picker_capture() -> np.ndarray:
+    # Lasso twirl (two whoosh turns), the tip cracks, then the rope is pulled taut (rising friction
+    # and a creak) and the target lands with a soft sand thud.
+    creak_t = t_axis(0.25)
+    creak = lowpass(sweep_tone(0.25, 120, 190, "saw", 0.15, 0.01) * (1 + 0.7 * np.sin(2 * np.pi * 42 * creak_t)), 1500)
+    y = mix(1.1, (whoosh(0.2, 400, 1300, 1.3, 0.55), 0, 0.3), (whoosh(0.2, 500, 1700, 1.3, 0.6), 0.16, 0.42),
+            (whip_crack(), 0.36, 0.85), (rope_rub(0.35, 500, 1600), 0.4, 0.55),
+            (creak / (np.max(np.abs(creak)) + 1e-9), 0.45, 0.16), (sand_step(1.15), 0.68, 0.55),
+            (spur_jingle(2, 3200), 0.7, 0.1))
+    return finish(room(y, 0.35, 0.09, 0.006, 4500, 0.15))
+
+
+def picker_hop_multi() -> np.ndarray:
+    # Hop-hop-hop through the line: three springy boings rising in pitch, each landing with a light
+    # tap on sand, then a final spur jingle.
+    y = silence(1.0)
+    for k, f in enumerate((280.0, 340.0, 410.0)):
+        at = 0.19 * k
+        place(y, hop_boing(f), at, 0.55)
+        tap = bandpass(noise(0.03), 900, 5000) * env_ad(int(0.03 * SR), 0.0003, 0.005)
+        place(y, tap / (np.max(np.abs(tap)) + 1e-9), at + 0.11, 0.35)
+        place(y, sand_step(1.25), at + 0.11, 0.3)
+    place(y, spur_jingle(3, 3500), 0.62, 0.2)
+    return finish(room(y, 0.3, 0.08, 0.006, 4000, 0.12))
+
+
 SFX = {
     "sad-select": sad_select,
     "sad-move": sad_move,
@@ -553,6 +749,17 @@ SFX = {
     "brutile-capture": brutile_capture,
     "brutile-skill": brutile_skill,
     "waste-death": waste_death,
+    # 2026-11-04, appended for the same reason. Michelle and Picker have no skill: their trait
+    # events (trap-set / trap-sprung, hop-multi) get their own effects instead.
+    "michelle-select": michelle_select,
+    "michelle-move": michelle_move,
+    "michelle-capture": michelle_capture,
+    "michelle-trap-set": michelle_trap_set,
+    "michelle-trap-sprung": michelle_trap_sprung,
+    "picker-select": picker_select,
+    "picker-move": picker_move,
+    "picker-capture": picker_capture,
+    "picker-hop-multi": picker_hop_multi,
 }
 
 

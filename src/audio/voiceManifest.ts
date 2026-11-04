@@ -150,8 +150,8 @@ export const CHAR_SFX: Record<CharacterId, Partial<Record<CharAudioEvent, string
   walk: { select: 'sfx/walk-select.m4a', move: 'sfx/walk-move.m4a', capture: 'sfx/walk-capture.m4a', skill: 'sfx/walk-skill.m4a' },
   insaner: { select: 'sfx/insaner-select.m4a', move: 'sfx/insaner-move.m4a', capture: 'sfx/insaner-capture.m4a', skill: 'sfx/insaner-skill.m4a', chain: 'sfx/insaner-chain.m4a' },
   brutile: { select: 'sfx/brutile-select.m4a', move: 'sfx/brutile-move.m4a', capture: 'sfx/brutile-capture.m4a', skill: 'sfx/brutile-skill.m4a' },
-  michelle: {},
-  picker: {},
+  michelle: { select: 'sfx/michelle-select.m4a', move: 'sfx/michelle-move.m4a', capture: 'sfx/michelle-capture.m4a', 'trap-set': 'sfx/michelle-trap-set.m4a', 'trap-sprung': 'sfx/michelle-trap-sprung.m4a' },
+  picker: { select: 'sfx/picker-select.m4a', move: 'sfx/picker-move.m4a', capture: 'sfx/picker-capture.m4a', 'hop-multi': 'sfx/picker-hop-multi.m4a' },
 };
 
 /** Shared effects used when a character has no specific one. */

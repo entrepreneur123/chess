@@ -139,6 +139,96 @@
   "trail_ms": 40,
   "bytes": 15136
  },
+ "michelle-capture": {
+  "file": "sfx/michelle-capture.m4a",
+  "dur": 1.045,
+  "lufs": -16.96,
+  "peak_db": -1.62,
+  "centroid": 1114,
+  "lead_ms": 0,
+  "trail_ms": 43,
+  "bytes": 9561
+ },
+ "michelle-move": {
+  "file": "sfx/michelle-move.m4a",
+  "dur": 0.469,
+  "lufs": -17.67,
+  "peak_db": -1.83,
+  "centroid": 1832,
+  "lead_ms": 0,
+  "trail_ms": 37,
+  "bytes": 4895
+ },
+ "michelle-select": {
+  "file": "sfx/michelle-select.m4a",
+  "dur": 1.045,
+  "lufs": -17.14,
+  "peak_db": -3.11,
+  "centroid": 1143,
+  "lead_ms": 0,
+  "trail_ms": 26,
+  "bytes": 9560
+ },
+ "michelle-trap-set": {
+  "file": "sfx/michelle-trap-set.m4a",
+  "dur": 1.024,
+  "lufs": -17.07,
+  "peak_db": -2.18,
+  "centroid": 1455,
+  "lead_ms": 0,
+  "trail_ms": 25,
+  "bytes": 9512
+ },
+ "michelle-trap-sprung": {
+  "file": "sfx/michelle-trap-sprung.m4a",
+  "dur": 0.597,
+  "lufs": -17.02,
+  "peak_db": -1.92,
+  "centroid": 1694,
+  "lead_ms": 0,
+  "trail_ms": 25,
+  "bytes": 6006
+ },
+ "picker-capture": {
+  "file": "sfx/picker-capture.m4a",
+  "dur": 0.917,
+  "lufs": -16.96,
+  "peak_db": -2.41,
+  "centroid": 3556,
+  "lead_ms": 4,
+  "trail_ms": 28,
+  "bytes": 8609
+ },
+ "picker-hop-multi": {
+  "file": "sfx/picker-hop-multi.m4a",
+  "dur": 0.896,
+  "lufs": -17.03,
+  "peak_db": -3.75,
+  "centroid": 2815,
+  "lead_ms": 0,
+  "trail_ms": 30,
+  "bytes": 8448
+ },
+ "picker-move": {
+  "file": "sfx/picker-move.m4a",
+  "dur": 0.512,
+  "lufs": -17.58,
+  "peak_db": -2.22,
+  "centroid": 3491,
+  "lead_ms": 0,
+  "trail_ms": 36,
+  "bytes": 5192
+ },
+ "picker-select": {
+  "file": "sfx/picker-select.m4a",
+  "dur": 0.597,
+  "lufs": -17.09,
+  "peak_db": -3.84,
+  "centroid": 3601,
+  "lead_ms": 0,
+  "trail_ms": 32,
+  "bytes": 5955
+ },
  "sad-capture": {
   "file": "sfx/sad-capture.m4a",
   "dur": 1.259,

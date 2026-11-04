@@ -177,9 +177,22 @@ All 21 clips: -16.00..-16.19 LUFS, true peak <= -1.16 dBTP, tail <= -54.5 dB, 7.
   michelle `trap-set-1` (same take) the wav2vec2 P(female) moved from 0.92 to 0.68 between two
   runs (ECAPA 0.97). Both readings are female, but this is the least robust clip of the set.
 
-**Budget.** The new clips add 306.7 KB. `public/audio/vo` + `sfx` total 1,356,961 B, which is
-98,670 B over the 1.2 MiB (1,258,291 B) limit in `tests/voice.test.ts`; michelle/picker SFX are not
-generated yet and would add more. The budget was not changed. Options for the owner: raise the
-budget (about 1.45 MB with SFX for both), or re-run every voice line at 48 kb/s (estimated vo
-about 865 KB, total about 1.07 MB), which needs an audition first.
+**SFX.** `gen_sfx.py` gained 9 effects, appended after `waste-death` so the shared RNG leaves every
+earlier sound sample-identical (checked: max difference 0.0 on all 23). Michelle and Picker have no
+skill, so they get no `skill` effect; their trait events have their own:
 
+| File | Concept | dur s | LUFS | peak dBFS | bytes |
+| --- | --- | --- | --- | --- | --- |
+| michelle-select | three slow, slightly flat music-box notes + a faint doll squeak | 1.045 | -17.14 | -3.11 | 9560 |
+| michelle-move | two small soft footsteps + dress rustle | 0.469 | -17.67 | -1.83 | 4895 |
+| michelle-capture | scissor snip (two blade clicks), muffled cloth thump, a sinking music-box note | 1.045 | -16.96 | -1.62 | 9561 |
+| michelle-trap-set | wind-up ratchet clicks slowing, creaky spring settling, one music-box note | 1.024 | -17.07 | -2.18 | 9512 |
+| michelle-trap-sprung | sharp wooden toy snap, string pulled tight (rising creak), small thump | 0.597 | -17.02 | -1.92 | 6006 |
+| picker-select | spur jingle + lasso rope sliding through the hand | 0.597 | -17.09 | -3.84 | 5955 |
+| picker-move | two boot steps on sand with faint spur rings | 0.512 | -17.58 | -2.22 | 5192 |
+| picker-capture | lasso twirl (two whoosh turns), thin high-passed whip-tip crack (no low body, never a gunshot), rope pulled taut, sand thud | 0.917 | -16.96 | -2.41 | 8609 |
+| picker-hop-multi | three springy boings rising in pitch, each landing with a light tap, then a spur jingle | 0.896 | -17.03 | -3.75 | 8448 |
+
+**Budget.** vo + sfx = 1,424,699 B (vo 1,153,610 + sfx 271,089). The test budget was raised by the
+lead from 1.2 MiB to 1.5 MiB (1,572,864 B) because the roster grew from 5 to 7 characters
+(0.24 -> 0.21 MiB per character); headroom 148,165 B.

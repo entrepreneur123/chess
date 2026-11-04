@@ -306,7 +306,9 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     const dist = Math.max(Math.abs(move.to.r - move.from.r), Math.abs(move.to.c - move.from.c));
     // Signature moves: Marki's long charge, Walk's wide leap.
     const signature = (mover.character === 'marki' && dist >= 3) || (mover.character === 'walk' && Math.abs(move.to.c - move.from.c) >= 2);
-    playCharSfx(mover.character, signature ? 'skill' : 'move');
+    // Picker's multi-capture hop has its own sound ('hop-multi'); everyone else plays move/skill.
+    const multiHop = mover.character === 'picker' && capturedIds(move).length >= 2;
+    playCharSfx(mover.character, multiHop ? 'hop-multi' : signature ? 'skill' : 'move');
     if (move.captureId) {
       // Insaner sometimes shouts its absorb line instead of a capture line; a hop that takes
       // several pieces has its own line ('hop-multi', falling back to a capture line).
