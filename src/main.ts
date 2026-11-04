@@ -12,7 +12,7 @@ import './styles/overlays.css';
 import './styles/game.css';
 import './styles/nav.css';
 import './styles/progression.css';
-import { installAudio } from './audio/sfx';
+import { installAudio, primeAudio } from './audio/sfx';
 import { APP_NAME } from './meta/economy';
 import { getProfile } from './meta/profile';
 import { createTabBar } from './ui/components/tabBar';
@@ -38,6 +38,10 @@ getProfile(); // load + sanitize persisted data early
 installArtFallback();
 // Create/resume the AudioContext on the first gesture (autoplay policy); without this the game stays silent.
 installAudio();
+// Inside the native app there is no autoplay gate (Capacitor's Android WebView sets
+// mediaPlaybackRequiresUserGesture=false), so sound and music start at launch instead of on the
+// first tap. If the context still comes up suspended, the gesture unlock above takes over.
+if (Capacitor.isNativePlatform()) primeAudio();
 // Background music follows settings.sound && settings.music (no-op until src/audio/music.ts exists).
 installMusic();
 

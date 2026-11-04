@@ -244,6 +244,10 @@ legendary.
   starts a silent buffer. It also requests `navigator.audioSession.type = 'playback'` (WebKit Audio Session API) so the
   iOS/iPadOS silent mode does not mute the game; every iOS browser, Chrome included, is WebKit.
   `?diag=1` shows an `audio ctx=… session=…` line for device reports.
+  On the web the first tap starts the sound (browser autoplay policy, unavoidable). In the native
+  app (`Capacitor.isNativePlatform()`) `main.ts` primes audio at launch; Capacitor's Android
+  WebView already sets `mediaPlaybackRequiresUserGesture(false)` (Bridge.java). This is untested on a
+  device, and there is no iOS project yet.
 - **Endless splash right after a deploy:** old hashed chunks 404 at once, and the CDN may serve a
   stale index for seconds. `public/boot-guard.js` reloads once with a cache-busting `?_r=`, then
   shows 다시 시도. After 12 s on the splash it reloads once if the main chunk already downloaded
