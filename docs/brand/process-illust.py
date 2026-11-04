@@ -25,10 +25,13 @@ FACE = {
     # Grades 2-3 were generated from the grade-1 master as a reference, so the head stays put.
     'michelle': (0.285, 0.095, 0.775, 0.461),
     'picker': (0.26, 0.04, 0.72, 0.383),
+    # Two forms with separate masters (illust-rakaeli-lv{n}, illust-rakaeli-awake-lv{n}).
+    'rakaeli': (0.273, 0.017, 0.72, 0.36),
+    'rakaeli-awake': (0.26, 0.017, 0.707, 0.36),
 }
 for f in sorted(SRC.glob('illust-*.jpg')):
     name = f.stem.replace('illust-', '')  # sad-lv1
-    cid = name.split('-')[0]
+    cid = name.rsplit('-lv', 1)[0]  # sad, rakaeli-awake
     im = Image.open(f).convert('RGB')
     w, h = im.size
     card = im.resize((540, 720), Image.LANCZOS)

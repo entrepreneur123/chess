@@ -216,3 +216,239 @@ Picker. The lv2 and lv3 alternatives used the same reference with different upgr
   lv3 is clearly distinct for both.
 - **Rights:** the images were generated through the project's Magic Patterns account. Usage rights
   follow Magic Patterns' terms for generated images.
+
+## 라카엘리 Rakaeli (`rakaeli`, `rakaeli-awake`): 2026-11-04
+
+Rakaeli has two forms, and each form has its own three masters:
+
+- **Base form:** `illust-rakaeli-lv{1,2,3}.jpg`.
+- **Transformed form, 타천:** `illust-rakaeli-awake-lv{1,2,3}.jpg`.
+
+`process-illust.py` writes `public/chars/rakaeli-lv{n}[-face].jpg` and
+`public/chars/rakaeli-awake-lv{n}[-face].jpg`. The design brief is the "Identity" section of
+`docs/design/new-character-rakaeli.md`.
+
+### Generation
+- **Tool, OS and date:**
+  - The same pipeline as Michelle and Picker: the Magic Patterns `generate_image` MCP tool, in
+    the "GRID CLASH illustrations" OS (`mES6an8gxzuquCRoUq5cVM`).
+  - Aspect ratio `3:4`, which returned 896x1200. 2026-11-04.
+- **Reference chain:**
+  - Base lv1 was generated from text only, then edited once with the lv1 image as the reference.
+  - Base lv2 and lv3 used the chosen base lv1 (`rakaeli-lv1-e2`) as the reference.
+  - Transformed lv1 also used the chosen base lv1 as the reference, so the face and hair match
+    across forms.
+  - Transformed lv2 and lv3 used the chosen transformed lv1 (`rakaeli-awake-lv1-a`) as the
+    reference.
+- **Candidates:** 21 requests and 21 images, with no provider blocks. All raw images are kept as
+  448x600 JPEGs in `generated/rakaeli-*.jpg`.
+
+| Slot | Candidates |
+| --- | --- |
+| base lv1 | 6 (`a`–`e` from text, plus `e2`, an edit of `e`) |
+| base lv2 | 3 (`a`–`c`) |
+| base lv3 | 3 (`a`–`c`) |
+| transformed lv1 | 4 (`awake-lv1-a`–`d`) |
+| transformed lv2 | 3 (`awake-lv2-a`–`c`) |
+| transformed lv3 | 2 (`awake-lv3-a`, `b`) |
+
+- **Post-processing:**
+  - The picks are re-encoded at the original 896x1200 with PIL quality 88. There is no
+    retouching.
+  - The `FACE` table is now keyed by everything before `-lv`, so `rakaeli-awake` gets its own box.
+    For every other id the key is unchanged.
+  - The script was rerun, and the outputs for the seven existing characters came out
+    byte-identical (`git status` shows no change under `public/chars/` except the new files).
+- **Review:** the picks were checked on contact sheets next to all seven existing characters, at
+  the same sizes as for Michelle and Picker:
+  - card art at 180x240;
+  - a hand-card crop at 100x180 (`50% 18%`);
+  - face crops at 160px;
+  - circular tokens at 40px and 80px, with both blue and red rims.
+
+### Picks and reasons
+| File | Candidate | Why |
+| --- | --- | --- |
+| `illust-rakaeli-lv1.jpg` | `rakaeli-lv1-e2` | `e` had the strongest silhouette and the most elegant face: ash-grey wings wrapped around his shoulders like a mantle, a hand on his heart and a lowered head. But its coat was almost all black, and its halo was scattered pieces. `e2` is `e` edited to add a wide bone-white stole and cuffs, which makes the coat clearly black-and-bone-white, and to make the halo one dim ring with a crack. |
+| `illust-rakaeli-lv2.jpg` | `rakaeli-lv2-a` | Answers the brief directly: silver-thread feather and vine embroidery on the stole, collar and cuffs, a short embroidered capelet, a silver chain across the chest, and long broken chains that reach the hem. Same pose and face as lv1. |
+| `illust-rakaeli-lv3.jpg` | `rakaeli-lv3-b` | The strongest signature glow: a pale-gold light burst behind him, a shining cracked halo, glowing pale-gold wing tips and floating luminous feathers, and gold filigree on the coat. At 40px it is clearly brighter than lv1 and lv2. |
+| `illust-rakaeli-awake-lv1.jpg` | `rakaeli-awake-lv1-a` | Every transform cue reads: <ul><li>the blindfold burns off one side;</li><li>glowing crimson eyes and a cold smirk;</li><li>two short obsidian horns;</li><li>wide black wings with flaming crimson edges;</li><li>a broken crimson ring halo;</li><li>red cracks on the face and hand;</li><li>a crimson and violet aura;</li><li>a menacing reaching claw.</li></ul> The same face and hair as base lv1, and the same bone-white stole. |
+| `illust-rakaeli-awake-lv2.jpg` | `rakaeli-awake-lv2-a` | It matches base lv2's upgrade language: silver thorn and feather embroidery, a chain across the chest and longer chains. So the 2성 step reads the same in both forms. |
+| `illust-rakaeli-awake-lv3.jpg` | `rakaeli-awake-lv3-b` | A dark eclipse disc with a crimson corona behind his head, violet fire on the wing tips, crimson sigil embroidery on the stole and black-gold trim. In the token, the crimson ring around the head is a unique mark that no other character has. |
+
+### Rejected candidates
+- **base lv1:**
+  - `a`: clean and readable, but a plain, stiff, frontal pose and a younger, blander face.
+  - `b`: a dynamic reaching pose, but the head is small, so the face crop is weak.
+  - `c`: floating and barefoot, with wide wings; a weaker face and a busy silhouette.
+  - `d`: arms spread, with a cross-shaped front panel and a sweating, open-mouthed face. Off-mood.
+  - `e`: became `e2`.
+- **base lv2:**
+  - `b`: large Christian cross motifs on the stole and a cross brooch. More overtly religious
+    than needed.
+  - `c`: an embroidered blindfold, but a chain wrapped around the neck reads like a collar.
+- **base lv3:**
+  - `a`: the glow is too subtle for a 3성.
+  - `c`: a double halo with thorn-like spikes that reads as a crown of thorns, and the wings
+    changed design (veined, butterfly-like).
+- **transformed lv1:**
+  - `b`: the blindfold is still on and the eyes glow through it, which misses the brief, and
+    blood drips from the hands.
+  - `c`: strong, but a snarling face that loses the cold elegance.
+  - `d`: the figure is too small, so the head is tiny at token size, and blood drips from the
+    hands.
+- **transformed lv2:**
+  - `b`: a cross brooch and a chain belt, and the torn hem is gone.
+  - `c`: obsidian shoulder spikes clash with the priestly silhouette.
+- **transformed lv3:**
+  - `a`: the stole turns crimson, which loses the black-and-bone-white identity, and the glow is
+    weaker than in `b`.
+
+No candidate was rejected for resembling a known character. See the IP notes below.
+
+### Face crop boxes
+These are fractions of (w, h). One box serves all three grades of a form.
+
+- `rakaeli: (0.273, 0.017, 0.72, 0.36)`: the halo, the hair and the blindfold band, down to the
+  chin.
+- `rakaeli-awake: (0.26, 0.017, 0.707, 0.36)`: the crimson ring halo, the horns, the eyes and the
+  smirk. At lv3 it also takes in the eclipse corona.
+
+At 40px:
+- the base token reads as black hair with a dark band under a gold ring;
+- the transformed token reads as magenta-red with horns and red eyes.
+
+Neither collides with walk (black hair, blue scarf, no halo), insaner (purple skin, green eyes)
+or michelle (black bob over a white face). Michelle is the closest at 40px, because both have
+black hair over a pale lower face; Rakaeli's gold halo and white collar separate them.
+
+### Prompts (winners)
+**rakaeli-lv1-e** (text only, aspect 3:4; the base of the pick):
+> Vertical character splash illustration for a dark fantasy mobile game in an angular shounen
+> anime cel-shaded style with thick black ink outlines and hard flat shadows. Deep navy blue-black
+> backdrop, vignette, sharp diagonal cyan and crimson slash streaks from the upper corners,
+> floating shards, sparks and drifting grey feathers. Head-and-torso to knees composition filling
+> the frame, head in the upper third near the centre. Subject: original character Rakaeli, a
+> beautiful pale young man, late teens, a gentle melancholic fallen angel. Tousled midnight-black
+> hair with a few strands over the blindfold. A black silk blindfold over both eyes, long black
+> ribbon tails trailing in the wind. Sad soft mouth, pale skin. A dimmed, cracked gold halo
+> floating behind his head. Large ash-grey wings folded around his shoulders like a cloak, some
+> feathers torn. A long black-and-bone-white priestly coat with a tall collar, buttoned front,
+> white trims, torn ragged hem, broken iron chain cuffs on each wrist. Pose: one hand pressed over
+> his heart, the other hanging with a broken chain, head lowered, elegant and mournful. No weapon.
+> No text, no letters, no logo, no watermark.
+
+**rakaeli-lv1-e2** (reference: rakaeli-lv1-e; the pick):
+> Edit the reference image: make his long priestly coat clearly black-and-bone-white. Add a wide
+> bone-white priest's stole that hangs from his shoulders down both sides of the front of the black
+> coat to the torn hem, and bone-white turned-back cuffs, so the coat reads as black with bold
+> bone-white panels. Make the golden halo one dim, tarnished gold ring with a clear crack and a
+> small gap, instead of scattered pieces. Keep everything else exactly the same: the young man, his
+> face, the black silk blindfold with long ribbon tails, his midnight-black tousled hair, the
+> folded ash-grey wings wrapped around his shoulders with torn feathers, the broken chain cuffs,
+> the hand on his heart, the pose, the composition, the angular anime cel-shaded style with thick
+> black outlines and the dark navy background with cyan and red diagonal slash streaks and floating
+> shards. No weapon. No text, no letters, no logo, no watermark.
+
+**rakaeli-lv2-a** (reference: rakaeli-lv1-e2):
+> Same character, same pose, same composition and same art style as the reference image (angular
+> anime cel shading, bold black outlines, dark navy backdrop with cyan and red diagonal slash
+> streaks and floating shards). This is his upgraded 2-star form. Keep his face, the black silk
+> blindfold with long ribbon tails, his midnight-black tousled hair, the hand on his heart and the
+> folded ash-grey wings with a few torn feathers. Upgrades: a longer, more ornate ankle-length black
+> priestly coat with a high collar, and a bone-white stole covered in fine silver-thread embroidery
+> of feathers and vine patterns; silver-thread embroidery along the cuffs and coat edges; more
+> chains: heavier broken chain cuffs on both wrists with longer dangling chains, plus a thin silver
+> chain draped across his chest; the cracked dim golden halo now has small silver fittings. The
+> coat hem is still torn. No weapon. No text, no letters, no logo, no watermark.
+
+**rakaeli-lv3-b** (reference: rakaeli-lv1-e2):
+> Redraw the character from the reference image as his legendary 3-star version. Keep the same
+> blindfolded young man with midnight-black hair, the same face, the same hand-on-heart pose, the
+> same framing and the same angular anime cel-shaded style with bold black outlines on the dark
+> navy background with cyan and crimson diagonal slashes. Legendary upgrades: behind him a large
+> faint pale-gold light burst, the cracked halo shining pale gold with motes of light; swirling pale
+> gold and ash-grey glowing particles and floating luminous feathers around him; his
+> black-and-bone-white priest coat is regal and longer with gold filigree trim, a gold-embroidered
+> stole and a gold clasp; long ribbon tails of the black blindfold edged with thin gold thread;
+> ash-grey wings with pale gold glowing feather tips; broken chains glowing faintly gold. Elegant,
+> sorrowful, holy. No weapon. No text, no letters, no logo, no watermark.
+
+**rakaeli-awake-lv1-a** (reference: rakaeli-lv1-e2):
+> The same young man as in the reference image, same face, same midnight-black tousled hair, same
+> black-and-bone-white priest coat with torn hem and broken chain cuffs, same angular shounen anime
+> cel-shaded style with thick black outlines, same dark navy background with diagonal cyan and
+> crimson slash streaks and floating shards. Now he has transformed into his fallen form. His black
+> blindfold is burning away into embers and ash, revealing glowing crimson eyes. Two short curved
+> obsidian-black horns grow from his head through his hair. His wings are blown wide open behind
+> him, the feathers turned black with edges burning with crimson flame. His halo is now a broken
+> crimson ring of light floating above the horns. Thin glowing red cracks run across his cheek,
+> neck and hands. A crimson and violet aura swirls around him. Pose: dramatic and menacing, head
+> raised, staring straight at the viewer with a cold faint smirk, one clawed open hand reaching
+> forward with crimson energy, coat whipping in the wind. No weapon, no sword. Black hair only, no
+> white hair. No text, no letters, no logo, no watermark.
+
+**rakaeli-awake-lv2-a** (reference: rakaeli-awake-lv1-a):
+> Same character, same pose, same composition and same art style as the reference image (angular
+> anime cel shading, bold black outlines, dark navy backdrop with cyan and red diagonal slash
+> streaks, crimson and violet aura). This is his upgraded 2-star transformed form. Keep his face
+> with the cold smirk, glowing crimson eyes, the burning remains of the blindfold, black tousled
+> hair, two short obsidian horns, the broken crimson ring halo, the red cracks on his skin, the wide
+> black wings with crimson flame edges and the reaching clawed hand. Upgrades: a longer, more ornate
+> ankle-length black priest coat with a high collar, a bone-white stole with fine silver-thread
+> embroidery of thorns and feathers, silver-embroidered cuffs and edges; more chains: heavier broken
+> shackles on both wrists with long swinging chains and a broken chain draped across his chest.
+> Torn hem. No weapon. No text, no letters, no logo, no watermark.
+
+**rakaeli-awake-lv3-b** (reference: rakaeli-awake-lv1-a):
+> Redraw the character from the reference image as his legendary 3-star transformed version. Keep
+> the same face, crimson eyes, smirk, black hair, short obsidian horns, broken crimson halo ring,
+> pose and framing, and the same angular anime cel-shaded style with bold black outlines on the
+> dark navy background with cyan and crimson diagonal slashes. Legendary upgrades: a massive
+> crimson-violet glow; behind him a dark violet eclipse with a crimson corona; swirling crimson and
+> violet flames and black feathers burning into embers all around; his flaming black wings spread
+> even wider with violet fire tips; the obsidian horns have glowing crimson veins; his
+> black-and-bone-white priest coat is regal and longer with black-gold filigree trim and a stole
+> with glowing crimson sigil-like embroidery patterns; glowing red cracks run down his arms.
+> Dangerous, regal. No weapon. No text, no letters, no logo, no watermark.
+
+The other candidates used variations of the same text:
+- base lv1: other poses (frontal, reaching, floating, arms spread);
+- transformed lv1: other poses (arms spread low, a clawed hand by the face, hovering);
+- lv2 and lv3: other upgrade lists on the same references.
+
+### Source URLs (Magic Patterns CDN)
+- rakaeli-lv1-e2: <https://cdn.magicpatterns.com/patterns/generated-images/b86e03df-1dac-449a-bb5e-576ef6bd34ac.jpg>
+- rakaeli-lv2-a: <https://cdn.magicpatterns.com/patterns/generated-images/6d117da9-7977-46bf-8c21-ddff1590c28b.jpg>
+- rakaeli-lv3-b: <https://cdn.magicpatterns.com/patterns/generated-images/c4023edc-90ee-4d22-b181-69386d12bf77.jpg>
+- rakaeli-awake-lv1-a: <https://cdn.magicpatterns.com/patterns/generated-images/e8ef33e5-9d5c-4b89-a48e-ff919e2bf826.jpg>
+- rakaeli-awake-lv2-a: <https://cdn.magicpatterns.com/patterns/generated-images/a5c18663-4f7d-479c-9cc9-a61ae100ad14.jpg>
+- rakaeli-awake-lv3-b: <https://cdn.magicpatterns.com/patterns/generated-images/adf8b7cf-c075-4787-9837-650750e57d88.jpg>
+
+### IP check notes
+- **MapleStory's Damian (the owner's mood reference):**
+  - Only the mood was taken: a pretty, melancholic fallen youth who turns demonic.
+  - Rakaeli has:
+    - midnight-black hair, not silver or white;
+    - no weapon at all, and no greatsword;
+    - a black-and-bone-white priest's cassock and stole with broken shackles, a blindfold and a
+      halo. These are not Damian's costume elements.
+  - The transformed form's red eyes, short horns and black wings are generic demon tropes. The
+    prompts did not reference Damian's design, and nothing was copied from it.
+- **Gojo (Jujutsu Kaisen):** the blindfold is paired with black hair, never white hair. The
+  transformed prompts also say "black hair only, no white hair". The blindfold is silk with long
+  ribbon tails, not a bandage-style wrap. Gojo is also not a winged, haloed or religious-coded
+  design.
+- **Other works:**
+  - "Blindfolded angel", "fallen angel turning demon", "broken halo" and "chained priest" are
+    common genre tropes. I found no single known character that combines black hair, a black
+    blindfold, a cracked halo, folded grey wings and a bone-white stole.
+  - This is a visual judgement by the art director, not a legal clearance.
+- **Religious iconography:**
+  - The picks keep it light: a priest's stole and cassock silhouette, and at base lv2 a small
+    cross pendant on the chest chain.
+  - Candidates with large cross motifs (`lv2-b`, `awake-lv2-b`) were rejected partly for this
+    reason.
+  - The lv3 stole patterns are abstract filigree and sigils, with no letters.
+- **Rights:** the images were generated through the project's Magic Patterns account. Usage rights
+  follow Magic Patterns' terms for generated images.
