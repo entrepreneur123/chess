@@ -646,9 +646,10 @@
         {
           "id": "awake-move-2",
           "event": "awake-move",
-          "text": "재를 밟고 간다.",
+          "text": "불길 속을 걷는다.",
           "style": "Low, cold and slow.",
-          "fx": "rakaeli-awake"
+          "fx": "rakaeli-awake",
+          "_note": "Was '재를 밟고 간다.': Whisper heard the homophone 쟤 (or 죄를 받고) in 8/8 takes after the transformed-form FX, best CER 0.17, so the line was replaced."
         },
         {
           "id": "awake-capture-1",
