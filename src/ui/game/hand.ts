@@ -2,7 +2,9 @@
  * The in-game "hand": my three piece cards under the board (art, stars, a mini move diagram and
  * the skill readiness of Brutile / Rakaeli; while Rakaeli is transformed his card shows the
  * transformed art, pattern and "타천 · N"; Michelle's doll traps left; a "속박 · 1턴" band while a doll trap holds
- * the piece, which cannot be selected then; a captured piece's card is greyed out). Tapping a card selects that
+ * the piece, which cannot be selected then; a captured piece's card is greyed out; a small chevron chip
+ * next to the stars shows a direction-dependent piece's forward direction on screen and flips, with
+ * the move diagram, when it turns around at the far edge). Tapping a card selects that
  * piece exactly like tapping it on the board: it goes through `GameController.tapCell` with the
  * piece's square, so selection, toggling and the bot-turn reach preview behave identically.
  *
@@ -13,6 +15,8 @@ import {
   CHARACTERS,
   getPieceById,
   isAwake,
+  isDirectional,
+  screenArrow,
   isStunned,
   skillBlock,
   skillUnlockIn,
@@ -45,6 +49,54 @@ export interface HandCardModel {
   stunned: boolean;
   /** Michelle only: doll traps she can still lay this match (null for everyone else). */
   traps: number | null;
+  /**
+   * Forward direction on screen for a piece whose movement depends on it (`isDirectional`), null
+   * for symmetric movers and captured pieces. It flips when the piece turns around at the far edge.
+   */
+  arrow: 'up' | 'down' | null;
+}
+
+/** Screen-reader copy of a direction chip. */
+export const arrowLabel = (arrow: 'up' | 'down'): string => `전진 방향: ${arrow === 'up' ? '위' : '아래'}`;
+
+/**
+ * The direction chip: a small chevron in a pill. Built once; `setArrow` flips it in place (CSS
+ * rotates the chevron, with a short flip when it changes) so callers never rebuild it.
+ */
+export function dirChip(cls = ''): HTMLElement {
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', '0 0 12 12');
+  svg.setAttribute('class', 'dir-chip__glyph');
+  svg.setAttribute('aria-hidden', 'true');
+  const path = document.createElementNS(ns, 'path');
+  // An up-pointing chevron; "down" is the same glyph turned over.
+  path.setAttribute('d', 'M2.6 7.8 6 4.4l3.4 3.4');
+  svg.appendChild(path);
+  return h('span', { class: `dir-chip${cls ? ` ${cls}` : ''}`, role: 'img', hidden: true }, svg);
+}
+
+/**
+ * Point a `dirChip` up / down (null hides it). `animate`: play the flip (a turn-around just
+ * happened); the first call and reduced motion never animate.
+ */
+export function setArrow(chip: HTMLElement, arrow: 'up' | 'down' | null, animate: boolean): void {
+  const prev = chip.dataset.dir ?? '';
+  const next = arrow ?? '';
+  if (prev === next) return;
+  chip.hidden = !arrow;
+  if (!arrow) {
+    delete chip.dataset.dir;
+    chip.removeAttribute('aria-label');
+    return;
+  }
+  chip.dataset.dir = arrow;
+  chip.setAttribute('aria-label', arrowLabel(arrow));
+  if (animate && prev) {
+    chip.classList.remove('is-flip');
+    void chip.offsetWidth;
+    chip.classList.add('is-flip');
+  }
 }
 
 export const pieceIdOf = (owner: PlayerId, character: CharacterId): string => `p${owner}-${character}`;
@@ -91,6 +143,7 @@ export function handModel(slots: readonly FormationSlot[], owner: PlayerId, snap
       stunned: !!p && isStunned(p),
       awaken: p?.awaken ?? 0,
       traps: s.character === 'michelle' && p ? trapsLeft(snap.state, owner) : null,
+      arrow: p && isDirectional(p) ? screenArrow(p) : null,
     };
   });
 }
@@ -136,6 +189,7 @@ export function createHand(slots: readonly FormationSlot[], owner: PlayerId, onT
     const stun = h('span', { class: 'hand-card__stun', 'aria-hidden': 'true', hidden: true }, icon('lock', 12), '속박 · 1턴');
     const art = h('img', { class: 'hand-card__art', src: cardArtUrl(s.character, s.level), alt: '', decoding: 'async', draggable: 'false', onerror: artMissing }) as HTMLImageElement;
     const md = h('span', { class: 'hand-card__md', 'aria-hidden': 'true' }, diagramFor(s.character, s.level));
+    const dir = dirChip('hand-card__dir');
     const el = h(
       'button',
       {
@@ -157,12 +211,12 @@ export function createHand(slots: readonly FormationSlot[], owner: PlayerId, onT
         { class: 'hand-card__foot' },
         skill,
         trap,
-        h('span', { class: 'hand-card__stars', 'aria-hidden': 'true' }, starsOf(s.level)),
+        h('span', { class: 'hand-card__meta' }, h('span', { class: 'hand-card__stars', 'aria-hidden': 'true' }, starsOf(s.level)), dir),
         h('span', { class: 'hand-card__name' }, def.nameKo),
       ),
       h('span', { class: 'hand-card__ko', 'aria-hidden': 'true' }, icon('close', 16), '격파'),
     );
-    return { el, art, md, skill, skillText, trap, trapText, stun, key: '', awake: false };
+    return { el, art, md, dir, skill, skillText, trap, trapText, stun, key: '', awake: false };
   });
   const el = h('div', { class: 'hand', role: 'group', 'aria-label': '내 말' }, cards.map((c) => c.el));
   return {
@@ -171,9 +225,13 @@ export function createHand(slots: readonly FormationSlot[], owner: PlayerId, onT
       models.forEach((m, i) => {
         const c = cards[i];
         if (!c) return;
-        const key = `${m.alive}|${m.selected}|${m.skill?.state}|${m.skill?.label}|${m.stunned}|${m.traps}|${m.awaken}`;
+        const key = `${m.alive}|${m.selected}|${m.skill?.state}|${m.skill?.label}|${m.stunned}|${m.traps}|${m.awaken}|${m.arrow}`;
         if (key === c.key) return;
+        const first = !c.key;
         c.key = key;
+        setArrow(c.dir, m.arrow, !first);
+        // The move diagram is drawn forward-up; a piece heading down the screen shows it turned over.
+        c.el.classList.toggle('is-dir-down', m.arrow === 'down');
         // Rakaeli's transform swaps the card to the transformed art and pattern (and back).
         const awake = m.alive && m.awaken > 0;
         if (awake !== c.awake) {
@@ -202,7 +260,7 @@ export function createHand(slots: readonly FormationSlot[], owner: PlayerId, onT
         const name = CHARACTERS[m.character].nameKo;
         c.el.setAttribute(
           'aria-label',
-          `${name} ${m.level}성${m.alive ? '' : ' · 격파됨'}${m.stunned ? ' · 속박 1턴' : ''}${m.traps !== null ? ` · 함정 ${m.traps}개 남음` : ''}${m.skill ? (m.skill.state === 'active' ? ` · 타천 이동 ${m.awaken}번 남음` : ` · 스킬 ${m.skill.label}`) : ''}`,
+          `${name} ${m.level}성${m.alive ? '' : ' · 격파됨'}${m.arrow ? ` · ${arrowLabel(m.arrow)}` : ''}${m.stunned ? ' · 속박 1턴' : ''}${m.traps !== null ? ` · 함정 ${m.traps}개 남음` : ''}${m.skill ? (m.skill.state === 'active' ? ` · 타천 이동 ${m.awaken}번 남음` : ` · 스킬 ${m.skill.label}`) : ''}`,
         );
       });
     },

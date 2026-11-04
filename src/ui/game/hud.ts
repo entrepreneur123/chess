@@ -1,9 +1,10 @@
 /** DOM pieces of the in-game HUD (player bars, timer ring, turn pill, end-reason copy). */
-import { CHARACTERS, type EndReason, type FormationSlot, type GameState, type PlayerId } from '../../engine';
+import { CHARACTERS, isDirectional, screenArrow, type EndReason, type FormationSlot, type GameState, type PlayerId } from '../../engine';
 import { PACING } from '../../meta/economy';
 import { pieceToken } from '../components/piece';
 import { h } from '../dom';
 import type { ControllerSnapshot } from './GameController';
+import { dirChip, setArrow } from './hand';
 
 const RING_R = 18;
 /** Last seconds of a turn: running out is an immediate forfeit, so the ring pulses red. */
@@ -68,18 +69,43 @@ export class TimerRing {
   }
 }
 
-export function rosterChips(slots: FormationSlot[], owner: PlayerId, state: GameState): HTMLElement {
-  return h(
-    'div',
-    { class: 'pbar__roster', 'aria-label': '남은 기물' },
-    slots.map((s) => {
-      const piece = state.pieces.find((p) => p.id === `p${owner}-${s.character}`);
-      const alive = !!piece;
-      // A transformed Rakaeli shows his transformed face.
-      const t = pieceToken(s.character, s.level, owner, 'xs', !!piece?.awaken);
-      return h('span', { class: `roster-chip${alive ? '' : ' is-captured'}`, title: CHARACTERS[s.character].nameKo }, t);
-    }),
-  );
+export interface RosterView {
+  el: HTMLElement;
+  /** Patch captured / transformed / direction state; only touches chips whose state changed. */
+  update(state: GameState): void;
+}
+
+/**
+ * The opponent's lineup as tiny coins in the top bar. Built once; a capture greys a chip out, a
+ * transform swaps its face and a direction-dependent piece carries a tiny forward chevron that
+ * turns over when the piece turns around (the same chip as the hand cards).
+ */
+export function createRoster(slots: readonly FormationSlot[], owner: PlayerId): RosterView {
+  const chips = slots.map((s) => {
+    const dir = dirChip(`roster-chip__dir owner-${owner}`);
+    const el = h('span', { class: 'roster-chip', title: CHARACTERS[s.character].nameKo }, pieceToken(s.character, s.level, owner, 'xs'), dir);
+    return { slot: s, el, dir, key: '' };
+  });
+  const el = h('div', { class: 'pbar__roster', 'aria-label': '남은 기물' }, chips.map((c) => c.el));
+  return {
+    el,
+    update(state) {
+      for (const c of chips) {
+        const piece = state.pieces.find((p) => p.id === `p${owner}-${c.slot.character}`);
+        const awake = !!piece?.awaken;
+        const arrow = piece && isDirectional(piece) ? screenArrow(piece) : null;
+        const key = `${!!piece}|${awake}|${arrow}`;
+        if (key === c.key) continue;
+        const first = !c.key;
+        const prevAwake = c.key.split('|')[1] === 'true';
+        c.key = key;
+        c.el.classList.toggle('is-captured', !piece);
+        // A transformed Rakaeli shows his transformed face.
+        if (awake !== prevAwake) c.el.replaceChild(pieceToken(c.slot.character, c.slot.level, owner, 'xs', awake), c.el.firstChild!);
+        setArrow(c.dir, arrow, !first);
+      }
+    },
+  };
 }
 
 export function turnPillContent(snap: ControllerSnapshot): { text: string; cls: string } {

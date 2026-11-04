@@ -968,6 +968,14 @@
   align-items: center;
   gap: 6px;
 }
+.fcard__dir {
+  width: 22px;
+  height: 16px;
+}
+.fcard__dir .dir-chip__glyph {
+  width: 12px;
+  height: 12px;
+}
 .fcard__name {
   font-family: var(--font-display);
   font-size: 17px;
@@ -1313,6 +1321,120 @@
 .hand-card.is-dead .hand-card__ko {
   display: inline-flex;
 }
+/* Stars + the forward-direction chip on one line. */
+.hand-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.hand-card__dir {
+  margin-left: auto;
+}
+/* The move diagram is drawn forward-up: a piece heading down the screen shows it turned over. */
+.hand-card__md .move-diagram {
+  transition: transform 320ms var(--ease-out);
+}
+.hand-card.is-dir-down .hand-card__md .move-diagram {
+  transform: scaleY(-1);
+}
+
+/* ---- Forward-direction chip (hand cards, opponent roster chips; ui/game/hand.ts dirChip) ----
+   A light chevron in a subtle team-tinted pill, only for pieces whose moves depend on forward /
+   back. It turns over (a short 3D flip + pulse) when the piece turns around at the far edge. */
+.dir-chip {
+  --dir-tint: 150, 205, 255;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 13px;
+  border-radius: var(--r-full);
+  background: rgba(7, 10, 18, 0.66);
+  box-shadow: inset 0 0 0 1px rgba(var(--dir-tint), 0.4);
+  color: rgb(var(--dir-tint));
+  perspective: 40px;
+}
+.dir-chip[hidden] {
+  display: none;
+}
+.hand--opp .dir-chip,
+.dir-chip.owner-1 {
+  --dir-tint: 255, 160, 160;
+}
+.dir-chip__glyph {
+  width: 10px;
+  height: 10px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 320ms var(--ease-out);
+}
+.dir-chip[data-dir='down'] .dir-chip__glyph {
+  transform: rotateX(180deg);
+}
+.dir-chip.is-flip {
+  animation: dir-chip-flip 700ms var(--ease-out);
+}
+@keyframes dir-chip-flip {
+  0% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(1.28);
+    box-shadow:
+      inset 0 0 0 1.5px rgba(var(--dir-tint), 0.95),
+      0 0 10px rgba(var(--dir-tint), 0.75);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dir-chip__glyph,
+  .hand-card__md .move-diagram {
+    transition: none;
+  }
+  .dir-chip.is-flip {
+    animation: none;
+  }
+}
+/* Tablets: the cards are much larger, so is the chip. */
+@media (min-width: 600px) {
+  .hand-card__dir {
+    width: 24px;
+    height: 17px;
+  }
+  .hand-card__dir .dir-chip__glyph {
+    width: 13px;
+    height: 13px;
+  }
+}
+/* Top-bar roster: a tiny badge tucked on the coin's lower-right edge. */
+.roster-chip {
+  position: relative;
+}
+.roster-chip__dir {
+  position: absolute;
+  right: -4px;
+  bottom: -3px;
+  width: 11px;
+  height: 11px;
+  background: rgba(7, 10, 18, 0.9);
+  box-shadow: inset 0 0 0 1px rgba(var(--dir-tint), 0.5);
+}
+.roster-chip__dir .dir-chip__glyph {
+  width: 9px;
+  height: 9px;
+  stroke-width: 2.2;
+}
+.roster-chip.is-captured .dir-chip,
+.hand-card.is-dead .dir-chip {
+  display: none;
+}
+
 /* Short rows: the name and stars sit on one line. */
 /* Short rows: the skill badge becomes an icon in the top-left corner (its state reads from the
    colour; the label stays in the card's aria-label). */

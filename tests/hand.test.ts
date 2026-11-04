@@ -161,3 +161,30 @@ describe('hand cards: Michelle traps and doll-trap stuns', () => {
     expect(ctrl.state.pieces.find((q) => q.id === 'p1-sad')?.stun).toBe(1);
   });
 });
+
+describe('forward-direction arrows', () => {
+  it('hand cards carry a screen arrow only for direction-dependent movers', () => {
+    const cards = handModel(slots, 0, { state: position(), selection: null });
+    // sad: symmetric; brutile Lv2 and walk: forward is up for player 0.
+    expect(cards.map((c) => c.arrow)).toEqual([null, 'up', 'up']);
+    const turned = position();
+    turned.pieces = turned.pieces.map((p) => (p.id === 'p0-walk' ? { ...p, dir: -1 as const } : p));
+    expect(handModel(slots, 0, { state: turned, selection: null })[2].arrow).toBe('down');
+    // A captured piece shows no arrow.
+    const gone = { ...position(), pieces: position().pieces.filter((p) => p.id !== 'p0-walk') };
+    expect(handModel(slots, 0, { state: gone, selection: null })[2].arrow).toBeNull();
+  });
+
+  it('the controller announces a turn-around with the new screen direction', async () => {
+    const s = makeState([[0, 'walk', 1, 8, 5], [1, 'sad', 1, 3, 0]]);
+    const ctrl = new GameController(s, ports());
+    const events: string[] = [];
+    ctrl.on((e) => {
+      if (e.type === 'turnAround') events.push(`${e.pieceId}:${e.arrow}`);
+    });
+    ctrl.start();
+    expect(ctrl.tryHumanMove({ pieceId: 'p0-walk', from: { r: 8, c: 5 }, to: { r: 9, c: 5 } })).toBe(true);
+    for (let i = 0; i < 4; i++) await new Promise((r) => setTimeout(r, 0));
+    expect(events).toEqual(['p0-walk:down']);
+  });
+});

@@ -15,6 +15,7 @@ import {
   getPieceById,
   getTargetsForPiece,
   isAwake,
+  isDirectional,
   isStunned,
   josa,
   materialScore,
@@ -52,7 +53,7 @@ import { Disposables, h, replaceChildren } from '../dom';
 import { icon } from '../icons';
 import type { Router, Screen } from '../router';
 import { BOT, GameController, HUMAN, type ControllerSnapshot, type Phase } from '../game/GameController';
-import { CRITICAL_MS, endReasonText, rosterChips, setText, TimerRing, turnPillContent } from '../game/hud';
+import { CRITICAL_MS, createRoster, endReasonText, setText, TimerRing, turnPillContent } from '../game/hud';
 import { createFieldPanel } from '../game/fieldPanel';
 import { createHand, handModel, selectFromHand } from '../game/hand';
 import { CUTIN_MS, cutInEl, preloadCutIns } from '../game/cutin';
@@ -88,7 +89,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   // ---------- static DOM
   const topRing = new TimerRing(BOT);
   const botRing = new TimerRing(HUMAN);
-  const topRoster = h('div', { class: 'pbar__roster-host' });
+  const roster = createRoster(params.botFormation, BOT);
+  const topRoster = h('div', { class: 'pbar__roster-host' }, roster.el);
   // My hand: one card per fielded piece; a tap selects it like tapping it on the board.
   const hand = createHand(params.playerFormation, HUMAN, (pieceId) => onHandTap(pieceId));
   // Tablet landscape only (CSS hides it elsewhere): the opponent's lineup as a mirrored hand in
@@ -261,7 +263,6 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   let resultShown = false;
   let settled = false;
   let pillCls = '';
-  let rosterKey = -1;
   let prevPhase: Phase | null = null;
   let prevSel: string | null = null;
   let lastTickSec = -1;
@@ -275,6 +276,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   let transformAsk: string | null = null;
   /** The first transform of the match gets the coach toast. */
   let transformTipShown = false;
+  /** My pieces whose first turn-around of the match got the coach toast. */
+  const turnTipShown = new Set<string>();
   const notified = { unlock: false, storm: false };
   let stormStarted = initial.stormIn !== null;
   const passToastShown = [false, false];
@@ -721,12 +724,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     }
     skillNotices(snap);
     // HUD
-    // Pieces only disappear through captures; a transform swaps a face. Both make the change key.
-    const rk = s.pieces.length * 8 + s.pieces.filter((p) => p.owner === BOT && p.awaken).length;
-    if (rk !== rosterKey) {
-      rosterKey = rk;
-      replaceChildren(topRoster, rosterChips(params.botFormation, BOT, s));
-    }
+    roster.update(s);
     hand.update(handModel(params.playerFormation, HUMAN, snap));
     oppHand.update(handModel(params.botFormation, BOT, snap));
     const tp = turnPillContent(snap);
@@ -1046,6 +1044,14 @@ export function gameScreen(router: Router, params: GameParams): Screen {
             if (!p.onboarding.stunTip) {
               updateProfile((q) => ({ ...q, onboarding: { ...q.onboarding, stunTip: true } }));
               toast('인형 함정에 걸린 말은 주인의 다음 1턴 동안 이동도 스킬도 못 써요', { tone: 'neutral', duration: 3200 });
+            }
+          } else if (e.type === 'turnAround') {
+            // Coach toast on the first turn-around of each of my direction-dependent pieces (the
+            // hand card and roster chevrons flip every time).
+            const who = getPieceById(c.state, e.pieceId);
+            if (e.player === HUMAN && who && isDirectional(who) && !turnTipShown.has(who.id)) {
+              turnTipShown.add(who.id);
+              toast(`${CHARACTERS[who.character].nameKo} 방향 전환 · 이제 ${e.arrow === 'up' ? '위로' : '아래로'} 전진`, { tone: 'neutral', duration: 2600 });
             }
           } else if (e.type === 'multiCapture') {
             if (e.player === HUMAN) haptic('win');

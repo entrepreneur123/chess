@@ -92,6 +92,7 @@ import {
   easeOutCubic,
   hexToRgb,
   hopSquares,
+  arrowSign,
   hopTiming,
   indexHighlights,
   isHopMove,
@@ -2574,6 +2575,8 @@ export class BoardView implements IBoardView {
       v.token.scale.set(1, 1, 1);
       v.tokenMat.uniforms.uFlash.value = 0;
       v.tokenMat.uniforms.uDissolve.value = 0;
+      // Forward chevron on the rim (flips with a turn-around; off for symmetric movers).
+      v.tokenMat.uniforms.uArrow.value = arrowSign(p);
       if (fresh && this.idleAnim) this.startSpawn(v);
     }
     for (const [id, v] of this.visuals) {

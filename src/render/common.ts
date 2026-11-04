@@ -1,6 +1,7 @@
 /** Helpers shared by the WebGL and Canvas2D board views. */
 import { BOARD_SIZE, ZONE_DEPTH } from '../engine/types';
 import type { CharacterId, Level, Move, Piece, PlayerId, Pos } from '../engine/types';
+import { isDirectional, screenArrow } from '../engine/rules';
 import type { BoardHighlights } from './types';
 import {
   ANIM,
@@ -46,6 +47,26 @@ export const posKey = (p: Pos): number => p.r * BOARD_SIZE + p.c;
 
 export function inBoard(p: Pos): boolean {
   return p.r >= 0 && p.r < BOARD_SIZE && p.c >= 0 && p.c < BOARD_SIZE;
+}
+
+/**
+ * Forward chevron on a coin's left rim, in top-face units (1 = the coin's top-face radius, 0.385
+ * cell): centre radius, half width, height, and the half widths of its light stroke and ink
+ * outline. The WebGL token shader (tokens.ts) and Board2DView draw the same mark.
+ */
+export const ARROW_RIM = 0.86;
+export const ARROW_W = 0.17;
+export const ARROW_H = 0.13;
+export const ARROW_LINE = 0.04;
+export const ARROW_INK = 0.08;
+
+/**
+ * The coin's forward chevron: +1 up the screen, -1 down, 0 none (a symmetric mover). Goes through
+ * the engine's `screenArrow`, like every other direction arrow in the game.
+ */
+export function arrowSign(p: Pick<Piece, 'owner' | 'dir' | 'character' | 'level' | 'absorbed'>): -1 | 0 | 1 {
+  if (!isDirectional(p)) return 0;
+  return screenArrow(p) === 'up' ? 1 : -1;
 }
 
 /** Board-wide forward direction in rows for a player. */

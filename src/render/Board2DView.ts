@@ -67,6 +67,12 @@ import type { AwakenPhase, AwakenTimeline, FeatherTone, RakaeliStyle } from './a
 import {
   clamp01,
   containerSize,
+  ARROW_H,
+  ARROW_INK,
+  ARROW_LINE,
+  ARROW_RIM,
+  ARROW_W,
+  arrowSign,
   easeInOutCubic,
   easeOutCubic,
   faceUrl,
@@ -128,6 +134,15 @@ const FX_MS = 620;
 /** Token radius and rarity ring radius (fractions of a cell). */
 /** Token sprite size (fraction of a cell): the coin (r 0.385) + its edge and keyline. */
 const TOKEN_SPRITE = 0.92;
+/** Coin top-face radius and its lift above the cell centre, in cells (paintToken's geometry). */
+const COIN_TOP_R = 0.385;
+const COIN_TOP_LIFT = 0.024;
+/** Forward chevron colours: the team's light tone pushed toward white, over an ink outline. */
+const ARROW_CSS: Record<PlayerId, string> = {
+  0: rgbToCss(mixRgb(hexToRgb(TEAM_COLORS[0].light), [1, 1, 1], 0.65)),
+  1: rgbToCss(mixRgb(hexToRgb(TEAM_COLORS[1].light), [1, 1, 1], 0.65)),
+};
+const ARROW_INK_CSS = 'rgba(9,13,23,0.8)';
 const RING_R = 0.452;
 /** Storm tile tint strength (matches the WebGL board). */
 const STORM_TILE_ALPHA = 0.55;
@@ -2700,6 +2715,28 @@ export class Board2DView implements IBoardView {
       ctx.globalAlpha = alpha;
     }
     if (lk.burn > 0) this.drawBurn(x, yb, lk.burn, sx);
+    // Forward chevron on the left rim (mirrors the WebGL token): up / down the screen, flips with a
+    // turn-around, absent for symmetric movers. Plain path calls: no per-frame allocation.
+    const arrow = arrowSign(p);
+    if (arrow !== 0 && flash < 0.3) {
+      const R = cell * COIN_TOP_R;
+      const ax = x - ARROW_RIM * R * sx;
+      const ay = yb - COIN_TOP_LIFT * cell * sy;
+      const w = ARROW_W * R * sx;
+      const hh = ARROW_H * 0.5 * R * sy * arrow;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(ax - w, ay + hh);
+      ctx.lineTo(ax, ay - hh);
+      ctx.lineTo(ax + w, ay + hh);
+      ctx.strokeStyle = ARROW_INK_CSS;
+      ctx.lineWidth = 2 * ARROW_INK * R * sx;
+      ctx.stroke();
+      ctx.strokeStyle = ARROW_CSS[p.owner];
+      ctx.lineWidth = 2 * ARROW_LINE * R * sx;
+      ctx.stroke();
+    }
     if (flash > 0) {
       ctx.globalAlpha = alpha * flash;
       ctx.fillStyle = '#ffffff';

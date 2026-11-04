@@ -18,7 +18,7 @@
  */
 import * as THREE from 'three';
 import type { CharacterId, Level, PlayerId, Rarity } from '../engine/types';
-import { faceUrl } from './common';
+import { ARROW_H, ARROW_INK, ARROW_LINE, ARROW_RIM, ARROW_W, faceUrl } from './common';
 import { AWAKE_TINT, awakeFaceUrl, isRakaeli } from './awakenFx';
 import { BOARD_COLORS, RARITY_RING, TEAM_COLORS } from './palette';
 
@@ -143,7 +143,13 @@ uniform sampler2D uAwakeMap;
 uniform float uHasAwake;
 uniform float uAwake;
 uniform float uBurn;
+uniform float uArrow;
 varying vec2 vUv;
+float sdSeg(vec2 p, vec2 a, vec2 b) {
+  vec2 pa = p - a;
+  vec2 ba = b - a;
+  return length(pa - ba * clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0));
+}
 float sdStar5(vec2 p, float r, float rf) {
   const vec2 k1 = vec2(0.809016994375, -0.587785252292);
   const vec2 k2 = vec2(-k1.x, k1.y);
@@ -234,6 +240,15 @@ void main() {
     top = mix(top, ink, 1.0 - smoothstep(-ar, ar, d - 0.045));
     vec3 gcol = mix(uGold * vec3(0.95, 0.62, 0.2), mix(uGold, vec3(1.0, 0.98, 0.85), 0.5), clamp((pt.y - c.y) * 5.0 + 0.5, 0.0, 1.0));
     top = mix(top, gcol, 1.0 - smoothstep(-ar, ar, d));
+  }
+  // Forward chevron on the left rim (9 o'clock: clear of the stars below and Rakaeli's badge at the
+  // top right), pointing up / down the screen; only for direction-dependent movers (uArrow = 0 off).
+  if (uArrow != 0.0) {
+    vec2 ap = pt - vec2(${g3(-ARROW_RIM)}, 0.0);
+    ap.y *= uArrow;
+    float dc = min(sdSeg(ap, vec2(${g3(-ARROW_W)}, ${g3(-ARROW_H * 0.5)}), vec2(0.0, ${g3(ARROW_H * 0.5)})), sdSeg(ap, vec2(0.0, ${g3(ARROW_H * 0.5)}), vec2(${g3(ARROW_W)}, ${g3(-ARROW_H * 0.5)})));
+    top = mix(top, ink, 0.8 * (1.0 - smoothstep(${g3(ARROW_INK)} - ar, ${g3(ARROW_INK)} + ar, dc)));
+    top = mix(top, mix(uTeamLight, vec3(1.0), 0.65), 1.0 - smoothstep(${g3(ARROW_LINE)} - ar, ${g3(ARROW_LINE)} + ar, dc));
   }
   col = mix(col, top, inTop);
   // Ink keyline around the whole coin (outside the silhouette).
@@ -358,6 +373,7 @@ export class TokenKit {
         uHasAwake: aw.has,
         uAwake: { value: 0 },
         uBurn: { value: 0 },
+        uArrow: { value: 0 },
       },
       vertexShader: TOKEN_VS,
       fragmentShader: TOKEN_FS,

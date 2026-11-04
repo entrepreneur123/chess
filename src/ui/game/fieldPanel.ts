@@ -7,10 +7,11 @@
  * The drawer does NOT pause the turn clock (no free thinking time); it re-renders on every
  * controller change while open, but only when something it shows actually changed.
  */
-import { BOARD_SIZE, CHARACTERS, ZONE_DEPTH, SKILL_UNLOCK_PLY, WASTE_SIZE, getTargetsForPiece, inStorm, isAwake, isStunned, pieceDir, skillUnlockIn, trapsLeft, type FormationSlot, type GameState, type Piece, type PlayerId } from '../../engine';
+import { BOARD_SIZE, CHARACTERS, ZONE_DEPTH, SKILL_UNLOCK_PLY, WASTE_SIZE, getTargetsForPiece, inStorm, isAwake, isDirectional, isStunned, pieceDir, screenArrow, skillUnlockIn, trapsLeft, type FormationSlot, type GameState, type Piece, type PlayerId } from '../../engine';
 import { movementDiagram, rarityChip, starsOf, unitArt } from '../components/piece';
 import { overlayRoot, pushOverlay, registerForceClose } from '../components/overlay';
 import { h, replaceChildren } from '../dom';
+import { dirChip, setArrow } from './hand';
 import { icon } from '../icons';
 
 /** Column letters, one per board column (A..J on 10 columns). */
@@ -82,6 +83,14 @@ function skillStatus(piece: Piece | undefined, s: GameState): string {
   return CHARACTERS[piece.character].skill?.kind === 'transform' ? '사용 가능 · 2번 이동 동안 범위 확장' : '사용 가능 · 닿으면 소멸';
 }
 
+/** The forward-direction chip of a direction-dependent piece on the board (null otherwise). */
+function arrowChip(piece: Piece | undefined, owner: PlayerId): HTMLElement | null {
+  if (!piece || !isDirectional(piece)) return null;
+  const chip = dirChip(`fcard__dir owner-${owner}`);
+  setArrow(chip, screenArrow(piece), false);
+  return chip;
+}
+
 function infoCard(slot: FormationSlot, owner: PlayerId, s: GameState, focus: string | null): HTMLElement {
   const id = `p${owner}-${slot.character}`;
   const piece = s.pieces.find((p) => p.id === id);
@@ -114,6 +123,7 @@ function infoCard(slot: FormationSlot, owner: PlayerId, s: GameState, focus: str
         h('span', { class: 'fcard__name' }, def.nameKo),
         h('span', { class: 'fcard__stars', 'aria-label': `${level}성` }, starsOf(level)),
         rarityChip(def.rarity),
+        arrowChip(piece, owner),
       ),
       h('div', { class: `fcard__status${piece ? '' : ' is-dead'}` }, status),
       h('div', { class: 'fcard__desc' }, awake && def.awakeDescKo ? `${def.skill?.nameKo ?? ''} · ${def.awakeDescKo[level - 1]}` : def.descKo[level - 1]),

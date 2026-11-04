@@ -16,6 +16,8 @@ import {
   getPieceById,
   getTargetsForPiece,
   isLegalMove,
+  pieceDir,
+  screenArrow,
   resign,
   skipBonus,
   turnTimeMsFor,
@@ -70,6 +72,8 @@ export type ControllerEvent =
   | { type: 'stun'; player: PlayerId; pieceId: string; square: Pos }
   /** `pieceId` (Picker, or an Insaner with his hop) captured several pieces in one move. */
   | { type: 'multiCapture'; player: PlayerId; pieceId: string; captured: string[] }
+  /** `pieceId` reached the far edge and turned around: it now moves `arrow` on screen. */
+  | { type: 'turnAround'; player: PlayerId; pieceId: string; arrow: 'up' | 'down' }
   /** The storm advanced to `storm` columns per side, removing `killed`. */
   | { type: 'storm'; storm: number; killed: string[]; /** The removed pieces as they stood. */ lost: Piece[] }
   | { type: 'ended'; state: GameState };
@@ -457,6 +461,9 @@ export class GameController {
       const m = action.move;
       if (m.trap) this.emit({ type: 'trap', player: action.player, pieceId: m.pieceId, square: { ...m.from }, trapsLeft: trapsLeft(next, action.player) });
       if (m.stunned) this.emit({ type: 'stun', player: action.player, pieceId: m.pieceId, square: { ...m.to } });
+      const before = getPieceById(prev, m.pieceId);
+      const after = getPieceById(next, m.pieceId);
+      if (before && after && pieceDir(before) !== pieceDir(after)) this.emit({ type: 'turnAround', player: action.player, pieceId: m.pieceId, arrow: screenArrow(after) });
       const all = capturedIds(m);
       if (all.length > 1) this.emit({ type: 'multiCapture', player: action.player, pieceId: m.pieceId, captured: [...all] });
     }
