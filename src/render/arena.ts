@@ -570,12 +570,21 @@ export function paintTurnGlow(
  * caller repaints without the hole-based effect instead of hiding the cells.
  */
 export function alphaAt(g: CanvasRenderingContext2D, x: number, y: number): number {
+  // Copy the pixel into a 1x1 scratch canvas and read that one back, so the (GPU-backed) source
+  // canvas itself is never read back (repeated readbacks demote it to a slow CPU canvas).
   try {
-    return g.getImageData(Math.round(x), Math.round(y), 1, 1).data[3] / 255;
+    probe ??= document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+    if (!probe) return -1;
+    probe.canvas.width = 1;
+    probe.canvas.height = 1;
+    probe.clearRect(0, 0, 1, 1);
+    probe.drawImage(g.canvas, Math.round(x), Math.round(y), 1, 1, 0, 0, 1, 1);
+    return probe.getImageData(0, 0, 1, 1).data[3] / 255;
   } catch {
     return -1;
   }
 }
+let probe: CanvasRenderingContext2D | null | undefined;
 
 /** Highest alpha the field centre of a see-through layer may have (overlay washes are ~0.1). */
 export const SEE_THROUGH_MAX_ALPHA = 0.5;
