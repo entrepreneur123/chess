@@ -771,6 +771,8 @@ export class BoardView implements IBoardView {
   private readonly rings = new RingMaterials();
   private readonly tokens: TokenKit;
   private readonly reducedMotion = prefersReducedMotion();
+  /** A frame threw once already (logged once; see onFrameError). */
+  private frameErrorLogged = false;
   private impactCb: ((move: Move) => void) | null = null;
   /** True while dispose() settles a running animation (no impact callback then). */
   private disposing = false;
@@ -1815,7 +1817,7 @@ export class BoardView implements IBoardView {
     const root = a.mover.root;
     const inner = a.mover.inner;
     const n = hop.squares.length;
-    const i = Math.min(n - 1, Math.floor(t / hop.stepMs));
+    const i = Math.max(0, Math.min(n - 1, Math.floor(t / hop.stepMs)));
     const airborne = t < a.moveDur;
     if (airborne) {
       const k = clamp01((t - i * hop.stepMs) / hop.stepMs);
@@ -1965,20 +1967,29 @@ export class BoardView implements IBoardView {
   private endAwaken(run: AwakenRun, v: PieceVisual | null): void {
     if (this.awakening.get(run.id) !== run) return;
     this.awakening.delete(run.id);
-    if (run.phase === 'on') this.rakFx.setWings(0, 0, 0, 0, 0, 0);
-    if (v) {
-      const k = run.phase === 'on' ? 1 : 0;
-      v.awakeFace = k;
-      v.awakeAura = k;
-      v.tokenMat.uniforms.uBurn.value = 0;
-      this.applyAwakeLook(v);
+    try {
+      if (run.phase === 'on') this.rakFx.setWings(0, 0, 0, 0, 0, 0);
+      if (v) {
+        const k = run.phase === 'on' ? 1 : 0;
+        v.awakeFace = k;
+        v.awakeAura = k;
+        v.tokenMat.uniforms.uBurn.value = 0;
+        this.applyAwakeLook(v);
+      }
+    } finally {
+      run.resolve();
     }
-    run.resolve();
   }
 
   /** Resolve every run (dispose / context loss): no frames may come to finish them. */
   private settleAwaken(): void {
-    for (const run of [...this.awakening.values()]) this.endAwaken(run, this.visuals.get(run.id) ?? null);
+    for (const run of [...this.awakening.values()]) {
+      try {
+        this.endAwaken(run, this.visuals.get(run.id) ?? null);
+      } catch (e) {
+        console.error('[render] settling a transform failed:', e);
+      }
+    }
   }
 
   /** The transform peaks: crimson pulse ring, embers, black feathers, a flash and a short shake. */
@@ -2471,13 +2482,16 @@ export class BoardView implements IBoardView {
     const s = this.skill;
     if (!s) return;
     this.skill = null;
-    this.wasteFx.clearCast();
-    if (s.caster) {
-      s.caster.token.scale.set(1, 1, 1);
-      s.caster.tokenMat.uniforms.uFlash.value = 0;
+    try {
+      this.wasteFx.clearCast();
+      if (s.caster) {
+        s.caster.token.scale.set(1, 1, 1);
+        s.caster.tokenMat.uniforms.uFlash.value = 0;
+      }
+      this.requestRender();
+    } finally {
+      s.resolve();
     }
-    this.requestRender();
-    s.resolve();
   }
 
   /** True while the storm rule is in play (anything vanishing near the edges is a storm removal). */
@@ -3099,6 +3113,31 @@ export class BoardView implements IBoardView {
   private readonly frame = (now: number): void => {
     this.rafId = 0;
     if (this.disposed) return;
+    try {
+      this.renderFrame(now);
+    } catch (err) {
+      this.onFrameError(err);
+    }
+  };
+
+  /**
+   * A frame threw (an FX bug, a lost context...). The loop must never die with a move, cast or
+   * transform still pending: the game awaits those promises. Settle them all at their end state.
+   */
+  private onFrameError(err: unknown): void {
+    if (!this.frameErrorLogged) {
+      this.frameErrorLogged = true;
+      console.error('[render] frame failed; running animations settled:', err);
+    }
+    try {
+      this.finishAnimation(false);
+    } catch (e) {
+      console.error('[render] settling the animation failed:', e);
+    }
+    this.settleAwaken();
+  }
+
+  private renderFrame(now: number): void {
     const moving = this.tickAnimation(now);
     const casting = this.tickSkill(now);
     const awakening = this.tickAwaken(now);
@@ -3167,7 +3206,7 @@ export class BoardView implements IBoardView {
       this.lastTick = 0;
       this.scheduleScan(now);
     }
-  };
+  }
 
   private readonly onVisibility = (): void => {
     if (document.hidden) {
@@ -3183,7 +3222,9 @@ export class BoardView implements IBoardView {
   private tickAnimation(now: number): boolean {
     const a = this.anim;
     if (!a) return false;
-    const t = now - a.start;
+    // rAF timestamps are the frame's start time: the first frame after animateMove can be dated a
+    // little BEFORE `a.start`. Clamped, or the hop's square index goes negative.
+    const t = Math.max(0, now - a.start);
     if (t >= a.duration) {
       this.finishAnimation(true);
       return false;
@@ -3722,6 +3763,15 @@ export class BoardView implements IBoardView {
     if (!natural) this.clearFx();
     if (!a) return;
     this.anim = null;
+    try {
+      this.settleAnimation(a, natural);
+    } finally {
+      a.resolve();
+    }
+  }
+
+  /** The end state of a finished (or cut short) move: see finishAnimation. */
+  private settleAnimation(a: RunningAnim, natural: boolean): void {
     a.mover.inner.scale.set(1, 1, 1);
     a.mover.token.scale.set(1, 1, 1);
     if (a.trail) this.strike.trailEnd();
@@ -3754,7 +3804,6 @@ export class BoardView implements IBoardView {
     // A transformed mover whose transform ran out with this move fades back instead of popping.
     this.syncPieces(a.piecesAfter, true, natural ? a.mover.piece.id : null);
     this.requestRender();
-    a.resolve();
   }
 
   /** Hide all one-shot effects immediately (state is reset, e.g. by setPieces mid-animation). */

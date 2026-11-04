@@ -36,7 +36,7 @@ import {
   type SkillAction,
   type SkillBlock,
 } from '../../engine';
-import { createBoardView, diagEnabled, type IBoardView } from '../../render';
+import { Board2DView, BoardView, createBoardView, diagEnabled, type IBoardView } from '../../render';
 import type { VoiceEvent } from '../../audio/voice';
 import { PACING } from '../../meta/economy';
 import { getProfile, setProfile, settleMatch, updateProfile, type MatchOutcome, type MatchSummary } from '../../meta/profile';
@@ -66,6 +66,8 @@ import '../game/hud.css';
  * from turn 15 with the storm at turn 20 (about the last quarter of the run-up, as before).
  */
 const SUDDEN_DEATH_WARN_TURNS = 5;
+/** Grace period for a lost WebGL context to come back before the match switches to the 2D board. */
+const CONTEXT_FALLBACK_MS = 3000;
 /** Plies -> turns as the player counts them (one move each = one turn). */
 const pliesToTurns = (plies: number) => Math.ceil(plies / 2);
 
@@ -908,8 +910,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
         console.error('board init failed', e);
         replaceChildren(boardHost, h('div', { class: 'board-error' }, '보드를 표시할 수 없습니다.'));
       }
-      const b = board;
-      bag.add(() => b?.dispose());
+      bag.add(() => board?.dispose());
       bot = new BotClient();
       const botRef = bot;
       bag.add(() => botRef.dispose());
@@ -922,14 +923,17 @@ export function gameScreen(router: Router, params: GameParams): Screen {
           // Stepping on wasteland destroys the mover: the board plays the toxic dissolve.
           const m: Move = c.state.waste.includes(sqOf(move.to)) ? { ...move, wasted: true } : move;
           moveFeedbackStart(m, c.state);
+          const b = board;
           if (b) {
             b.setInteractive(false);
             await b.animateMove(m, after.pieces);
-            syncedPieces = after.pieces;
+            // (Unless the board was replaced meanwhile: the new one syncs on the next render.)
+            if (board === b) syncedPieces = after.pieces;
           }
           if (!bag.isDisposed) moveFeedbackEnd(m);
         },
         animateSkill: async (action, after) => {
+          const b = board;
           const caster = getPieceById(c.state, action.pieceId);
           const transform = !!caster && skillKindOf(caster.character) === 'transform';
           if (caster) {
@@ -957,16 +961,69 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       }));
       bag.add(() => c.dispose());
 
+      /** Input and strike callbacks of a (new) board view. */
+      const wireBoard = (view: IBoardView) => {
+        view.onCellClick((pos: Pos) => {
+          if (targeting) onTargetTap(pos);
+          else {
+            // A tap anywhere on the board while the transform waits for its confirm cancels it.
+            if (transformAsk) transformAsk = null;
+            c.tapCell(pos);
+          }
+        });
+        view.onImpact?.((move) => {
+          if (!bag.isDisposed) impact(move);
+        });
+      };
       board?.setPieces(initial.pieces);
       syncedPieces = initial.pieces;
-      board?.onCellClick((pos: Pos) => {
-        if (targeting) onTargetTap(pos);
-        else {
-          // A tap anywhere on the board while the transform waits for its confirm cancels it.
-          if (transformAsk) transformAsk = null;
-          c.tapCell(pos);
-        }
-      });
+      if (board) wireBoard(board);
+      // A WebGL context that is lost and not restored leaves a blank board while the match goes on
+      // (it reads as a frozen game; iOS drops contexts under memory pressure). After a grace period
+      // with the page visible, switch to the 2D board, which shows exactly the same state.
+      const glCanvas = board instanceof BoardView ? boardHost.querySelector('canvas') : null;
+      if (glCanvas) {
+        let lost = false;
+        let timer = 0;
+        const arm = () => {
+          window.clearTimeout(timer);
+          timer = lost && !document.hidden ? bag.timeout(() => swapTo2D(), CONTEXT_FALLBACK_MS) : 0;
+        };
+        const swapTo2D = () => {
+          if (!lost || document.hidden || bag.isDisposed || !(board instanceof BoardView)) return;
+          console.warn('[game] WebGL context lost and not restored: switching to the 2D board');
+          const old = board;
+          board = null;
+          old.dispose(); // settles any running animation
+          try {
+            board = new Board2DView(boardHost, { arena: theme.id });
+          } catch (e) {
+            console.error('2D board init failed', e);
+            replaceChildren(boardHost, h('div', { class: 'board-error' }, '보드를 표시할 수 없습니다.'));
+            return;
+          }
+          wireBoard(board);
+          // Everything the board was told so far is re-sent by the next render.
+          board.setPieces(c.state.pieces);
+          syncedPieces = c.state.pieces;
+          stormKey = '';
+          wasteKey = -1;
+          trapKey = '\u0000';
+          lastGlow = undefined;
+          stopTargeting(); // the wasteland preview lived on the old board
+          (board as { setTurn?: (p: PlayerId) => void }).setTurn?.(c.state.turn);
+          renderSnapshot(c.snapshot());
+        };
+        bag.listen(glCanvas, 'webglcontextlost', () => {
+          lost = true;
+          arm();
+        });
+        bag.listen(glCanvas, 'webglcontextrestored', () => {
+          lost = false;
+          arm();
+        });
+        bag.listen(document, 'visibilitychange', arm);
+      }
       const dragRef = (boardDrag = installBoardDrag({
         host: boardHost,
         board: () => board,
@@ -975,9 +1032,6 @@ export function gameScreen(router: Router, params: GameParams): Screen {
         warn: (message) => toast(message, { tone: 'warn', duration: 2600 }),
       }));
       bag.add(() => dragRef.dispose());
-      board?.onImpact?.((move) => {
-        if (!bag.isDisposed) impact(move);
-      });
       preloadCutIns([...params.playerFormation, ...params.botFormation]);
       void preloadCharacterAudio([...new Set([...params.playerFormation, ...params.botFormation].map((f) => f.character))]);
       bag.add(() => stopVoice());
@@ -1141,8 +1195,12 @@ export function gameScreen(router: Router, params: GameParams): Screen {
           snapshot: () => JSON.parse(JSON.stringify(c.snapshot())) as ControllerSnapshot,
           legalMoves: () => (c.phase === 'humanTurn' && !c.paused ? JSON.parse(JSON.stringify(getLegalMoves(c.state))) as Move[] : []),
           skillAnchors: (pieceId: string) => (c.phase === 'humanTurn' && !c.paused ? skillAnchors(c.state, pieceId) : []),
+          /** Squares the opponent's pieces reach now (what tapping them previews). */
+          enemyReach: () => c.state.pieces.filter((p) => p.owner === BOT).flatMap((p) => getTargetsForPiece(c.state, p).map((m) => m.to)),
           cellRect: (pos: Pos) => board?.cellRect?.(pos) ?? null,
-          renderer: board?.getDiagnostics?.()?.renderer ?? null,
+          get renderer() {
+            return board?.getDiagnostics?.()?.renderer ?? null;
+          },
         };
         w.__gridclash = probe;
         bag.add(() => {

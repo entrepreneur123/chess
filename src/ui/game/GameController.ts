@@ -96,6 +96,14 @@ export interface ControllerPorts {
 
 const samePos = (a: Pos, b: Pos) => a.r === b.r && a.c === b.c;
 
+/**
+ * Watchdog for the board's move / skill animations. The longest real one (a Picker multi-hop, a
+ * transform with its cut-in) takes about 2.5 s; a hidden page (no animation frames) or a broken
+ * FX must never hold the match in 'animating', so after this long the result is applied anyway
+ * (the board snaps to it on the next sync).
+ */
+export const ANIMATION_WATCHDOG_MS = 6000;
+
 export function lastMoveOf(history: HistoryEntry[]): { from: Pos; to: Pos } | null {
   for (let i = history.length - 1; i >= 0; i--) {
     const e = history[i];
@@ -270,8 +278,41 @@ export class GameController {
 
   // ------------------------------------------------------------------ internals
 
+  /** A throwing listener (UI, sound, FX) must never break the turn flow: it is logged and skipped. */
   private emit(e: ControllerEvent): void {
-    for (const l of [...this.listeners]) l(e);
+    for (const l of [...this.listeners]) {
+      try {
+        l(e);
+      } catch (err) {
+        console.error(`[game] '${e.type}' listener failed:`, err);
+      }
+    }
+  }
+
+  /**
+   * Await a board animation, but never longer than ANIMATION_WATCHDOG_MS, and never throw: the
+   * match goes on whatever the animation does.
+   */
+  private async awaitAnimation(run: () => Promise<void> | undefined, what: string): Promise<void> {
+    let timer: unknown = null;
+    try {
+      const anim = run();
+      if (!anim) return;
+      await Promise.race([
+        anim,
+        new Promise<void>((resolve) => {
+          timer = this.setTimer(() => {
+            timer = null;
+            console.warn(`[game] ${what} animation did not finish in ${ANIMATION_WATCHDOG_MS} ms; continuing`);
+            resolve();
+          }, ANIMATION_WATCHDOG_MS);
+        }),
+      ]);
+    } catch (e) {
+      console.warn(`[game] ${what} animation failed`, e);
+    } finally {
+      if (timer !== null) this.clearTimer(timer);
+    }
   }
 
   private setSelection(sel: Selection | null): void {
@@ -388,11 +429,7 @@ export class GameController {
     }
     this._phase = 'animating';
     this.emit({ type: 'change' });
-    try {
-      await this.ports.animate(move, next);
-    } catch (e) {
-      console.warn('animation failed', e);
-    }
+    await this.awaitAnimation(() => this.ports.animate(move, next), 'move');
     if (gen !== this.gen || this.disposed) return;
     this._state = next;
     this.announce(prev, next, 1);
@@ -413,11 +450,7 @@ export class GameController {
     }
     this._phase = 'animating';
     this.emit({ type: 'change' });
-    try {
-      await this.ports.animateSkill?.(action, next);
-    } catch (e) {
-      console.warn('skill animation failed', e);
-    }
+    await this.awaitAnimation(() => this.ports.animateSkill?.(action, next), 'skill');
     if (gen !== this.gen || this.disposed) return;
     this._state = next;
     const entry = next.history[prev.history.length];

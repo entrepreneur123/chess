@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GameState, Move } from '../src/engine';
-import { GameController, type ControllerPorts } from '../src/ui/game/GameController';
+import { ANIMATION_WATCHDOG_MS, GameController, type ControllerPorts } from '../src/ui/game/GameController';
 import { makeState } from './helpers';
 
 /** Manual clock + timers so races can be driven deterministically. */
@@ -339,5 +339,53 @@ describe('GameController without a match clock', () => {
     expect(h.ctrl.state.bonusPieceId).toBeNull();
     expect(h.ctrl.state.turn).toBe(1);
     expect(h.ctrl.phase).toBe('botThinking');
+  });
+
+  it('a move animation that never resolves (no frames: hidden page, broken FX) cannot lock the match', async () => {
+    const h = harness(position());
+    h.ctrl.start();
+    h.ctrl.tapCell({ r: 0, c: 0 });
+    h.ctrl.tapCell({ r: 1, c: 0 });
+    expect(h.ctrl.phase).toBe('animating');
+    // The animation never settles: the watchdog applies the move anyway and the bot's turn starts.
+    const warn = console.warn;
+    console.warn = () => undefined;
+    try {
+      await h.advance(ANIMATION_WATCHDOG_MS - 1);
+      expect(h.ctrl.phase).toBe('animating');
+      await h.advance(1);
+    } finally {
+      console.warn = warn;
+    }
+    expect(h.ctrl.phase).toBe('botThinking');
+    expect(h.ctrl.state.turn).toBe(1);
+    expect(h.ctrl.state.pieces.find((p) => p.id === 'p0-marki')?.pos).toEqual({ r: 1, c: 0 });
+    // A late settle of the stale animation changes nothing.
+    h.anims.shift()!.resolve();
+    await h.flush();
+    expect(h.ctrl.phase).toBe('botThinking');
+    expect(h.ctrl.state.ply).toBe(1);
+  });
+
+  it('a UI listener that throws never leaves the controller stuck in a phase', async () => {
+    const h = harness(position(), { botMove: () => ({ pieceId: 'p1-sad', from: { r: 9, c: 9 }, to: { r: 8, c: 9 } }) });
+    h.ctrl.on(() => {
+      throw new Error('render failed');
+    });
+    const err = console.error;
+    console.error = () => undefined;
+    try {
+      h.ctrl.start();
+      h.ctrl.tapCell({ r: 0, c: 0 });
+      h.ctrl.tapCell({ r: 1, c: 0 });
+      await h.finishAnims();
+      await h.advance(0);
+      await h.finishAnims();
+      // Both moves went through although every 'change' / event listener call threw.
+      expect(h.ctrl.phase).toBe('humanTurn');
+      expect(h.ctrl.state.ply).toBe(2);
+    } finally {
+      console.error = err;
+    }
   });
 });

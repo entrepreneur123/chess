@@ -364,6 +364,8 @@ export class Board2DView implements IBoardView {
   private stormNext: number | null = null;
   private readonly fading: { piece: Piece; start: number }[] = [];
   private readonly reducedMotion = prefersReducedMotion();
+  /** A frame threw once already (logged once; see onFrameError). */
+  private frameErrorLogged = false;
   private hasLegendary = false;
   /** Pre-rendered tokens keyed by look + pixel size. */
   private readonly sprites = new Map<string, HTMLCanvasElement>();
@@ -923,9 +925,12 @@ export class Board2DView implements IBoardView {
     const s = this.skill;
     if (!s) return;
     this.skill = null;
-    for (const q of s.squares) this.wasteOpen.delete(q.sq);
-    this.requestRender();
-    s.resolve();
+    try {
+      for (const q of s.squares) this.wasteOpen.delete(q.sq);
+      this.requestRender();
+    } finally {
+      s.resolve();
+    }
   }
 
   private get stormActive(): boolean {
@@ -1425,6 +1430,37 @@ export class Board2DView implements IBoardView {
   private readonly frame = (now: number): void => {
     this.rafId = 0;
     if (this.disposed) return;
+    try {
+      this.renderFrame(now);
+    } catch (err) {
+      this.onFrameError(err);
+    }
+  };
+
+  /**
+   * A frame threw (an FX bug...). The loop must never die with a move, cast or transform still
+   * pending: the game awaits those promises. Settle them all at their end state.
+   */
+  private onFrameError(err: unknown): void {
+    if (!this.frameErrorLogged) {
+      this.frameErrorLogged = true;
+      console.error('[render] frame failed; running animations settled:', err);
+    }
+    try {
+      this.finishAnimation(false);
+    } catch (e) {
+      console.error('[render] settling the animation failed:', e);
+    }
+    for (const run of [...this.awRuns.values()]) {
+      try {
+        this.endRun(run, true);
+      } catch (e) {
+        console.error('[render] settling a transform failed:', e);
+      }
+    }
+  }
+
+  private renderFrame(now: number): void {
     if (this.anim) this.tickAnim(now);
     this.tickSkill(now);
     this.tickAwaken(now);
@@ -1446,12 +1482,14 @@ export class Board2DView implements IBoardView {
     this.lastFrame = now;
     this.draw(now);
     if (busy || loop) this.requestRender();
-  };
+  }
 
   private tickAnim(now: number): void {
     const a = this.anim;
     if (!a) return;
-    const t = now - a.start;
+    // rAF timestamps are the frame's start time: the first frame after animateMove can be dated a
+    // little BEFORE `a.start`. Clamped, or the hop's square index goes negative.
+    const t = Math.max(0, now - a.start);
     if (t >= a.duration) {
       this.finishAnimation(true);
       return;
@@ -1541,6 +1579,15 @@ export class Board2DView implements IBoardView {
     }
     if (!a) return;
     this.anim = null;
+    try {
+      this.settleAnimation(a, natural);
+    } finally {
+      a.resolve();
+    }
+  }
+
+  /** The end state of a finished (or cut short) move: see finishAnimation. */
+  private settleAnimation(a: Anim2D, natural: boolean): void {
     // A mover destroyed on the wasteland already dissolved: never a storm ghost too.
     const skip = [a.moverId, ...(a.captured ? [a.captured.id] : []), ...(a.hop ? a.hop.victims.map((v) => v.piece.id) : [])];
     this.collectStormVictims(a.piecesAfter, a.wasted || a.hop ? skip : (a.captured?.id ?? null));
@@ -1559,7 +1606,6 @@ export class Board2DView implements IBoardView {
       }
     }
     this.requestRender();
-    a.resolve();
   }
 
   // ---------------------------------------------------------------- drawing
@@ -1691,7 +1737,7 @@ export class Board2DView implements IBoardView {
     if (sk && sk.casterId) this.drawRune(this.cx(sk.from.c), this.cy(sk.from.r), cell * 1.15, (now - sk.start) / SKILL_RUNE_MS, (now - sk.start) * 0.0016);
     // Pieces (back rows first so overlaps read naturally).
     const a = this.anim;
-    const t = a ? now - a.start : 0;
+    const t = a ? Math.max(0, now - a.start) : 0;
     const list = [...this.pieces].sort((p, q) => q.pos.r - p.pos.r);
     let moverDraw: (() => void) | null = null;
     let moverXY = { x: 0, y: 0 };
@@ -1699,7 +1745,7 @@ export class Board2DView implements IBoardView {
       if (a && a.hop && p.id === a.moverId) {
         const hop = a.hop;
         const n = hop.squares.length;
-        const i = Math.min(n - 1, Math.floor(t / hop.stepMs));
+        const i = Math.max(0, Math.min(n - 1, Math.floor(t / hop.stepMs)));
         let fr: number;
         let fc: number;
         let lift = 0;
