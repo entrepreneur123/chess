@@ -337,8 +337,10 @@ def normalise(x: np.ndarray) -> np.ndarray:
 def encode_tp(y: np.ndarray, path: str):
     """Encode and judge the decoded file: re-encode quieter while its true peak is above TP_MAX, and
     nudge the gain while its loudness is off target by > 0.2 LU (AAC padding shifts the gated
-    loudness of sub-second clips by up to ~0.6 LU), never past the true-peak headroom."""
-    for _ in range(6):
+    loudness of sub-second clips by up to ~0.6 LU), never past the true-peak headroom. When the
+    clip is too quiet only because AAC overshoots on one transient (decoded peak well above the
+    PCM peak), that transient is limited harder instead of turning the whole clip down."""
+    for _ in range(8):
         encode_m4a(y, path, "64k", SR)
         z = vq.load(path)
         tp = vq.true_peak_db(z)
@@ -349,6 +351,10 @@ def encode_tp(y: np.ndarray, path: str):
         if abs(err) <= 0.2:
             break
         step = min(err, TP_MAX - 0.15 - tp)
+        if err > 0.2 and step < err - 0.1:  # peak-bound, not loudness-bound
+            overshoot = max(0.0, tp - vq.true_peak_db(y))
+            y = tp_limit(y * 10 ** (err / 20), ceil_db=TP_MAX - 0.3 - overshoot)
+            continue
         if abs(step) < 0.05:
             break
         y = y * 10 ** (step / 20)
@@ -515,12 +521,17 @@ def main() -> None:
                 # it costs about as much as one wrong syllable in a 7-syllable line.
                 score = (cer(ref, hyp) + 0.5 * dev(k) + 0.15 * max(0.0, d - 2.6)
                          + 0.1 * max(0.0, k["dur"] / natural - 1.2) + 1.5 * max(0.0, art["warble"] - 0.12))
+                # Brightness that survives the de-esser / presence cut (hard affricates, hissy takes):
+                # a mild cost per dB above the character's harshness target + 2 dB and above -9 dB
+                # sibilance (about the roster's 90th percentile), so a duller equal take wins.
+                harsh, sib, _ = vq.band_stats(z, SR)
+                score += 0.05 * max(0.0, harsh - (HARSH_TARGET[char] + 2.0)) + 0.04 * max(0.0, sib + 9.0)
                 fp = None
                 if gender is not None and want in ("female", "male"):
                     fp = gender(z)
                     score += 2.0 * max(0.0, (0.6 - fp) if want == "female" else (fp - 0.4))
                 print(f"  {char}:{line['id']} {k['file']} -> {hyp!r} cer={cer(ref, hyp):.2f} dur={d:.2f} "
-                      f"f0={k['f0']:.0f} warble={art['warble']} fem={fp} ({score:.3f})", flush=True)
+                      f"f0={k['f0']:.0f} warble={art['warble']} harsh={harsh:.1f} sib={sib:.1f} fem={fp} ({score:.3f})", flush=True)
                 if best is None or score < best[0]:
                     best = (score, k, y, hyp)
             _, k, y, hyp = best

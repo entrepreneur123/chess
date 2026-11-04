@@ -89,7 +89,7 @@ def main() -> None:
     ]
     for char in CHARS:
         inner = ", ".join(f"{key(ev)}: '{p}'" for ev, p in sfx[char].items())
-        lines.append(f"  {char}: {{ {inner} }},")
+        lines.append(f"  {char}: {{ {inner} }}," if inner else f"  {char}: {{}},")
     lines += [
         "};",
         "",

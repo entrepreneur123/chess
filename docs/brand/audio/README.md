@@ -27,8 +27,10 @@ VIRTUAL_ENV=$W/venv uv pip install qwen-tts==0.1.1 pyworld pyloudnorm faster-whi
 $W/venv/bin/hf download Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign --local-dir $W/qwen-vd
 $W/venv/bin/hf download Qwen/Qwen3-TTS-12Hz-1.7B-Base --local-dir $W/qwen-base
 $W/venv/bin/hf download Systran/faster-whisper-medium --local-dir $W/fw-medium
-# QA only (gender plausibility gate for brutile), Apache-2.0:
+# QA only (gender plausibility gate for brutile, michelle and picker), Apache-2.0:
 $W/venv/bin/hf download prithivMLmods/Common-Voice-Gender-Detection config.json model.safetensors preprocessor_config.json --local-dir $W/gender-w2v
+# QA only, second gender opinion (MIT, ECAPA-TDNN; needs the repo's model.py, run outside the repo):
+$W/venv/bin/hf download JaesungHuh/voice-gender-classifier --local-dir $W/gender-ecapa
 ```
 
 ffmpeg 6.x must be on PATH.
@@ -99,13 +101,18 @@ walk's exclaimed lines are spoken with a period; the caption keeps the '!'). Per
 | walk (shield soldier) | scrappy shield fighter: brave like sad but rougher, lower, steadier | clone of a gravelly "veteran" VoiceDesign take (100 Hz) - the "young soldier" prompt only produced shouted 150-330 Hz takes | HP 80 Hz, +1 dB body at 300 Hz, 20 % soft-clip grit, 3:1 compression, 0.6 s small room |
 | insaner (imp) | small purple imp with a manic grin: evil creature, real demonic modulation | clone of a sly male creature VoiceDesign take (153 Hz) - no longer the 500-700 Hz "baby" voice | main voice formants +10 % (smaller creature, pitch unchanged), octave-down WORLD demon double (envelope x0.78, 47 Hz growl flutter, saturated, 12 ms late) at 75 %, 10 % ring modulation at 92 Hz, light flanger, dark 1.5 s tail (LP 2.5 kHz) |
 | brutile (witch) | green-skinned fanged witch: unmistakably female, aged, raspy, sneering, cackling | clone of an elderly-witch VoiceDesign take (167 Hz, raspy); takes gated on P(female) | never pitch-shifted (that is what made her male before), subtle slow 9 ms chorus, +1 dB low shelf, 2.5:1 compression, 1.2 s dark hall at 12 % wet |
+| michelle (gloomy girl) | little girl with bangs over her eyes and a doll: quiet, soft, slightly breathy, eerie; never cute, babyish or shrill | clone of a hushed "gloomy ten-year-old" VoiceDesign take (269 Hz, narrow 240-295 Hz range); `f0_target` 265; takes gated on P(female) | **never pitch-shifted**; HP 100 Hz, a whispered double of the same words (WORLD resynthesis with fully aperiodic excitation at the original pitch and envelope, band 0.7-5.5 kHz, 28 ms late, level drifting at 0.45 Hz, about -18 dB under the voice), +1 dB low shelf, 2:1 compression, 0.55 s small room at 11 % wet |
+| picker (frontier drifter) | lone cowboy, about 30, with a lasso: laconic, low, dry drawl, calm and confident, never shouted | clone of a "laconic frontier cowboy" VoiceDesign take (108 Hz, the sigh the model added before the line cut off); `f0_target` 105; takes gated on P(female) <= 0.4 | HP 65 Hz, +1.5 dB warmth at 200 Hz, -0.8 dB at 450 Hz (no boxiness), 10 % soft saturation, 2.5:1 compression, a dry wooden "saloon": four early reflections (6.5-23 ms, LP 3.2 kHz) plus a 0.45 s dark tail at 7 % wet |
 
 Take selection (`post_voice.py`): every raw take is transcribed; the best `--shortlist` (3) per line
 by CER, distance from the character's pitch target (`f0_target`, else the median of its
 intelligible takes; rejects shouted takes) and length are fully processed, encoded, decoded and
 judged again on Whisper CER, pitch distance, length, warble (fast pitch-contour wobble above
-0.12 st is penalised) and - for `"gender": "female"` - a wav2vec2 gender classifier (QA model,
-never shipped).
+0.12 st is penalised), brightness that survives the de-esser (harshness more than 2 dB above the
+character's target and sibilance above -9 dB cost a little, so a duller equal take wins; added
+2026-11-04) and - for `"gender": "female"` / `"male"` - a wav2vec2 gender classifier (QA model,
+never shipped). If AAC overshoots on one transient (decoded true peak well above the PCM peak), the
+encoder loop limits that transient harder instead of turning the whole clip below -16 LUFS.
 
 ## QA metrics (`voice_qa.py`, recorded per clip in `qa-voice.json`)
 
@@ -130,3 +137,49 @@ All 52 clips: -15.99..-16.74 LUFS, true peak <= -1.07 dBTP, tail <= -48.7 dB; ev
 by both QA models (min 0.96 / 0.93). `public/audio/vo` grew from 637 KB to 847 KB (longer, natural
 reverb tails). Insaner's CER (0.14 median) comes from Whisper writing the homophones 내/네 and from
 the non-lexical "키힉"; insaner's lower HNR / higher warble is the intended growl and ring-mod texture.
+
+## Michelle and Picker (2026-11-04)
+
+Two new voices, made with the same pipeline (references in `refs/`, prompts and take provenance in
+`lines.json`). Lines: the standard set (select x2, move x2, capture x3, death, victory) plus trait
+lines keyed by new events: michelle `trap-set` (a doll trap is laid) and `trap-sprung` (a trap
+catches a piece), picker `hop-multi` (one hop captures several pieces). `write_manifest.py` now
+reads the character list from the `CharacterId` union in `src/engine/types.ts` and quotes the
+hyphenated event keys.
+
+**References.** 8 VoiceDesign takes of two lines per character, scored on CER, F0, harshness,
+WORLD aperiodicity and both gender classifiers (`score_refs`-style run):
+- michelle: takes ranged 204-350 Hz. The 330-350 Hz takes were rejected as too childish/bright,
+  the 200-215 Hz ones as too adult. Kept seed 11 take 7: 269 Hz, flat 240-295 Hz contour, warble
+  0.016, HNR 16.9 dB, P(female) 0.94 / 0.95. A 1.0 s pause after "인형이…" was cut to 0.4 s.
+- picker: takes ranged 71-108 Hz. The 71-86 Hz takes were creaky (HNR -3..9 dB) and as deep as
+  marki. Kept take 7 at 108 Hz (CER 0, warble 0.043, P(female) 0.001 / 0.006) after cutting off
+  a sigh the model had added before the line.
+
+**Takes.** 6 cloned takes per line; every take fully processed and judged (`--shortlist 6`).
+Results on the decoded .m4a (`qa-voice.json`; `female_p` = wav2vec2, `female_p_ecapa` = ECAPA):
+
+| Character | clips | dur s | F0 Hz | harsh dB | sib dB | tail dB | hiss dB | warble st | HNR dB | CER | P(female) w2v / ECAPA |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| michelle (median) | 11 | 2.18 (0.90-2.69) | 244 (212-286) | -16.1 | -14.5 | -58.5 | -49.9 | 0.048 | 11.0 | 0 (all) | 0.95 / 0.95 (min 0.68 / 0.77) |
+| picker (median) | 10 | 1.20 (0.81-2.48) | 107 (88-114) | -14.1 | -13.3 | -60.2 | -43.2 | 0.071 | 4.6 | 0 (all) | 0.001 / 0.004 (max 0.001 / 0.007) |
+
+All 21 clips: -16.00..-16.19 LUFS, true peak <= -1.16 dBTP, tail <= -54.5 dB, 7.5-23.0 KB.
+
+- The whisper layer is subtle by measurement. An ablation on the reference changed the noise floor
+  by +0.6 dB (hiss -42.8 -> -42.2) and HNR by -4.2 dB (the intended breath); harshness and
+  sibilance did not rise.
+- picker `death-1` was written "여기까진가…", but the model said "여기까지인가" in 6/6 takes. The
+  caption now follows the audio; `say` keeps what was fed to the TTS.
+- Whisper writes michelle's "인형" as "인영" on some takes. That is the normal ㅎ-weakening in the
+  pronunciation, not a TTS error; the shipped takes transcribe exactly.
+- The reverb IR is drawn from a shared RNG, so a re-render of the same take differs slightly. On
+  michelle `trap-set-1` (same take) the wav2vec2 P(female) moved from 0.92 to 0.68 between two
+  runs (ECAPA 0.97). Both readings are female, but this is the least robust clip of the set.
+
+**Budget.** The new clips add 306.7 KB. `public/audio/vo` + `sfx` total 1,356,961 B, which is
+98,670 B over the 1.2 MiB (1,258,291 B) limit in `tests/voice.test.ts`; michelle/picker SFX are not
+generated yet and would add more. The budget was not changed. Options for the owner: raise the
+budget (about 1.45 MB with SFX for both), or re-run every voice line at 48 kb/s (estimated vo
+about 865 KB, total about 1.07 MB), which needs an audition first.
+

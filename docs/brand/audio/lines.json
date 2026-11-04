@@ -535,8 +535,10 @@
         {
           "id": "death-1",
           "event": "death",
-          "text": "여기까진가… 석양이 좋군.",
-          "style": "Weary, quiet and wry, fading."
+          "text": "여기까지인가… 석양이 좋군.",
+          "style": "Weary, quiet and wry, fading.",
+          "say": "여기까진가… 석양이 좋군.",
+          "_note": "Every take was voiced from 'say' but the model expands the contraction (Whisper hears 여기까지인가 in 6/6 takes), so the caption follows what is spoken."
         },
         {
           "id": "victory-1",

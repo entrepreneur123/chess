@@ -2,7 +2,7 @@
 // Paths are relative to public/audio/ (served at `${import.meta.env.BASE_URL}audio/`).
 import type { CharacterId } from '../engine/types';
 
-export type CharAudioEvent = 'select' | 'move' | 'capture' | 'skill' | 'chain' | 'death' | 'victory';
+export type CharAudioEvent = 'select' | 'move' | 'capture' | 'skill' | 'chain' | 'trap-set' | 'trap-sprung' | 'hop-multi' | 'death' | 'victory';
 
 /** Voice-line variants per character and event (one is picked at random, avoiding repeats). */
 export const VOICE_CLIPS: Record<CharacterId, Partial<Record<CharAudioEvent, readonly string[]>>> = {
@@ -46,6 +46,23 @@ export const VOICE_CLIPS: Record<CharacterId, Partial<Record<CharAudioEvent, rea
     skill: ['vo/brutile-skill-1.m4a', 'vo/brutile-skill-2.m4a'],
     death: ['vo/brutile-death-1.m4a'],
     victory: ['vo/brutile-victory-1.m4a'],
+  },
+  michelle: {
+    select: ['vo/michelle-select-1.m4a', 'vo/michelle-select-2.m4a'],
+    move: ['vo/michelle-move-1.m4a', 'vo/michelle-move-2.m4a'],
+    capture: ['vo/michelle-capture-1.m4a', 'vo/michelle-capture-2.m4a', 'vo/michelle-capture-3.m4a'],
+    'trap-set': ['vo/michelle-trap-set-1.m4a'],
+    'trap-sprung': ['vo/michelle-trap-sprung-1.m4a'],
+    death: ['vo/michelle-death-1.m4a'],
+    victory: ['vo/michelle-victory-1.m4a'],
+  },
+  picker: {
+    select: ['vo/picker-select-1.m4a', 'vo/picker-select-2.m4a'],
+    move: ['vo/picker-move-1.m4a', 'vo/picker-move-2.m4a'],
+    capture: ['vo/picker-capture-1.m4a', 'vo/picker-capture-2.m4a', 'vo/picker-capture-3.m4a'],
+    'hop-multi': ['vo/picker-hop-multi-1.m4a'],
+    death: ['vo/picker-death-1.m4a'],
+    victory: ['vo/picker-victory-1.m4a'],
   },
 };
 
@@ -103,6 +120,27 @@ export const VOICE_TEXT: Readonly<Record<string, string>> = {
   'vo/brutile-skill-2.m4a': "불모지여, 피어나라!",
   'vo/brutile-death-1.m4a': "이… 이럴 리가…",
   'vo/brutile-victory-1.m4a': "모두 썩어라! 이히히히!",
+  'vo/michelle-select-1.m4a': "불렀어…?",
+  'vo/michelle-select-2.m4a': "인형도… 같이 갈래.",
+  'vo/michelle-move-1.m4a': "조용히… 갈게.",
+  'vo/michelle-move-2.m4a': "따라오지 마…",
+  'vo/michelle-capture-1.m4a': "같이 놀자…",
+  'vo/michelle-capture-2.m4a': "쉿… 이제 잘 시간이야.",
+  'vo/michelle-capture-3.m4a': "숨바꼭질… 끝.",
+  'vo/michelle-trap-set-1.m4a': "인형이… 기다릴 거야.",
+  'vo/michelle-trap-sprung-1.m4a': "잡았다… 이제 못 움직여.",
+  'vo/michelle-death-1.m4a': "인형… 놓치면 안 되는데…",
+  'vo/michelle-victory-1.m4a': "다들… 조용해졌네.",
+  'vo/picker-select-1.m4a': "일거리인가.",
+  'vo/picker-select-2.m4a': "말은 짧게 하지.",
+  'vo/picker-move-1.m4a': "가 보지.",
+  'vo/picker-move-2.m4a': "한 발짝씩.",
+  'vo/picker-capture-1.m4a': "올가미에 걸렸군.",
+  'vo/picker-capture-2.m4a': "운이 없었군.",
+  'vo/picker-capture-3.m4a': "한발 늦었어.",
+  'vo/picker-hop-multi-1.m4a': "줄 서. 한 번에 간다.",
+  'vo/picker-death-1.m4a': "여기까지인가… 석양이 좋군.",
+  'vo/picker-victory-1.m4a': "해 지기 전에 끝났군.",
 };
 
 /** Character-specific sound effects per event. */
@@ -112,6 +150,8 @@ export const CHAR_SFX: Record<CharacterId, Partial<Record<CharAudioEvent, string
   walk: { select: 'sfx/walk-select.m4a', move: 'sfx/walk-move.m4a', capture: 'sfx/walk-capture.m4a', skill: 'sfx/walk-skill.m4a' },
   insaner: { select: 'sfx/insaner-select.m4a', move: 'sfx/insaner-move.m4a', capture: 'sfx/insaner-capture.m4a', skill: 'sfx/insaner-skill.m4a', chain: 'sfx/insaner-chain.m4a' },
   brutile: { select: 'sfx/brutile-select.m4a', move: 'sfx/brutile-move.m4a', capture: 'sfx/brutile-capture.m4a', skill: 'sfx/brutile-skill.m4a' },
+  michelle: {},
+  picker: {},
 };
 
 /** Shared effects used when a character has no specific one. */
