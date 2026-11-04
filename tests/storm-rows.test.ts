@@ -92,21 +92,20 @@ describe('storm rows', () => {
     expect(s.pieces.map((p) => p.id).sort()).toEqual(['p0-insaner', 'p1-walk']);
   });
 
-  it('ends the game by storm when the rows take a side\'s last piece, and adjudicates a double wipe by material', () => {
+  it('ends the game by storm when the rows take a side\'s last piece; a 1-for-1 double wipe is a draw', () => {
     let s = makeState([[0, 'sad', 2, 4, 4], [1, 'marki', 1, 9, 5]], 0, at(2, 1));
     s = applyMove(s, mv(s, 'p0-sad', 4, 5));
     expect(s.status).toBe('ended');
     expect(s.endReason).toBe('storm');
     expect(s.winner).toBe(0);
     // Both last pieces swallowed by the same step (step 4: rows 1 / 8 and columns 3 / 6): decided by
-    // the material lost.
+    // piece count, so one against one is a draw however much more the Walk 3성 is worth.
     let w = makeState([[0, 'sad', 1, 1, 4], [1, 'walk', 3, 8, 5]], 0, at(3, 1));
     w = applyMove(w, mv(w, 'p0-sad', 1, 3)); // still on row 1 (closes at step 4)
     expect(w.status).toBe('ended');
     expect(w.endReason).toBe('storm');
     expect(w.pieces).toHaveLength(0);
-    // Walk 3성 (8) outweighs Sad 1성 (3).
-    expect(w.winner).toBe(1);
+    expect(w.winner).toBeNull();
   });
 
   it('blocks slides, jumps and hops into or through storm rows', () => {
@@ -181,19 +180,20 @@ describe('storm rows', () => {
     expect(u.pieces.find((p) => p.id === 'p0-marki')!.dir).toBe(-1);
   });
 
-  it('the engine passes a side whose only piece faces the storm rows; it is a stalemate when neither can act', () => {
-    // Blue's only piece is a marki stuck facing row 9: red moves, blue is passed ('noMoves').
+  it('a side whose only piece faces the storm rows is boxed in and loses (stormLocked)', () => {
+    // Blue's only piece is a marki stuck facing row 9: red moves, blue has nothing to play and loses.
     let s = makeState([[0, 'marki', 1, 8, 5], [1, 'sad', 1, 4, 4]], 1, at(3));
     s = applyMove(s, mv(s, 'p1-sad', 4, 3));
-    expect(s.turn).toBe(1);
-    expect(s.history.some((e) => e.kind === 'pass' && e.player === 0 && e.reason === 'noMoves')).toBe(true);
-    expect(s.pieces.find((p) => p.id === 'p0-marki')!.dir ?? 1).toBe(1);
-    // Red's walk lands on row 1 facing the storm row 0: now neither side can ever act.
+    expect(s.status).toBe('ended');
+    expect(s.endReason).toBe('stormLocked');
+    expect(s.winner).toBe(1);
+    expect(s.history.some((e) => e.kind === 'pass')).toBe(false);
+    // Red's walk lands on row 1 facing the storm row 0 while blue is stuck too: blue is to move, so
+    // blue is the one boxed in (no stalemate adjudication once the storm has closed in).
     let t = makeState([[0, 'marki', 1, 8, 5], [1, 'walk', 1, 2, 4]], 1, at(3));
     t = applyMove(t, mv(t, 'p1-walk', 1, 4));
     expect(t.status).toBe('ended');
-    expect(t.endReason).toBe('stalemate');
-    // Walk 1성 (4) outweighs Marki 1성 (3).
+    expect(t.endReason).toBe('stormLocked');
     expect(t.winner).toBe(1);
   });
 

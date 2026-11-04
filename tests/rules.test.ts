@@ -15,6 +15,8 @@ import {
   isLegalMove,
   materialScore,
   resign,
+  skillUnlockIn,
+  wipeWinner,
 } from '../src/engine';
 import type { GameState } from '../src/engine';
 import { makeState } from './helpers';
@@ -197,8 +199,9 @@ describe('no moves / stalemate / sudden death', () => {
     // long capture-free stretches no longer end the game: only the storm / elimination do
     expect(s2.pliesSinceCapture).toBe(32);
   });
-  it('a storm that swallows both last pieces is decided by material', () => {
-    const base = makeState(
+  it('a storm that swallows both last pieces is decided by piece COUNT; 1 vs 1 is a draw', () => {
+    // 1 vs 1 (a 3성 against a 1성): rarity and grade do not count, it is a draw.
+    const one = makeState(
       [
         [0, 'sad', 3, 5, 1],
         [1, 'sad', 1, 7, 8],
@@ -206,22 +209,26 @@ describe('no moves / stalemate / sudden death', () => {
       0,
       { stormIn: 1, storm: 1 },
     );
-    const s2 = applyMove(base, mv(base, 'p0-sad', 6, 1));
-    expect(s2.status).toBe('ended');
-    expect(s2.endReason).toBe('storm');
-    expect(s2.pieces).toHaveLength(0);
-    expect(s2.winner).toBe(0);
-    const eq = makeState(
+    const d1 = applyMove(one, mv(one, 'p0-sad', 6, 1));
+    expect(d1.status).toBe('ended');
+    expect(d1.endReason).toBe('storm');
+    expect(d1.pieces).toHaveLength(0);
+    expect(d1.winner).toBeNull();
+    // 2 cheap pieces vs 1 legendary 3성: the side with more pieces wins.
+    const two = makeState(
       [
-        [0, 'sad', 2, 5, 1],
-        [1, 'sad', 2, 7, 8],
+        [0, 'sad', 1, 5, 1],
+        [0, 'michelle', 1, 3, 8],
+        [1, 'insaner', 3, 7, 8],
       ],
       0,
       { stormIn: 1, storm: 1 },
     );
-    const d = applyMove(eq, mv(eq, 'p0-sad', 6, 1));
-    expect(d.endReason).toBe('storm');
-    expect(d.winner).toBeNull();
+    const w = applyMove(two, mv(two, 'p0-sad', 6, 1));
+    expect(w.endReason).toBe('storm');
+    expect(w.pieces).toHaveLength(0);
+    expect(w.winner).toBe(0);
+    expect(wipeWinner(two.pieces, two.pieces.map((p) => p.id))).toBe(0);
   });
   it('a capture-free game is bounded by the storm', () => {
     // Shuffle back and forth without ever capturing: sudden death + storm must end it.
@@ -256,5 +263,39 @@ describe('resign', () => {
     expect(r.winner).toBe(0);
     expect(r.endReason).toBe('resign');
     expect(g.status).toBe('playing');
+  });
+});
+
+describe('random first player: turn counting, skills and sudden death stay fair', () => {
+  it('whoever starts, each side unlocks its skill on its own 4th turn and both have played 19 moves when sudden death starts', () => {
+    for (const first of [0, 1] as const) {
+      const g = createGame(defaultFormation(), defaultFormation(), first);
+      expect(g.turn).toBe(first);
+      expect(g.ply).toBe(0);
+      // Ply p is the (floor(p / 2) + 1)-th turn of the side to move: first mover on even plies.
+      const sideAt = (ply: number) => (ply % 2 === 0 ? first : 1 - first);
+      const ownTurn = (ply: number) => Math.floor(ply / 2) + 1;
+      expect(turnNumber({ ply: 0 })).toBe(1);
+      expect(turnNumber({ ply: 1 })).toBe(1);
+      // Skills: locked on each side's first three turns, open from its 4th (SKILL_UNLOCK_PLY = 6).
+      for (let ply = 0; ply < 12; ply++) {
+        const open = skillUnlockIn({ ply }) === 0;
+        expect(open, `ply ${ply} side ${sideAt(ply)}`).toBe(ownTurn(ply) >= 4);
+      }
+      // Sudden death: at ply 38 the first mover starts turn 20; both sides have made 19 moves.
+      expect(SUDDEN_DEATH_PLY).toBe(38);
+      expect(ownTurn(SUDDEN_DEATH_PLY)).toBe(20);
+      expect(ownTurn(SUDDEN_DEATH_PLY + 1)).toBe(20);
+      expect(suddenDeathIn({ ply: 37, stormIn: null, status: 'playing' })).toBe(1);
+    }
+  });
+
+  it('the coin flip is a fair 50/50', async () => {
+    const { coinFlipFirst, seededRng } = await import('../src/meta/rng');
+    const rng = seededRng(2026);
+    let ones = 0;
+    const N = 20_000;
+    for (let i = 0; i < N; i++) ones += coinFlipFirst(rng);
+    expect(Math.abs(ones / N - 0.5)).toBeLessThan(0.015);
   });
 });

@@ -8,7 +8,7 @@ import { PACING } from '../../meta/economy';
 import { createOpponent, DIFFICULTY_LABEL, matchArenaId, type Opponent } from '../../meta/opponent';
 import { devArenaOf, formationAllowed, getProfile, levelsOf } from '../../meta/profile';
 import { DUNGEON_LABEL, MODE_LABEL, OPPONENT_BAND, arenaById, arenaForRating, clampRating } from '../../meta/progression';
-import { randInt, defaultRng } from '../../meta/rng';
+import { coinFlipFirst, randInt, defaultRng } from '../../meta/rng';
 import { preloadArt } from '../backdrops';
 import { playArenaMusic } from '../musicBridge';
 import { arenaBadge } from '../components/currency';
@@ -64,6 +64,9 @@ export function matchmakingScreen(router: Router, params: MatchRequest): Screen 
       ? createOpponent({ mode: 'dungeon', level: dungeonLevel! }, defaultRng)
       : createOpponent({ mode, rating: myRating, playerGrades: (playerFormation ?? profile.formation).map((s) => s.level), arena: devArena ?? undefined }, defaultRng);
   const themeArena = arenaById(devArena ?? matchArenaId(mode, myRating, opp.arena));
+  // Who moves first: a fair coin per match (ranked, casual and dungeon alike), shown on the VS card
+  // and carried into the game.
+  const firstTurn = coinFlipFirst(defaultRng);
   const modeChip = mode === 'dungeon' ? `${MODE_LABEL.dungeon} · ${DUNGEON_LABEL[dungeonLevel!]}` : MODE_LABEL[mode];
   const searchLine = devArena
     ? `DEV · ${themeArena.index} 전장 ${themeArena.name}`
@@ -111,14 +114,22 @@ export function matchmakingScreen(router: Router, params: MatchRequest): Screen 
     // The opponent leads with a different unit than the player so the VS card is a real face-off.
     const squad = squadOf(formation);
     const lead = who === 'me' ? myLead : leadUnit(squad, lv, myLead);
+    // Like the board: the opponent fills the top half, the player the bottom half.
+    const pos = who === 'me' ? 'bottom' : 'top';
+    const first = firstTurn === owner;
     return h(
       'div',
-      { class: `versus__side versus__side--${who}` },
+      { class: `versus__side versus__side--${who} versus__side--${pos}` },
       h('div', { class: 'versus__art' }, h('img', { src: `./chars/${lead}-lv${lv[lead]}.jpg`, alt: '', decoding: 'async', draggable: 'false', onerror: artMissing })),
       h(
         'div',
         { class: 'versus__plate' },
-        h('span', { class: 'versus__eyebrow' }, who === 'me' ? 'BLUE TEAM' : 'RED TEAM · AI'),
+        h(
+          'span',
+          { class: 'versus__tags' },
+          h('span', { class: 'versus__eyebrow' }, who === 'me' ? 'BLUE TEAM' : 'RED TEAM · AI'),
+          first ? h('span', { class: 'versus__first', 'data-first': '' }, '선공') : null,
+        ),
         h('span', { class: 'versus__name', 'data-opponent': who === 'opp' ? name : undefined }, who === 'opp' ? h('span', { class: 'ai-tag' }, 'AI') : null, name),
         h('span', { class: 'versus__rank', 'data-rating': rating }, arenaBadge(ar, 'sm'), h('b', { class: 't-num' }, String(rating)), h('span', null, `${ar.index} 전장`)),
         h('div', { class: 'versus__pieces' }, formation.map((s) => pieceToken(s.character, s.level, owner, 'sm'))),
@@ -139,14 +150,15 @@ export function matchmakingScreen(router: Router, params: MatchRequest): Screen 
       h(
         'div',
         { class: 'versus' },
-        side('me', '나', levels, 0, playerFormation ?? profile.formation, myRating, myArena.id),
-        h('div', { class: 'versus__vs', 'aria-hidden': 'true' }, h('span', null, 'VS')),
         side('opp', opp.name, opp.levels, 1, opp.formation, opp.rating, opp.arena),
+        h('div', { class: 'versus__vs', 'aria-hidden': 'true' }, h('span', null, 'VS')),
+        side('me', '나', levels, 0, playerFormation ?? profile.formation, myRating, myArena.id),
       ),
       h(
         'div',
         { class: 'mm__found' },
         h('h2', { class: 'mm__title mm__title--found' }, '상대 발견!'),
+        h('p', { class: 'mm__order', 'data-first-turn': firstTurn === 0 ? 'me' : 'opp' }, firstTurn === 0 ? '내가 선공 · 먼저 둡니다' : '후공 · 상대가 먼저 둡니다'),
         h('p', { class: 'mm__sub mm__sub--row' }, h('span', { class: 'chip chip--gold' }, modeChip), h('span', { class: 'chip chip--outline' }, icon('lock', 14), '상대 진형 비공개')),
       ),
     );
@@ -174,6 +186,7 @@ export function matchmakingScreen(router: Router, params: MatchRequest): Screen 
             themeArena: themeArena.id,
             playerFormation: playerFormation ?? profile.formation,
             botFormation: opp.formation,
+            firstTurn,
           });
         }, PACING.foundHoldMs);
       }, search);

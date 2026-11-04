@@ -18,6 +18,14 @@ export function randInt(rng: Rng, min: number, max: number): number {
   return min + Math.floor(rng() * (max - min + 1));
 }
 
+/**
+ * Who moves first in a match: a fair 50/50 coin flip (0 = the player, 1 = the opponent), the same
+ * for ranked, casual and dungeon matches.
+ */
+export function coinFlipFirst(rng: Rng): 0 | 1 {
+  return rng() < 0.5 ? 0 : 1;
+}
+
 export function pick<T>(rng: Rng, items: readonly T[]): T {
   return items[Math.floor(rng() * items.length) % items.length];
 }

@@ -77,7 +77,8 @@ describe('character reach on 10 columns', () => {
     expect(movementSpan('sad', 3)).toEqual({ rows: 7, cols: 7 });
     expect(movementSpan('insaner', 3)).toEqual({ rows: 7, cols: 7 });
     expect(movementSpan('picker', 3)).toEqual({ rows: 7, cols: 7 });
-    expect(movementSpan('michelle', 3)).toEqual({ rows: 4, cols: 5 });
+    expect(movementSpan('michelle', 2)).toEqual({ rows: 4, cols: 5 });
+    expect(movementSpan('michelle', 3)).toEqual({ rows: 5, cols: 5 });
     expect(movementSpan('brutile', 3)).toEqual({ rows: 3, cols: 3 });
   });
 
@@ -88,7 +89,7 @@ describe('character reach on 10 columns', () => {
     expect(reach('walk')).toEqual([5, 7, 9]);
     expect(reach('insaner')).toEqual([8, 12, 16]);
     expect(reach('brutile')).toEqual([2, 3, 8]);
-    expect(reach('michelle')).toEqual([3, 6, 7]);
+    expect(reach('michelle')).toEqual([3, 7, 8]);
     expect(reach('picker')).toEqual([4, 8, 12]);
     expect(reach('rakaeli')).toEqual([3, 6, 7]);
     expect([1, 2, 3].map((lv) => movementReach('rakaeli', lv as 1 | 2 | 3, true))).toEqual([5, 10, 16]);

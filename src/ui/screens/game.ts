@@ -45,7 +45,7 @@ import { DUNGEON_LABEL, arenaById } from '../../meta/progression';
 import { useMatchBackdrop } from '../backdrops';
 import { duck, playArenaMusic } from '../musicBridge';
 import { resultPanel } from '../game/resultPanel';
-import { randInt, defaultRng } from '../../meta/rng';
+import { coinFlipFirst, randInt, defaultRng } from '../../meta/rng';
 import { installBoardDrag, type BoardDrag } from '../components/boardDrag';
 import { confetti } from '../components/celebrate';
 import { starsOf, unitArt } from '../components/piece';
@@ -55,7 +55,7 @@ import { Disposables, h, replaceChildren } from '../dom';
 import { icon } from '../icons';
 import type { Router, Screen } from '../router';
 import { BOT, GameController, HUMAN, type ControllerSnapshot, type Phase } from '../game/GameController';
-import { CRITICAL_MS, createRoster, endReasonText, setText, stormStatusText, TimerRing, turnPillContent } from '../game/hud';
+import { CRITICAL_MS, createRoster, endReasonText, setText, stormStatusText, TimerRing, turnPillContent, wipeCounts } from '../game/hud';
 import { createFieldPanel } from '../game/fieldPanel';
 import { createHand, handModel, selectFromHand } from '../game/hand';
 import { CUTIN_MS, cutInEl, preloadCutIns } from '../game/cutin';
@@ -91,7 +91,9 @@ async function playAwaken(board: IBoardView | null, pieceId: string, phase: 'on'
 
 export function gameScreen(router: Router, params: GameParams): Screen {
   const bag = new Disposables();
-  const initial = createGame(params.playerFormation, params.botFormation, HUMAN);
+  // Who moves first was flipped by matchmaking (and shown on the VS card); flip here otherwise.
+  const firstTurn: PlayerId = params.firstTurn ?? coinFlipFirst(defaultRng);
+  const initial = createGame(params.playerFormation, params.botFormation, firstTurn);
 
   // ---------- static DOM
   const topRing = new TimerRing(BOT);
@@ -176,7 +178,17 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       if (Date.now() >= duckUntil - 5) duck(false);
     }, CUTIN_MS);
   };
-  const showTurnBanner = (mine: boolean) => {
+  /** `opening`: the match's first turn, which also says who moves first (a coin flip per match). */
+  const showTurnBanner = (mine: boolean, opening = false) => {
+    if (opening) {
+      spawnFx(
+        mine
+          ? h('div', { class: 'turn-banner turn-banner--opening', 'data-first-turn': 'me' }, '선공', h('span', { class: 'turn-banner__sub' }, '내가 먼저 둡니다'))
+          : h('div', { class: 'turn-banner turn-banner--bot turn-banner--opening', 'data-first-turn': 'opp' }, '후공', h('span', { class: 'turn-banner__sub' }, '상대가 먼저 둡니다')),
+        1400,
+      );
+      return;
+    }
     spawnFx(
       mine
         ? h('div', { class: 'turn-banner' }, '내 차례', h('span', { class: 'turn-banner__sub' }, 'YOUR TURN'))
@@ -759,7 +771,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     }
     // Turn banner + board turn sweep whenever the side to move changes (not on the ended state).
     if (snap.phase !== 'ended' && snap.phase !== 'animating' && s.turn !== lastTurnShown) {
-      if (lastTurnShown !== null || s.turn === HUMAN) showTurnBanner(s.turn === HUMAN);
+      showTurnBanner(s.turn === HUMAN, lastTurnShown === null && s.ply === 0);
       lastTurnShown = s.turn;
       const b = board as unknown as { setTurn?: (p: 0 | 1) => void } | null;
       b?.setTurn?.(s.turn);
@@ -845,7 +857,9 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     if (bag.isDisposed) return;
     clearToasts(); // nothing may sit on top of (or compete with) the result
     const title = outcome === 'win' ? '승리!' : outcome === 'loss' ? '패배' : '무승부';
-    const adjudicated = s.endReason === 'stalemate' || (s.endReason === 'storm' && s.pieces.length === 0);
+    const adjudicated = s.endReason === 'stalemate';
+    // Both sides' last pieces gone in one storm step: decided by how many each side had then.
+    const wiped = wipeCounts(s);
     const panel = summary ? resultPanel(summary, { onShop: () => router.navigate('shop') }) : null;
     if (panel) bag.add(() => panel.dispose());
     // Hero strip: the player's surviving units celebrate (win) or the opponent's units stand (loss).
@@ -860,9 +874,10 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       'div',
       { class: 'result__body' },
       hero,
-      h('p', { class: 'result__reason', 'data-reason': s.endReason ?? '' }, endReasonText(s.endReason, outcome, s.endReason === 'storm' && s.pieces.length === 0)),
+      h('p', { class: 'result__reason', 'data-reason': s.endReason ?? '' }, endReasonText(s.endReason, outcome, wiped !== null)),
       outcome === 'loss' && params.mode !== 'ranked' ? h('p', { class: 'result__cheer' }, '진형·성급을 바꿔 다시 도전해 보세요') : null,
       adjudicated && s.pieces.length > 0 ? h('p', { class: 'result__score' }, `전력  나 ${materialScore(s, HUMAN)} : ${materialScore(s, BOT)} 상대`) : null,
+      wiped ? h('p', { class: 'result__score', 'data-wipe': '' }, `남은 말  나 ${wiped[HUMAN]} : ${wiped[BOT]} 상대`) : null,
       panel?.el ?? null,
       params.mode === 'dungeon' ? null : h('p', { class: 'result__total', 'data-record': '' }, icon('trophy', 16), `통산 ${after.stats.wins}승 ${after.stats.losses}패 ${after.stats.draws}무`),
     );

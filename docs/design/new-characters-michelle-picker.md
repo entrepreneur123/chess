@@ -18,8 +18,11 @@ character)
 | Grade | Moves |
 | --- | --- |
 | 1성 | left, right or back, 1 square |
-| 2성 | left, right or back, up to 2 squares in a straight line |
-| 3성 | as 2성, plus forward 1 square |
+| 2성 | left, right or back, up to 2 squares in a straight line, plus forward 1 square |
+| 3성 | left, right or back, up to 2 squares, plus forward up to 2 squares (a straight slide) |
+
+(Owner change, 2026-11-04: the forward step moved from 3성 down to 2성, and 3성 now slides
+forward up to 2. Doll traps still come from backward moves only.)
 
 - Moves slide like 사드's: the path must be clear, and she captures the enemy on the landing
   square.

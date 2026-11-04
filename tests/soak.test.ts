@@ -20,6 +20,7 @@ import {
   createGame,
   fastFromState,
   fastGenMoves,
+  fastStormLocked,
   getLegalMoves,
   inStorm,
   isLegalMove,
@@ -78,6 +79,9 @@ describe('soak: bot self-play through the worker entry point', () => {
         const end = fastGenMoves(b, b.turn, buf);
         for (let k = 0; k < end; k++) if (!(buf[k] & SKILL_FLAG)) n++;
         expect(n, `game ${i} ply ${g.ply}: fast/engine move count`).toBe(legal.length);
+        // A side boxed in by the storm has already lost: the engine never hands it the move, and
+        // the fast board (the bot's search) agrees.
+        expect(fastStormLocked(b), `game ${i} ply ${g.ply}: storm-locked side to move`).toBe(false);
         if (g.ply % 3 === 0) {
           const fb = fallbackAction(g);
           expect(fb && isLegal(g, fb), `game ${i} ply ${g.ply}: fallback`).toBe(true);
@@ -101,6 +105,28 @@ describe('soak: bot self-play through the worker entry point', () => {
       }
       expect(g.ply - chainPlies(g.history), `game ${i} too long`).toBeLessThanOrEqual(MAX_MATCH_PLIES);
       stats.reasons[g.endReason!] = (stats.reasons[g.endReason!] ?? 0) + 1;
+      // Once the storm has closed in, a side without a move loses: no stalemate (and no 'noMoves'
+      // pass) is left for it.
+      if (g.storm >= 1) expect(g.endReason, `game ${i}`).not.toBe('stalemate');
+      if (g.endReason === 'stormLocked') expect(g.winner).not.toBe(g.turn);
+      if (g.endReason === 'storm' && g.pieces.length === 0) {
+        // A double wipe is decided by piece count (equal = draw).
+        const last = [...g.history].reverse().find((e) => e.kind === 'storm');
+        const n0 = last?.kind === 'storm' ? last.killed.filter((id) => id.startsWith('p0-')).length : 0;
+        const n1 = last?.kind === 'storm' ? last.killed.length - n0 : 0;
+        expect(g.winner).toBe(n0 > n1 ? 0 : n1 > n0 ? 1 : null);
+      }
+      for (let k = 1; k < g.history.length; k++) {
+        const e = g.history[k];
+        if (e.kind !== 'pass' || e.reason !== 'noMoves') continue;
+        // The storm step in force when that pass was played.
+        let storm = 0;
+        for (let q = 0; q < k; q++) {
+          const x = g.history[q];
+          if (x.kind === 'storm') storm = x.storm;
+        }
+        expect(storm, `game ${i}: a noMoves pass after the storm closed in`).toBe(0);
+      }
     }
     expect(stats.waste).toBeGreaterThan(0);
     expect(stats.transform).toBeGreaterThan(0);

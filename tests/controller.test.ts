@@ -426,3 +426,52 @@ describe('GameController without a match clock', () => {
     }
   });
 });
+
+describe('GameController: the bot moves first (random first player)', () => {
+  /** The same position as `position()`, but red (the bot) is to move at ply 0. */
+  const botFirst = () => ({ ...position(), turn: 1 as const });
+
+  it('starts in botThinking, asks the bot at once and never runs the human clock meanwhile', async () => {
+    const h = harness(botFirst());
+    h.ctrl.start();
+    expect(h.ctrl.phase).toBe('botThinking');
+    expect(h.botCalls).toHaveLength(1);
+    expect(h.botCalls[0].state.ply).toBe(0);
+    expect(h.botCalls[0].state.turn).toBe(1);
+    // The human cannot act during the bot's opening turn: a tap only previews.
+    expect(h.ctrl.tryHumanMove({ pieceId: 'p0-marki', from: { r: 0, c: 0 }, to: { r: 1, c: 0 } })).toBe(false);
+    h.ctrl.tapCell({ r: 0, c: 0 });
+    expect(h.ctrl.snapshot().selection?.actionable).toBe(false);
+    // The bot takes a while: the human never times out for it.
+    await h.advance(30_000);
+    expect(h.ctrl.phase).toBe('botThinking');
+    expect(h.ctrl.state.status).toBe('playing');
+    h.botCalls[0].resolve({ pieceId: 'p1-sad', from: { r: 9, c: 9 }, to: { r: 8, c: 9 } });
+    await h.flush();
+    await h.finishAnims();
+    // Now it is the human's turn with a full, fresh clock.
+    expect(h.ctrl.phase).toBe('humanTurn');
+    expect(h.ctrl.state.ply).toBe(1);
+    expect(h.ctrl.turnRemainingMs()).toBe(60_000);
+    expect(h.ctrl.snapshot().selection?.actionable).toBe(true);
+    expect(h.ctrl.tryHumanMove({ pieceId: 'p0-marki', from: { r: 0, c: 0 }, to: { r: 1, c: 0 } })).toBe(true);
+    await h.finishAnims();
+    expect(h.ctrl.phase).toBe('botThinking');
+    expect(h.ctrl.state.ply).toBe(2);
+  });
+
+  it('a hung bot on the opening turn plays a fallback move: the match never stalls', async () => {
+    const h = harness(botFirst());
+    const warn = console.warn;
+    console.warn = () => undefined;
+    try {
+      h.ctrl.start();
+      await h.advance(60_001);
+      await h.finishAnims();
+      expect(h.ctrl.state.history[0]?.kind === 'move' && h.ctrl.state.history[0].player).toBe(1);
+      expect(h.ctrl.phase).toBe('humanTurn');
+    } finally {
+      console.warn = warn;
+    }
+  });
+});

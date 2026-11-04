@@ -128,16 +128,21 @@ export function turnPillContent(snap: ControllerSnapshot): { text: string; cls: 
   return chain ? { text: '연쇄 이동!', cls: 'is-me is-bonus' } : { text: '내 차례', cls: 'is-me' };
 }
 
-/** `bothWiped`: the storm swallowed the last pieces of both sides at once (decided by material). */
+/**
+ * `bothWiped`: the storm swallowed the last pieces of both sides at once (the side that had more
+ * pieces left wins; equal counts are a draw).
+ */
 export function endReasonText(reason: EndReason | null, outcome: 'win' | 'loss' | 'draw', bothWiped = false): string {
   if (reason === 'storm' && bothWiped) {
-    return `양쪽의 마지막 말이 동시에 자기장에 휩쓸려 사라진 전력으로 판정했습니다.${outcome === 'draw' ? ' 전력이 같습니다.' : ''}`;
+    return outcome === 'draw' ? '양쪽 마지막 말이 동시에 자기장에 휩쓸려, 남은 말 수가 같아 무승부' : '양쪽 마지막 말이 동시에 자기장에 휩쓸려, 남은 말이 많은 쪽이 승리';
   }
   switch (reason) {
     case 'elimination':
       return outcome === 'win' ? '상대의 말을 모두 잡았습니다.' : '내 말이 모두 잡혔습니다.';
     case 'storm':
       return outcome === 'win' ? '상대의 마지막 말이 자기장에 휩쓸렸습니다.' : '내 마지막 말이 자기장에 휩쓸렸습니다.';
+    case 'stormLocked':
+      return outcome === 'win' ? '상대가 자기장에 막혀 승리' : '자기장에 막혀 더 움직일 수 없어 패배';
     case 'timeoutForfeit':
       return outcome === 'win' ? '상대 시간 초과 · 몰수승' : '시간 초과 · 몰수패';
     case 'resign':
@@ -149,6 +154,22 @@ export function endReasonText(reason: EndReason | null, outcome: 'win' | 'loss' 
     default:
       return '';
   }
+}
+
+/**
+ * Pieces each side lost to the storm step that ended the match by swallowing both sides' last
+ * pieces ([player 0, player 1]), or null when the match did not end that way.
+ */
+export function wipeCounts(state: GameState): [number, number] | null {
+  if (state.endReason !== 'storm' || state.pieces.length > 0) return null;
+  for (let i = state.history.length - 1; i >= 0; i--) {
+    const e = state.history[i];
+    if (e.kind !== 'storm') continue;
+    const n: [number, number] = [0, 0];
+    for (const id of e.killed) n[id.startsWith('p0-') ? 0 : 1]++;
+    return n;
+  }
+  return null;
 }
 
 export function setText(el: HTMLElement, text: string): void {

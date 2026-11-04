@@ -69,7 +69,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     nameKo: '미셸',
     nameEn: 'Michelle',
     rarity: 'common',
-    descKo: ['좌·우·뒤로 1칸 · 끝줄에서 방향 전환', '좌·우·뒤로 최대 2칸 직진 · 끝줄에서 방향 전환', '좌·우·뒤로 최대 2칸 직진 + 앞으로 1칸 · 끝줄에서 방향 전환'],
+    descKo: ['좌·우·뒤로 1칸 · 끝줄에서 방향 전환', '좌·우·뒤로 최대 2칸 직진 + 앞으로 1칸 · 끝줄에서 방향 전환', '좌·우·뒤로 최대 2칸 직진 + 앞으로 최대 2칸 직진 · 끝줄에서 방향 전환'],
     value: [3, 4, 5],
     trait: {
       nameKo: '인형 함정',
@@ -151,9 +151,13 @@ export function keepsDirection(ch: number): boolean {
   return ch === CH_SAD || ch === CH_PICKER;
 }
 
-/** Michelle's sideways / backward slide range by level (index = level); 3-star adds forward 1. */
+/** Michelle's sideways / backward slide range by level (index = level). */
 export const MICHELLE_RANGE = [0, 1, 2, 2];
-export const MICHELLE_FORWARD_LEVEL = 3;
+/**
+ * Michelle's straight forward slide by level (index = level): none at 1-star, 1 square at 2-star,
+ * up to 2 at 3-star (blocked by pieces like her other slides). Her doll traps stay backward-only.
+ */
+export const MICHELLE_FORWARD_RANGE = [0, 0, 1, 2];
 /** Picker's diagonal hop range by level (index = level). */
 export const PICKER_RANGE = [0, 1, 2, 3];
 

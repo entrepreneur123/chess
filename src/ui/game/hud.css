@@ -69,6 +69,18 @@
   color: rgb(var(--rb));
   text-shadow: 0 1px 0 var(--outline);
 }
+/* The match's first banner says who moves first (a coin flip per match): held a little longer,
+   the Korean sub line without the wide tracking of the English one. */
+.turn-banner--opening {
+  font-size: 36px;
+  animation-duration: 1350ms;
+}
+.turn-banner--opening .turn-banner__sub {
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  text-indent: 0;
+  color: var(--ink);
+}
 @keyframes banner-in {
   0% {
     opacity: 0;
@@ -1040,6 +1052,10 @@
   .float-text,
   .storm-flash {
     display: none;
+  }
+  /* Who moves first is information, not decoration: shown still. */
+  .turn-banner.turn-banner--opening {
+    display: flex;
   }
   /* Forfeit urgency without motion: a steady red rim. */
   .pbar--bottom.is-critical {

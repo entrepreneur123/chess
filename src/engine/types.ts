@@ -198,7 +198,9 @@ export interface SkillAction {
 
 export type EndReason =
   | 'elimination' // all enemy pieces captured
-  | 'storm' // the last piece(s) of a side were swallowed by the storm (both at once: by material)
+  | 'storm' // the last piece(s) of a side were swallowed by the storm (both at once: more pieces wins, equal = draw)
+  /** Once the storm has closed in (storm >= 1), the side to move had no legal action: it loses. */
+  | 'stormLocked'
   | 'timeoutForfeit' // the side to move ran out of turn time: it loses at once
   | 'resign'
   | 'stalemate' // neither side has any legal move -> adjudicated by material

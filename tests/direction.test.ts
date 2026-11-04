@@ -15,7 +15,9 @@ describe('isDirectional', () => {
   it('matches the move generator: directional exactly when flipping forward changes the reach', () => {
     for (const ch of CHARACTER_IDS) {
       for (const lv of LEVELS) {
-        const differs = reach(ch, lv, 1).join() !== reach(ch, lv, -1).join();
+        // Michelle's traps come from backward moves: her facing matters even where her reach is
+        // symmetric (3성: up to 2 squares in all four directions).
+        const differs = reach(ch, lv, 1).join() !== reach(ch, lv, -1).join() || ch === 'michelle';
         expect({ ch, lv, directional: isDirectional({ character: ch, level: lv }) }).toEqual({ ch, lv, directional: differs });
       }
     }

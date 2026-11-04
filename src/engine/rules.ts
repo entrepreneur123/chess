@@ -153,9 +153,10 @@ export function pieceDir(piece: Pick<Piece, 'owner' | 'dir'>): 1 | -1 {
 }
 
 /**
- * Does this (character, level) movement pattern tell forward from back? Sad, Insaner's own pattern,
- * Picker and a level-3 Brutile (every neighbour) are symmetric; Marki, Walk, Michelle, Rakaeli and a
- * level-1/2 Brutile are not.
+ * Does this (character, level) tell forward from back? Sad, Insaner's own pattern, Picker and a
+ * level-3 Brutile (every neighbour) are symmetric; Marki, Walk, Rakaeli and a level-1/2 Brutile are
+ * not. Michelle always is: even where her reach is symmetric (3-star: 2 squares every way) her
+ * doll traps come from BACKWARD moves only, so which way she faces still matters.
  */
 function patternIsDirectional(character: CharacterId, level: number): boolean {
   switch (character) {
@@ -310,6 +311,22 @@ export function adjudicate(state: GameState): PlayerId | null {
   return a > b ? 0 : b > a ? 1 : null;
 }
 
+/**
+ * Winner when one storm step removes the last pieces of both sides: the side that lost more pieces
+ * in it (= had more left right before it), or null (a draw) on equal counts. Only the number of
+ * pieces counts, never their rarity, grade or absorbed abilities.
+ */
+export function wipeWinner(before: readonly Piece[], killed: readonly string[]): PlayerId | null {
+  let n0 = 0;
+  let n1 = 0;
+  for (const p of before) {
+    if (!killed.includes(p.id)) continue;
+    if (p.owner === 0) n0++;
+    else n1++;
+  }
+  return n0 > n1 ? 0 : n1 > n0 ? 1 : null;
+}
+
 function countPieces(pieces: Piece[], player: PlayerId): number {
   let n = 0;
   for (const p of pieces) if (p.owner === player) n++;
@@ -361,11 +378,10 @@ function switchTurn(state: GameState, entry: HistoryEntry, pliesSinceCapture: nu
       const left0 = countPieces(pieces, 0);
       const left1 = countPieces(pieces, 1);
       // The storm (columns, and rows from step 3) swallowed the last pieces of BOTH sides at once:
-      // decided by what was lost.
-      if (left0 === 0 && left1 === 0) {
-        const gone = state.pieces.filter((p) => killed.includes(p.id));
-        return end(next, adjudicate({ ...next, pieces: gone }), 'storm');
-      }
+      // the side that had more pieces left wins, equal counts are a draw (rarity and grade do not
+      // count). Every piece of both sides was on the board right before this step, so that is
+      // simply who lost more pieces in it.
+      if (left0 === 0 && left1 === 0) return end(next, wipeWinner(state.pieces, killed), 'storm');
       if (left0 === 0 || left1 === 0) return end(next, left0 > 0 ? 0 : 1, 'storm');
     }
   }
@@ -395,8 +411,14 @@ function countDownTurnEnd(pieces: Piece[], player: PlayerId): Piece[] {
 
 /**
  * Post-ply bookkeeping: elimination (by capture or storm), storm activation (one piece left or
- * sudden death), chain moves that cannot be played, and automatic passes when the side to move has
- * no legal moves (stalemate if neither side can move).
+ * sudden death), chain moves that cannot be played, and what happens when the side to move has no
+ * legal action (no move and no castable skill):
+ *  - only its doll-trap stuns hold it (it would have a move without them): it passes ('stunned');
+ *  - otherwise, once the storm has closed in (storm >= 1): it is boxed in for good and LOSES at
+ *    once ('stormLocked'), e.g. a Walk or Marki facing a storm row it can never turn around at;
+ *  - before that: it passes ('noMoves'), and if neither side could act it is a 'stalemate'
+ *    (adjudicated by material).
+ * A pending chain move that cannot be played just lapses ('bonusSkip'), never a loss.
  * `state` must already be a fresh object owned by the caller.
  */
 function settle(state: GameState): GameState {
@@ -417,6 +439,7 @@ function settle(state: GameState): GameState {
     if (hasAnyMove(state, state.turn) || sideCanCast(state, state.turn)) return state;
     // Stuns wear off, so the game is only stuck when neither side could act even without them.
     const selfLater = hasAnyMove(state, state.turn, null, true) || sideCanCast(state, state.turn, true);
+    if (!selfLater && state.storm >= 1) return end(state, other(state.turn), 'stormLocked');
     if (!selfLater && !hasAnyMove(state, other(state.turn), null, true) && !sideCanCast(state, other(state.turn), true)) return end(state, adjudicate(state), 'stalemate');
     const reason: PassReason = selfLater ? 'stunned' : 'noMoves';
     state = switchTurn(state, { kind: 'pass', player: state.turn, reason }, state.pliesSinceCapture + 1);

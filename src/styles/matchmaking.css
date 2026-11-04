@@ -213,7 +213,8 @@
   letter-spacing: 0.06em;
 }
 
-/* ---- VS card: blue team over red team ------------------------------------------------ */
+/* ---- VS card: the opponent (red) on top, me (blue) at the bottom, like the board ---------
+   Geometry belongs to the half (--top / --bottom); colour to the team (--me / --opp). */
 .mm.is-found .mm__stage {
   justify-content: stretch;
   padding: 0;
@@ -234,34 +235,46 @@
   overflow: hidden;
 }
 .versus__side--me {
-  clip-path: polygon(0 0, 100% 0, 100% 86%, 0 100%);
-  background:
-    radial-gradient(90% 70% at 80% 40%, rgba(95, 176, 255, 0.45), transparent 70%),
-    linear-gradient(160deg, var(--team-blue-deep), #0c1430 70%, var(--night-0));
-  animation: vs-in-left 520ms var(--ease-emph) both;
+  --vs-glow: rgba(95, 176, 255, 0.45);
+  --vs-deep: var(--team-blue-deep);
+  --vs-mid: #0c1430;
+  --vs-seam: rgba(140, 194, 255, 0.9);
 }
 .versus__side--opp {
+  --vs-glow: rgba(255, 106, 90, 0.42);
+  --vs-deep: var(--team-red-deep);
+  --vs-mid: #2a0c14;
+  --vs-seam: rgba(255, 154, 160, 0.9);
+}
+.versus__side--top {
+  clip-path: polygon(0 0, 100% 0, 100% 86%, 0 100%);
+  background:
+    radial-gradient(90% 70% at 80% 40%, var(--vs-glow), transparent 70%),
+    linear-gradient(160deg, var(--vs-deep), var(--vs-mid) 70%, var(--night-0));
+  animation: vs-in-left 520ms var(--ease-emph) both;
+}
+.versus__side--bottom {
   margin-top: -14%;
   clip-path: polygon(0 14%, 100% 0, 100% 100%, 0 100%);
   background:
-    radial-gradient(90% 70% at 20% 60%, rgba(255, 106, 90, 0.42), transparent 70%),
-    linear-gradient(200deg, var(--team-red-deep), #2a0c14 70%, var(--night-0));
+    radial-gradient(90% 70% at 20% 60%, var(--vs-glow), transparent 70%),
+    linear-gradient(200deg, var(--vs-deep), var(--vs-mid) 70%, var(--night-0));
   animation: vs-in-right 520ms var(--ease-emph) 80ms both;
 }
 /* Glowing seam along each diagonal edge. */
-.versus__side--me::after,
-.versus__side--opp::after {
+.versus__side--top::after,
+.versus__side--bottom::after {
   content: '';
   position: absolute;
   inset: 0;
   z-index: 1;
   pointer-events: none;
 }
-.versus__side--me::after {
-  background: linear-gradient(to top right, transparent calc(50% - 2px), rgba(140, 194, 255, 0.9) 50%, transparent calc(50% + 2px)) left bottom / 100% 14% no-repeat;
+.versus__side--top::after {
+  background: linear-gradient(to top right, transparent calc(50% - 2px), var(--vs-seam) 50%, transparent calc(50% + 2px)) left bottom / 100% 14% no-repeat;
 }
-.versus__side--opp::after {
-  background: linear-gradient(to bottom right, transparent calc(50% - 2px), rgba(255, 154, 160, 0.9) 50%, transparent calc(50% + 2px)) left top / 100% 14% no-repeat;
+.versus__side--bottom::after {
+  background: linear-gradient(to bottom right, transparent calc(50% - 2px), var(--vs-seam) 50%, transparent calc(50% + 2px)) left top / 100% 14% no-repeat;
 }
 @keyframes vs-in-left {
   from {
@@ -287,13 +300,15 @@
   mask-image: radial-gradient(ellipse 50% 50% at 50% 48%, #000 55%, transparent 100%);
   animation: vs-art 1.6s var(--ease-out) both;
 }
-.versus__side--me .versus__art img {
+.versus__side--top .versus__art img {
   right: -10%;
   top: -2%;
 }
-.versus__side--opp .versus__art img {
+.versus__side--bottom .versus__art img {
   left: -10%;
   bottom: -8%;
+}
+.versus__side--opp .versus__art img {
   filter: sepia(0.25) saturate(1.2) hue-rotate(-20deg);
 }
 @keyframes vs-art {
@@ -307,19 +322,29 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+  /* Never wider than the screen minus both gutters (long opponent names wrap, never clip). */
+  max-width: calc(100% - 2 * var(--s-5));
 }
-.versus__side--me .versus__plate {
+.versus__side--top .versus__plate {
   left: var(--s-5);
   top: calc(var(--s-8) + 20px);
 }
-.versus__side--opp .versus__plate {
+.versus__side--bottom .versus__plate {
   right: var(--s-5);
-  bottom: calc(110px + var(--sab));
+  bottom: calc(118px + var(--sab));
   align-items: flex-end;
   text-align: right;
 }
+.versus__tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.versus__side--bottom .versus__tags {
+  justify-content: flex-end;
+}
 .versus__eyebrow {
-  align-self: flex-start;
   padding: 2px 10px;
   border-radius: var(--r-full);
   background: rgba(7, 10, 18, 0.75);
@@ -328,18 +353,40 @@
   font-family: var(--font-display);
   font-size: var(--fs-caption);
   letter-spacing: 0.1em;
+  white-space: nowrap;
 }
 .versus__side--opp .versus__eyebrow {
-  align-self: flex-end;
   box-shadow: inset 0 0 0 1px rgba(255, 154, 160, 0.6);
   color: var(--team-red-light);
 }
+/* Who moves first (a coin flip per match). */
+.versus__first {
+  padding: 2px 10px;
+  border-radius: var(--r-full);
+  background: linear-gradient(180deg, #f7cf63, var(--gold-deep));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 196, 0.75),
+    0 0 0 1.5px var(--outline),
+    0 0 14px rgba(242, 193, 78, 0.55);
+  color: var(--gold-ink);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-bold);
+  white-space: nowrap;
+  animation: vs-first 520ms var(--ease-pop) 900ms both;
+}
+@keyframes vs-first {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
 .versus__name {
   font-family: var(--font-display);
-  font-size: 40px;
+  font-size: clamp(30px, 10vw, 40px);
   line-height: 1.05;
   color: var(--ink);
   text-shadow: var(--ink-outline-l);
+  overflow-wrap: anywhere;
 }
 .versus__pieces {
   display: flex;
@@ -417,6 +464,17 @@
 .mm__found .mm__sub {
   font-size: var(--fs-caption);
 }
+.mm__order {
+  color: var(--gold-100);
+  font-size: var(--fs-label);
+  font-weight: var(--fw-bold);
+  text-shadow:
+    0 1px 0 var(--outline),
+    0 0 8px rgba(7, 10, 18, 0.9);
+}
+.mm__order[data-first-turn='opp'] {
+  color: var(--team-red-light);
+}
 @media (min-width: 720px) {
   .versus {
     width: min(100%, 560px);
@@ -429,9 +487,10 @@
   .radar__sweep,
   .radar__core,
   .mm__dots i,
-  .versus__side--me,
-  .versus__side--opp,
+  .versus__side--top,
+  .versus__side--bottom,
   .versus__art img,
+  .versus__first,
   .versus__vs,
   .mm__found {
     animation: none;

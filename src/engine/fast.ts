@@ -43,7 +43,11 @@ export interface FastBoard {
   stormIn: number;
   /** Plies played (drives sudden death). */
   ply: number;
-  /** Material difference (side 0 minus side 1) of a storm that swallowed both sides' last pieces. */
+  /**
+   * Piece-count difference (side 0 minus side 1) right before the storm step that last killed
+   * something: when that step swallowed both sides' last pieces, its sign decides the game (more
+   * pieces wins, 0 = draw; rarity and grade do not count).
+   */
   wipe: number;
   /** Wasteland flags per square. */
   waste: Uint8Array;
@@ -182,6 +186,15 @@ export function fastHasMoves(b: FastBoard, side: number, ignoreStun = false): bo
 }
 
 /**
+ * Engine rule 'stormLocked': once the storm has closed in (storm >= 1) the side to move loses when
+ * it has no legal action. Skills are sealed by then, so that is "no move even once its doll-trap
+ * stuns wear off" (a stun alone only passes). A boxed-in chain move just lapses: never a lock.
+ */
+export function fastStormLocked(b: FastBoard): boolean {
+  return b.storm >= 1 && b.bonus < 0 && !fastHasMoves(b, b.turn, true);
+}
+
+/**
  * Material (base values) of the enemies piece `pi` would hop onto on the way to `to` (Picker's
  * hop-through; 0 for every other move). Only valid for a legal move, before it is made.
  */
@@ -256,7 +269,7 @@ function switchSide(b: FastBoard): void {
         if (s < 0) continue;
         const r = (s / BOARD_SIZE) | 0;
         if (inStorm(r, s - r * BOARD_SIZE, b.storm)) {
-          if (killed === 0) b.wipe = b.material[0] - b.material[1];
+          if (killed === 0) b.wipe = b.alive[0] - b.alive[1];
           kill(b, i);
           killed++;
         }

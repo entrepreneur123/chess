@@ -47,21 +47,46 @@ describe('Michelle movement', () => {
     expect(targetKeys(getLegalMoves(s, 'p0-michelle'))).toEqual(keys([[5, 4], [5, 6], [4, 5]]));
   });
 
-  it('2성: left, right or back up to 2 (slides, blocked by pieces, captures on landing)', () => {
+  it('2성: left, right or back up to 2 plus forward 1 (slides, blocked by pieces, captures on landing)', () => {
     const s = makeState([[0, 'michelle', 2, 5, 5], [1, 'sad', 1, 5, 6], [0, 'sad', 1, 3, 5]]);
     const t = targetKeys(getLegalMoves(s, 'p0-michelle'));
-    expect(t).toEqual(keys([[5, 4], [5, 3], [5, 6], [4, 5]]));
+    expect(t).toEqual(keys([[5, 4], [5, 3], [5, 6], [4, 5], [6, 5]]));
     expect(getLegalMoves(s, 'p0-michelle').find((m) => m.to.c === 6)?.captureId).toBe('p1-sad');
+    // Forward is only 1 square at 2성.
+    const open = makeState([[0, 'michelle', 2, 5, 5], [1, 'sad', 1, 9, 0]]);
+    expect(targetKeys(getLegalMoves(open, 'p0-michelle'))).toEqual(keys([[5, 4], [5, 3], [5, 6], [5, 7], [4, 5], [3, 5], [6, 5]]));
   });
 
-  it('3성: as 2성 plus forward 1', () => {
+  it('3성: left, right or back up to 2 plus forward up to 2 (a straight slide)', () => {
     const s = makeState([[0, 'michelle', 3, 5, 5], [1, 'sad', 1, 9, 0]]);
-    expect(targetKeys(getLegalMoves(s, 'p0-michelle'))).toEqual(keys([[5, 4], [5, 3], [5, 6], [5, 7], [4, 5], [3, 5], [6, 5]]));
+    expect(targetKeys(getLegalMoves(s, 'p0-michelle'))).toEqual(keys([[5, 4], [5, 3], [5, 6], [5, 7], [4, 5], [3, 5], [6, 5], [7, 5]]));
+  });
+
+  it('3성: the forward slide needs a clear path (blocked by an ally, captures the first enemy)', () => {
+    const ally = makeState([[0, 'michelle', 3, 5, 5], [0, 'sad', 1, 6, 5], [1, 'sad', 1, 9, 0]]);
+    const ta = targetKeys(getLegalMoves(ally, 'p0-michelle'));
+    expect(ta).not.toContain('6,5');
+    expect(ta).not.toContain('7,5');
+    const enemy = makeState([[0, 'michelle', 3, 5, 5], [1, 'sad', 1, 6, 5], [1, 'marki', 1, 9, 0]]);
+    const te = getLegalMoves(enemy, 'p0-michelle');
+    expect(te.find((m) => m.to.r === 6 && m.to.c === 5)?.captureId).toBe('p1-sad');
+    expect(targetKeys(te)).not.toContain('7,5');
+  });
+
+  it('forward moves never lay a trap (2성 and 3성); only backward ones do', () => {
+    for (const lv of [2, 3] as const) {
+      let s = makeState([[0, 'michelle', lv, 4, 5], [1, 'sad', 1, 9, 0]]);
+      s = play(s, 'p0-michelle', lv === 3 ? 6 : 5, 5);
+      expect(traps(s), `${lv}성`).toEqual([]);
+      expect(trapsLeft(s, 0)).toBe(3);
+    }
   });
 
   it('player 1 faces -r: back is toward the last row, forward toward r = 0', () => {
     const s = makeState([[1, 'michelle', 3, 5, 5], [0, 'sad', 1, 0, 0]], 1);
-    expect(targetKeys(getLegalMoves(s, 'p1-michelle'))).toEqual(keys([[5, 4], [5, 3], [5, 6], [5, 7], [6, 5], [7, 5], [4, 5]]));
+    expect(targetKeys(getLegalMoves(s, 'p1-michelle'))).toEqual(keys([[5, 4], [5, 3], [5, 6], [5, 7], [6, 5], [7, 5], [4, 5], [3, 5]]));
+    const s2 = makeState([[1, 'michelle', 2, 5, 5], [0, 'sad', 1, 0, 0]], 1);
+    expect(targetKeys(getLegalMoves(s2, 'p1-michelle'))).toEqual(keys([[5, 4], [5, 3], [5, 6], [5, 7], [6, 5], [7, 5], [4, 5]]));
     const s1 = makeState([[1, 'michelle', 1, 5, 5], [0, 'sad', 1, 0, 0]], 1);
     expect(targetKeys(getLegalMoves(s1, 'p1-michelle'))).toEqual(keys([[5, 4], [5, 6], [6, 5]]));
   });
@@ -72,10 +97,12 @@ describe('Michelle movement', () => {
     let m = s.pieces.find((p) => p.id === 'p0-michelle')!;
     expect(m.dir).toBe(-1);
     expect(traps(s)).toEqual([]);
-    // Now "forward" is toward her home rows: only 1 square (3-star), and moving there lays nothing.
+    // Now "forward" is toward her home rows (up to 2 squares at 3-star), and moving there lays
+    // nothing; "back" is the edge behind her (row 9 is the board's last row: nothing past it).
     const reach = targetKeys(getTargetsForPiece(s, m));
-    expect(reach).not.toContain('7,5');
     expect(reach).toContain('8,5');
+    expect(reach).toContain('7,5');
+    expect(reach).not.toContain('6,5');
     s = play(s, 'p1-sad', 0, 1);
     s = play(s, 'p0-michelle', 8, 5);
     expect(traps(s)).toEqual([]);

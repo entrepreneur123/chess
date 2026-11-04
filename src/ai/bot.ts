@@ -8,6 +8,7 @@ import {
   fastMoveToMove,
   fastPass,
   fastSkillToAction,
+  fastStormLocked,
   fastUnmake,
   fastUnpass,
   genTargets,
@@ -73,7 +74,7 @@ const STRENGTH: Record<Difficulty, Strength> = {
 };
 
 const WIN = 1_000_000;
-const ADJ_WIN = 500_000; // won by adjudication (ply limit / stalemate)
+const ADJ_WIN = 500_000; // won by adjudication (stalemate by material, a storm wipe by piece count)
 const INF = 10_000_000;
 const MAX_PLY = 64;
 const MAX_MOVES = 128;
@@ -277,7 +278,7 @@ function adjudicateScore(b: FastBoard, side: number, ply: number): number {
   return 0;
 }
 
-/** Both sides' last pieces were swallowed by the same storm: decided by the material lost. */
+/** Both sides' last pieces were swallowed by the same storm: more pieces lost wins, equal = draw. */
 function wipeScore(b: FastBoard, side: number, ply: number): number {
   const d = side === 0 ? b.wipe : -b.wipe;
   return d > 0 ? ADJ_WIN - ply : d < 0 ? -ADJ_WIN + ply : 0;
@@ -346,6 +347,8 @@ function qsearch(ctx: SearchCtx, alpha: number, beta: number, ply: number, qd: n
   const side = b.turn;
   if (b.alive[side] === 0) return b.alive[1 - side] === 0 ? wipeScore(b, side, ply) : -WIN + ply;
   if (b.alive[1 - side] === 0) return WIN - ply;
+  // Boxed in by the storm with nothing to play: the side to move has lost (engine 'stormLocked').
+  if (b.storm >= 1 && fastStormLocked(b)) return -WIN + ply;
   const stand = evaluate(b, side);
   if (stand >= beta) return stand;
   if (stand > alpha) alpha = stand;
@@ -387,8 +390,11 @@ function negamax(ctx: SearchCtx, depth: number, alpha: number, beta: number, ply
   const scores = ctx.scoreBufs[ply];
   const n = fastGenMoves(b, side, moves, 0);
   if (n === 0) {
-    // No move (or a boxed-in chain move): the turn passes, exactly like the engine's auto-pass.
-    // Stuns wear off, so it is only a stalemate when neither side could move even without them.
+    // No move. Once the storm has closed in that loses at once (engine 'stormLocked'), unless only
+    // doll-trap stuns hold the side (it passes) or it is a boxed-in chain move (it lapses).
+    if (fastStormLocked(b)) return -WIN + ply;
+    // Otherwise the turn passes, exactly like the engine's auto-pass. Stuns wear off, so it is only
+    // a stalemate when neither side could move even without them.
     if (b.bonus < 0 && !fastHasMoves(b, side, true) && !fastHasMoves(b, 1 - side, true)) return adjudicateScore(b, side, ply);
     fastPass(b);
     try {

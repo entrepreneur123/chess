@@ -13,7 +13,7 @@ import {
   INSANER_RANGE,
   MARKI_RANGE,
   MARKI_SIDE_LEVEL,
-  MICHELLE_FORWARD_LEVEL,
+  MICHELLE_FORWARD_RANGE,
   MICHELLE_RANGE,
   N_CHARS,
   PICKER_RANGE,
@@ -88,7 +88,7 @@ const BRUTILE_DIRS: Record<number, [number[], number[], number[]]> = {
   [-1]: [[], [-1, -1, -1, 1], [-1, -1, -1, 1, 1, 0]],
 };
 
-/** Michelle: left, right and straight back (by direction); the 3-star forward step is separate. */
+/** Michelle: left, right and straight back (by direction); her forward slide (2-star on) is separate. */
 const MICHELLE_DIRS: Record<number, number[]> = {
   1: [0, 1, 0, -1, -1, 0],
   [-1]: [0, 1, 0, -1, 1, 0],
@@ -275,7 +275,8 @@ function genPattern(
   }
   if (ch === CH_MICHELLE) {
     n = slide(occ, owners, owner, r, c, MICHELLE_DIRS[dir], MICHELLE_RANGE[level], out, n, includeAllies, storm, waste);
-    if (level >= MICHELLE_FORWARD_LEVEL) n = slide(occ, owners, owner, r, c, MICHELLE_FWD[dir], 1, out, n, includeAllies, storm, waste);
+    const fwd = MICHELLE_FORWARD_RANGE[level];
+    if (fwd > 0) n = slide(occ, owners, owner, r, c, MICHELLE_FWD[dir], fwd, out, n, includeAllies, storm, waste);
     return n;
   }
   if (ch === CH_PICKER) return hop(occ, owners, owner, r, c, PICKER_RANGE[level], out, n, includeAllies, storm, waste, traps);
