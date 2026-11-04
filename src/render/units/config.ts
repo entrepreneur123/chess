@@ -65,7 +65,7 @@ export interface CharacterLook {
   levels: Record<Level, LevelLook>;
 }
 
-const BASE_LOOKS: Record<Exclude<CharacterId, 'michelle' | 'picker'>, CharacterLook> = {
+const BASE_LOOKS: Record<Exclude<CharacterId, 'michelle' | 'picker' | 'rakaeli'>, CharacterLook> = {
   // Holy paladin: Lv1 squire (dented steel over gambeson) -> Lv2 silver-blue knight with gold trim ->
   // Lv3 white-gold holy champion with a radiant greatsword.
   sad: {
@@ -265,13 +265,22 @@ const BASE_LOOKS: Record<Exclude<CharacterId, 'michelle' | 'picker'>, CharacterL
 };
 
 /**
- * Every character's look. Michelle and Picker have no glTF looks of their own yet (the 3D arena is
+ * Every character's look. Michelle, Picker and Rakaeli have no glTF looks of their own yet (the 3D arena is
  * shelved; the top-down board only draws illustrated tokens), so they borrow the closest builds.
  */
-export const LOOKS: Record<CharacterId, CharacterLook> = { ...BASE_LOOKS, michelle: BASE_LOOKS.brutile, picker: BASE_LOOKS.sad };
+export const LOOKS = { ...BASE_LOOKS, michelle: BASE_LOOKS.brutile, picker: BASE_LOOKS.sad, rakaeli: BASE_LOOKS.sad } as Record<CharacterId, CharacterLook>;
 
-/** Clip used for each logical action (walk and picker jump, the others run). */
-export const MOVE_CLIP: Record<CharacterId, ClipName> = { sad: 'run', marki: 'run', walk: 'jump', insaner: 'run', brutile: 'run', michelle: 'run', picker: 'jump' };
+/** Clip used for each logical action (walk, picker and rakaeli jump, the others run). */
+export const MOVE_CLIP = {
+  sad: 'run',
+  marki: 'run',
+  walk: 'jump',
+  insaner: 'run',
+  brutile: 'run',
+  michelle: 'run',
+  picker: 'jump',
+  rakaeli: 'jump',
+} satisfies Record<Exclude<CharacterId, 'rakaeli'>, ClipName> & { rakaeli: ClipName } as Record<CharacterId, ClipName>;
 
 /**
  * Board fit constants for the camera / picking code (tile units, measured from the unit's feet =

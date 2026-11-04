@@ -49,6 +49,14 @@
  * capture ring, and a lifted selection shown as a screen-up offset with a spreading shadow
  * (applyTopLift).
  *
+ * Rakaeli (awakenFx.ts): base-form moves leap and shed pale ash feathers (ash feather burst + dim
+ * halo-gold ring on a capture). While transformed (`Piece.awaken` > 0) his coin shows the awake face
+ * (crimson-tinted base face if that art is missing), an additive crimson / violet flame aura with
+ * rising embers under it (one shader, ~30 fps idle tick, static with reduced motion) and a
+ * countdown badge; his moves leave a crimson feather trail and captures burst in a dark flame.
+ * playAwaken plays the transform ('on': blindfold-burn flash, flame wings unfolding, a pulse, the
+ * face swap at the peak) and the revert ('off': embers fade, smoke puff, face swaps back).
+ *
  * Performance notes: tiles are one InstancedMesh, overlays are InstancedMeshes, effects reuse
  * pre-allocated meshes (no per-frame / per-move allocations), one 1024 shadow map (none when
  * top-only), pixel ratio capped at 2, effect shaders pre-compiled when idle. Frames are only
@@ -69,12 +77,14 @@ import { loadUnitAssets, unitAssetsIfLoaded } from './units/assets';
 import { LOOKS, MOVE_CLIP } from './units/config';
 import type { UnitLibrary } from './units/library';
 import { DustPool, SparkPool } from './boardFx';
-import { ANIM, ARENA, BOARD_COLORS, CHARACTER_FX, CHARACTER_RARITY, HOLO, RARITY_COLORS, RARITY_GLOW, TEAM_COLORS, WASTE_COLORS } from './palette';
+import { ANIM, ARENA, BOARD_COLORS, CHARACTER_FX, CHARACTER_RARITY, HOLO, RAKAELI_AWAKE_FX, RARITY_COLORS, RARITY_GLOW, TEAM_COLORS, WASTE_COLORS } from './palette';
 import { GROUND_MODE, StrikeFx } from './strikeFx';
 import { RingMaterials, TokenKit } from './tokens';
 import { STORM_COLORS, StormFx } from './storm';
 import { WasteFx } from './waste';
 import { TrapMarks3D } from './trapFx';
+import { AWAKEN_COLORS, AwakenMarks3D, RakaeliFx3D, awakenOf, awakenTimeline, isRakaeli, makeAwakenSample, rakaeliStyle, sampleAwaken } from './awakenFx';
+import type { AwakeMarks, AwakenPhase, AwakenTimeline, RakaeliStyle } from './awakenFx';
 import {
   clamp01,
   containerSize,
@@ -225,6 +235,11 @@ interface PieceVisual {
   tokenMat: THREE.ShaderMaterial;
   /** Top-down lift last applied (inner shifted screen-up, shadow spread); 0 = resting. */
   topLift: number;
+  /** Rakaeli's transform marks (aura + countdown badge, children of `inner`), created on demand. */
+  awake: AwakeMarks | null;
+  /** Shown transform look: awake face blend and aura intensity (0..1). */
+  awakeFace: number;
+  awakeAura: number;
 }
 
 /** Yaw (radians, model faces +z at 0) for a piece's forward direction (+1 = toward row 11 = -z). */
@@ -271,6 +286,26 @@ interface RunningAnim {
   piecesAfter: Piece[];
   /** Picker's hop-through (square by square), or null for every other move. */
   hop: HopData | null;
+  /** Rakaeli's move style (crimson feathers when transformed, pale ash otherwise) or null. */
+  rk: RakaeliStyle | null;
+  /** Next feather emission (ms since start). */
+  nextFeather: number;
+  resolve: () => void;
+}
+
+/** A running playAwaken (or the automatic short revert after a transformed piece's last move). */
+interface AwakenRun {
+  id: string;
+  phase: AwakenPhase;
+  tl: AwakenTimeline;
+  start: number;
+  /** Look when it started (a revert that begins mid-fade continues from there). */
+  face0: number;
+  aura0: number;
+  pulsed: boolean;
+  smoked: boolean;
+  /** Started by the board itself (no caller waits for it). */
+  auto: boolean;
   resolve: () => void;
 }
 
@@ -337,6 +372,11 @@ const WASTE_TILE = hexToRgb(WASTE_COLORS.tile);
 const SMOKE_GREEN = 0x1f4a14;
 const SMOKE_CURSE = 0x2e1240;
 const WASTE_DIE_MS = 560;
+/** Rakaeli: dark smoke / pale ash dust, feather cadence (ms) while transformed / in base form. */
+const SMOKE_RAK = 0x2a0a18;
+const ASH_DUST = 0xb9b2c4;
+const FEATHER_MS_AWAKE = 34;
+const FEATHER_MS_ASH = 75;
 /**
  * Brutile's cast (animateSkill) timeline in ms: caster flare + rune, bolt launch / travel / fade,
  * then the squares crack open one after another (stagger shrinks with the area size).
@@ -700,6 +740,13 @@ export class BoardView implements IBoardView {
   /** Michelle's doll traps (setTraps) and the dolls / stun badges drawn for them. */
   private traps: Trap[] = [];
   private trapMarks!: TrapMarks3D;
+  /** Rakaeli: transform marks, feathers / wings / dark flame, running playAwaken calls. */
+  private readonly awakenMarks = new AwakenMarks3D(0.008, TOKEN_Y + 0.06);
+  private readonly rakFx: RakaeliFx3D;
+  private readonly awakening = new Map<string, AwakenRun>();
+  private readonly awSample = makeAwakenSample();
+  /** Visuals currently showing the transform aura (keeps the light idle tick alive). */
+  private awakeCount = 0;
   /** glTF unit factory (null until the models are loaded, or if loading failed). */
   private units: UnitLibrary | null = null;
   /** Point-sprite scale shared with the unit FX (drawing-buffer px per world unit at distance 1). */
@@ -840,6 +887,7 @@ export class BoardView implements IBoardView {
     this.scene.add(this.wasteFx.group);
     this.trapMarks = new TrapMarks3D(cellX, cellZ, OVERLAY_Y + 0.006, TILE_TOP + TOKEN_Y + 0.05);
     this.scene.add(this.trapMarks.group);
+    this.rakFx = new RakaeliFx3D(this.awakenMarks.auraMaterial());
 
     const fx = this.buildFx(glowTex);
     this.landRing = fx.landRing;
@@ -853,7 +901,7 @@ export class BoardView implements IBoardView {
     this.dust = new DustPool(160, this.pointScale);
     this.sparks = new SparkPool(72);
     this.strike = new StrikeFx(this.pointScale);
-    this.fxLayer.add(this.dust.points, this.sparks.mesh, this.strike.group);
+    this.fxLayer.add(this.dust.points, this.sparks.mesh, this.strike.group, this.rakFx.group);
 
     this.scene.add(this.pieceLayer, this.fxLayer);
     this.applyHighlights();
@@ -1004,6 +1052,8 @@ export class BoardView implements IBoardView {
       if (this.disposed) return;
       // Without the parallel-compile extension compileAsync only warns and compiles synchronously.
       const parallel = this.renderer.extensions.has('KHR_parallel_shader_compile');
+      // Hidden objects are skipped by compile(): show the Rakaeli FX for its synchronous part.
+      this.rakFx.setWarm(true);
       for (const obj of [this.fxLayer, this.wasteFx.group]) {
         try {
           if (parallel) this.renderer.compileAsync(obj, this.camera, this.scene).catch(() => undefined);
@@ -1012,6 +1062,7 @@ export class BoardView implements IBoardView {
           // Optional optimisation only.
         }
       }
+      this.rakFx.setWarm(false);
     };
     const ric = (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
     if (ric) ric(run, { timeout: 1500 });

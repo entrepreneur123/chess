@@ -12,10 +12,14 @@
  *    pips with ink outlines on the lower rim. One material per piece (it carries the per-piece
  *    cross-fade / hit flash / dissolve uniforms) over a face texture shared per (character, level)
  *    and loaded lazily (sRGB, mipmaps, anisotropy).
+ *  - Rakaeli's "타천" (awakenFx.ts): his coins also carry the transformed face slot
+ *    (public/chars/rakaeli-awake-lv<n>-face.jpg). `uAwake` cross-fades to it; while it is loading or
+ *    missing the base face is tinted crimson instead. `uBurn` draws the blindfold-burn band.
  */
 import * as THREE from 'three';
 import type { CharacterId, Level, PlayerId, Rarity } from '../engine/types';
 import { faceUrl } from './common';
+import { AWAKE_TINT, awakeFaceUrl, isRakaeli } from './awakenFx';
 import { BOARD_COLORS, RARITY_RING, TEAM_COLORS } from './palette';
 
 /** Ring radius (world units, centre of the band) and the half width of the solid band. */
@@ -135,6 +139,10 @@ uniform float uOpacity;
 uniform float uFlash;
 uniform float uDissolve;
 uniform vec3 uEdge;
+uniform sampler2D uAwakeMap;
+uniform float uHasAwake;
+uniform float uAwake;
+uniform float uBurn;
 varying vec2 vUv;
 float sdStar5(vec2 p, float r, float rf) {
   const vec2 k1 = vec2(0.809016994375, -0.587785252292);
@@ -184,6 +192,26 @@ void main() {
     face = texture2D(uMap, pt * 0.5 * 0.8 + vec2(0.5, 0.49)).rgb;
   } else {
     face = mix(uTeamDark * 0.6, uTeamDark * 0.18, smoothstep(0.0, 0.85, length(pt - vec2(0.0, 0.15))));
+  }
+  // Rakaeli transformed: cross-fade to the awake art, or tint the base face crimson without it.
+  if (uAwake > 0.001) {
+    vec3 aw;
+    if (uHasAwake > 0.5) {
+      aw = texture2D(uAwakeMap, pt * 0.5 * 0.8 + vec2(0.5, 0.49)).rgb;
+    } else {
+      float l = dot(face, vec3(0.2126, 0.7152, 0.0722));
+      aw = mix(face * vec3(${g3(AWAKE_TINT[0])}, ${g3(AWAKE_TINT[1])}, ${g3(AWAKE_TINT[2])}), vec3(l * 1.25, l * 0.06, l * 0.1), 0.55) + vec3(0.03, 0.0, 0.012);
+    }
+    face = mix(face, aw, clamp(uAwake, 0.0, 1.0));
+  }
+  // Blindfold burning away: a white-hot band across the eyes, its crimson edge racing outward.
+  if (uBurn > 0.0) {
+    float bw = uBurn * 1.15;
+    float by = abs(pt.y - 0.14);
+    float band = (1.0 - smoothstep(0.09, 0.15, by)) * (1.0 - smoothstep(bw - 0.1, bw, abs(pt.x)));
+    float bedge = band * smoothstep(bw - 0.32, bw - 0.03, abs(pt.x));
+    float bfade = 1.0 - smoothstep(0.65, 1.0, uBurn);
+    face = mix(face, vec3(1.0, 0.86, 0.72), band * 0.6 * bfade) + vec3(1.0, 0.16, 0.06) * bedge * 1.6 * bfade;
   }
   // Inset shading: the rim casts a soft shadow onto the top-left of the face.
   face *= 1.0 - 0.45 * smoothstep(0.56, 0.78, r) * (0.35 + 0.65 * lit);
@@ -244,6 +272,8 @@ export class TokenKit {
   private readonly anisotropy: number;
   private readonly onLoad: () => void;
   private readonly gold = new THREE.Color(BOARD_COLORS.pip);
+  /** Shared "no awake art" uniforms of every non-Rakaeli coin. */
+  private readonly noAwake: Pick<FaceSlot, 'map' | 'has'> = { map: { value: null }, has: { value: 0 } };
   private disposed = false;
 
   constructor(maxAnisotropy: number, onLoad: () => void) {
@@ -251,8 +281,8 @@ export class TokenKit {
     this.onLoad = onLoad;
   }
 
-  private slot(character: CharacterId, level: Level): FaceSlot {
-    const key = `${character}:${level}`;
+  private slot(character: CharacterId, level: Level, awake = false): FaceSlot {
+    const key = `${character}${awake ? '-awake' : ''}:${level}`;
     let s = this.faces.get(key);
     if (!s) {
       s = { map: { value: null }, has: { value: 0 }, requested: false, failedAt: -Infinity };
@@ -263,11 +293,24 @@ export class TokenKit {
 
   /** Start loading a face texture (no-op if already requested). */
   load(character: CharacterId, level: Level): void {
-    const s = this.slot(character, level);
+    this.request(this.slot(character, level), faceUrl(character, level));
+  }
+
+  /** Start loading Rakaeli's transformed face (preloaded with his base face, so the swap is ready). */
+  loadAwake(character: CharacterId, level: Level): void {
+    if (isRakaeli({ character })) this.request(this.slot(character, level, true), awakeFaceUrl(level));
+  }
+
+  /** True once Rakaeli's transformed face of `level` is on the GPU (else the crimson tint shows). */
+  hasAwake(character: CharacterId, level: Level): boolean {
+    return this.faces.get(`${character}-awake:${level}`)?.has.value === 1;
+  }
+
+  private request(s: FaceSlot, url: string): void {
     if (s.requested || this.disposed || performance.now() - s.failedAt < FACE_RETRY_MS) return;
     s.requested = true;
     this.loader.load(
-      faceUrl(character, level),
+      url,
       (tex) => {
         if (this.disposed) {
           tex.dispose();
@@ -296,6 +339,7 @@ export class TokenKit {
   /** New per-piece token material (dispose it with the piece). */
   material(character: CharacterId, level: Level, owner: PlayerId): THREE.ShaderMaterial {
     const s = this.slot(character, level);
+    const aw = isRakaeli({ character }) ? this.slot(character, level, true) : this.noAwake;
     const t = TEAM_COLORS[owner];
     return new THREE.ShaderMaterial({
       uniforms: {
@@ -310,6 +354,10 @@ export class TokenKit {
         uFlash: { value: 0 },
         uDissolve: { value: 0 },
         uEdge: { value: new THREE.Color(t.glow) },
+        uAwakeMap: aw.map,
+        uHasAwake: aw.has,
+        uAwake: { value: 0 },
+        uBurn: { value: 0 },
       },
       vertexShader: TOKEN_VS,
       fragmentShader: TOKEN_FS,

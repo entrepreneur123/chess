@@ -4,14 +4,16 @@
  * Undo tokens: ((capturedIndex + 1) << 8) | fromSquare (+ bit 16 when the mover turned around).
  * Everything else a move changes (turn, chain move, absorbed abilities, storm clock and storm
  * kills) is pushed on an internal LIFO history so make/unmake stay exact.
- * Skill actions (Brutile's wasteland) are encoded as SKILL_FLAG | (pieceIndex << 8) | anchorSquare.
+ * Skill actions are encoded as SKILL_FLAG | (pieceIndex << 8) | anchorSquare: Brutile's wasteland
+ * (anchor = the area's lowest corner) or Rakaeli's transform (anchor = his own square; it sets
+ * `awaken`, which counts down at the end of each of its owner's turns like `stun`).
  * A move whose target is wasteland destroys the mover (WASTE_BIT in the undo token).
  * Picker's hop-through captures the enemies on its path too, Michelle's backward moves lay doll
  * traps and a mover ending on an enemy trap is stunned: all of it is undone from the LIFO history.
  */
-import { BOARD_SIZE, SKILL_UNLOCK_PLY, SKILL_USES_PER_MATCH, STORM_INTERVAL_PLIES, SUDDEN_DEATH_PLY, TRAPS_PER_MICHELLE, TRAP_STUN } from './types';
+import { AWAKEN_TURNS, BOARD_SIZE, SKILL_UNLOCK_PLY, STORM_INTERVAL_PLIES, SUDDEN_DEATH_PLY, TRAPS_PER_MICHELLE, TRAP_STUN } from './types';
 import type { CharacterId, GameState, Move, PlayerId, SkillAction } from './types';
-import { CHARACTERS, CHAR_BY_CODE, CHAR_CODE, CH_BRUTILE, CH_INSANER, CH_MICHELLE, WASTE_SIZE, abilityBit, absorbMaskOf, keepsDirection } from './characters';
+import { CHARACTERS, CHAR_BY_CODE, CHAR_CODE, CH_BRUTILE, CH_INSANER, CH_MICHELLE, CH_RAKAELI, WASTE_SIZE, abilityBit, absorbMaskOf, keepsDirection } from './characters';
 import { N_SQUARES, atTurnRow, canHop, genTargets, inStorm, posOf, sqOf, trapBit } from './board';
 import { pieceDir } from './rules';
 
@@ -25,6 +27,8 @@ export interface FastBoard {
   dir: Int8Array; // current forward direction per piece (+1 / -1)
   absorb: Uint32Array; // absorbed pattern bitmask per piece (see abilityBit; N_CHARS * 3 bits)
   stun: Int8Array; // doll-trap stun per piece (owner turns left to sit out, see Piece.stun)
+  awaken: Int8Array; // Rakaeli's transform per piece (owner turns left, see Piece.awaken)
+  used: Uint8Array; // 1 once the piece has used its skill this match (Piece.skillUsed)
   value: Int16Array; // base material value of each piece
   occ: Int8Array; // piece index or -1
   alive: Int16Array; // [count0, count1]
@@ -42,7 +46,7 @@ export interface FastBoard {
   wipe: number;
   /** Wasteland flags per square. */
   waste: Uint8Array;
-  /** Skill uses per side. */
+  /** Skill uses per side (a count; whether a piece may cast is `used`). */
   skills: Int8Array;
   /** Doll-trap masks per square (bit `trapBit(owner)`). */
   trap: Uint8Array;
@@ -65,6 +69,8 @@ export function fastFromState(state: GameState): FastBoard {
     dir: new Int8Array(n),
     absorb: new Uint32Array(n),
     stun: new Int8Array(n),
+    awaken: new Int8Array(n),
+    used: new Uint8Array(n),
     value: new Int16Array(n),
     occ: new Int8Array(N_SQUARES).fill(-1),
     alive: new Int16Array(2),
@@ -91,6 +97,8 @@ export function fastFromState(state: GameState): FastBoard {
     b.dir[i] = pieceDir(p);
     b.absorb[i] = absorbMaskOf(p.absorbed);
     b.stun[i] = p.stun ?? 0;
+    b.awaken[i] = p.awaken ?? 0;
+    b.used[i] = p.skillUsed ? 1 : 0;
     b.value[i] = CHARACTERS[p.character].value[p.level - 1];
     b.occ[s] = i;
     b.alive[p.owner]++;
@@ -105,17 +113,22 @@ export function fastFromState(state: GameState): FastBoard {
 /** Encoded skill action flag (see the file header). */
 export const SKILL_FLAG = 1 << 20;
 
-/** Can piece `i` lay its wasteland now (side to move, unlocked, not used up, storm not closing)? */
+/**
+ * Can piece `i` cast its skill now (Brutile's wasteland or Rakaeli's transform: side to move,
+ * unlocked, not used by this piece, not transformed already, not stunned, storm not closing)?
+ */
 export function fastCanSkill(b: FastBoard, i: number): boolean {
+  const ch = b.ch[i];
   return (
-    b.ch[i] === CH_BRUTILE &&
+    (ch === CH_BRUTILE || ch === CH_RAKAELI) &&
     b.sq[i] >= 0 &&
     b.stun[i] === 0 &&
+    b.awaken[i] === 0 &&
+    b.used[i] === 0 &&
     b.owner[i] === b.turn &&
     b.bonus < 0 &&
     b.storm === 0 &&
-    b.ply >= SKILL_UNLOCK_PLY &&
-    b.skills[b.owner[i]] < SKILL_USES_PER_MATCH
+    b.ply >= SKILL_UNLOCK_PLY
   );
 }
 
@@ -143,7 +156,7 @@ export function fastGenMoves(b: FastBoard, side: number, out: Int32Array, n = 0)
     if (s < 0 || b.owner[i] !== side || b.stun[i] > 0) continue;
     if (b.bonus >= 0 && i !== b.bonus) continue;
     const start = n;
-    n = genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, out, n, false, b.dir[i], b.storm, b.absorb[i], b.waste, b.trap);
+    n = genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, out, n, false, b.dir[i], b.storm, b.absorb[i], b.waste, b.trap, b.awaken[i] > 0);
     const hi = i << 8;
     for (let k = start; k < n; k++) out[k] |= hi;
   }
@@ -159,7 +172,7 @@ export function fastHasMoves(b: FastBoard, side: number, ignoreStun = false): bo
     if (s < 0 || b.owner[i] !== side) continue;
     if (!ignoreStun && b.stun[i] > 0) continue;
     if (b.bonus >= 0 && i !== b.bonus) continue;
-    if (genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, scratch, 0, false, b.dir[i], b.storm, b.absorb[i], b.waste, b.trap) > 0) return true;
+    if (genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, scratch, 0, false, b.dir[i], b.storm, b.absorb[i], b.waste, b.trap, b.awaken[i] > 0) > 0) return true;
   }
   return false;
 }
@@ -209,12 +222,19 @@ function switchSide(b: FastBoard): void {
   const oldBonus = b.bonus;
   const oldStorm = b.storm;
   const oldStormIn = b.stormIn;
-  // The side whose turn ends: each of its stunned pieces has one owner turn less to sit out.
+  // The side whose turn ends: each of its stunned pieces has one owner turn less to sit out, and a
+  // transformed Rakaeli one transformed turn less.
   let stunMask = 0;
+  let awakenMask = 0;
   for (let i = 0; i < b.n; i++) {
-    if (b.stun[i] > 0 && b.owner[i] === b.turn) {
+    if (b.owner[i] !== b.turn) continue;
+    if (b.stun[i] > 0) {
       b.stun[i]--;
       stunMask |= 1 << i;
+    }
+    if (b.awaken[i] > 0) {
+      b.awaken[i]--;
+      awakenMask |= 1 << i;
     }
   }
   b.bonus = -1;
@@ -246,10 +266,12 @@ function switchSide(b: FastBoard): void {
   h[b.histTop++] = oldStorm;
   h[b.histTop++] = oldBonus;
   h[b.histTop++] = stunMask;
+  h[b.histTop++] = awakenMask;
 }
 
 function undoSwitch(b: FastBoard): void {
   const h = b.hist;
+  let awakenMask = h[--b.histTop];
   let stunMask = h[--b.histTop];
   b.bonus = h[--b.histTop];
   b.storm = h[--b.histTop];
@@ -267,6 +289,7 @@ function undoSwitch(b: FastBoard): void {
   }
   b.turn = (1 - b.turn) as PlayerId;
   for (let i = 0; stunMask !== 0; i++, stunMask >>>= 1) if (stunMask & 1) b.stun[i]++;
+  for (let i = 0; awakenMask !== 0; i++, awakenMask >>>= 1) if (awakenMask & 1) b.awaken[i]++;
 }
 
 /**
@@ -430,11 +453,28 @@ export function fastUnmake(b: FastBoard, mv: number, undo: number): void {
   undoMoveExtras(b, pi);
 }
 
-/** Lay piece `pi`'s wasteland at the encoded anchor (the turn passes). Caller checked legality. */
+/**
+ * Cast piece `pi`'s skill (the turn passes): Brutile lays its wasteland at the encoded anchor,
+ * Rakaeli transforms. Caller checked legality.
+ */
 function makeSkill(b: FastBoard, mv: number): number {
   const pi = (mv >> 8) & 255;
   const anchor = mv & 255;
-  const k = WASTE_SIZE[b.lvl[pi]];
+  const h = b.hist;
+  if (b.ch[pi] === CH_RAKAELI) {
+    b.awaken[pi] = AWAKEN_TURNS;
+    h[b.histTop++] = 0; // no wasteland squares
+  } else layWaste(b, WASTE_SIZE[b.lvl[pi]], anchor);
+  b.used[pi] = 1;
+  b.skills[b.owner[pi]]++;
+  h[b.histTop++] = pi;
+  b.ply++;
+  switchSide(b);
+  return 0;
+}
+
+/** Flag the k x k wasteland with lowest corner `anchor`; pushes the new squares and their count. */
+function layWaste(b: FastBoard, k: number, anchor: number): void {
   const r0 = (anchor / BOARD_SIZE) | 0;
   const c0 = anchor - r0 * BOARD_SIZE;
   const h = b.hist;
@@ -449,19 +489,17 @@ function makeSkill(b: FastBoard, mv: number): number {
     }
   }
   h[b.histTop++] = added;
-  b.skills[b.owner[pi]]++;
-  h[b.histTop++] = b.owner[pi];
-  b.ply++;
-  switchSide(b);
-  return 0;
 }
 
 function unmakeSkill(b: FastBoard): void {
   undoSwitch(b);
   b.ply--;
   const h = b.hist;
-  const side = h[--b.histTop];
-  b.skills[side]--;
+  const pi = h[--b.histTop];
+  b.skills[b.owner[pi]]--;
+  b.used[pi] = 0;
+  // A transform can only be cast untransformed: the cast is undone back to 0.
+  if (b.ch[pi] === CH_RAKAELI) b.awaken[pi] = 0;
   const added = h[--b.histTop];
   for (let k = 0; k < added; k++) b.waste[h[--b.histTop]] = 0;
 }

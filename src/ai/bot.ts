@@ -17,16 +17,16 @@ import {
 } from '../engine';
 import type { FastBoard } from '../engine';
 import { SKILL_FLAG, fastCanSkill, fastHopGain, fastSkillFits, fastSkillSize } from '../engine/fast';
-import { CHARACTERS, CHAR_BY_CODE, CH_BRUTILE, CH_INSANER, CH_MARKI, CH_MICHELLE, CH_PICKER, CH_SAD, CH_WALK, N_CHARS } from '../engine/characters';
+import { CHARACTERS, CHAR_BY_CODE, CH_BRUTILE, CH_INSANER, CH_MARKI, CH_MICHELLE, CH_PICKER, CH_RAKAELI, CH_SAD, CH_WALK, N_CHARS } from '../engine/characters';
 import { trapBit } from '../engine/board';
-import { BOARD_SIZE, SKILL_USES_PER_MATCH, TRAPS_PER_MICHELLE } from '../engine/types';
+import { BOARD_SIZE, TRAPS_PER_MICHELLE } from '../engine/types';
 
 /** Bot strength. `extreme` (극악) is the dungeon's top tier and the AI of the top arena. */
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'extreme';
 
 export const DIFFICULTIES: readonly Difficulty[] = ['easy', 'normal', 'hard', 'extreme'];
 
-/** What the bot plays: a move, or Brutile's wasteland. */
+/** What the bot plays: a move, or a skill (Brutile's wasteland, Rakaeli's transform). */
 export type BotAction = Move | SkillAction;
 
 export function isSkillAction(a: BotAction | null | undefined): a is SkillAction {
@@ -80,6 +80,16 @@ const MAX_MOVES = 128;
 const UNIT = 100; // material unit
 /** Eval bonus for holding an unused wasteland, by Brutile's level (index = level). */
 const SKILL_POTENTIAL = [0, 15, 25, 35];
+/**
+ * Rakaeli's transform. An unused one is worth TRANSFORM_POTENTIAL (by level) while it can still be
+ * cast; a transformed Rakaeli is worth AWAKE_BONUS per transformed move left, on top of the wider
+ * reach the attack maps already credit. The potential is above the bonus of a fresh transform, so
+ * casting only pays when the search finds captures or threats within the two transformed moves.
+ */
+const TRANSFORM_POTENTIAL = [0, 20, 30, 40];
+const AWAKE_BONUS = [0, 8, 12, 16];
+/** Transform candidates need at least this score (see `transformScore`) to be searched at the root. */
+const TRANSFORM_MIN_SCORE = 1;
 /** Eval bonus per doll trap Michelle can still lay (they are laid by backing off, so modest). */
 const TRAP_POTENTIAL = 8;
 /** Eval bonus per own doll trap on the board within two squares of an enemy piece (area denial). */
@@ -127,7 +137,7 @@ function buildAttackMaps(b: FastBoard): number[] {
     // A stunned piece neither threatens nor defends anything on its owner's next turn.
     if (s < 0 || b.stun[i] > 0) continue;
     const side = b.owner[i];
-    const n = genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, attackBuf, 0, true, b.dir[i], b.storm, b.absorb[i], b.waste, b.trap);
+    const n = genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, attackBuf, 0, true, b.dir[i], b.storm, b.absorb[i], b.waste, b.trap, b.awaken[i] > 0);
     const v = b.value[i];
     for (let k = 0; k < n; k++) {
       const t = attackBuf[k];
@@ -191,7 +201,7 @@ export function evaluate(b: FastBoard, side: number): number {
       if (!facingEnemy && b.lvl[i] === 1) sc -= v * 0.15;
       sc += centerC * 3 + Math.min(room, 6);
       // An unused wasteland is worth keeping until it wins something (before the storm closes in).
-      if (b.storm === 0 && b.skills[p] < SKILL_USES_PER_MATCH) sc += SKILL_POTENTIAL[b.lvl[i]];
+      if (b.storm === 0 && b.used[i] === 0) sc += SKILL_POTENTIAL[b.lvl[i]];
     } else if (ch === CH_MICHELLE) {
       // Sideways / backward mover: central files, and unspent traps are worth a little.
       sc += centerC * 3 + Math.min(room, 6);
@@ -199,6 +209,12 @@ export function evaluate(b: FastBoard, side: number): number {
     } else if (ch === CH_PICKER) {
       // Diagonal hopper: centre and room in front give him the most hop lanes.
       sc += centerC * 4 + centerR * 2;
+    } else if (ch === CH_RAKAELI) {
+      // Forward jumper like Walk; transformed he is worth more while it lasts.
+      if (!facingEnemy) sc -= v * 0.2;
+      sc += centerC * 4 + Math.min(room, 6) * 2;
+      if (b.awaken[i] > 0) sc += AWAKE_BONUS[b.lvl[i]] * b.awaken[i];
+      else if (b.storm === 0 && b.used[i] === 0) sc += TRANSFORM_POTENTIAL[b.lvl[i]];
     }
     if (b.stun[i] > 0) sc -= v * STUN_PENALTY;
     // storm: standing next to (or on) the columns that vanish next is a liability
@@ -474,18 +490,60 @@ function searchRoot(
   return result;
 }
 
-// ---------------------------------------------------------------- wasteland (Brutile skill)
+// ---------------------------------------------------------------- skills (Brutile, Rakaeli)
+
+const transformBuf = new Int32Array(MAX_MOVES);
+const transformBuf2 = new Int32Array(MAX_MOVES);
 
 /**
- * Up to `max` promising wasteland anchors for the side to move, encoded as root moves. Areas are
- * scored by how much enemy reach they cover and how close they sit to enemy pieces (where they
- * trap or block), minus the player's own reach they would spoil.
+ * How promising Rakaeli's transform is right now: enemies inside his transformed reach (a capture
+ * on his first transformed move: 3 each) plus enemies one more transformed jump away from an empty
+ * square of it (a threat within the two moves: 1 each). 0 = nothing to gain from casting now.
+ */
+function transformScore(b: FastBoard, i: number): number {
+  const side = b.owner[i];
+  const s = b.sq[i];
+  const n = genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, transformBuf, 0, false, b.dir[i], b.storm, b.absorb[i], b.waste, b.trap, true);
+  let score = 0;
+  for (let k = 0; k < n; k++) {
+    const t = transformBuf[k];
+    if (b.waste[t]) continue;
+    if (b.occ[t] >= 0) {
+      score += 3;
+      continue;
+    }
+    // A second transformed jump from t (the piece is lifted off s for it).
+    b.occ[s] = -1;
+    const m = genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], t, transformBuf2, 0, false, b.dir[i], b.storm, b.absorb[i], b.waste, b.trap, true);
+    b.occ[s] = i;
+    for (let q = 0; q < m; q++) if (b.occ[transformBuf2[q]] >= 0 && !b.waste[transformBuf2[q]]) score += 1;
+  }
+  return score;
+}
+
+/**
+ * Up to `max` promising skill casts for the side to move, encoded as root moves: Brutile's
+ * wasteland anchors and, when it can create captures or threats, Rakaeli's transform (anchor = his
+ * own square; it does not count toward `max`). Wasteland areas are scored by how much enemy reach
+ * they cover and how close they sit to enemy pieces (where they trap or block), minus the player's
+ * own reach they would spoil. The best candidate comes first.
  */
 function skillCandidates(b: FastBoard, max: number): number[] {
+  const out: { mv: number; score: number }[] = [];
+  for (let i = 0; i < b.n; i++) {
+    if (!fastCanSkill(b, i)) continue;
+    if (b.ch[i] === CH_RAKAELI) {
+      const score = transformScore(b, i);
+      if (score >= TRANSFORM_MIN_SCORE) out.push({ mv: SKILL_FLAG | (i << 8) | b.sq[i], score });
+    } else for (const c of wasteCandidates(b, i, max)) out.push(c);
+  }
+  out.sort((x, y) => y.score - x.score);
+  return out.map((x) => x.mv);
+}
+
+/** Up to `max` scored wasteland anchors for Brutile `caster` (see `skillCandidates`). */
+function wasteCandidates(b: FastBoard, caster: number, max: number): { mv: number; score: number }[] {
   const side = b.turn;
-  let caster = -1;
-  for (let i = 0; i < b.n; i++) if (fastCanSkill(b, i)) caster = i;
-  if (caster < 0) return [];
   buildAttackMaps(b);
   const enemy = 1 - side;
   const k = fastSkillSize(b, caster);
@@ -511,7 +569,7 @@ function skillCandidates(b: FastBoard, max: number): number[] {
     if (score > 0) cands.push({ mv: SKILL_FLAG | (caster << 8) | anchor, score });
   }
   cands.sort((x, y) => y.score - x.score);
-  return cands.slice(0, max).map((x) => x.mv);
+  return cands.slice(0, max);
 }
 
 // ---------------------------------------------------------------- easy bot
@@ -520,14 +578,14 @@ function isAttackedBy(b: FastBoard, sq: number, attacker: number): boolean {
   for (let i = 0; i < b.n; i++) {
     const s = b.sq[i];
     if (s < 0 || b.owner[i] !== attacker || b.stun[i] > 0) continue;
-    const n = genTargets(b.occ, b.owner, attacker, b.ch[i], b.lvl[i], s, attackBuf, 0, false, b.dir[i], b.storm, b.absorb[i], b.waste, b.trap);
+    const n = genTargets(b.occ, b.owner, attacker, b.ch[i], b.lvl[i], s, attackBuf, 0, false, b.dir[i], b.storm, b.absorb[i], b.waste, b.trap, b.awaken[i] > 0);
     for (let k = 0; k < n; k++) if (attackBuf[k] === sq) return true;
   }
   return false;
 }
 
 function chooseEasy(b: FastBoard, rng: () => number, allowSkill = true): number {
-  // Sometimes lay the wasteland at the most obvious spot.
+  // Sometimes cast the most obvious skill (the best wasteland spot, or a promising transform).
   const sk = allowSkill ? skillCandidates(b, 1) : [];
   if (sk.length && rng() < 0.25) return sk[0];
   const side = b.turn;
@@ -567,7 +625,7 @@ function chooseEasy(b: FastBoard, rng: () => number, allowSkill = true): number 
 // ---------------------------------------------------------------- public API
 
 /**
- * Pick an action for `state.turn`: a move or (with `allowSkill`, the default) Brutile's wasteland.
+ * Pick an action for `state.turn`: a move or (with `allowSkill`, the default) a skill.
  * Returns null only if there is nothing to play (no legal move; the engine auto-passes).
  */
 export function chooseAction(state: GameState, difficulty: Difficulty, opts: ChooseMoveOptions & { allowSkill?: boolean } = {}): BotAction | null {

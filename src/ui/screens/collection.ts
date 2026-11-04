@@ -11,7 +11,7 @@ import { buyBlocker, getProfile, isOwned, priceOf, setGrade, subscribeProfile, u
 import { arenaForRating, unlockArenaOf, upgradeCost } from '../../meta/progression';
 import { essenceIcon, tokenIcon, topBar } from '../components/currency';
 import { confirmBuy, confirmUpgrade } from '../components/purchase';
-import { artMissing, movementDiagram, rarityChip, starsOf, unitArt } from '../components/piece';
+import { artMissing, cardArtUrl, movementDiagram, rarityChip, starsOf, unitArt } from '../components/piece';
 import { Disposables, h, replaceChildren } from '../dom';
 import { icon } from '../icons';
 import { playHomeMusic } from '../musicBridge';
@@ -27,6 +27,7 @@ export const TIER_TITLE: Record<CharacterId, [string, string, string]> = {
   brutile: ['떠돌이 마녀', '독초의 흑마녀', '불모의 여왕'],
   michelle: ['인형 소녀', '속삭이는 인형사', '저주 인형의 주인'],
   picker: ['카우보이', '사막의 올가미꾼', '황야의 전설'],
+  rakaeli: ['눈가린 천사', '추락한 천사', '타천의 군주'],
 };
 
 export const ROLE: Record<CharacterId, { role: string; trait: string }> = {
@@ -37,26 +38,35 @@ export const ROLE: Record<CharacterId, { role: string; trait: string }> = {
   brutile: { role: '저주형 마녀', trait: '한 칸씩 걷는 느린 마녀 · 성급이 오를수록 사방으로' },
   michelle: { role: '함정형 견제수', trait: '뒤로 물러날 때 인형 함정(한 판 3개) · 밟은 상대는 1턴 속박' },
   picker: { role: '돌파형 사냥꾼', trait: '대각선 콩콩 점프 · 막히지 않고 지나는 적을 모두 잡음 · 상대 함정에서 멈춤' },
+  rakaeli: { role: '변신형 점퍼', trait: '앞쪽 블록으로 점프 · 타천하면 2번 이동하는 동안 점프 범위가 크게 넓어짐' },
 };
 
-/** Numeric "reach" per level for the stat bar (max squares reachable on an open board). */
-function reachCount(id: CharacterId, lv: Level): number {
-  const tbl: Record<CharacterId, [number, number, number]> = { sad: [4, 8, 12], marki: [3, 4, 6], walk: [5, 7, 9], insaner: [8, 12, 24], brutile: [2, 3, 8], michelle: [3, 6, 7], picker: [4, 8, 12] };
+/**
+ * Numeric "reach" per level for the stat bar (max squares reachable on an open board); `awake` is
+ * Rakaeli's transformed form.
+ */
+function reachCount(id: CharacterId, lv: Level, awake = false): number {
+  const tbl: Record<CharacterId, [number, number, number]> = { sad: [4, 8, 12], marki: [3, 4, 6], walk: [5, 7, 9], insaner: [8, 12, 24], brutile: [2, 3, 8], michelle: [3, 6, 7], picker: [4, 8, 12], rakaeli: [3, 6, 7] };
+  if (awake && id === 'rakaeli') return [5, 10, 16][lv - 1];
   return tbl[id][lv - 1];
 }
 
 /** The unit's illustration at a level (the board is top-down only for now, so no 3D renders). */
-function unitPreview(id: CharacterId, lv: Level, size = 84) {
-  return unitArt(id, lv, { size, cls: 'grade-pick__art' });
+function unitPreview(id: CharacterId, lv: Level, size = 84, awake = false) {
+  return unitArt(id, lv, { size, cls: 'grade-pick__art', awake });
 }
+
+/** Which form a two-form card shows (Rakaeli: 기본 / 타천). Per screen visit, default base. */
+const formShown = new Map<CharacterId, 'base' | 'awake'>();
 
 /** Everything a card's look depends on; a card is rebuilt only when its key changes. */
 function cardKey(p: Profile, id: CharacterId): string {
-  return `${p.owned[id]}|${p.grades[id]}|${upgradeBlocker(p, id) ?? 'ok'}|${buyBlocker(p, id) ?? 'ok'}`;
+  return `${p.owned[id]}|${p.grades[id]}|${upgradeBlocker(p, id) ?? 'ok'}|${buyBlocker(p, id) ?? 'ok'}|${formShown.get(id) ?? 'base'}`;
 }
 
 export function collectionScreen(router: Router): Screen {
   const bag = new Disposables();
+  formShown.clear();
   const bar = topBar(router);
   bag.add(bar.dispose);
   const list = h('div', { class: 'scroll-body collection__body' });
@@ -143,6 +153,33 @@ export function collectionScreen(router: Router): Screen {
     );
   };
 
+  /** 기본 / 타천 switch of a two-form character (the card is rebuilt in place). */
+  const formToggle = (id: CharacterId, awake: boolean) => {
+    const def = CHARACTERS[id];
+    const pick = (to: 'base' | 'awake') => {
+      if ((formShown.get(id) ?? 'base') === to) return;
+      formShown.set(id, to);
+      sfx(to === 'awake' ? 'levelup' : 'select');
+      haptic('light');
+      update();
+    };
+    const btn = (to: 'base' | 'awake', label: string) =>
+      h(
+        'button',
+        {
+          class: `form-toggle__btn${(to === 'awake') === awake ? ' is-active' : ''}${to === 'awake' ? ' form-toggle__btn--awake' : ''}`,
+          type: 'button',
+          role: 'tab',
+          'aria-selected': String((to === 'awake') === awake),
+          'data-action': 'form',
+          'data-form': to,
+          onclick: () => pick(to),
+        },
+        label,
+      );
+    return h('div', { class: 'form-toggle', role: 'tablist', 'aria-label': `${def.nameKo} 형태` }, btn('base', '기본'), btn('awake', def.skill?.nameKo ?? '변신'));
+  };
+
   const card = (id: CharacterId) => {
     const p = getProfile();
     const def = CHARACTERS[id];
@@ -151,14 +188,24 @@ export function collectionScreen(router: Router): Screen {
     const grade = p.grades[id];
     const levels: Level[] = [1, 2, 3];
     const picked = justPicked === id;
-    const reachMax = reachCount(id, 3) > 12 ? 24 : 12;
+    // Rakaeli has two forms: the card shows the one picked with the 기본 / 타천 switch.
+    const twoForms = !!def.awakeDescKo;
+    const awake = twoForms && formShown.get(id) === 'awake';
+    const descOf = (lv: Level) => (awake ? def.awakeDescKo![lv - 1] : def.descKo[lv - 1]);
+    const reachMax = Math.max(reachCount(id, 3), reachCount(id, 3, twoForms)) > 12 ? 24 : 12;
     return h(
       'article',
-      { class: `unit-card rarity-${def.rarity} tier-${grade}${picked ? ' is-picked' : ''}${locked ? ' is-locked' : ''}`, 'data-character': id, 'data-level': grade, 'data-owned': owned },
+      {
+        class: `unit-card rarity-${def.rarity} tier-${grade}${picked ? ' is-picked' : ''}${locked ? ' is-locked' : ''}${awake ? ' is-awake' : ''}`,
+        'data-character': id,
+        'data-level': grade,
+        'data-owned': owned,
+        'data-form': twoForms ? (awake ? 'awake' : 'base') : undefined,
+      },
       h(
         'header',
         { class: 'unit-card__banner' },
-        h('img', { class: 'unit-card__art', src: `./chars/${id}-lv${grade}.jpg`, alt: '', loading: 'lazy', decoding: 'async', draggable: 'false', onerror: artMissing }),
+        h('img', { class: 'unit-card__art', src: cardArtUrl(id, grade, awake), alt: '', loading: 'lazy', decoding: 'async', draggable: 'false', onerror: artMissing }),
         h('div', { class: 'unit-card__shine', 'aria-hidden': 'true' }),
         h(
           'div',
@@ -178,6 +225,7 @@ export function collectionScreen(router: Router): Screen {
         h('div', { class: 'unit-card__tier', 'aria-hidden': 'true' }, levels.map((lv) => h('i', { class: lv <= owned ? 'is-on' : '' }))),
         locked ? h('div', { class: 'unit-card__veil', 'aria-hidden': 'true' }, icon('lock', 34)) : null,
       ),
+      twoForms ? formToggle(id, awake) : null,
       actionRow(p, id),
       h('p', { class: 'unit-card__trait' }, icon('info', 14), ROLE[id].trait),
       def.passiveKo ? h('p', { class: 'unit-card__passive' }, icon('magic', 14), h('span', null, h('b', null, '패시브 · 흡수'), ' ', def.passiveKo)) : null,
@@ -185,7 +233,7 @@ export function collectionScreen(router: Router): Screen {
       def.skill
         ? h('p', { class: 'unit-card__passive unit-card__skill' }, icon('magic', 14), h('span', null, h('b', null, `스킬 · ${def.skill.nameKo}`), ' ', def.skill.descKo[grade - 1], ' · 4턴째부터 한 판에 1번, 자기장이 좁혀오면 금지'))
         : null,
-      h('div', { class: 'unit-card__stats' }, statBar('이동 범위', reachCount(id, grade), reachMax)),
+      h('div', { class: 'unit-card__stats' }, statBar(awake ? `${def.skill?.nameKo ?? ''} 이동 범위` : '이동 범위', reachCount(id, grade, awake), reachMax)),
       // Grade picker: owned stars can be fielded; higher ones show locked with their token cost.
       locked
         ? null
@@ -218,27 +266,27 @@ export function collectionScreen(router: Router): Screen {
                       }
                     },
                   },
-                  unitPreview(id, lv, 46),
+                  unitPreview(id, lv, 46, awake),
                   h('span', { class: 'grade-pick__stars', 'aria-hidden': 'true' }, starsOf(lv)),
                   h('span', { class: 'grade-pick__name' }, `${lv}성`),
-                  have ? movementDiagram(id, lv, { cell: 6 }) : h('span', { class: 'grade-pick__cost' }, icon('lock', 12), tokenIcon(14), h('b', { class: 't-num' }, String(stepCost))),
+                  have ? movementDiagram(id, lv, { cell: 6, awake }) : h('span', { class: 'grade-pick__cost' }, icon('lock', 12), tokenIcon(14), h('b', { class: 't-num' }, String(stepCost))),
                 );
               }),
             ),
-            h('p', { class: 'grade-pick__desc' }, def.descKo[grade - 1]),
+            h('p', { class: 'grade-pick__desc' }, descOf(grade)),
           ),
       h(
         'table',
         { class: 'ability-table' },
-        h('caption', { class: 'sr-only' }, `${def.nameKo} 성급별 능력`),
+        h('caption', { class: 'sr-only' }, `${def.nameKo}${awake ? ` ${def.skill?.nameKo ?? ''}` : ''} 성급별 능력`),
         h('tbody', null,
           levels.map((lv) =>
             h(
               'tr',
               { class: lv === grade && !locked ? 'is-current' : '' },
               h('th', { scope: 'row' }, `${lv}성`),
-              h('td', { class: 'ability-table__desc' }, def.descKo[lv - 1]),
-              h('td', { class: 'ability-table__diagram' }, movementDiagram(id, lv, { cell: 6 })),
+              h('td', { class: 'ability-table__desc' }, descOf(lv)),
+              h('td', { class: 'ability-table__diagram' }, movementDiagram(id, lv, { cell: 6, awake })),
             ),
           ),
         ),

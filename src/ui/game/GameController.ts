@@ -59,6 +59,11 @@ export type ControllerEvent =
   | { type: 'absorb'; player: PlayerId; pieceId: string; character: CharacterId }
   /** `pieceId` (Brutile) laid wasteland on `squares`. */
   | { type: 'skill'; player: PlayerId; pieceId: string; squares: number[] }
+  /**
+   * `pieceId` (Rakaeli) transformed ('on', right after the cast) or turned back ('off', when his
+   * owner's turn ended with his last transformed turn; he is still on the board).
+   */
+  | { type: 'awaken'; phase: 'on' | 'off'; player: PlayerId; pieceId: string }
   /** `pieceId` (Michelle) left a doll trap on `square` (her `trapsLeft` traps remain). */
   | { type: 'trap'; player: PlayerId; pieceId: string; square: Pos; trapsLeft: number }
   /** `pieceId` (owned by `player`) ended its move on an enemy doll trap and is stunned. */
@@ -412,7 +417,8 @@ export class GameController {
     if (gen !== this.gen || this.disposed) return;
     this._state = next;
     const entry = next.history[prev.history.length];
-    if (entry?.kind === 'skill') this.emit({ type: 'skill', player: entry.player, pieceId: entry.pieceId, squares: entry.squares });
+    if (entry?.kind === 'skill' && entry.transform) this.emit({ type: 'awaken', phase: 'on', player: entry.player, pieceId: entry.pieceId });
+    else if (entry?.kind === 'skill') this.emit({ type: 'skill', player: entry.player, pieceId: entry.pieceId, squares: entry.squares });
     this.announce(prev, next, 1);
     this.checkEndOrContinue(true);
   }
@@ -436,9 +442,16 @@ export class GameController {
 
   /**
    * Events for everything the engine did after the action itself: auto-passes, absorptions,
-   * chain moves granted, and storm advances (`skip` = history entries that were the action).
+   * chain moves granted, transforms that ended, and storm advances (`skip` = history entries that
+   * were the action).
    */
   private announce(prev: GameState, next: GameState, skip: number): void {
+    // A transformed Rakaeli whose last transformed turn just ended (and who is still standing).
+    for (const p of prev.pieces) {
+      if (!p.awaken) continue;
+      const q = getPieceById(next, p.id);
+      if (q && !q.awaken) this.emit({ type: 'awaken', phase: 'off', player: q.owner, pieceId: q.id });
+    }
     const action = next.history[prev.history.length];
     if (action?.kind === 'move') {
       const m = action.move;

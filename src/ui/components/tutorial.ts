@@ -26,6 +26,7 @@ const SHORT_MOVE: Record<CharacterId, string> = {
   brutile: '대각선 한 칸 · 불모지 스킬',
   michelle: '좌·우·뒤 이동 · 물러나며 인형 함정',
   picker: '대각선 콩콩 점프 · 지나는 적 모두 잡기',
+  rakaeli: '앞쪽 블록 점프 · 타천하면 범위 확장',
 };
 
 function goalArt(): Child {
@@ -45,7 +46,7 @@ function goalArt(): Child {
 }
 
 function charactersArt(): Child {
-  // Seven characters: a two-column list of compact rows (art, name + concept, one-line move, diagram).
+  // Eight characters: a two-column list of compact rows (art, name + concept, one-line move, diagram).
   return h(
     'div',
     { class: 'tut-art tut-art--chars' },

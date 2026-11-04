@@ -8,6 +8,12 @@
  */
 import type { CharacterId, PlayerId, Rarity } from '../engine/types';
 
+/**
+ * Characters every table below lists explicitly. Rakaeli is added on top through a cast, so these
+ * tables compile whether or not `CharacterId` already contains 'rakaeli'.
+ */
+type CoreCharacterId = Exclude<CharacterId, 'rakaeli'>;
+
 export interface TeamColors {
   /** Main body color of pieces / primary accent for the team. */
   main: string;
@@ -81,7 +87,7 @@ export const RARITY_RING: Record<Rarity, { core: string; glow: string; glowAmt: 
  * sad = holy gold, marki = molten orange + dust, walk = shield blue-white, insaner = violet/crimson,
  * brutile = sickly toxic green over black-purple (witch curse).
  */
-export const CHARACTER_FX: Record<CharacterId, { primary: string; secondary: string; core: string }> = {
+const CORE_FX: Record<CoreCharacterId, { primary: string; secondary: string; core: string }> = {
   sad: { primary: '#FFC93A', secondary: '#FFF0B8', core: '#FFFFFF' },
   marki: { primary: '#FF6A1F', secondary: '#C9B9A0', core: '#FFE2B0' },
   walk: { primary: '#7CC8FF', secondary: '#DDF2FF', core: '#FFFFFF' },
@@ -91,6 +97,16 @@ export const CHARACTER_FX: Record<CharacterId, { primary: string; secondary: str
   michelle: { primary: '#B9A6FF', secondary: '#4B3B6E', core: '#F3EEFF' },
   picker: { primary: '#FFB547', secondary: '#C9894A', core: '#FFF1D6' },
 };
+
+/**
+ * Rakaeli's base form: pale ash feathers and a dim halo gold. His transformed form ("타천") uses
+ * RAKAELI_AWAKE_FX instead: crimson flame, violet aura, a white-hot core.
+ */
+export const CHARACTER_FX = {
+  ...CORE_FX,
+  rakaeli: { primary: '#D9D3E0', secondary: '#C9B57A', core: '#FFFFFF' },
+} as Record<CharacterId, { primary: string; secondary: string; core: string }>;
+export const RAKAELI_AWAKE_FX = { primary: '#FF2742', secondary: '#9A3CFF', core: '#FFE0D4' } as const;
 
 /**
  * Brutile's wasteland ("불모지"): cracked black-green earth split by sickly toxic-green glowing
@@ -138,7 +154,8 @@ export const RARITY_GLOW: Record<Rarity, number> = {
  * Character -> rarity, kept locally so the renderer does not depend on the engine's
  * runtime data. Must match CHARACTERS in src/engine.
  */
-export const CHARACTER_RARITY: Record<CharacterId, Rarity> = {
+export const CHARACTER_RARITY = {
+  rakaeli: 'epic',
   sad: 'common',
   marki: 'rare',
   walk: 'epic',
@@ -146,7 +163,7 @@ export const CHARACTER_RARITY: Record<CharacterId, Rarity> = {
   brutile: 'legendary',
   michelle: 'common',
   picker: 'rare',
-};
+} satisfies Record<CoreCharacterId, Rarity> & { rakaeli: Rarity } as Record<CharacterId, Rarity>;
 
 /**
  * Board surfaces (doc palette). v6 "tactical hologram" (docs/design/v6-clean-tactical.md): a slim

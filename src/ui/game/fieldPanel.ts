@@ -7,7 +7,7 @@
  * The drawer does NOT pause the turn clock (no free thinking time); it re-renders on every
  * controller change while open, but only when something it shows actually changed.
  */
-import { BOARD_SIZE, CHARACTERS, ZONE_DEPTH, SKILL_UNLOCK_PLY, WASTE_SIZE, getTargetsForPiece, inStorm, isStunned, pieceDir, skillUnlockIn, trapsLeft, type FormationSlot, type GameState, type Piece, type PlayerId } from '../../engine';
+import { BOARD_SIZE, CHARACTERS, ZONE_DEPTH, SKILL_UNLOCK_PLY, WASTE_SIZE, getTargetsForPiece, inStorm, isAwake, isStunned, pieceDir, skillUnlockIn, trapsLeft, type FormationSlot, type GameState, type Piece, type PlayerId } from '../../engine';
 import { movementDiagram, rarityChip, starsOf, unitArt } from '../components/piece';
 import { overlayRoot, pushOverlay, registerForceClose } from '../components/overlay';
 import { h, replaceChildren } from '../dom';
@@ -37,7 +37,7 @@ export interface FieldPanel {
 
 function pieceKey(s: GameState): string {
   return (
-    s.pieces.map((p) => `${p.id}@${p.pos.r},${p.pos.c}:${(p.absorbed ?? []).map((a) => a.character + a.level).join('')}:${p.stun ?? 0}`).join('|') +
+    s.pieces.map((p) => `${p.id}@${p.pos.r},${p.pos.c}:${(p.absorbed ?? []).map((a) => a.character + a.level).join('')}:${p.stun ?? 0}:${p.awaken ?? 0}:${p.skillUsed ? 1 : 0}`).join('|') +
     `#${s.storm}#${s.waste.length}#${s.skillsUsed.join(',')}#${s.ply >= SKILL_UNLOCK_PLY}#${(s.traps ?? []).length}`
   );
 }
@@ -63,7 +63,7 @@ function miniMap(s: GameState, focus: string | null, onPick: (id: string) => voi
               'aria-label': `${p.owner === 0 ? '내' : '상대'} ${CHARACTERS[p.character].nameKo} ${squareLabel(r, c)}`,
               onclick: () => onPick(p.id),
             },
-            unitArt(p.character, p.level, { owner: p.owner, cls: 'fmap__art' }),
+            unitArt(p.character, p.level, { owner: p.owner, cls: `fmap__art${isAwake(p) ? ' is-awake' : ''}`, awake: isAwake(p) }),
           ),
         );
       } else grid.appendChild(h('span', { class: cls }));
@@ -72,11 +72,22 @@ function miniMap(s: GameState, focus: string | null, onPick: (id: string) => voi
   return grid;
 }
 
+/** Skill state line of a skill character's info card (per piece: each skill character casts once). */
+function skillStatus(piece: Piece | undefined, s: GameState): string {
+  if (!piece) return '—';
+  if (isAwake(piece)) return `타천 중 · ${piece.awaken}번 더 이동`;
+  if (piece.skillUsed) return '사용함';
+  if (s.storm > 0) return '자기장으로 사용 불가';
+  if (s.ply < SKILL_UNLOCK_PLY) return `${skillUnlockIn(s)}턴 후 사용 가능`;
+  return CHARACTERS[piece.character].skill?.kind === 'transform' ? '사용 가능 · 2번 이동 동안 범위 확장' : '사용 가능 · 닿으면 소멸';
+}
+
 function infoCard(slot: FormationSlot, owner: PlayerId, s: GameState, focus: string | null): HTMLElement {
   const id = `p${owner}-${slot.character}`;
   const piece = s.pieces.find((p) => p.id === id);
   const def = CHARACTERS[slot.character];
   const level = piece?.level ?? slot.level;
+  const awake = !!piece && isAwake(piece);
   let status: string;
   if (!piece) status = '격파됨';
   else if (isStunned(piece)) status = `${squareLabel(piece.pos.r, piece.pos.c)} · 속박 · 1턴 쉬어요`;
@@ -85,14 +96,15 @@ function infoCard(slot: FormationSlot, owner: PlayerId, s: GameState, focus: str
     const caps = reach.filter((m) => m.captureId).length;
     status = `${squareLabel(piece.pos.r, piece.pos.c)} · 이동 ${reach.length}칸${caps ? owner === 1 ? ` · 내 말 ${caps}개 위협` : ` · 잡기 ${caps}` : ''}`;
   }
+  const skillName = def.skill ? (def.skill.kind === 'waste' ? `${def.skill.nameKo} ${WASTE_SIZE[level]}×${WASTE_SIZE[level]}` : def.skill.nameKo) : '';
   return h(
     'article',
     {
-      class: `fcard owner-${owner} rarity-${def.rarity}${piece ? '' : ' is-dead'}${focus === id ? ' is-focus' : ''}`,
+      class: `fcard owner-${owner} rarity-${def.rarity}${piece ? '' : ' is-dead'}${focus === id ? ' is-focus' : ''}${awake ? ' is-awake' : ''}`,
       'data-piece': id,
       'aria-label': `${owner === 0 ? '내' : '상대'} ${def.nameKo} ${level}성`,
     },
-    h('div', { class: 'fcard__art' }, unitArt(slot.character, level, { size: 52, owner })),
+    h('div', { class: 'fcard__art' }, unitArt(slot.character, level, { size: 52, owner, awake })),
     h(
       'div',
       { class: 'fcard__main' },
@@ -104,24 +116,9 @@ function infoCard(slot: FormationSlot, owner: PlayerId, s: GameState, focus: str
         rarityChip(def.rarity),
       ),
       h('div', { class: `fcard__status${piece ? '' : ' is-dead'}` }, status),
-      h('div', { class: 'fcard__desc' }, def.descKo[level - 1]),
+      h('div', { class: 'fcard__desc' }, awake && def.awakeDescKo ? `${def.skill?.nameKo ?? ''} · ${def.awakeDescKo[level - 1]}` : def.descKo[level - 1]),
       def.skill
-        ? h(
-            'div',
-            { class: 'fcard__skill' },
-            icon('magic', 14),
-            h('b', null, `스킬 · ${def.skill.nameKo} ${WASTE_SIZE[level]}×${WASTE_SIZE[level]}`),
-            ' ',
-            s.skillsUsed[owner] > 0
-              ? '사용함'
-              : s.storm > 0
-                ? '자기장으로 사용 불가'
-                : s.ply < SKILL_UNLOCK_PLY
-                  ? `${skillUnlockIn(s)}턴 후 사용 가능`
-                  : piece
-                    ? '사용 가능 · 닿으면 소멸'
-                    : '—',
-          )
+        ? h('div', { class: `fcard__skill${awake ? ' is-active' : ''}` }, icon('magic', 14), h('b', null, `스킬 · ${skillName}`), ' ', skillStatus(piece, s))
         : null,
       def.trait
         ? h(
@@ -146,7 +143,7 @@ function infoCard(slot: FormationSlot, owner: PlayerId, s: GameState, focus: str
           : null,
     ),
     // Diagrams are drawn "forward = up"; a piece heading down the board gets it turned around.
-    h('div', { class: `fcard__diagram${(piece ? pieceDir(piece) : owner === 0 ? 1 : -1) === -1 ? ' is-flipped' : ''}` }, movementDiagram(slot.character, level, { cell: 7, owner })),
+    h('div', { class: `fcard__diagram${(piece ? pieceDir(piece) : owner === 0 ? 1 : -1) === -1 ? ' is-flipped' : ''}` }, movementDiagram(slot.character, level, { cell: 7, owner, awake })),
   );
 }
 

@@ -11,12 +11,16 @@ import {
   WASTE_SIZE,
   capturedIds,
   createGame,
+  AWAKEN_TURNS,
   getPieceById,
+  getTargetsForPiece,
+  isAwake,
   isStunned,
   josa,
   materialScore,
   skillAnchors,
   skillBlock,
+  skillKindOf,
   skillUnlockIn,
   sqOf,
   suddenDeathIn,
@@ -31,6 +35,7 @@ import {
   type SkillBlock,
 } from '../../engine';
 import { createBoardView, type IBoardView } from '../../render';
+import type { VoiceEvent } from '../../audio/voice';
 import { PACING } from '../../meta/economy';
 import { getProfile, setProfile, settleMatch, updateProfile, type MatchOutcome, type MatchSummary } from '../../meta/profile';
 import { DUNGEON_LABEL, arenaById } from '../../meta/progression';
@@ -58,6 +63,20 @@ import '../game/hud.css';
 const SUDDEN_DEATH_WARN_TURNS = 10;
 /** Plies -> turns as the player counts them (one move each = one turn). */
 const pliesToTurns = (plies: number) => Math.ceil(plies / 2);
+
+/** The board's optional transform FX (Rakaeli's "타천"); boards without it simply skip it. */
+interface AwakenFxView {
+  playAwaken?(pieceId: string, phase: 'on' | 'off'): Promise<void>;
+}
+
+/** Play the transform-in ('on') or revert ('off') FX when the board has it. Never throws. */
+async function playAwaken(board: IBoardView | null, pieceId: string, phase: 'on' | 'off'): Promise<void> {
+  try {
+    await (board as (IBoardView & AwakenFxView) | null)?.playAwaken?.(pieceId, phase);
+  } catch (e) {
+    console.warn('awaken fx failed', e);
+  }
+}
 
 export function gameScreen(router: Router, params: GameParams): Screen {
   const bag = new Disposables();
@@ -249,6 +268,10 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   let trapKey = '';
   /** Brutile's wasteland targeting (the player is choosing where to lay it). */
   let targeting: { pieceId: string; level: 1 | 2 | 3; anchors: Set<number>; preview: Pos | null } | null = null;
+  /** Rakaeli's transform waiting for the player's confirm (no target to pick: his own square). */
+  let transformAsk: string | null = null;
+  /** The first transform of the match gets the coach toast. */
+  let transformTipShown = false;
   const notified = { unlock: false, storm: false };
   let stormStarted = initial.stormIn !== null;
   const passToastShown = [false, false];
@@ -288,6 +311,9 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     bag.timeout(() => toast('좋아요! 상대 말 3개를 모두 잡으면 승리해요', { tone: 'success', duration: 2600 }), 450);
   };
 
+  /** A transformed Rakaeli dies with his transformed voice and sound. */
+  const deathEvent = (p: Piece): VoiceEvent => (isAwake(p) ? 'awake-death' : 'death');
+
   /**
    * Sound + haptics for one move, split into lift-off (now), the strike landing (capturing moves:
    * the board's onImpact, or the end of the animation on boards without it) and the landing.
@@ -308,9 +334,16 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     impacted.clear();
     cutInShown = false;
     shout = null;
-    sfx(mover?.character === 'walk' || mover?.character === 'picker' ? 'jump' : 'move');
+    sfx(mover?.character === 'walk' || mover?.character === 'picker' || mover?.character === 'rakaeli' ? 'jump' : 'move');
     if (!mover) return;
     const vo = { level: mover.level, owner: mover.owner };
+    // A transformed Rakaeli speaks (and sounds) in his transformed voice.
+    if (isAwake(mover)) {
+      playCharSfx(mover.character, move.captureId ? 'awake-capture' : 'awake-move');
+      const rel = playVoice(mover.character, move.captureId ? 'awake-capture' : 'awake-move', vo);
+      shout = move.captureId && rel ? (VOICE_TEXT[rel] ?? null) : null;
+      return;
+    }
     const dist = Math.max(Math.abs(move.to.r - move.from.r), Math.abs(move.to.c - move.from.c));
     // Signature moves: Marki's long charge, Walk's wide leap.
     const signature = (mover.character === 'marki' && dist >= 3) || (mover.character === 'walk' && Math.abs(move.to.c - move.from.c) >= 2);
@@ -339,17 +372,17 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       playCharSfx(mover.character, 'capture');
       if (!cutInShown) {
         cutInShown = true;
-        spawnCutIn(cutInEl({ character: mover.character, level: mover.level, owner: mover.owner, kind: 'capture', line: shout ?? undefined }));
+        spawnCutIn(cutInEl({ character: mover.character, level: mover.level, owner: mover.owner, kind: 'capture', line: shout ?? undefined, awake: isAwake(mover) }));
       }
     }
     const v = victims.find((p) => p.id === id);
-    if (v) playCharSfx(v.character, 'death');
+    if (v) playCharSfx(v.character, deathEvent(v));
   };
   const moveFeedbackEnd = (move: Move) => {
     // Boards without onImpact (or a hop cut short): every victim is still struck once.
     for (const id of capturedIds(move)) impact({ ...move, captureId: id });
     if (move.wasted) {
-      if (mover) playCharSfx(mover.character, 'death');
+      if (mover) playCharSfx(mover.character, deathEvent(mover));
       playWasteDeath();
       haptic('warn');
       const mine = move.pieceId.startsWith(`p${HUMAN}-`);
@@ -376,6 +409,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     chain: '연쇄 이동 중',
     notYet: '',
     used: '이번 판에 이미 사용',
+    active: '타천 중',
     storm: '자기장 이후 사용 불가',
     stunned: '속박 · 다음 턴에 사용 가능',
     ended: '',
@@ -385,8 +419,9 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   const onHandTap = (pieceId: string) => {
     const c = ctrl;
     if (!c) return;
-    if (targeting) {
+    if (targeting || transformAsk) {
       stopTargeting();
+      transformAsk = null;
       renderSnapshot(c.snapshot());
     }
     const p = getPieceById(c.state, pieceId);
@@ -407,8 +442,9 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   const onOppHandTap = (pieceId: string) => {
     const c = ctrl;
     if (!c) return;
-    if (targeting) {
+    if (targeting || transformAsk) {
       stopTargeting();
+      transformAsk = null;
       renderSnapshot(c.snapshot());
     }
     const p = getPieceById(c.state, pieceId);
@@ -471,11 +507,47 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     if (ctrl) renderSnapshot(ctrl.snapshot());
   };
 
-  /** The dock below the board: chain move, Brutile's skill button, or skill targeting controls. */
+  /** Rakaeli's skill button: one tap asks for a confirm (the board previews the transformed reach). */
+  const askTransform = (pieceId: string) => {
+    const c = ctrl;
+    if (!c || skillBlock(c.state, pieceId) !== null) return;
+    transformAsk = pieceId;
+    sfx('select');
+    haptic('light');
+    renderSnapshot(c.snapshot());
+  };
+
+  const cancelTransform = () => {
+    if (!transformAsk) return;
+    transformAsk = null;
+    sfx('tap');
+    if (ctrl) renderSnapshot(ctrl.snapshot());
+  };
+
+  const confirmTransform = () => {
+    const c = ctrl;
+    const id = transformAsk;
+    transformAsk = null;
+    const p = c && id ? getPieceById(c.state, id) : undefined;
+    if (!c || !p) return;
+    if (!c.trySkill({ kind: 'skill', pieceId: p.id, anchor: { ...p.pos } })) {
+      toast(`지금은 ${CHARACTERS[p.character].skill?.nameKo ?? '스킬'}을 쓸 수 없어요`, { tone: 'warn' });
+      renderSnapshot(c.snapshot());
+    }
+  };
+
+  /** Squares a piece would reach once transformed (the confirm preview). */
+  const transformedReach = (s: GameState, pieceId: string): Move[] => {
+    const p = getPieceById(s, pieceId);
+    return p ? getTargetsForPiece(s, { ...p, awaken: AWAKEN_TURNS }) : [];
+  };
+
+  /** The dock below the board: chain move, a skill button, wasteland targeting or the transform confirm. */
   const renderDock = (snap: ControllerSnapshot) => {
     const s = snap.state;
     const myTurn = snap.phase === 'humanTurn' && !snap.paused;
     if (targeting && (!myTurn || !getPieceById(s, targeting.pieceId) || skillBlock(s, targeting.pieceId) !== null)) stopTargeting();
+    if (transformAsk && (!myTurn || skillBlock(s, transformAsk) !== null)) transformAsk = null;
     const sel = snap.selection ? getPieceById(s, snap.selection.pieceId) : undefined;
     let key = '';
     let content: HTMLElement[] = [];
@@ -484,6 +556,15 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       content = [
         h('span', { class: 'action-bar__text' }, icon('magic', 16), '연쇄 이동 · 한 번 더!'),
         h('button', { class: 'btn btn--secondary btn--sm', type: 'button', 'data-action': 'skip-bonus', onclick: () => ctrl?.skipBonus() }, '건너뛰기'),
+      ];
+    } else if (transformAsk) {
+      const p = getPieceById(s, transformAsk)!;
+      const def = CHARACTERS[p.character];
+      key = `transform|${p.id}`;
+      content = [
+        h('span', { class: 'action-bar__text' }, icon('magic', 16), `${def.skill!.nameKo} · ${AWAKEN_TURNS - 1}번 이동 동안 범위 확장`),
+        h('button', { class: 'btn btn--text btn--sm', type: 'button', 'data-action': 'skill-cancel', onclick: () => cancelTransform() }, '취소'),
+        h('button', { class: 'btn btn--success btn--sm action-bar__go action-bar__go--awake', type: 'button', 'data-action': 'skill-confirm', onclick: () => confirmTransform() }, def.skill!.nameKo),
       ];
     } else if (targeting) {
       const t = targeting;
@@ -497,13 +578,22 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       ];
     } else if (myTurn && sel && sel.owner === HUMAN && CHARACTERS[sel.character].skill) {
       const block = skillBlock(s, sel.id);
+      const transform = skillKindOf(sel.character) === 'transform';
       const k = WASTE_SIZE[sel.level];
-      const reason = block === 'notYet' ? `${skillUnlockIn(s)}턴 후 사용 가능` : block ? BLOCK_TEXT[block] : `빈 칸 ${k}×${k} · 닿으면 소멸`;
+      const ready = transform ? `${AWAKEN_TURNS - 1}번 이동 동안 범위 확장` : `빈 칸 ${k}×${k} · 닿으면 소멸`;
+      const reason =
+        block === 'notYet' ? `${skillUnlockIn(s)}턴 후 사용 가능` : block === 'active' ? `타천 중 · ${sel.awaken ?? 0}번 더 이동` : block ? BLOCK_TEXT[block] : ready;
       key = `skill|${sel.id}|${block}|${reason}`;
       content = [
         h(
           'button',
-          { class: `skill-btn${block ? ' is-blocked' : ''}`, type: 'button', 'data-action': 'skill', disabled: !!block, onclick: () => startTargeting(sel.id) },
+          {
+            class: `skill-btn${block ? ' is-blocked' : ''}${transform ? ' skill-btn--awake' : ''}${block === 'active' ? ' is-active' : ''}`,
+            type: 'button',
+            'data-action': 'skill',
+            disabled: !!block,
+            onclick: () => (transform ? askTransform(sel.id) : startTargeting(sel.id)),
+          },
           h('span', { class: 'skill-btn__icon', 'aria-hidden': 'true' }, icon('magic', 20)),
           h('span', { class: 'skill-btn__main' }, h('span', { class: 'skill-btn__name' }, `스킬 · ${CHARACTERS[sel.character].skill!.nameKo}`), h('span', { class: 'skill-btn__sub' }, reason)),
         ),
@@ -516,19 +606,27 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     replaceChildren(actionBar, ...content);
   };
 
-  /** One-time notices: the skill unlocking, and the storm about to forbid it. */
+  /** One-time notices: the skills unlocking, and the storm about to forbid them. */
   const skillNotices = (snap: ControllerSnapshot) => {
     const s = snap.state;
     if (snap.phase === 'ended') return;
-    const mine = s.pieces.find((p) => p.owner === HUMAN && CHARACTERS[p.character].skill);
-    const unused = !!mine && s.skillsUsed[HUMAN] === 0 && s.storm === 0;
-    if (!notified.unlock && mine && unused && s.ply >= SKILL_UNLOCK_PLY && snap.phase === 'humanTurn') {
+    // Every skill character casts once per match: only the ones still unused matter.
+    const mine = s.storm === 0 ? s.pieces.filter((p) => p.owner === HUMAN && CHARACTERS[p.character].skill && !p.skillUsed) : [];
+    if (!notified.unlock && mine.length && s.ply >= SKILL_UNLOCK_PLY && snap.phase === 'humanTurn') {
       notified.unlock = true;
-      toast(`${CHARACTERS[mine.character].nameKo}의 스킬 '불모지'를 쓸 수 있어요! ${josa(CHARACTERS[mine.character].nameKo, '을/를')} 탭하세요`, { tone: 'success', duration: 2800 });
+      const names = mine.map((p) => CHARACTERS[p.character].nameKo);
+      const last = names[names.length - 1];
+      toast(
+        mine.length === 1
+          ? `${names[0]}의 스킬 '${CHARACTERS[mine[0].character].skill!.nameKo}'를 쓸 수 있어요! ${josa(last, '을/를')} 탭하세요`
+          : `스킬을 쓸 수 있어요! ${names.slice(0, -1).join('·')}·${josa(last, '을/를')} 탭하세요`,
+        { tone: 'success', duration: 2800 },
+      );
     }
-    if (!notified.storm && unused && s.stormIn !== null && s.storm === 0) {
+    if (!notified.storm && mine.length && s.stormIn !== null) {
       notified.storm = true;
-      toast(`자기장이 ${pliesToTurns(s.stormIn)}턴 후 좁혀와요. 그 전에만 '불모지'를 쓸 수 있어요`, { tone: 'warn', duration: 3000 });
+      const what = mine.length === 1 ? `'${CHARACTERS[mine[0].character].skill!.nameKo}'` : '스킬';
+      toast(`자기장이 ${pliesToTurns(s.stormIn)}턴 후 좁혀와요. 그 전에만 ${what}를 쓸 수 있어요`, { tone: 'warn', duration: 3000 });
     }
   };
 
@@ -545,6 +643,17 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       const selPiece = sel ? getPieceById(s, sel.pieceId) : undefined;
       if (snap.phase === 'animating' || targeting) {
         board.setHighlights({ selected: targeting ? (selPiece?.pos ?? null) : null, moves: [], captures: [], lastMove: targeting ? snap.lastMove : null });
+      } else if (transformAsk && getPieceById(s, transformAsk)) {
+        // Confirming the transform: preview the transformed reach from where he stands.
+        const reach = transformedReach(s, transformAsk);
+        board.setHighlights({
+          selected: getPieceById(s, transformAsk)!.pos,
+          moves: reach.filter((m) => !m.captureId).map((m) => m.to),
+          captures: reach.filter((m) => m.captureId).map((m) => m.to),
+          lastMove: snap.lastMove,
+          tone: 'own',
+          deadly: reach.filter((m) => s.waste.includes(sqOf(m.to))).map((m) => m.to),
+        });
       } else {
         board.setHighlights({
           selected: selPiece?.pos ?? null,
@@ -571,7 +680,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     stormChip.hidden = snap.phase === 'ended' || (s.stormIn === null && !sdSoon);
     if (s.stormIn !== null) {
       const inTurns = pliesToTurns(s.stormIn);
-      const skillLeft = s.storm === 0 && s.pieces.some((p) => CHARACTERS[p.character].skill && s.skillsUsed[p.owner] === 0);
+      const skillLeft = s.storm === 0 && s.pieces.some((p) => CHARACTERS[p.character].skill && !p.skillUsed);
       setText(stormText, s.storm > 0 ? `자기장 · 좌우 ${s.storm}줄 소멸 · ${inTurns}턴 후 축소` : `자기장 활성 · ${inTurns}턴 후 축소${skillLeft ? ' · 이후 스킬 금지' : ''}`);
       stormChip.classList.toggle('is-soon', inTurns <= 1);
     } else if (sd !== null && sdSoon) {
@@ -663,7 +772,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
           sfx('select');
           haptic('light');
           const sp = getPieceById(s, snap.selection.pieceId);
-          if (sp) playVoice(sp.character, 'select', { level: sp.level, owner: sp.owner });
+          if (sp) playVoice(sp.character, isAwake(sp) ? 'awake-select' : 'select', { level: sp.level, owner: sp.owner });
         } else sfx('tap');
       }
       prevSel = selKey;
@@ -673,18 +782,21 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     const showSel = !!selPiece && snap.phase !== 'animating' && snap.phase !== 'ended';
     selChip.hidden = !showSel;
     if (selPiece && showSel) {
-      const k = `${selPiece.id}|${selPiece.level}|${snap.selection?.moves.length}|${snap.selection?.actionable}|${selPiece.stun ?? 0}`;
+      const k = `${selPiece.id}|${selPiece.level}|${snap.selection?.moves.length}|${snap.selection?.actionable}|${selPiece.stun ?? 0}|${selPiece.awaken ?? 0}`;
       if (k !== selChipKey) {
         selChipKey = k;
         const sel = snap.selection!;
         const caps = sel.moves.filter((m) => m.captureId).length;
         selChip.className = `sel-chip owner-${selPiece.owner}`;
-        replaceChildren(selArt, unitArt(selPiece.character, selPiece.level, { size: 24, owner: selPiece.owner }));
+        const awake = isAwake(selPiece);
+        replaceChildren(selArt, unitArt(selPiece.character, selPiece.level, { size: 24, owner: selPiece.owner, awake }));
         setText(selName, CHARACTERS[selPiece.character].nameKo);
         setText(selStars, starsOf(selPiece.level));
+        selChip.classList.toggle('is-awake', awake);
         setText(
           selHint,
-          isStunned(selPiece)
+          (awake ? `타천 · ${selPiece.awaken} · ` : '') +
+          (isStunned(selPiece)
             ? '속박 · 1턴 쉬어요'
             : selPiece.owner === BOT
             ? `상대 · 이동 ${sel.moves.length}칸${caps ? ` · 내 말 ${caps}개 위협` : ''}`
@@ -692,7 +804,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
               ? sel.moves.length
                 ? `이동 ${sel.moves.length}칸${caps ? ` · 잡기 ${caps}` : ''}`
                 : '지금 움직일 수 없어요'
-              : `이동 범위 ${sel.moves.length}칸`,
+              : `이동 범위 ${sel.moves.length}칸`),
         );
       }
     } else selChipKey = '';
@@ -812,11 +924,21 @@ export function gameScreen(router: Router, params: GameParams): Screen {
         },
         animateSkill: async (action, after) => {
           const caster = getPieceById(c.state, action.pieceId);
+          const transform = !!caster && skillKindOf(caster.character) === 'transform';
           if (caster) {
             const rel = playVoice(caster.character, 'skill', { level: caster.level, owner: caster.owner });
             playCharSfx(caster.character, 'skill');
             haptic('capture');
-            spawnCutIn(cutInEl({ character: caster.character, level: caster.level, owner: caster.owner, kind: 'skill', line: rel ? VOICE_TEXT[rel] : undefined }));
+            spawnCutIn(cutInEl({ character: caster.character, level: caster.level, owner: caster.owner, kind: 'skill', line: rel ? VOICE_TEXT[rel] : undefined, awake: transform }));
+          }
+          if (transform) {
+            // The transform-in FX (optional board API); the token shows the transformed face once
+            // the pieces are synced with `after`.
+            if (b) {
+              b.setInteractive(false);
+              await playAwaken(b, action.pieceId, 'on');
+            }
+            return;
           }
           if (b) {
             b.setInteractive(false);
@@ -832,13 +954,17 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       syncedPieces = initial.pieces;
       board?.onCellClick((pos: Pos) => {
         if (targeting) onTargetTap(pos);
-        else c.tapCell(pos);
+        else {
+          // A tap anywhere on the board while the transform waits for its confirm cancels it.
+          if (transformAsk) transformAsk = null;
+          c.tapCell(pos);
+        }
       });
       const dragRef = (boardDrag = installBoardDrag({
         host: boardHost,
         board: () => board,
         controller: () => ctrl,
-        blocked: () => targeting !== null,
+        blocked: () => targeting !== null || transformAsk !== null,
         warn: (message) => toast(message, { tone: 'warn', duration: 2600 }),
       }));
       bag.add(() => dragRef.dispose());
@@ -871,6 +997,23 @@ export function gameScreen(router: Router, params: GameParams): Screen {
             if (e.player === HUMAN) haptic('capture');
           } else if (e.type === 'skill') {
             if (e.player === BOT) toast('상대 브루타일이 불모지를 깔았어요! 닿으면 소멸해요', { tone: 'warn', duration: 2600 });
+          } else if (e.type === 'awaken') {
+            const who = getPieceById(c.state, e.pieceId);
+            const mine = e.player === HUMAN;
+            if (e.phase === 'on') {
+              spawnFx(h('div', { class: 'float-text float-text--awake' }, mine ? '타천!' : '상대 타천!'), 1300);
+              if (!transformTipShown) {
+                transformTipShown = true;
+                const name = CHARACTERS[who?.character ?? 'rakaeli'].nameKo;
+                toast(`${mine ? '' : '상대 '}${name} 타천: ${AWAKEN_TURNS - 1}번 이동하는 동안 범위 확장`, { tone: mine ? 'success' : 'warn', duration: 3000 });
+              }
+            } else if (who) {
+              // Turning back: the revert FX, his last transformed line and sound.
+              playVoice(who.character, 'awake-end', { level: who.level, owner: who.owner });
+              playCharSfx(who.character, 'awake-end');
+              spawnFx(h('div', { class: 'float-text float-text--awake-end' }, mine ? '타천 해제' : '상대 타천 해제'), 1100);
+              void playAwaken(board, who.id, 'off');
+            }
           } else if (e.type === 'trap') {
             const mine = e.player === HUMAN;
             const who = getPieceById(c.state, e.pieceId);
@@ -909,8 +1052,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
             showStormFx(e.killed.length);
             // Pieces swallowed by the storm: their death sound, and one last word from the first.
             const gone = e.lost;
-            gone.forEach((p) => playCharSfx(p.character, 'death'));
-            if (gone[0]) playVoice(gone[0].character, 'death', { level: gone[0].level, owner: gone[0].owner });
+            gone.forEach((p) => playCharSfx(p.character, deathEvent(p)));
+            if (gone[0]) playVoice(gone[0].character, deathEvent(gone[0]), { level: gone[0].level, owner: gone[0].owner });
             sfx('capture');
             haptic('warn');
           }

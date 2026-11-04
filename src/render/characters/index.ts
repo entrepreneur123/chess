@@ -19,6 +19,10 @@ import { buildSad } from './sad';
 import { buildInsaner } from './insaner';
 import { buildWalk } from './walk';
 
+/** Characters listed explicitly; Rakaeli is added through a cast (see palette.ts). */
+type CoreCharacterId = Exclude<CharacterId, 'rakaeli'>;
+type Builder = (g: THREE.Group, ctx: BuildCtx) => void;
+
 export interface CharacterModelOptions {
   character: CharacterId;
   level: Level;
@@ -26,7 +30,8 @@ export interface CharacterModelOptions {
 }
 
 /** Approximate model height (feet to top of plume / horns / spear-less silhouette) in world units. */
-export const CHARACTER_MODEL_HEIGHT: Record<CharacterId, number> = {
+export const CHARACTER_MODEL_HEIGHT = {
+  rakaeli: 1.0,
   sad: 1.0,
   marki: 0.75,
   walk: 1.0,
@@ -34,10 +39,11 @@ export const CHARACTER_MODEL_HEIGHT: Record<CharacterId, number> = {
   brutile: 1.0,
   michelle: 0.9,
   picker: 1.0,
-};
+} satisfies Record<CoreCharacterId, number> & { rakaeli: number } as Record<CharacterId, number>;
 
 /** Uniform scale applied to each builder's output so that all units read at a similar size. */
-const BODY_SCALE: Record<CharacterId, number> = {
+const BODY_SCALE = {
+  rakaeli: 0.9,
   sad: 0.9,
   marki: 0.95,
   walk: 0.94,
@@ -45,10 +51,11 @@ const BODY_SCALE: Record<CharacterId, number> = {
   brutile: 0.92,
   michelle: 0.86,
   picker: 0.92,
-};
+} satisfies Record<CoreCharacterId, number> & { rakaeli: number } as Record<CharacterId, number>;
 
 /** Head-centre height per character (used by the 'head' marker). */
-const HEAD_POS: Record<CharacterId, [number, number, number]> = {
+const HEAD_POS = {
+  rakaeli: [0, 0.79, 0],
   sad: [0, 0.79, 0],
   marki: [0, 0.42, 0.45],
   walk: [0, 0.77, 0],
@@ -56,9 +63,11 @@ const HEAD_POS: Record<CharacterId, [number, number, number]> = {
   brutile: [0, 0.84, 0],
   michelle: [0, 0.8, 0],
   picker: [0, 0.79, 0],
-};
+} satisfies Record<CoreCharacterId, [number, number, number]> & { rakaeli: [number, number, number] } as Record<CharacterId, [number, number, number]>;
 
-const BUILDERS: Record<CharacterId, (g: THREE.Group, ctx: BuildCtx) => void> = {
+const BUILDERS = {
+  // Placeholder (top-down tokens only): the paladin silhouette until Rakaeli gets his own model.
+  rakaeli: buildSad,
   sad: buildSad,
   marki: buildMarki,
   walk: buildWalk,
@@ -68,7 +77,7 @@ const BUILDERS: Record<CharacterId, (g: THREE.Group, ctx: BuildCtx) => void> = {
   // Placeholders as well (top-down tokens only): the closest existing silhouettes.
   michelle: buildInsaner,
   picker: buildSad,
-};
+} satisfies Record<CoreCharacterId, Builder> & { rakaeli: Builder } as Record<CharacterId, Builder>;
 
 /** Builds a THREE.Group ~1.0 unit tall (feet at y=0, facing +z). See file header for conventions. */
 export function buildCharacterModel(opts: CharacterModelOptions): THREE.Group {

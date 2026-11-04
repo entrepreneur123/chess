@@ -5,32 +5,43 @@
  */
 import { CHARACTERS, type CharacterId, type Level, type PlayerId } from '../../engine';
 import { VOICE_CLIPS, VOICE_TEXT } from '../../audio/voiceManifest';
-import { artMissing, starsOf } from '../components/piece';
+import { artMissing, cardArtUrl, faceUrl, starsOf } from '../components/piece';
 import { h } from '../dom';
 
 export type CutInKind = 'capture' | 'skill' | 'chain';
 
-/** Caption lines per character and cut-in kind: the texts of the matching voice clips. */
-function linesFor(character: CharacterId, kind: CutInKind): string[] {
+/**
+ * Caption lines per character and cut-in kind: the texts of the matching voice clips (a
+ * transformed Rakaeli's capture prefers his transformed-form lines).
+ */
+function linesFor(character: CharacterId, kind: CutInKind, awake = false): string[] {
   // A character without recorded voices yet (no manifest entry) still gets a caption: its name.
-  const clips = (VOICE_CLIPS as Partial<typeof VOICE_CLIPS>)[character];
-  const out = (clips?.[kind] ?? clips?.capture ?? []).map((rel) => VOICE_TEXT[rel]).filter(Boolean);
+  const clips = (VOICE_CLIPS as Partial<Record<CharacterId, Partial<Record<string, readonly string[]>>>>)[character];
+  const own = awake && kind === 'capture' ? clips?.['awake-capture'] : undefined;
+  const out = (own?.length ? own : (clips?.[kind] ?? clips?.capture ?? [])).map((rel) => VOICE_TEXT[rel]).filter(Boolean);
   return out.length ? out : [CHARACTERS[character].nameKo];
 }
 
 export const CUTIN_MS = 1250;
 
-export function cardUrl(id: CharacterId, level: Level): string {
-  return `./chars/${id}-lv${level}.jpg`;
+export function cardUrl(id: CharacterId, level: Level, awake = false): string {
+  return cardArtUrl(id, level, awake);
 }
 
-/** Warm the browser cache so the first cut-in does not pop in half-loaded. */
+/**
+ * Warm the browser cache so the first cut-in does not pop in half-loaded (a character that can
+ * transform also gets its transformed art, which the transform cut-in and his hand card use).
+ */
 export function preloadCutIns(units: { character: CharacterId; level: Level }[]): void {
   if (typeof Image === 'undefined') return;
   for (const u of units) {
-    const img = new Image();
-    img.decoding = 'async';
-    img.src = cardUrl(u.character, u.level);
+    const urls = [cardUrl(u.character, u.level)];
+    if (CHARACTERS[u.character].awakeDescKo) urls.push(cardUrl(u.character, u.level, true), faceUrl(u.character, u.level, true));
+    for (const src of urls) {
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = src;
+    }
   }
 }
 
@@ -41,34 +52,38 @@ export interface CutInSpec {
   kind: CutInKind;
   /** Subtitle (the voice line actually spoken); defaults to one of the character's lines. */
   line?: string;
+  /** Rakaeli transformed (or transforming): the transformed art, crimson styling. */
+  awake?: boolean;
 }
 
 let lineIdx = 0;
 
-export function pickLine(character: CharacterId, kind: CutInKind): string {
-  const lines = linesFor(character, kind);
+export function pickLine(character: CharacterId, kind: CutInKind, awake = false): string {
+  const lines = linesFor(character, kind, awake);
   return lines[lineIdx++ % lines.length];
 }
 
 /** Build the cut-in element (caller appends it to the FX layer and removes it after CUTIN_MS). */
 export function cutInEl(spec: CutInSpec): HTMLElement {
   const def = CHARACTERS[spec.character];
-  const label = spec.kind === 'capture' ? '격파' : spec.kind === 'chain' ? '연쇄' : '스킬';
+  const awake = !!spec.awake && !!def.awakeDescKo;
+  // The transform cut-in names the skill itself ("타천") instead of the generic "스킬" tag.
+  const label = spec.kind === 'capture' ? '격파' : spec.kind === 'chain' ? '연쇄' : awake && def.skill?.kind === 'transform' ? def.skill.nameKo : '스킬';
   return h(
     'div',
     {
-      class: `cutin cutin--${spec.kind} owner-${spec.owner} rarity-${def.rarity} char-${spec.character}`,
+      class: `cutin cutin--${spec.kind} owner-${spec.owner} rarity-${def.rarity} char-${spec.character}${awake ? ' is-awake' : ''}`,
       'aria-hidden': 'true',
     },
     h('div', { class: 'cutin__band' }),
     h('div', { class: 'cutin__lines' }),
-    h('div', { class: 'cutin__art' }, h('img', { src: cardUrl(spec.character, spec.level), alt: '', decoding: 'async', draggable: 'false', onerror: artMissing })),
+    h('div', { class: 'cutin__art' }, h('img', { src: cardUrl(spec.character, spec.level, awake), alt: '', decoding: 'async', draggable: 'false', onerror: artMissing })),
     h(
       'div',
       { class: 'cutin__text' },
       h('span', { class: 'cutin__tag' }, label),
       h('span', { class: 'cutin__name' }, def.nameKo, h('span', { class: 'cutin__stars' }, starsOf(spec.level))),
-      h('span', { class: 'cutin__line' }, spec.line ?? pickLine(spec.character, spec.kind)),
+      h('span', { class: 'cutin__line' }, spec.line ?? pickLine(spec.character, spec.kind, awake)),
     ),
   );
 }

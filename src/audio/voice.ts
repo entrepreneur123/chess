@@ -22,11 +22,31 @@ export type { CharAudioEvent };
 /**
  * Game events the voice system reacts to: the generated manifest's events plus the new-character
  * moments (Michelle laying a doll trap / a trap catching an enemy, Picker capturing several pieces
- * in one hop). The manifest may list clips under these names too; until it does, each falls back to
- * the closest manifest event of the same character, and to silence when that is missing as well.
+ * in one hop, and Rakaeli's transformed form: `awake-*` while transformed, `awake-end` when he turns
+ * back). The manifest may list clips under these names too; until it does, each falls back to the
+ * closest manifest event of the same character (`awake-X` to `X`, `awake-end` to `move`), and to
+ * silence when that is missing as well.
  */
-export type VoiceEvent = CharAudioEvent | 'trap-set' | 'trap-sprung' | 'hop-multi';
-const EVENT_FALLBACK: Partial<Record<VoiceEvent, CharAudioEvent>> = { 'trap-set': 'skill', 'trap-sprung': 'skill', 'hop-multi': 'capture' };
+export type VoiceEvent =
+  | CharAudioEvent
+  | 'trap-set'
+  | 'trap-sprung'
+  | 'hop-multi'
+  | 'awake-select'
+  | 'awake-move'
+  | 'awake-capture'
+  | 'awake-death'
+  | 'awake-end';
+const EVENT_FALLBACK: Partial<Record<VoiceEvent, CharAudioEvent>> = {
+  'trap-set': 'skill',
+  'trap-sprung': 'skill',
+  'hop-multi': 'capture',
+  'awake-select': 'select',
+  'awake-move': 'move',
+  'awake-capture': 'capture',
+  'awake-death': 'death',
+  'awake-end': 'move',
+};
 
 /** Clip list of a character for an event (or its fallback), tolerant of missing characters. */
 function clipList(character: CharacterId, event: VoiceEvent): readonly string[] | undefined {
@@ -67,8 +87,14 @@ const PRIORITY: Record<VoiceEvent, number> = {
   'trap-set': 2,
   'trap-sprung': 3,
   'hop-multi': 3,
+  'awake-select': 1,
+  'awake-move': 1,
+  'awake-capture': 2,
+  // Turning back is a one-off moment: above a plain move or select line.
+  'awake-end': 2,
   chain: 3,
   death: 3,
+  'awake-death': 3,
   victory: 4,
 };
 
@@ -81,13 +107,21 @@ const VOICE_COOLDOWN_MS: Record<VoiceEvent, number> = {
   'trap-set': 350,
   'trap-sprung': 300,
   'hop-multi': 300,
+  'awake-select': 650,
+  'awake-move': 900,
+  'awake-capture': 250,
+  'awake-end': 400,
   chain: 300,
   death: 250,
+  'awake-death': 250,
   victory: 2000,
 };
 
-/** Probability that a voice line is spoken at all (keeps frequent events from getting repetitive). */
-const VOICE_CHANCE: Partial<Record<VoiceEvent, number>> = { move: 0.6 };
+/**
+ * Probability that a voice line is spoken at all (keeps frequent events from getting repetitive).
+ * A transformed move is rare (two per transform), so it speaks more often than a plain move.
+ */
+const VOICE_CHANCE: Partial<Record<VoiceEvent, number>> = { move: 0.6, 'awake-move': 0.85 };
 
 /** Playback-rate tint per grade (pitch and speed move together; +-3% is subtle but audible). */
 const LEVEL_RATE: Record<1 | 2 | 3, number> = { 1: 1.035, 2: 1, 3: 0.97 };

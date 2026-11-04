@@ -141,6 +141,8 @@ const PREFERRED_ROWS: Record<CharacterId, number[]> = {
   michelle: [1],
   // Picker hops diagonally through anything: either row keeps both forward diagonals open.
   picker: [0, 1],
+  // Rakaeli jumps forward (a 2-3 row block once transformed): either row.
+  rakaeli: [0, 1],
 };
 /**
  * Columns the bot prefers: away from the two outer columns per side, which the storm swallows

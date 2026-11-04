@@ -1,4 +1,5 @@
 import {
+  AWAKEN_TURNS,
   CHARACTERS,
   getTargetsForPiece,
   type CharacterId,
@@ -13,7 +14,7 @@ import { h } from '../dom';
 export const RARITY_LABEL: Record<Rarity, string> = { common: '일반', rare: '희귀', epic: '영웅', legendary: '전설' };
 
 /** Character concept titles shown with the illustrations (UI copy only). */
-export const CONCEPT: Record<CharacterId, string> = { sad: '성기사', marki: '황소 전사', walk: '방패병', insaner: '꼬마 악마', brutile: '초록 마녀', michelle: '인형 소녀', picker: '사막의 카우보이' };
+export const CONCEPT: Record<CharacterId, string> = { sad: '성기사', marki: '황소 전사', walk: '방패병', insaner: '꼬마 악마', brutile: '초록 마녀', michelle: '인형 소녀', picker: '사막의 카우보이', rakaeli: '타락 천사' };
 
 /**
  * Neutral head-and-shoulders silhouette shown in place of an illustration that failed to load
@@ -23,13 +24,36 @@ export const CONCEPT: Record<CharacterId, string> = { sad: '성기사', marki: '
 export const ART_SILHOUETTE =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='xMidYMid slice'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23aab4d6' stop-opacity='.55'/%3E%3Cstop offset='1' stop-color='%23aab4d6' stop-opacity='.15'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='50' cy='38' r='17' fill='url(%23g)'/%3E%3Cpath d='M18 100 Q20 64 50 60 Q80 64 82 100Z' fill='url(%23g)'/%3E%3C/svg%3E";
 
-/** Swap a failed illustration for the silhouette placeholder (idempotent). */
+/** A transformed-form illustration ("-awake-"): its base-form twin is the first fallback. */
+const AWAKE_ART = /\/chars\/([a-z]+)-awake-(lv[123](?:-face)?)\.jpg/;
+
+/**
+ * Swap a failed illustration for a placeholder (idempotent). A missing transformed-form image
+ * falls back to the base form with a crimson tint (`is-awake-fallback`), then to the silhouette.
+ */
 export function markArtMissing(img: HTMLImageElement): void {
   if (img.dataset.artMissing) return;
+  const awake = AWAKE_ART.exec(img.src);
+  if (awake && !img.dataset.awakeFallback) {
+    img.dataset.awakeFallback = '1';
+    img.classList.add('is-awake-fallback');
+    img.removeAttribute('srcset');
+    img.src = `./chars/${awake[1]}-${awake[2]}.jpg`;
+    return;
+  }
   img.dataset.artMissing = '1';
   img.classList.add('is-art-missing');
   img.removeAttribute('srcset');
   img.src = ART_SILHOUETTE;
+}
+
+/** Point an illustration at a new image, clearing any placeholder state of the previous one. */
+export function setArtSrc(img: HTMLImageElement, src: string): void {
+  if (img.getAttribute('src') === src && !img.dataset.artMissing && !img.dataset.awakeFallback) return;
+  delete img.dataset.artMissing;
+  delete img.dataset.awakeFallback;
+  img.classList.remove('is-art-missing', 'is-awake-fallback');
+  img.src = src;
 }
 
 /** `onerror` handler for illustration <img> elements (see `markArtMissing`). */
@@ -58,9 +82,14 @@ export function starsOf(level: Level): string {
   return '★'.repeat(level);
 }
 
-/** Face illustration URL for a character grade. */
-export function faceUrl(id: CharacterId, level: Level): string {
-  return `./chars/${id}-lv${level}-face.jpg`;
+/** Face illustration URL for a character grade (`awake`: Rakaeli's transformed form). */
+export function faceUrl(id: CharacterId, level: Level, awake = false): string {
+  return `./chars/${id}${awake ? '-awake' : ''}-lv${level}-face.jpg`;
+}
+
+/** Full 3:4 card illustration URL for a character grade (`awake`: Rakaeli's transformed form). */
+export function cardArtUrl(id: CharacterId, level: Level, awake = false): string {
+  return `./chars/${id}${awake ? '-awake' : ''}-lv${level}.jpg`;
 }
 
 export function rarityChip(rarity: Rarity): HTMLElement {
@@ -101,11 +130,12 @@ export function pieceToken(
 export function unitArt(
   character: CharacterId,
   level: Level,
-  opts: { kind?: 'face' | 'card'; size?: number; owner?: PlayerId; cls?: string } = {},
+  opts: { kind?: 'face' | 'card'; size?: number; owner?: PlayerId; cls?: string; awake?: boolean } = {},
 ): HTMLElement {
   const def = CHARACTERS[character];
   const kind = opts.kind ?? 'face';
-  const src = kind === 'face' ? faceUrl(character, level) : `./chars/${character}-lv${level}.jpg`;
+  const awake = !!opts.awake;
+  const src = kind === 'face' ? faceUrl(character, level, awake) : cardArtUrl(character, level, awake);
   return h(
     'span',
     {
@@ -134,15 +164,15 @@ interface Pattern {
 
 const patternCache = new Map<string, Pattern | null>();
 
-function computePattern(character: CharacterId, level: Level): Pattern | null {
-  const key = `${character}:${level}`;
+function computePattern(character: CharacterId, level: Level, awake = false): Pattern | null {
+  const key = `${character}:${level}:${awake ? 1 : 0}`;
   if (patternCache.has(key)) return patternCache.get(key)!;
   let result: Pattern | null = null;
   try {
     // Room for the longest reach of every pattern on 10 x 10: 6 rows ahead (Marki 3성), 3 behind
     // (Sad / Insaner), 4 to each side (Walk 3성's 9-wide landing row).
     const origin = { r: 3, c: 4 };
-    const piece: Piece = { id: `p0-${character}`, owner: 0, character, level, pos: origin };
+    const piece: Piece = { id: `p0-${character}`, owner: 0, character, level, pos: origin, ...(awake ? { awaken: AWAKEN_TURNS } : {}) };
     const state: GameState = {
       pieces: [piece],
       turn: 0,
@@ -185,22 +215,28 @@ function computePattern(character: CharacterId, level: Level): Pattern | null {
 }
 
 /** Rows x columns of a character's movement diagram (to size it into a fixed box). */
-export function movementSpan(character: CharacterId, level: Level): { rows: number; cols: number } {
-  const p = computePattern(character, level);
+export function movementSpan(character: CharacterId, level: Level, awake = false): { rows: number; cols: number } {
+  const p = computePattern(character, level, awake);
   return p ? { rows: p.rows, cols: p.cols } : { rows: 1, cols: 1 };
 }
 
-/** Tiny CSS grid showing where a character can go from the center square. Forward is up. */
-export function movementDiagram(character: CharacterId, level: Level, opts: { cell?: number; owner?: PlayerId } = {}): HTMLElement {
-  const p = computePattern(character, level);
+/**
+ * Tiny CSS grid showing where a character can go from the center square. Forward is up. `awake`
+ * draws Rakaeli's transformed ("타천") pattern instead (crimson, `is-awake`).
+ */
+export function movementDiagram(character: CharacterId, level: Level, opts: { cell?: number; owner?: PlayerId; awake?: boolean } = {}): HTMLElement {
+  const def = CHARACTERS[character];
+  const awake = !!opts.awake && !!def.awakeDescKo;
+  const p = computePattern(character, level, awake);
   const cell = opts.cell ?? 9;
   // Picker's diagonals are hops (round landing pads in a chain), not slides.
   const hop = character === 'picker';
   const traps = character === 'michelle';
+  const desc = awake ? `${def.skill?.nameKo ?? ''} ${def.awakeDescKo![level - 1]}` : def.descKo[level - 1];
   const wrap = h('div', {
-    class: `move-diagram owner-${opts.owner ?? 0}${hop ? ' is-hop' : ''}${traps ? ' is-traps' : ''}`,
+    class: `move-diagram owner-${opts.owner ?? 0}${hop ? ' is-hop' : ''}${traps ? ' is-traps' : ''}${awake ? ' is-awake' : ''}`,
     role: 'img',
-    'aria-label': `${CHARACTERS[character].nameKo} ${level}성 이동 범위: ${CHARACTERS[character].descKo[level - 1]}`,
+    'aria-label': `${def.nameKo} ${level}성 이동 범위: ${desc}`,
   });
   if (!p) return wrap;
   wrap.style.gridTemplateColumns = `repeat(${p.cols}, ${cell}px)`;
