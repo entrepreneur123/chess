@@ -259,9 +259,6 @@ body.in-game,
 .ring.is-critical .ring__label {
   color: var(--team-red-light);
 }
-.ring.is-paused {
-  opacity: 0.6;
-}
 
 /* ---- Turn strip: the turn count + whose turn ---------------------------------- */
 .hud-strip {
@@ -353,8 +350,7 @@ body.in-game,
     color var(--dur-2) var(--ease-out);
 }
 .turn-pill.is-bot,
-.turn-pill.is-ended,
-.turn-pill.is-paused {
+.turn-pill.is-ended {
   --pill-dot: var(--team-red);
   background: linear-gradient(180deg, rgba(37, 47, 74, 0.95), rgba(22, 29, 48, 0.95));
   box-shadow:
@@ -372,8 +368,7 @@ body.in-game,
     inset 0 0 0 1px rgba(139, 108, 255, 0.7),
     0 3px 0 var(--panel-lip);
 }
-.turn-pill.is-ended,
-.turn-pill.is-paused {
+.turn-pill.is-ended {
   --pill-dot: var(--text-3);
 }
 .turn-pill.is-me.is-bonus {

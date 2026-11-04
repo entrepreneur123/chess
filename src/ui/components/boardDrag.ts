@@ -96,7 +96,7 @@ export function installBoardDrag(deps: BoardDragDeps): BoardDrag {
   };
 
   const stillValid = (snap: ControllerSnapshot, d: Drag): boolean =>
-    snap.phase === 'humanTurn' && !snap.paused && !deps.blocked() && snap.selection?.pieceId === d.pieceId && snap.selection.actionable;
+    snap.phase === 'humanTurn' && !deps.blocked() && snap.selection?.pieceId === d.pieceId && snap.selection.actionable;
 
   /** The ghost flies back to the piece's square; the piece reappears when it lands. */
   const flyBack = (d: Drag) => {
@@ -120,7 +120,7 @@ export function installBoardDrag(deps: BoardDragDeps): BoardDrag {
   const start = (ev: PointerEvent, x: number, y: number): boolean => {
     const c = deps.controller();
     const b = deps.board();
-    if (disposed || !c || !b?.pickCell || c.phase !== 'humanTurn' || c.paused || deps.blocked()) return false;
+    if (disposed || !c || !b?.pickCell || c.phase !== 'humanTurn' || deps.blocked()) return false;
     const pos = b.pickCell(ev.clientX, ev.clientY);
     const piece = pos ? getPieceAt(c.state, pos) : undefined;
     if (!piece || piece.owner !== HUMAN) return false;
@@ -229,7 +229,7 @@ export function installBoardDrag(deps: BoardDragDeps): BoardDrag {
     if (disposed || tracker || !ev.isPrimary || (ev.pointerType === 'mouse' && ev.button !== 0)) return;
     const c = deps.controller();
     const b = deps.board();
-    if (!c || !b?.pickCell || c.phase !== 'humanTurn' || c.paused || deps.blocked()) return;
+    if (!c || !b?.pickCell || c.phase !== 'humanTurn' || deps.blocked()) return;
     const pos = b.pickCell(ev.clientX, ev.clientY);
     const piece = pos ? getPieceAt(c.state, pos) : undefined;
     if (!piece || piece.owner !== HUMAN || getLegalMoves(c.state, piece.id).length === 0) return;

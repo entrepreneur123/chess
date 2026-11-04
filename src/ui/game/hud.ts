@@ -41,17 +41,16 @@ export class TimerRing {
     this.el = h('div', { class: `ring owner-${owner}`, role: 'timer', 'aria-label': '남은 시간' }, svg, this.label);
   }
 
-  update(active: boolean, remainingMs: number, totalMs: number, paused: boolean): void {
+  update(active: boolean, remainingMs: number, totalMs: number): void {
     const secs = Math.ceil(remainingMs / 1000);
     const warn = active && remainingMs <= PACING.timerWarnMs;
-    const critical = warn && !paused && remainingMs <= CRITICAL_MS;
-    const state = `${active}|${warn}|${critical}|${paused}`;
+    const critical = warn && remainingMs <= CRITICAL_MS;
+    const state = `${active}|${warn}|${critical}`;
     if (state !== this.lastState) {
       this.lastState = state;
       this.el.classList.toggle('is-active', active);
       this.el.classList.toggle('is-warn', warn);
       this.el.classList.toggle('is-critical', critical);
-      this.el.classList.toggle('is-paused', paused);
     }
     const frac = active ? Math.max(0, Math.min(1, remainingMs / totalMs)) : 1;
     // Called every frame: only touch the style when the (rounded) value changes.
@@ -110,7 +109,6 @@ export function createRoster(slots: readonly FormationSlot[], owner: PlayerId): 
 
 export function turnPillContent(snap: ControllerSnapshot): { text: string; cls: string } {
   if (snap.phase === 'ended') return { text: '대전 종료', cls: 'is-ended' };
-  if (snap.paused) return { text: '일시정지', cls: 'is-paused' };
   const mine = snap.state.turn === 0;
   const chain = snap.state.bonusPieceId !== null;
   if (snap.phase === 'botThinking') return chain ? { text: '상대 연쇄 이동 중', cls: 'is-bot is-thinking is-bonus' } : { text: '상대가 생각 중', cls: 'is-bot is-thinking' };

@@ -47,7 +47,6 @@ export interface Selection {
 export interface ControllerSnapshot {
   state: GameState;
   phase: Phase;
-  paused: boolean;
   selection: Selection | null;
   lastMove: { from: Pos; to: Pos } | null;
 }
@@ -115,7 +114,6 @@ export function lastMoveOf(history: HistoryEntry[]): { from: Pos; to: Pos } | nu
 export class GameController {
   private _state: GameState;
   private _phase: Phase = 'humanTurn';
-  private _paused = false;
   private selection: Selection | null = null;
   private listeners = new Set<(e: ControllerEvent) => void>();
   /** Bumped to invalidate in-flight async work (bot requests, animations) on resign/timeout/dispose. */
@@ -124,12 +122,12 @@ export class GameController {
   private started = false;
   private endEmitted = false;
 
-  // Turn clock
+  // Turn clock: a wall-clock deadline. It keeps running while the page / app is hidden (like any
+  // online game, leaving does not stop your clock); the timer only wakes us up to check it.
   private turnTime: number;
-  private timerRemaining: number;
-  private timerStartedAt: number | null = null;
+  /** When the current turn's time runs out (`now()` units); null while no turn clock runs. */
+  private deadline: number | null = null;
   private timerHandle: unknown = null;
-  private resumeWaiters: (() => void)[] = [];
 
   private readonly now: () => number;
   private readonly setTimer: (fn: () => void, ms: number) => unknown;
@@ -138,8 +136,8 @@ export class GameController {
   constructor(initial: GameState, private readonly ports: ControllerPorts) {
     this._state = initial;
     this.turnTime = ports.turnTimeMs ?? turnTimeMsFor(initial);
-    this.timerRemaining = this.turnTime;
-    this.now = ports.now ?? (() => performance.now());
+    // Wall clock: it advances while the page is hidden or the app suspended.
+    this.now = ports.now ?? (() => Date.now());
     this.setTimer = ports.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
     this.clearTimer = ports.clearTimer ?? ((id) => clearTimeout(id as number));
   }
@@ -152,15 +150,10 @@ export class GameController {
   get phase(): Phase {
     return this._phase;
   }
-  get paused(): boolean {
-    return this._paused;
-  }
-
   snapshot(): ControllerSnapshot {
     return {
       state: this._state,
       phase: this._phase,
-      paused: this._paused,
       selection: this.selection,
       lastMove: lastMoveOf(this._state.history),
     };
@@ -177,10 +170,21 @@ export class GameController {
     this.enterTurn();
   }
 
-  /** Remaining time of the current turn in ms (frozen while paused/animating). */
+  /** Remaining time of the current turn in ms (the full turn time while no turn clock runs). */
   turnRemainingMs(): number {
-    if (this.timerStartedAt === null) return this.timerRemaining;
-    return Math.max(0, this.timerRemaining - (this.now() - this.timerStartedAt));
+    if (this.deadline === null) return this.turnTime;
+    return Math.max(0, this.deadline - this.now());
+  }
+
+  /**
+   * Re-check the turn deadline now. Call it when the page becomes visible again / the app returns
+   * to the foreground: hidden pages throttle timers (Chrome: up to a minute) and a suspended iOS app
+   * runs none, so a deadline that passed meanwhile is applied at once (the human forfeits on time,
+   * the bot plays its fallback).
+   */
+  checkClock(): void {
+    if (this.disposed || this.deadline === null || this.now() < this.deadline) return;
+    this.expire();
   }
   get turnTimeMs(): number {
     return this.turnTime;
@@ -190,7 +194,7 @@ export class GameController {
   tapCell(pos: Pos): void {
     if (this.disposed || this._phase === 'ended' || this._phase === 'animating') return;
     const sel = this.selection;
-    if (sel?.actionable && this._phase === 'humanTurn' && !this._paused) {
+    if (sel?.actionable && this._phase === 'humanTurn') {
       const move = sel.moves.find((m) => samePos(m.to, pos));
       if (move) {
         void this.playHumanMove(move);
@@ -210,9 +214,9 @@ export class GameController {
     }
   }
 
-  /** Brutile's wasteland for the human (own turn, not paused). Returns false if not allowed now. */
+  /** A skill for the human (own turn). Returns false if not allowed now. */
   trySkill(action: SkillAction): boolean {
-    if (this.disposed || this._phase !== 'humanTurn' || this._paused || !isLegalSkill(this._state, action)) return false;
+    if (this.disposed || this._phase !== 'humanTurn' || !isLegalSkill(this._state, action)) return false;
     this.selection = null;
     void this.playSkill(action);
     return true;
@@ -220,7 +224,7 @@ export class GameController {
 
   /** Decline the pending chain move (human only). Returns false if none is pending. */
   skipBonus(): boolean {
-    if (this.disposed || this._phase !== 'humanTurn' || this._paused || this._state.bonusPieceId === null) return false;
+    if (this.disposed || this._phase !== 'humanTurn' || this._state.bonusPieceId === null) return false;
     this.gen++;
     this.stopTimer();
     const prev = this._state;
@@ -233,7 +237,7 @@ export class GameController {
 
   /** Programmatic move (used by tests/debug). Returns false if not allowed now. */
   tryHumanMove(move: Move): boolean {
-    if (this._phase !== 'humanTurn' || this._paused || !isLegalMove(this._state, move)) return false;
+    if (this.disposed || this._phase !== 'humanTurn' || !isLegalMove(this._state, move)) return false;
     void this.playHumanMove(move);
     return true;
   }
@@ -251,29 +255,12 @@ export class GameController {
     this.checkEndOrContinue(false);
   }
 
-  pause(): void {
-    if (this._paused || this.disposed) return;
-    this._paused = true;
-    this.freezeTimer();
-    this.emit({ type: 'change' });
-  }
-
-  resume(): void {
-    if (!this._paused || this.disposed) return;
-    this._paused = false;
-    if (this._phase === 'humanTurn' || this._phase === 'botThinking') this.runTimer();
-    const waiters = this.resumeWaiters.splice(0);
-    for (const w of waiters) w();
-    this.emit({ type: 'change' });
-  }
-
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     this.gen++;
     this.stopTimer();
     this.listeners.clear();
-    this.resumeWaiters.splice(0).forEach((w) => w());
   }
 
   // ------------------------------------------------------------------ internals
@@ -345,20 +332,18 @@ export class GameController {
       return;
     }
     this.turnTime = this.ports.turnTimeMs ?? turnTimeMsFor(this._state);
-    this.timerRemaining = this.turnTime;
-    this.timerStartedAt = null;
     if (this._state.turn === HUMAN) {
       this._phase = 'humanTurn';
       // A chain move can only be played by one piece: pre-select it so the player just taps a square.
       const bonusId = this._state.bonusPieceId;
       if (bonusId !== null && getPieceById(this._state, bonusId)) this.selection = { pieceId: bonusId, moves: getLegalMoves(this._state, bonusId), actionable: true };
       this.refreshSelection();
-      if (!this._paused) this.runTimer();
+      this.startClock();
       this.emit({ type: 'change' });
     } else {
       this._phase = 'botThinking';
       this.refreshSelection();
-      if (!this._paused) this.runTimer();
+      this.startClock();
       this.emit({ type: 'change' });
       void this.runBotTurn();
     }
@@ -378,7 +363,6 @@ export class GameController {
     if (gen !== this.gen || this.disposed) return;
     const wait = this.ports.botThinkDelayMs() - (this.now() - t0);
     if (wait > 0) await new Promise<void>((r) => this.setTimer(r, wait));
-    await this.whenResumed();
     if (gen !== this.gen || this.disposed || this._phase !== 'botThinking') return;
     if (move && 'kind' in move && move.kind === 'skill' && isLegalSkill(this._state, move)) await this.playSkill(move);
     else if (move && !('kind' in move) && isLegalMove(this._state, move)) await this.playMove(move);
@@ -403,11 +387,6 @@ export class GameController {
       if (isLegalSkill(this._state, action)) return this.playSkill(action);
     } else if (action && isLegalMove(this._state, action)) return this.playMove(action);
     this.doTimeout();
-  }
-
-  private whenResumed(): Promise<void> {
-    if (!this._paused) return Promise.resolve();
-    return new Promise((r) => this.resumeWaiters.push(r));
   }
 
   private async playHumanMove(move: Move): Promise<void> {
@@ -549,28 +528,36 @@ export class GameController {
 
   // ---- clock
 
-  private runTimer(): void {
-    if (this.timerHandle !== null) return;
-    this.timerStartedAt = this.now();
-    this.timerHandle = this.setTimer(() => {
-      this.timerHandle = null;
-      this.timerStartedAt = null;
-      this.timerRemaining = 0;
-      // The human's clock ran out: forfeit. The bot never times out: it plays a fallback move.
-      if (this._phase === 'botThinking') void this.playBotFallback();
-      else this.doTimeout();
-    }, Math.max(0, this.timerRemaining));
+  /** Start the turn clock: a fresh deadline `turnTime` from now. */
+  private startClock(): void {
+    this.stopTimer();
+    this.deadline = this.now() + this.turnTime;
+    this.armTimer();
   }
 
-  private freezeTimer(): void {
-    if (this.timerHandle === null) return;
-    this.clearTimer(this.timerHandle);
-    this.timerHandle = null;
-    if (this.timerStartedAt !== null) this.timerRemaining = Math.max(0, this.timerRemaining - (this.now() - this.timerStartedAt));
-    this.timerStartedAt = null;
+  /** Wake up at the deadline. Timers may fire late (throttled) or early: the deadline decides. */
+  private armTimer(): void {
+    if (this.deadline === null) return;
+    if (this.timerHandle !== null) this.clearTimer(this.timerHandle);
+    this.timerHandle = this.setTimer(() => {
+      this.timerHandle = null;
+      if (this.deadline === null) return;
+      if (this.now() < this.deadline) this.armTimer();
+      else this.expire();
+    }, Math.max(0, this.deadline - this.now()));
+  }
+
+  /** The turn's time ran out. */
+  private expire(): void {
+    this.stopTimer();
+    // The human's clock ran out: forfeit. The bot never times out: it plays a fallback move.
+    if (this._phase === 'botThinking') void this.playBotFallback();
+    else if (this._phase === 'humanTurn') this.doTimeout();
   }
 
   private stopTimer(): void {
-    this.freezeTimer();
+    if (this.timerHandle !== null) this.clearTimer(this.timerHandle);
+    this.timerHandle = null;
+    this.deadline = null;
   }
 }

@@ -303,7 +303,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   };
 
   const updateCoach = (snap: ControllerSnapshot) => {
-    if (!coachOn || snap.phase !== 'humanTurn' || snap.paused) {
+    if (!coachOn || snap.phase !== 'humanTurn') {
       setCoach('');
       return;
     }
@@ -557,7 +557,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   /** The dock below the board: chain move, a skill button, wasteland targeting or the transform confirm. */
   const renderDock = (snap: ControllerSnapshot) => {
     const s = snap.state;
-    const myTurn = snap.phase === 'humanTurn' && !snap.paused;
+    const myTurn = snap.phase === 'humanTurn';
     if (targeting && (!myTurn || !getPieceById(s, targeting.pieceId) || skillBlock(s, targeting.pieceId) !== null)) stopTargeting();
     if (transformAsk && (!myTurn || skillBlock(s, transformAsk) !== null)) transformAsk = null;
     const sel = snap.selection ? getPieceById(s, snap.selection.pieceId) : undefined;
@@ -678,7 +678,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
           deadly: sel ? sel.moves.filter((m) => s.waste.includes(sqOf(m.to))).map((m) => m.to) : [],
         });
       }
-      board.setInteractive(snap.phase !== 'animating' && snap.phase !== 'ended' && !snap.paused);
+      board.setInteractive(snap.phase !== 'animating' && snap.phase !== 'ended');
       const sk = `${s.storm}|${s.stormIn}`;
       if (sk !== stormKey) {
         stormKey = sk;
@@ -749,8 +749,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
         passing === BOT ? (stunned ? '상대 말 속박 · 내가 연속으로 둬요' : '상대 이동 불가 · 내가 연속으로 둬요') : stunned ? '내 말 속박 · 자동 패스' : '이동 가능한 말 없음 · 자동 패스',
       );
     }
-    // Your-turn cue (not while paused / on the very first frame before any gesture is irrelevant).
-    if (snap.phase === 'humanTurn' && prevPhase !== 'humanTurn' && !snap.paused) {
+    // Your-turn cue.
+    if (snap.phase === 'humanTurn' && prevPhase !== 'humanTurn') {
       sfx('turn');
       if (prevPhase !== null) haptic('turn');
     }
@@ -1130,18 +1130,20 @@ export function gameScreen(router: Router, params: GameParams): Screen {
         }),
       );
 
-      bag.listen(document, 'visibilitychange', () => {
-        if (document.hidden) c.pause();
-        else c.resume();
-      });
-      // Running out of time forfeits, so the native app pauses the clock whenever it is
-      // backgrounded too (the WebView does not always fire visibilitychange there).
+      // The turn clock keeps running while the page / app is hidden (leaving does not stop your
+      // clock). Hidden pages throttle timers and a suspended app runs none, so the deadline is
+      // re-checked whenever the player comes back: time that ran out meanwhile is applied at once.
+      const checkClock = () => {
+        if (!document.hidden) c.checkClock();
+      };
+      bag.listen(document, 'visibilitychange', checkClock);
+      bag.listen(window, 'pageshow', checkClock);
+      bag.listen(window, 'focus', checkClock);
       if (Capacitor.isNativePlatform()) {
         let handle: PluginListenerHandle | null = null;
         let closed = false;
         void App.addListener('appStateChange', ({ isActive }) => {
-          if (isActive) c.resume();
-          else c.pause();
+          if (isActive) c.checkClock();
         }).then((hd) => {
           if (closed) void hd.remove();
           else handle = hd;
@@ -1158,10 +1160,10 @@ export function gameScreen(router: Router, params: GameParams): Screen {
         const snap = c.state;
         const active = c.phase === 'humanTurn' || c.phase === 'botThinking';
         const rem = c.turnRemainingMs();
-        topRing.update(active && snap.turn === BOT, rem, c.turnTimeMs, c.paused);
-        botRing.update(active && snap.turn === HUMAN, rem, c.turnTimeMs, c.paused);
+        topRing.update(active && snap.turn === BOT, rem, c.turnTimeMs);
+        botRing.update(active && snap.turn === HUMAN, rem, c.turnTimeMs);
         // Countdown ticks for the last seconds of the player's own turn.
-        if (c.phase === 'humanTurn' && !c.paused) {
+        if (c.phase === 'humanTurn') {
           bottomBar.classList.toggle('is-urgent', rem <= PACING.timerWarnMs);
           // Out of time is an immediate forfeit: the last seconds pulse red.
           bottomBar.classList.toggle('is-critical', rem <= CRITICAL_MS);
@@ -1193,8 +1195,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
         const w = window as unknown as Record<string, unknown>;
         const probe = {
           snapshot: () => JSON.parse(JSON.stringify(c.snapshot())) as ControllerSnapshot,
-          legalMoves: () => (c.phase === 'humanTurn' && !c.paused ? JSON.parse(JSON.stringify(getLegalMoves(c.state))) as Move[] : []),
-          skillAnchors: (pieceId: string) => (c.phase === 'humanTurn' && !c.paused ? skillAnchors(c.state, pieceId) : []),
+          legalMoves: () => (c.phase === 'humanTurn' ? JSON.parse(JSON.stringify(getLegalMoves(c.state))) as Move[] : []),
+          skillAnchors: (pieceId: string) => (c.phase === 'humanTurn' ? skillAnchors(c.state, pieceId) : []),
           /** Squares the opponent's pieces reach now (what tapping them previews). */
           enemyReach: () => c.state.pieces.filter((p) => p.owner === BOT).flatMap((p) => getTargetsForPiece(c.state, p).map((m) => m.to)),
           cellRect: (pos: Pos) => board?.cellRect?.(pos) ?? null,
@@ -1210,7 +1212,6 @@ export function gameScreen(router: Router, params: GameParams): Screen {
 
       renderSnapshot(c.snapshot());
       c.start();
-      if (document.hidden) c.pause();
     },
     onBack() {
       if (!ctrl || ctrl.phase === 'ended') router.home();
