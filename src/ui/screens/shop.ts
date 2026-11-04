@@ -99,7 +99,13 @@ export function shopScreen(router: Router): Screen {
       locked.length ? h('h2', { class: 'section-title section-title--display' }, '다음 전장에서') : null,
       locked.map(offer),
       emptyArenas.length
-        ? h('p', { class: 'hint hint--pad shop__soon' }, icon('castle', 16), `${emptyArenas.map((a) => a.index).join('·')} 전장 신규 캐릭터 준비 중`)
+        ? h(
+            'p',
+            { class: 'hint hint--pad shop__soon' },
+            icon('castle', 16),
+            // Only arena 6 still waits for a character: name it.
+            emptyArenas.length === 1 ? `${emptyArenas[0].index} 전장 ${emptyArenas[0].name} · 신규 캐릭터 준비 중` : `${emptyArenas.map((a) => a.index).join('·')} 전장 신규 캐릭터 준비 중`,
+          )
         : null,
       h('h2', { class: 'section-title section-title--display' }, '보유 중'),
       h(

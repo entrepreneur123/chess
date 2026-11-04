@@ -11,7 +11,7 @@ import { DUNGEON_LABEL, MODE_LABEL, OPPONENT_BAND, arenaById, arenaForRating, cl
 import { randInt, defaultRng } from '../../meta/rng';
 import { preloadArt } from '../backdrops';
 import { arenaBadge } from '../components/currency';
-import { pieceToken, unitArt } from '../components/piece';
+import { artMissing, pieceToken, unitArt } from '../components/piece';
 import { clearToasts, toast } from '../components/toast';
 import { Disposables, h, replaceChildren } from '../dom';
 import { icon } from '../icons';
@@ -108,7 +108,7 @@ export function matchmakingScreen(router: Router, params: MatchRequest): Screen 
     return h(
       'div',
       { class: `versus__side versus__side--${who}` },
-      h('div', { class: 'versus__art' }, h('img', { src: `./chars/${lead}-lv${lv[lead]}.jpg`, alt: '', decoding: 'async', draggable: 'false' })),
+      h('div', { class: 'versus__art' }, h('img', { src: `./chars/${lead}-lv${lv[lead]}.jpg`, alt: '', decoding: 'async', draggable: 'false', onerror: artMissing })),
       h(
         'div',
         { class: 'versus__plate' },

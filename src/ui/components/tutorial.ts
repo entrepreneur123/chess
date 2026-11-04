@@ -9,7 +9,7 @@ import { h, prefersReducedMotion, type Child } from '../dom';
 import { icon } from '../icons';
 import { formationGrid } from './formationGrid';
 import { overlayRoot, pushOverlay, registerForceClose } from './overlay';
-import { CONCEPT, movementDiagram, pieceToken, rarityChip, unitArt } from './piece';
+import { CONCEPT, movementDiagram, movementSpan, pieceToken, unitArt } from './piece';
 
 interface Slide {
   key: string;
@@ -24,6 +24,8 @@ const SHORT_MOVE: Record<CharacterId, string> = {
   walk: '앞줄로 점프 · 끝줄에서 뒤돌아요',
   insaner: '상하좌우 직진 · 잡은 적의 이동을 흡수',
   brutile: '대각선 한 칸 · 불모지 스킬',
+  michelle: '좌·우·뒤 이동 · 물러나며 인형 함정',
+  picker: '대각선 콩콩 점프 · 지나는 적 모두 잡기',
 };
 
 function goalArt(): Child {
@@ -43,21 +45,26 @@ function goalArt(): Child {
 }
 
 function charactersArt(): Child {
+  // Seven characters: a two-column list of compact rows (art, name + concept, one-line move, diagram).
   return h(
     'div',
     { class: 'tut-art tut-art--chars' },
-    CHARACTER_IDS.map((id) =>
-      h(
+    CHARACTER_IDS.map((id) => {
+      const { rows, cols } = movementSpan(id, 1);
+      const cell = Math.max(2, Math.min(6, Math.floor(26 / Math.max(rows, cols))));
+      return h(
         'div',
-        { class: 'tut-char' },
-        h('div', { class: 'tut-char__diagram' }, movementDiagram(id, 1, { cell: 9 })),
-        unitArt(id, 1, { size: 52 }),
-        h('div', { class: 'tut-char__name' }, CHARACTERS[id].nameKo),
-        h('div', { class: 'tut-char__concept' }, CONCEPT[id]),
-        rarityChip(CHARACTERS[id].rarity),
-        h('div', { class: 'tut-char__move' }, SHORT_MOVE[id]),
-      ),
-    ),
+        { class: `tut-char rarity-${CHARACTERS[id].rarity}` },
+        unitArt(id, 1, { size: 26 }),
+        h(
+          'div',
+          { class: 'tut-char__main' },
+          h('div', { class: 'tut-char__name' }, CHARACTERS[id].nameKo, h('span', { class: 'tut-char__concept' }, CONCEPT[id])),
+          h('div', { class: 'tut-char__move' }, SHORT_MOVE[id]),
+        ),
+        h('div', { class: 'tut-char__diagram' }, movementDiagram(id, 1, { cell })),
+      );
+    }),
   );
 }
 
@@ -132,7 +139,7 @@ function growArt(): Child {
 
 const SLIDES: Slide[] = [
   { key: 'goal', art: goalArt, title: '상대 말 3개를 모두 잡으면 승리!', body: '12×12 보드 위 1:1 대결. 이동 경로에서 처음 만나는 상대 말을 잡을 수 있어요.' },
-  { key: 'chars', art: charactersArt, title: '다섯 캐릭터, 분대는 3명', body: '파란 칸이 갈 수 있는 곳이에요. 마르키·월크는 앞으로만 가다가 끝줄에 닿으면 뒤돌아요. 전설 인세이너는 잡은 적의 능력을 흡수하고, 전설 브루타일은 닿으면 소멸하는 불모지를 깔아요.' },
+  { key: 'chars', art: charactersArt, title: '일곱 캐릭터, 분대는 3명', body: '파란 칸이 갈 수 있는 곳이에요. 미셸은 물러나며 인형 함정을 남기고, 피커는 대각선으로 콩콩 뛰며 지나는 적을 모두 잡아요.' },
   { key: 'tap', art: tapArt, title: '탭하고, 한 번 더 탭!', body: '내 말을 탭하면 갈 수 있는 칸이 빛나요. 빛나는 칸을 탭하면 이동해요.' },
   { key: 'zone', art: zoneArt, title: '진형은 아래 3줄에서', body: '대전 전에 내 구역(3×12) 안에 말을 자유롭게 배치해 작전을 짜세요.' },
   { key: 'timer', art: timerArt, title: '한 수 45초, 넘기면 몰수패', body: '말이 줄면 제한시간이 40초 → 20초로 줄고, 시간을 넘기면 즉시 몰수패! 한쪽 말이 1개만 남거나 40턴이 지나면 자기장이 발동해 3턴마다 좌우 바깥 줄이 좁혀오고, 닿은 말은 소멸해요.' },

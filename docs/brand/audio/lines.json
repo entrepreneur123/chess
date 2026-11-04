@@ -1,5 +1,5 @@
 {
-  "_note": "Voice script for GRID CLASH. Every character is voiced by Qwen3-TTS Base voice cloning of a reference clip in refs/ that is itself a Qwen3-TTS VoiceDesign take (a designed voice, no real person). 'voice' + 'clone.style' document the VoiceDesign prompt that made the reference; 'concept' is the target derived from the character art (public/chars/*-lv*.jpg); 'gender': 'female' makes post_voice.py gate takes on a gender classifier (QA only). 'asr' (optional) is the reference text for the character-error-rate check when the spoken text has non-lexical sounds. 'say' (optional) is what the TTS speaks when it differs from the caption 'text' (exclamation marks make Qwen shout male voices an octave up); 'f0_target' (optional) is the pitch post_voice.py prefers when choosing takes.",
+  "_note": "Voice script for GRID CLASH. Every character is voiced by Qwen3-TTS Base voice cloning of a reference clip in refs/ that is itself a Qwen3-TTS VoiceDesign take (a designed voice, no real person). 'voice' + 'clone.style' document the VoiceDesign prompt that made the reference; 'concept' is the target derived from the character art (public/chars/*-lv*.jpg); 'gender': 'female' / 'male' makes post_voice.py gate takes on a gender classifier (QA only). 'asr' (optional) is the reference text for the character-error-rate check when the spoken text has non-lexical sounds. 'say' (optional) is what the TTS speaks when it differs from the caption 'text' (exclamation marks make Qwen shout male voices an octave up); 'f0_target' (optional) is the pitch post_voice.py prefers when choosing takes.",
   "characters": {
     "sad": {
       "concept": "Young-adult paladin in gold armour and winged helm, stoic and focused: a warm, clear, confident baritone, heroic but natural, never shouted or shrill.",
@@ -389,6 +389,160 @@
           "text": "모두 썩어라! 이히히히!",
           "style": "Triumphant and cruel, then a short wicked witch cackle.",
           "asr": "모두 썩어라 이히히히"
+        }
+      ]
+    },
+    "michelle": {
+      "concept": "A gloomy little girl whose long bangs hide her eyes, always holding a doll; she lays doll traps behind her. A quiet, soft, slightly breathy child's voice with a flat, eerie calm: unsettling, never cute, babyish or shrill.",
+      "gender": "female",
+      "voice": "A gloomy, quiet little girl of about ten who always holds an old doll. Soft, hushed, slightly breathy voice in a natural low-middle child pitch, speaking slowly with a flat, eerie calm, as if telling a secret. Melancholic and unsettling. Never cute, never babyish, never squeaky, never shrill, never excited.",
+      "clone": {
+        "ref": "refs/michelle-ref.flac",
+        "text": "인형이… 기다릴 거야.",
+        "style": "Quiet, slow and eerie, almost a whisper.",
+        "_from": "VoiceDesign take (seed 11, take 7) of 8, trimmed and a 1.0 s mid-line pause shortened to 0.4 s; F0 269 Hz with a narrow 240-295 Hz range (flat, hushed), warble 0.016, HNR 16.9 dB, P(female) 0.94 / 0.95 on two classifiers; the takes at 330-350 Hz were rejected as too childish/bright, those at 200-215 Hz as too adult"
+      },
+      "f0_target": 265,
+      "lines": [
+        {
+          "id": "select-1",
+          "event": "select",
+          "text": "불렀어…?",
+          "style": "Quiet and flat, barely interested."
+        },
+        {
+          "id": "select-2",
+          "event": "select",
+          "text": "인형도… 같이 갈래.",
+          "style": "Soft and solemn, hugging her doll."
+        },
+        {
+          "id": "move-1",
+          "event": "move",
+          "text": "조용히… 갈게.",
+          "style": "Hushed, slow, almost a whisper."
+        },
+        {
+          "id": "move-2",
+          "event": "move",
+          "text": "따라오지 마…",
+          "style": "Flat, quiet and eerie."
+        },
+        {
+          "id": "capture-1",
+          "event": "capture",
+          "text": "같이 놀자…",
+          "style": "Soft, flat and unsettling, slow."
+        },
+        {
+          "id": "capture-2",
+          "event": "capture",
+          "text": "쉿… 이제 잘 시간이야.",
+          "style": "A soft, eerie lullaby tone."
+        },
+        {
+          "id": "capture-3",
+          "event": "capture",
+          "text": "숨바꼭질… 끝.",
+          "style": "Quiet and matter-of-fact, eerie."
+        },
+        {
+          "id": "trap-set-1",
+          "event": "trap-set",
+          "text": "인형이… 기다릴 거야.",
+          "style": "Quiet, slow and eerie, almost a whisper."
+        },
+        {
+          "id": "trap-sprung-1",
+          "event": "trap-sprung",
+          "text": "잡았다… 이제 못 움직여.",
+          "style": "A soft, satisfied, eerie whisper."
+        },
+        {
+          "id": "death-1",
+          "event": "death",
+          "text": "인형… 놓치면 안 되는데…",
+          "style": "Weak, sad and fading."
+        },
+        {
+          "id": "victory-1",
+          "event": "victory",
+          "text": "다들… 조용해졌네.",
+          "style": "Calm, quiet and unsettling."
+        }
+      ]
+    },
+    "picker": {
+      "concept": "A lone frontier cowboy of about 30 with a lasso who hops diagonally through every square: a laconic, low, dry drawl, calm and confident, a little amused, never shouted.",
+      "gender": "male",
+      "voice": "A lone frontier cowboy in his thirties, a man of few words. Low, dry, slightly husky baritone with a relaxed, unhurried drawl. Calm, confident and a little amused, speaking softly and slowly from the chest. Never shouting, never excited.",
+      "clone": {
+        "ref": "refs/picker-ref.flac",
+        "text": "일거리인가. 말은 짧게 하지.",
+        "style": "Laconic, calm and dry, low and slow.",
+        "_from": "VoiceDesign take (seed 11, take 7) of 8; a sigh the model added before the line was cut off and a 0.6 s pause shortened to 0.35 s. F0 108 Hz (the 71-86 Hz takes were creaky, HNR -3..9 dB, and as deep as the minotaur), CER 0, warble 0.043, P(female) 0.001 / 0.006"
+      },
+      "f0_target": 105,
+      "lines": [
+        {
+          "id": "select-1",
+          "event": "select",
+          "text": "일거리인가.",
+          "style": "Laconic, calm and dry."
+        },
+        {
+          "id": "select-2",
+          "event": "select",
+          "text": "말은 짧게 하지.",
+          "style": "Dry, unhurried, low."
+        },
+        {
+          "id": "move-1",
+          "event": "move",
+          "text": "가 보지.",
+          "style": "Relaxed and unbothered."
+        },
+        {
+          "id": "move-2",
+          "event": "move",
+          "text": "한 발짝씩.",
+          "style": "Easy-going drawl, unhurried."
+        },
+        {
+          "id": "capture-1",
+          "event": "capture",
+          "text": "올가미에 걸렸군.",
+          "style": "Dry and calm, quietly amused."
+        },
+        {
+          "id": "capture-2",
+          "event": "capture",
+          "text": "운이 없었군.",
+          "style": "Dry and laconic."
+        },
+        {
+          "id": "capture-3",
+          "event": "capture",
+          "text": "한발 늦었어.",
+          "style": "Calm, quietly confident."
+        },
+        {
+          "id": "hop-multi-1",
+          "event": "hop-multi",
+          "text": "줄 서. 한 번에 간다.",
+          "style": "Cool and confident, a low drawl, not shouting."
+        },
+        {
+          "id": "death-1",
+          "event": "death",
+          "text": "여기까진가… 석양이 좋군.",
+          "style": "Weary, quiet and wry, fading."
+        },
+        {
+          "id": "victory-1",
+          "event": "victory",
+          "text": "해 지기 전에 끝났군.",
+          "style": "Calm, dry satisfaction."
         }
       ]
     }

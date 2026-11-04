@@ -129,7 +129,7 @@ export function aiGradeCenter(playerGrades: readonly Level[]): Level {
 /**
  * Preferred home-zone rows (local: 0 = back rank, 2 = front) per character for a sensible but
  * varied bot set-up: forward movers start up front, Brutile (a weak mover with a skill worth
- * keeping) stays back.
+ * keeping) stays back, Michelle starts up front so her backward moves can lay traps.
  */
 const PREFERRED_ROWS: Record<CharacterId, number[]> = {
   sad: [1, 2],
@@ -137,6 +137,10 @@ const PREFERRED_ROWS: Record<CharacterId, number[]> = {
   walk: [1, 2],
   insaner: [1, 2],
   brutile: [0, 1],
+  // Michelle's traps come from backward moves: start up front so she has room to step back.
+  michelle: [2],
+  // Picker hops diagonally through anything: the middle row keeps both forward diagonals open.
+  picker: [1, 2],
 };
 /** Columns the bot prefers (away from the edges, which the storm swallows first). */
 const MIN_COL = 2;

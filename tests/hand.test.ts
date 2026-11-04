@@ -98,3 +98,66 @@ describe('hand model', () => {
     expect(skillReadiness(position(), 'p0-sad')).toBeNull();
   });
 });
+
+describe('hand cards: Michelle traps and doll-trap stuns', () => {
+  const mslots: FormationSlot[] = [
+    { character: 'michelle', level: 2, row: 2, col: 5 },
+    { character: 'picker', level: 1, row: 1, col: 1 },
+    { character: 'sad', level: 1, row: 0, col: 11 },
+  ];
+  const mpos = (extra: Partial<GameState> = {}) =>
+    makeState(
+      [
+        [0, 'michelle', 2, 5, 5],
+        [0, 'picker', 1, 1, 1],
+        [0, 'sad', 1, 0, 11],
+        [1, 'marki', 3, 9, 5],
+      ],
+      0,
+      extra,
+    );
+
+  it('Michelle\'s card counts the traps left; nobody else has a count', () => {
+    const cards = handModel(mslots, 0, { state: mpos({ trapsLaid: [1, 0] }), selection: null });
+    expect(cards.map((c) => c.traps)).toEqual([2, null, null]);
+    expect(cards.every((c) => !c.stunned)).toBe(true);
+  });
+
+  it('a stunned card shows the stun and cannot be selected', async () => {
+    const s = mpos();
+    s.pieces = s.pieces.map((p) => (p.id === 'p0-picker' ? { ...p, stun: 1 } : p));
+    const ctrl = new GameController(s, ports());
+    ctrl.start();
+    const cards = handModel(mslots, 0, ctrl.snapshot());
+    expect(cards[1].stunned).toBe(true);
+    expect(selectFromHand(ctrl, 'p0-picker')).toBe(false);
+    expect(ctrl.snapshot().selection).toBeNull();
+    expect(selectFromHand(ctrl, 'p0-michelle')).toBe(true);
+  });
+
+  it('the controller announces a laid trap, then a stun when the bot lands on it', async () => {
+    const events: string[] = [];
+    // Michelle steps back from (5,5) and leaves a trap; the bot's sad then lands on (5,5).
+    const s = makeState(
+      [
+        [0, 'michelle', 1, 5, 5],
+        [0, 'picker', 3, 0, 0],
+        [1, 'sad', 1, 6, 5],
+        [1, 'marki', 1, 11, 11],
+      ],
+      0,
+    );
+    const botMove: Move = { pieceId: 'p1-sad', from: { r: 6, c: 5 }, to: { r: 5, c: 5 } };
+    const p: ControllerPorts = { ...ports(), requestBotMove: () => Promise.resolve(botMove) };
+    const ctrl = new GameController(s, p);
+    ctrl.on((e) => {
+      if (e.type === 'trap' || e.type === 'stun' || e.type === 'multiCapture') events.push(`${e.type}:${e.player}`);
+    });
+    ctrl.start();
+    expect(ctrl.tryHumanMove({ pieceId: 'p0-michelle', from: { r: 5, c: 5 }, to: { r: 4, c: 5 } })).toBe(true);
+    for (let i = 0; i < 6; i++) await new Promise((r) => setTimeout(r, 0));
+    expect(ctrl.state.traps).toEqual([{ sq: 5 * 12 + 5, owner: 0 }]);
+    expect(events).toEqual(['trap:0', 'stun:1']);
+    expect(ctrl.state.pieces.find((q) => q.id === 'p1-sad')?.stun).toBe(1);
+  });
+});

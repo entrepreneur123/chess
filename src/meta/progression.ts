@@ -73,8 +73,8 @@ export interface ArenaDef {
 /**
  * The six arenas. Ranges and rating steps are the owner's numbers. "2000이상 전설" overlaps the
  * fifth range at exactly 2000, so 2000 stays in arena 5 and the legend arena starts at 2001.
- * Brutile unlocks in arena 2 and Insaner in arena 3; arenas 4–6 have empty slots for upcoming
- * characters.
+ * Brutile unlocks in arena 2, Insaner in arena 3, Michelle in arena 4 and Picker in arena 5; arena
+ * 6 still has an empty slot for an upcoming character.
  */
 export const ARENA_DEFS: readonly ArenaDef[] = [
   {
@@ -94,12 +94,12 @@ export const ARENA_DEFS: readonly ArenaDef[] = [
   },
   {
     id: 'frostkeep', index: 4, name: '서리 성채', tagline: '오로라 아래 얼어붙은 요새',
-    min: 1001, max: 1500, win: [18, 22], loss: [17, 20], unlocks: [],
+    min: 1001, max: 1500, win: [18, 22], loss: [17, 20], unlocks: ['michelle'],
     accent: '#9fe8ff', card: './arenas/frostkeep/card.webp', backdrop: './arenas/frostkeep/bg.webp', bgm: 'frostkeep',
   },
   {
     id: 'madcrown', index: 5, name: '광기의 왕좌', tagline: '부서진 사슬과 보랏빛 불꽃',
-    min: 1501, max: 2000, win: [15, 17], loss: [19, 21], unlocks: [],
+    min: 1501, max: 2000, win: [15, 17], loss: [19, 21], unlocks: ['picker'],
     accent: '#c06cff', card: './arenas/madcrown/card.webp', backdrop: './arenas/madcrown/bg.webp', bgm: 'madcrown',
   },
   {

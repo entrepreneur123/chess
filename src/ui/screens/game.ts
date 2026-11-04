@@ -8,8 +8,10 @@ import {
   CHARACTERS,
   SKILL_UNLOCK_PLY,
   WASTE_SIZE,
+  capturedIds,
   createGame,
   getPieceById,
+  isStunned,
   josa,
   materialScore,
   skillAnchors,
@@ -164,6 +166,11 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     sfx('levelup');
     haptic('warn');
   };
+  /** Picker's hop took a second (third...) piece: a combo count instead of another "격파!". */
+  const showComboFx = (n: number) => {
+    spawnFx(h('div', { class: 'hit-flash hit-flash--gain' }), 560);
+    spawnFx(h('div', { class: 'float-text float-text--combo' }, `${n}연속 격파!`), 1150);
+  };
   const showCaptureFx = (byMe: boolean) => {
     spawnFx(h('div', { class: `hit-flash${byMe ? ' hit-flash--gain' : ''}` }), 560);
     spawnFx(h('div', { class: `float-text${byMe ? '' : ' float-text--hurt'}` }, byMe ? '격파!' : '피격!'), 1150);
@@ -231,6 +238,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   let stormKey = '';
   let selChipKey = '';
   let wasteKey = 0;
+  let trapKey = '';
   /** Brutile's wasteland targeting (the player is choosing where to lay it). */
   let targeting: { pieceId: string; level: 1 | 2 | 3; anchors: Set<number>; preview: Pos | null } | null = null;
   const notified = { unlock: false, storm: false };
@@ -277,16 +285,22 @@ export function gameScreen(router: Router, params: GameParams): Screen {
    * the board's onImpact, or the end of the animation on boards without it) and the landing.
    */
   let mover: Piece | null = null;
-  let victim: Piece | null = null;
-  let impactDone: Move | null = null;
+  /** Every piece the current move captures (Picker's hop can take several), as they stood. */
+  let victims: Piece[] = [];
+  /** Victims already struck in the current move (onImpact fires once per victim). */
+  const impacted = new Set<string>();
+  let cutInShown = false;
   /** Caption of the capture shout, so the cut-in shows exactly what is heard. */
   let shout: string | null = null;
   const moveFeedbackStart = (move: Move, before: GameState) => {
     mover = getPieceById(before, move.pieceId) ?? null;
-    victim = move.captureId ? (getPieceById(before, move.captureId) ?? null) : null;
-    impactDone = null;
+    victims = capturedIds(move)
+      .map((id) => getPieceById(before, id))
+      .filter((p): p is Piece => !!p);
+    impacted.clear();
+    cutInShown = false;
     shout = null;
-    sfx(mover?.character === 'walk' ? 'jump' : 'move');
+    sfx(mover?.character === 'walk' || mover?.character === 'picker' ? 'jump' : 'move');
     if (!mover) return;
     const vo = { level: mover.level, owner: mover.owner };
     const dist = Math.max(Math.abs(move.to.r - move.from.r), Math.abs(move.to.c - move.from.c));
@@ -294,34 +308,43 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     const signature = (mover.character === 'marki' && dist >= 3) || (mover.character === 'walk' && Math.abs(move.to.c - move.from.c) >= 2);
     playCharSfx(mover.character, signature ? 'skill' : 'move');
     if (move.captureId) {
-      // Insaner sometimes shouts its absorb line instead of a capture line.
-      const ev = mover.character === 'insaner' && Math.random() < 0.5 ? 'skill' : 'capture';
+      // Insaner sometimes shouts its absorb line instead of a capture line; a hop that takes
+      // several pieces has its own line ('hop-multi', falling back to a capture line).
+      const ev = victims.length > 1 ? 'hop-multi' : mover.character === 'insaner' && Math.random() < 0.5 ? 'skill' : 'capture';
       const rel = playVoice(mover.character, ev, vo);
       shout = rel ? (VOICE_TEXT[rel] ?? null) : null;
     } else playVoice(mover.character, signature ? 'skill' : 'move', vo);
   };
+  /** One victim struck (`move.captureId`): sound, haptic, hit flash; the cut-in once per move. */
   const impact = (move: Move) => {
-    if (impactDone === move || !move.captureId) return;
-    impactDone = move;
+    const id = move.captureId;
+    if (!id || impacted.has(id)) return;
+    impacted.add(id);
     const byMe = move.pieceId.startsWith(`p${HUMAN}-`);
     sfx('capture');
     haptic('capture');
-    showCaptureFx(byMe);
+    if (impacted.size >= 2) showComboFx(impacted.size);
+    else showCaptureFx(byMe);
     if (mover && mover.id === move.pieceId) {
       playCharSfx(mover.character, 'capture');
-      spawnCutIn(cutInEl({ character: mover.character, level: mover.level, owner: mover.owner, kind: 'capture', line: shout ?? undefined }));
+      if (!cutInShown) {
+        cutInShown = true;
+        spawnCutIn(cutInEl({ character: mover.character, level: mover.level, owner: mover.owner, kind: 'capture', line: shout ?? undefined }));
+      }
     }
-    if (victim && victim.id === move.captureId) playCharSfx(victim.character, 'death');
+    const v = victims.find((p) => p.id === id);
+    if (v) playCharSfx(v.character, 'death');
   };
   const moveFeedbackEnd = (move: Move) => {
+    // Boards without onImpact (or a hop cut short): every victim is still struck once.
+    for (const id of capturedIds(move)) impact({ ...move, captureId: id });
     if (move.wasted) {
       if (mover) playCharSfx(mover.character, 'death');
       playWasteDeath();
       haptic('warn');
       const mine = move.pieceId.startsWith(`p${HUMAN}-`);
       spawnFx(h('div', { class: 'float-text float-text--waste' }, mine ? '불모지에 소멸!' : '상대가 불모지에 소멸!'), 1300);
-    } else if (move.captureId) impact(move);
-    else sfx('land');
+    } else if (!move.captureId) sfx('land');
   };
   let lastTurnShown: number | null = null;
   let lastGlow: PlayerId | null | undefined;
@@ -344,6 +367,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     notYet: '',
     used: '이번 판에 이미 사용',
     storm: '자기장 이후 사용 불가',
+    stunned: '속박 · 다음 턴에 사용 가능',
     ended: '',
   };
 
@@ -354,6 +378,14 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     if (targeting) {
       stopTargeting();
       renderSnapshot(c.snapshot());
+    }
+    const p = getPieceById(c.state, pieceId);
+    if (p && isStunned(p)) {
+      // A stunned card cannot be selected (the piece sits out its owner's next turn).
+      sfx('tap');
+      haptic('light');
+      toast(`${josa(CHARACTERS[p.character].nameKo, '은/는')} 인형 함정에 속박돼 이번 턴에 움직일 수 없어요`, { tone: 'warn', duration: 2200 });
+      return;
     }
     if (!selectFromHand(c, pieceId)) {
       sfx('tap');
@@ -542,6 +574,13 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       wasteKey = s.waste.length;
       board.setWaste?.(s.waste);
     }
+    // Doll traps (only ever accumulate) are drawn once the move that laid them has played.
+    const traps = s.traps ?? [];
+    const tk = traps.map((t) => t.sq * 2 + t.owner).join();
+    if (board && snap.phase !== 'animating' && tk !== trapKey) {
+      trapKey = tk;
+      board.setTraps?.(traps);
+    }
     skillNotices(snap);
     // HUD
     // Pieces only disappear through captures, so the count is a sufficient change key.
@@ -557,9 +596,15 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     }
     setText(pillText, tp.text);
     const lastEntry = s.history[s.history.length - 1];
-    const passing = snap.phase !== 'ended' && lastEntry?.kind === 'pass' && lastEntry.reason === 'noMoves' ? lastEntry.player : null;
+    const passing = snap.phase !== 'ended' && lastEntry?.kind === 'pass' && (lastEntry.reason === 'noMoves' || lastEntry.reason === 'stunned') ? lastEntry.player : null;
     passChip.hidden = passing === null;
-    if (passing !== null) setText(passChip, passing === BOT ? '상대 이동 불가 · 내가 연속으로 둬요' : '이동 가능한 말 없음 · 자동 패스');
+    if (passing !== null) {
+      const stunned = lastEntry?.kind === 'pass' && lastEntry.reason === 'stunned';
+      setText(
+        passChip,
+        passing === BOT ? (stunned ? '상대 말 속박 · 내가 연속으로 둬요' : '상대 이동 불가 · 내가 연속으로 둬요') : stunned ? '내 말 속박 · 자동 패스' : '이동 가능한 말 없음 · 자동 패스',
+      );
+    }
     // Your-turn cue (not while paused / on the very first frame before any gesture is irrelevant).
     if (snap.phase === 'humanTurn' && prevPhase !== 'humanTurn' && !snap.paused) {
       sfx('turn');
@@ -601,7 +646,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     const showSel = !!selPiece && snap.phase !== 'animating' && snap.phase !== 'ended';
     selChip.hidden = !showSel;
     if (selPiece && showSel) {
-      const k = `${selPiece.id}|${selPiece.level}|${snap.selection?.moves.length}|${snap.selection?.actionable}`;
+      const k = `${selPiece.id}|${selPiece.level}|${snap.selection?.moves.length}|${snap.selection?.actionable}|${selPiece.stun ?? 0}`;
       if (k !== selChipKey) {
         selChipKey = k;
         const sel = snap.selection!;
@@ -612,7 +657,9 @@ export function gameScreen(router: Router, params: GameParams): Screen {
         setText(selStars, starsOf(selPiece.level));
         setText(
           selHint,
-          selPiece.owner === BOT
+          isStunned(selPiece)
+            ? '속박 · 1턴 쉬어요'
+            : selPiece.owner === BOT
             ? `상대 · 이동 ${sel.moves.length}칸${caps ? ` · 내 말 ${caps}개 위협` : ''}`
             : sel.actionable
               ? sel.moves.length
@@ -797,6 +844,37 @@ export function gameScreen(router: Router, params: GameParams): Screen {
             if (e.player === HUMAN) haptic('capture');
           } else if (e.type === 'skill') {
             if (e.player === BOT) toast('상대 브루타일이 불모지를 깔았어요! 닿으면 소멸해요', { tone: 'warn', duration: 2600 });
+          } else if (e.type === 'trap') {
+            const mine = e.player === HUMAN;
+            const who = getPieceById(c.state, e.pieceId);
+            if (who) {
+              playVoice(who.character, 'trap-set', { level: who.level, owner: who.owner });
+              playCharSfx(who.character, 'trap-set');
+            }
+            sfx('select');
+            haptic('light');
+            spawnFx(h('div', { class: 'float-text float-text--trap' }, mine ? `인형 함정 · ${e.trapsLeft}개 남음` : '상대 인형 함정!'), 1200);
+            const p = getProfile();
+            if (!p.onboarding.trapTip) {
+              updateProfile((q) => ({ ...q, onboarding: { ...q.onboarding, trapTip: true } }));
+              toast(mine ? '미셸이 인형 함정을 놓았어요! 상대 말이 이 칸에 멈추면 1턴 속박돼요' : '상대 미셸의 인형 함정! 그 칸에 멈추면 1턴 동안 못 움직여요', { tone: mine ? 'success' : 'warn', duration: 3200 });
+            }
+          } else if (e.type === 'stun') {
+            const mine = e.player === HUMAN;
+            // The trap's owner (the other side's Michelle) has the line.
+            const owner = mine ? BOT : HUMAN;
+            const michelle = c.state.pieces.find((p) => p.owner === owner && p.character === 'michelle');
+            playVoice(michelle?.character ?? 'michelle', 'trap-sprung', { level: michelle?.level ?? 2, owner });
+            playCharSfx('michelle', 'trap-sprung');
+            haptic(mine ? 'warn' : 'capture');
+            spawnFx(h('div', { class: `float-text float-text--trap${mine ? ' float-text--hurt' : ''}` }, mine ? '속박! 1턴 쉬어요' : '상대 속박!'), 1300);
+            const p = getProfile();
+            if (!p.onboarding.stunTip) {
+              updateProfile((q) => ({ ...q, onboarding: { ...q.onboarding, stunTip: true } }));
+              toast('인형 함정에 걸린 말은 주인의 다음 1턴 동안 이동도 스킬도 못 써요', { tone: 'neutral', duration: 3200 });
+            }
+          } else if (e.type === 'multiCapture') {
+            if (e.player === HUMAN) haptic('win');
           } else if (e.type === 'absorb') {
             const who = e.player === HUMAN ? '내 인세이너가' : '상대 인세이너가';
             toast(`${who} ${CHARACTERS[e.character].nameKo}의 이동 능력을 흡수했어요`, { tone: e.player === HUMAN ? 'success' : 'warn', duration: 2400 });

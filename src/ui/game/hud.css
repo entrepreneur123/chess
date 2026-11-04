@@ -1342,3 +1342,116 @@
     transition: none;
   }
 }
+
+/* Michelle's doll traps left ("함정 2") and the stun band ("속박 · 1턴"). */
+.hand-card__trap {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+  margin: 0 0 4px -2px;
+  padding: 0 7px 0 4px;
+  border-radius: var(--r-full);
+  background: rgba(30, 20, 56, 0.9);
+  box-shadow: inset 0 0 0 1px rgba(185, 166, 255, 0.7);
+  color: #e6dcff;
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-bold);
+  line-height: 1;
+  white-space: nowrap;
+}
+.hand-card__trap.is-empty {
+  color: var(--text-3);
+  box-shadow: inset 0 0 0 1px rgba(72, 88, 128, 0.85);
+}
+.hand-card__trap.is-empty .hand-card__doll {
+  opacity: 0.4;
+}
+.hand-card__doll {
+  width: 12px;
+  height: 14px;
+  flex: none;
+  background: no-repeat center / contain
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 28'%3E%3Cpath d='M9 13 Q6 20 3 25 Q12 28 21 25 Q18 20 15 13Z' fill='%23B9A6FF' stroke='%23140f22' stroke-width='1.6'/%3E%3Ccircle cx='12' cy='8' r='6.2' fill='%23EDE6F7' stroke='%23140f22' stroke-width='1.6'/%3E%3Cpath d='M8.4 6.6l2 2m0-2l-2 2M13.6 6.6l2 2m0-2l-2 2M9.5 11h5' stroke='%23140f22' stroke-width='1.2' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+.hand-card__stun {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px 3px 6px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #5b3fa8, #2c1b5c);
+  box-shadow:
+    inset 0 0 0 1.5px #cdb8ff,
+    0 3px 0 rgba(0, 0, 0, 0.5),
+    0 0 14px -2px rgba(185, 166, 255, 0.7);
+  color: #fff;
+  font-size: 12px;
+  font-weight: var(--fw-bold);
+  line-height: 1.2;
+  transform: translate(-50%, -50%) rotate(-6deg);
+  white-space: nowrap;
+}
+.hand-card__stun[hidden] {
+  display: none;
+}
+.hand-card.is-stunned {
+  --hc-rim: rgba(185, 166, 255, 0.75);
+  cursor: not-allowed;
+}
+.hand-card.is-stunned .hand-card__art,
+.hand-card.is-stunned .hand-card__md {
+  filter: saturate(0.35) brightness(0.55);
+}
+.hand-card.is-stunned:active {
+  transform: none;
+}
+@media (max-height: 720px) {
+  /* Short rows: a corner chip (doll + count) that leaves room for the move diagram. */
+  .hand-card__trap {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    height: 22px;
+    margin: 0;
+    padding: 0 6px 0 3px;
+  }
+  .hand-card__trap-label {
+    display: none;
+  }
+}
+
+/* Floating text for the new-character moments (trap laid, stunned, multi-capture). */
+.float-text--trap {
+  color: #e6dcff;
+  text-shadow: 0 2px 0 #2c1b5c, 0 0 14px rgba(185, 166, 255, 0.85);
+}
+.float-text--combo {
+  color: #ffd27a;
+  text-shadow: 0 2px 0 #6b3a10, 0 0 16px rgba(255, 181, 71, 0.9);
+}
+
+/* Field mini map: a doll trap is a small team-tinted dot in the square's corner. */
+.fmap__cell.is-trap {
+  position: relative;
+}
+.fmap__cell.is-trap::after {
+  content: '';
+  position: absolute;
+  top: 12%;
+  left: 12%;
+  width: 34%;
+  height: 34%;
+  border-radius: 50%;
+  background: #ede6f7;
+  box-shadow: 0 0 0 1.5px var(--team-blue), 0 0 6px var(--team-blue);
+  pointer-events: none;
+}
+.fmap__cell.is-trap.trap-1::after {
+  box-shadow: 0 0 0 1.5px var(--team-red), 0 0 6px var(--team-red);
+}

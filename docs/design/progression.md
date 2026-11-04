@@ -41,8 +41,8 @@ them elsewhere. Any number not given by the owner is marked **(lead default)** a
 | 1 | 달빛 룬 투기장 (moonrune) | 0–300 | 29–31 | 5–7 | 사드, 마르키, 월크 (owned from the start) |
 | 2 | 잿불 대장간 (emberforge) | 301–600 | 25–29 | 10–14 | 브루타일 |
 | 3 | 독초 늪 신전 (blightmire) | 601–1000 | 20–22 | 15–17 | 인세이너 |
-| 4 | 서리 성채 (frostkeep) | 1001–1500 | 18–22 | 17–20 | (slot for a future character) |
-| 5 | 광기의 왕좌 (madcrown) | 1501–2000 | 15–17 | 19–21 | (slot) |
+| 4 | 서리 성채 (frostkeep) | 1001–1500 | 18–22 | 17–20 | 미셸 (Michelle) |
+| 5 | 광기의 왕좌 (madcrown) | 1501–2000 | 15–17 | 19–21 | 피커 (Picker) |
 | 6 | 천공의 정점 · 전설 (apex) | 2001+ | 14–16 | 20–22 | (slot) |
 
 - **Gain and loss.** The amount is a random integer in the range of the arena the player was in
@@ -166,7 +166,8 @@ sits there.
 ## Decisions to confirm with the owner (lead defaults in use)
 1. Rating on a draw: no change.
 2. Rating 2000 is arena 5; the legend arena starts at 2001.
-3. Brutile opens in arena 2 and Insaner in arena 3; arenas 4–6 wait for new characters.
+3. Brutile opens in arena 2 and Insaner in arena 3; Michelle opens in arena 4 and Picker in arena 5
+   (docs/design/new-characters-michelle-picker.md); arena 6 still waits for a new character.
 4. Players can field a lower grade than they own.
 5. The dungeon is playable after the daily claim (no reward), gives no essence and no rating, and
    resets at device midnight.

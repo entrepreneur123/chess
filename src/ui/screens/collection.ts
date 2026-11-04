@@ -11,7 +11,7 @@ import { buyBlocker, getProfile, isOwned, priceOf, setGrade, subscribeProfile, u
 import { arenaForRating, unlockArenaOf, upgradeCost } from '../../meta/progression';
 import { essenceIcon, tokenIcon, topBar } from '../components/currency';
 import { confirmBuy, confirmUpgrade } from '../components/purchase';
-import { movementDiagram, rarityChip, starsOf, unitArt } from '../components/piece';
+import { artMissing, movementDiagram, rarityChip, starsOf, unitArt } from '../components/piece';
 import { Disposables, h, replaceChildren } from '../dom';
 import { icon } from '../icons';
 import { playHomeMusic } from '../musicBridge';
@@ -25,6 +25,8 @@ export const TIER_TITLE: Record<CharacterId, [string, string, string]> = {
   walk: ['방패병', '강철 방패병', '마도 방패병'],
   insaner: ['꼬마 악마', '광기의 악동', '미친 왕'],
   brutile: ['떠돌이 마녀', '독초의 흑마녀', '불모의 여왕'],
+  michelle: ['인형 소녀', '속삭이는 인형사', '저주 인형의 주인'],
+  picker: ['카우보이', '사막의 올가미꾼', '황야의 전설'],
 };
 
 export const ROLE: Record<CharacterId, { role: string; trait: string }> = {
@@ -33,11 +35,13 @@ export const ROLE: Record<CharacterId, { role: string; trait: string }> = {
   walk: { role: '기습형 점퍼', trait: '사이의 말을 뛰어넘는 점프 · 넓은 앞줄 커버' },
   insaner: { role: '흡수형 광전사', trait: '적을 잡으면 그 말의 이동 능력을 흡수 · 3성은 잡은 뒤 한 번 더 이동' },
   brutile: { role: '저주형 마녀', trait: '한 칸씩 걷는 느린 마녀 · 성급이 오를수록 사방으로' },
+  michelle: { role: '함정형 견제수', trait: '뒤로 물러날 때 인형 함정(한 판 3개) · 밟은 상대는 1턴 속박' },
+  picker: { role: '돌파형 사냥꾼', trait: '대각선 콩콩 점프 · 막히지 않고 지나는 적을 모두 잡음 · 상대 함정에서 멈춤' },
 };
 
 /** Numeric "reach" per level for the stat bar (max squares reachable on an open board). */
 function reachCount(id: CharacterId, lv: Level): number {
-  const tbl: Record<CharacterId, [number, number, number]> = { sad: [4, 8, 12], marki: [3, 4, 6], walk: [5, 7, 9], insaner: [8, 12, 24], brutile: [2, 3, 8] };
+  const tbl: Record<CharacterId, [number, number, number]> = { sad: [4, 8, 12], marki: [3, 4, 6], walk: [5, 7, 9], insaner: [8, 12, 24], brutile: [2, 3, 8], michelle: [3, 6, 7], picker: [4, 8, 12] };
   return tbl[id][lv - 1];
 }
 
@@ -154,7 +158,7 @@ export function collectionScreen(router: Router): Screen {
       h(
         'header',
         { class: 'unit-card__banner' },
-        h('img', { class: 'unit-card__art', src: `./chars/${id}-lv${grade}.jpg`, alt: '', loading: 'lazy', decoding: 'async', draggable: 'false' }),
+        h('img', { class: 'unit-card__art', src: `./chars/${id}-lv${grade}.jpg`, alt: '', loading: 'lazy', decoding: 'async', draggable: 'false', onerror: artMissing }),
         h('div', { class: 'unit-card__shine', 'aria-hidden': 'true' }),
         h(
           'div',
@@ -177,6 +181,7 @@ export function collectionScreen(router: Router): Screen {
       actionRow(p, id),
       h('p', { class: 'unit-card__trait' }, icon('info', 14), ROLE[id].trait),
       def.passiveKo ? h('p', { class: 'unit-card__passive' }, icon('magic', 14), h('span', null, h('b', null, '패시브 · 흡수'), ' ', def.passiveKo)) : null,
+      def.trait ? h('p', { class: 'unit-card__passive unit-card__trait' }, icon('magic', 14), h('span', null, h('b', null, `특성 · ${def.trait.nameKo}`), ' ', def.trait.descKo)) : null,
       def.skill
         ? h('p', { class: 'unit-card__passive unit-card__skill' }, icon('magic', 14), h('span', null, h('b', null, `스킬 · ${def.skill.nameKo}`), ' ', def.skill.descKo[grade - 1], ' · 4턴째부터 한 판에 1번, 자기장이 좁혀오면 금지'))
         : null,

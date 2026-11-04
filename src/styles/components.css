@@ -855,6 +855,20 @@
   background: var(--gold);
   box-shadow: 0 0 5px rgba(242, 193, 78, 0.7);
 }
+/* Picker: every diagonal square is a separate hop (round landing pads), not a slide. */
+.move-diagram.is-hop .md-cell.is-target {
+  border-radius: 50%;
+  transform: scale(0.8);
+  background: radial-gradient(circle, #fff 0 22%, var(--team-blue-light) 26% 100%);
+}
+.move-diagram.is-hop.owner-1 .md-cell.is-target {
+  background: radial-gradient(circle, #fff 0 22%, var(--team-red-light) 26% 100%);
+}
+/* Michelle: the squares behind her are where her backward moves leave doll traps. */
+.move-diagram.is-traps .md-cell.is-back {
+  background: #b9a6ff;
+  box-shadow: 0 0 5px rgba(185, 166, 255, 0.85);
+}
 
 /* ---- Switch ---------------------------------------------------------------- */
 .switch {
@@ -1237,4 +1251,13 @@ body.in-game .toast.is-in {
     animation: none;
     transition: none;
   }
+}
+
+/* An illustration that is not there yet (new characters ship before their art): a neutral
+   silhouette (see ART_SILHOUETTE) on a soft rarity-tinted backdrop. */
+img.is-art-missing {
+  object-fit: cover;
+  background:
+    radial-gradient(circle at 50% 34%, var(--rar-soft, rgba(154, 166, 196, 0.22)), transparent 72%),
+    linear-gradient(180deg, var(--night-1, #141a2e), var(--night-0, #0a0e1a));
 }

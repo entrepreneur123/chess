@@ -21,16 +21,22 @@ const fsP: Promise<Fs> = import(/* @vite-ignore */ nodeFs);
 const audioDir = decodeURIComponent(new URL('../public/audio/', import.meta.url).pathname);
 const join = (...parts: string[]) => parts.join('/').replace(/\/+/g, '/');
 // Typed as a full record so adding a CharacterId without listing it here fails to compile.
-const CHAR_SET: Record<CharacterId, true> = { sad: true, marki: true, walk: true, insaner: true, brutile: true };
-const CHARS = Object.keys(CHAR_SET) as CharacterId[];
+const CHAR_SET: Record<CharacterId, true> = { sad: true, marki: true, walk: true, insaner: true, brutile: true, michelle: true, picker: true };
+const ALL_CHARS = Object.keys(CHAR_SET) as CharacterId[];
+/**
+ * Characters whose voices are recorded. Michelle and Picker are voiced separately (their clips land
+ * in the generated manifest later); until then they must simply stay silent, see the last test.
+ */
+const VOICED = new Set<CharacterId>(['sad', 'marki', 'walk', 'insaner', 'brutile']);
+const CHARS = ALL_CHARS.filter((c) => VOICED.has(c) || (VOICE_CLIPS as Partial<typeof VOICE_CLIPS>)[c] !== undefined);
 const VOICE_EVENTS: CharAudioEvent[] = ['select', 'move', 'capture', 'skill', 'death', 'victory'];
 const SFX_EVENTS: CharAudioEvent[] = ['select', 'move', 'capture', 'skill'];
 
 function allFiles(): string[] {
   const out = new Set<string>();
   for (const c of CHARS) {
-    for (const list of Object.values(VOICE_CLIPS[c])) for (const f of list ?? []) out.add(f);
-    for (const f of Object.values(CHAR_SFX[c])) if (f) out.add(f);
+    for (const list of Object.values(VOICE_CLIPS[c] ?? {})) for (const f of list ?? []) out.add(f);
+    for (const f of Object.values(CHAR_SFX[c] ?? {})) if (f) out.add(f);
   }
   for (const f of Object.values(GENERIC_SFX)) if (f) out.add(f);
   if (WASTE_DEATH_SFX) out.add(WASTE_DEATH_SFX);
@@ -90,5 +96,15 @@ describe('character audio manifest', () => {
     expect(() => playWasteDeath()).not.toThrow();
     expect(() => stopVoice()).not.toThrow();
     await expect(preloadCharacterAudio(CHARS)).resolves.toBeUndefined();
+  });
+
+  it('new characters and new game events never throw, voiced or not', async () => {
+    for (const c of ['michelle', 'picker'] as CharacterId[]) {
+      for (const e of ['select', 'move', 'capture', 'death', 'victory', 'trap-set', 'trap-sprung', 'hop-multi'] as const) {
+        expect(() => playVoice(c, e, { level: 2, owner: 0 })).not.toThrow();
+        expect(() => playCharSfx(c, e)).not.toThrow();
+      }
+    }
+    await expect(preloadCharacterAudio(['michelle', 'picker'])).resolves.toBeUndefined();
   });
 });

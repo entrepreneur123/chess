@@ -25,6 +25,7 @@ import { lobbyScreen } from './ui/screens/lobby';
 import { matchmakingScreen } from './ui/screens/matchmaking';
 import { shopScreen } from './ui/screens/shop';
 import { installMusic } from './ui/musicBridge';
+import { installArtFallback } from './ui/components/piece';
 
 document.title = APP_NAME;
 
@@ -33,6 +34,8 @@ document.addEventListener('contextmenu', (e) => e.preventDefault());
 document.addEventListener('dblclick', (e) => e.preventDefault(), { passive: false });
 
 getProfile(); // load + sanitize persisted data early
+// Illustrations that are not there yet (new characters) show a silhouette, never a broken image.
+installArtFallback();
 // Create/resume the AudioContext on the first gesture (autoplay policy); without this the game stays silent.
 installAudio();
 // Background music follows settings.sound && settings.music (no-op until src/audio/music.ts exists).

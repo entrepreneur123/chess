@@ -261,7 +261,7 @@ def fx_michelle(x):
     w = biquad(biquad(w, "hp", 700), "lp", 5500)
     w = np.concatenate([np.zeros(int(0.028 * SR)), w])[:n]      # 28 ms behind: a second presence
     w *= 0.75 + 0.25 * np.sin(2 * math.pi * 0.45 * t + 1.3)     # drifts in and out
-    y = y + 0.16 * w * rms(y) / rms(w)
+    y = y + 0.125 * w * rms(y) / rms(w)                    # about -18 dB under the voice
     y = biquad(y, "lowshelf", 250, 1.0)
     y = compress(y, -22, 2.0, attack=0.008, release=0.15)
     return hall(y, 0.55, 0.11, predelay=0.008, lp=4500, hp=220)

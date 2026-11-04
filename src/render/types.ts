@@ -1,4 +1,4 @@
-import type { Move, Piece, Pos } from '../engine/types';
+import type { Move, Piece, Pos, Trap } from '../engine/types';
 
 /** Visual state of board squares. All positions are ABSOLUTE board coordinates. */
 export interface BoardHighlights {
@@ -76,7 +76,8 @@ export interface IBoardView {
   setStorm?(storm: number, nextIn: number | null): void;
   /**
    * Optional: called at the exact moment a capturing strike lands during `animateMove` (the UI
-   * syncs the impact sound, haptic and illustration cut-in to it). Only one listener.
+   * syncs the impact sound, haptic and illustration cut-in to it). Only one listener. Picker's
+   * hop-through calls it once per victim, as he lands on it, with `captureId` set to that victim.
    */
   onImpact?(cb: (move: Move) => void): void;
   /**
@@ -84,6 +85,13 @@ export interface IBoardView {
    * green ground. Called with the full list whenever it changes (it only grows during a match).
    */
   setWaste?(squares: number[]): void;
+  /**
+   * Optional: Michelle's doll traps (full list; they only ever accumulate during a match). Drawn as
+   * small team-tinted dolls with a subtle idle wobble (still with prefers-reduced-motion); a piece
+   * standing on one leaves a mini doll peeking out of the square's corner. Stunned pieces
+   * (`Piece.stun`, from setPieces / animateMove) are dimmed and carry a "속박" badge.
+   */
+  setTraps?(traps: readonly Trap[]): void;
   /**
    * Optional: skill targeting overlay. `anchors` = squares the player may tap to place the area
    * (subtle green tint), `preview` = the area under consideration (bright, or red when invalid).

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { chooseAction, isSkillAction } from '../src/ai/bot';
-import { applyMove, applySkill, createGame, getLegalMoves, isLegalMove, isLegalSkill, randomFormation, type CharacterId } from '../src/engine';
+import { CHARACTERS, applyMove, applySkill, createGame, getLegalMoves, isLegalMove, isLegalSkill, randomFormation, type CharacterId } from '../src/engine';
 import {
   PROFILE_VERSION,
   buyCharacter,
@@ -18,12 +18,15 @@ import {
   DUNGEON_LEVELS,
   DUNGEON_REWARD,
   UNLOCK_PRICE,
+  UNREACHABLE,
   UPGRADE_COST,
   arenaForRating,
   arenaProgress,
   dayKey,
   opponentRating,
   shopPool,
+  unlockArenaOf,
+  upgradeCost,
 } from '../src/meta/progression';
 import { seededRng } from '../src/meta/rng';
 import { rngFrom } from './helpers';
@@ -56,8 +59,8 @@ describe('migration v3 -> v4', () => {
     const storage: KeyValueStorage = { getItem: () => saved, setItem: (_k, v) => void (saved = v) };
     const p = loadProfile(storage);
     expect(p.version).toBe(4);
-    expect(p.owned).toEqual({ sad: 1, marki: 1, walk: 1, insaner: 0, brutile: 0 });
-    expect(Object.values(p.grades)).toEqual([1, 1, 1, 1, 1]);
+    expect(p.owned).toEqual({ sad: 1, marki: 1, walk: 1, insaner: 0, brutile: 0, michelle: 0, picker: 0 });
+    expect(Object.values(p.grades)).toEqual([1, 1, 1, 1, 1, 1, 1]);
     expect([p.tokens, p.essence, p.rating, p.bestRating]).toEqual([0, 0, 0, 0]);
     expect(p.dungeon.lastClaimDay).toBeNull();
     expect(p.dungeonLevel).toBe('easy');
@@ -107,8 +110,8 @@ describe('v4 sanitizing', () => {
       dungeon: { lastClaimDay: 'yesterday' },
       dungeonLevel: 'nightmare',
     });
-    expect(p.owned).toEqual({ sad: 1, marki: 1, walk: 2, insaner: 3, brutile: 0 });
-    expect(p.grades).toEqual({ sad: 1, marki: 1, walk: 2, insaner: 2, brutile: 1 });
+    expect(p.owned).toEqual({ sad: 1, marki: 1, walk: 2, insaner: 3, brutile: 0, michelle: 0, picker: 0 });
+    expect(p.grades).toEqual({ sad: 1, marki: 1, walk: 2, insaner: 2, brutile: 1, michelle: 1, picker: 1 });
     expect([p.tokens, p.essence, p.rating, p.bestRating]).toEqual([0, 12, 0, 0]);
     expect(p.dungeon.lastClaimDay).toBeNull();
     expect(p.dungeonLevel).toBe('easy');
@@ -122,16 +125,28 @@ describe('v4 sanitizing', () => {
 });
 
 describe('essence shop', () => {
-  it('pool per arena is cumulative: starters, + Brutile (2), + Insaner (3), then nothing new', () => {
+  it('pool per arena is cumulative: starters, + Brutile (2), + Insaner (3), + Michelle (4), + Picker (5), then nothing new', () => {
     const starters = ['sad', 'marki', 'walk'];
     expect(ARENA_DEFS.map((a) => shopPool(a))).toEqual([
       starters,
       [...starters, 'brutile'],
       [...starters, 'brutile', 'insaner'],
-      [...starters, 'brutile', 'insaner'],
-      [...starters, 'brutile', 'insaner'],
-      [...starters, 'brutile', 'insaner'],
+      [...starters, 'brutile', 'insaner', 'michelle'],
+      [...starters, 'brutile', 'insaner', 'michelle', 'picker'],
+      [...starters, 'brutile', 'insaner', 'michelle', 'picker'],
     ]);
+  });
+
+  it('Michelle opens in arena 4 for 30 essence and Picker in arena 5 for 50; upgrades follow rarity', () => {
+    expect(unlockArenaOf('michelle')?.id).toBe('frostkeep');
+    expect(unlockArenaOf('picker')?.id).toBe('madcrown');
+    expect(UNLOCK_PRICE[CHARACTERS.michelle.rarity]).toBe(30);
+    expect(UNLOCK_PRICE[CHARACTERS.picker.rarity]).toBe(50);
+    expect([upgradeCost('michelle', 1), upgradeCost('michelle', 2)]).toEqual([5, 50]);
+    expect([upgradeCost('picker', 1), upgradeCost('picker', 2)]).toEqual([10, 100]);
+    expect(UNREACHABLE).toEqual([]);
+    // Only arena 6 still waits for a character.
+    expect(ARENA_DEFS.filter((a) => a.unlocks.length === 0).map((a) => a.index)).toEqual([6]);
   });
 
   it('buying: locked below the arena, short of essence, then bought at 1성; never negative', () => {

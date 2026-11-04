@@ -16,9 +16,10 @@ import {
   skillAnchors,
 } from '../engine';
 import type { FastBoard } from '../engine';
-import { SKILL_FLAG, fastCanSkill, fastSkillFits, fastSkillSize } from '../engine/fast';
-import { CHARACTERS, CHAR_BY_CODE, CH_BRUTILE, CH_INSANER, CH_MARKI, CH_SAD, CH_WALK, N_CHARS } from '../engine/characters';
-import { BOARD_SIZE, SKILL_USES_PER_MATCH } from '../engine/types';
+import { SKILL_FLAG, fastCanSkill, fastHopGain, fastSkillFits, fastSkillSize } from '../engine/fast';
+import { CHARACTERS, CHAR_BY_CODE, CH_BRUTILE, CH_INSANER, CH_MARKI, CH_MICHELLE, CH_PICKER, CH_SAD, CH_WALK, N_CHARS } from '../engine/characters';
+import { trapBit } from '../engine/board';
+import { BOARD_SIZE, SKILL_USES_PER_MATCH, TRAPS_PER_MICHELLE } from '../engine/types';
 
 /** Bot strength. `extreme` (극악) is the dungeon's top tier and the AI of the top arena. */
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'extreme';
@@ -79,6 +80,14 @@ const MAX_MOVES = 128;
 const UNIT = 100; // material unit
 /** Eval bonus for holding an unused wasteland, by Brutile's level (index = level). */
 const SKILL_POTENTIAL = [0, 15, 25, 35];
+/** Eval bonus per doll trap Michelle can still lay (they are laid by backing off, so modest). */
+const TRAP_POTENTIAL = 8;
+/** Eval bonus per own doll trap on the board within two squares of an enemy piece (area denial). */
+const TRAP_NEAR_ENEMY = 6;
+/** A stunned piece sits out its next turn: a share of its value (its threats are already gone). */
+const STUN_PENALTY = 0.12;
+/** Move-ordering penalty for ending on an enemy doll trap (the mover loses its next turn). */
+const TRAP_LANDING_ORDER = -400;
 /** Material worth (in UNIT) of each absorbable pattern bit: half of the pattern owner's value. */
 const BIT_VALUE: number[] = [];
 for (let bit = 0; bit < N_CHARS * 3; bit++) BIT_VALUE.push((CHARACTERS[CHAR_BY_CODE[(bit / 3) | 0]].value[bit % 3] * UNIT) / 2);
@@ -111,9 +120,10 @@ function buildAttackMaps(b: FastBoard): number[] {
   const mob = [0, 0];
   for (let i = 0; i < b.n; i++) {
     const s = b.sq[i];
-    if (s < 0) continue;
+    // A stunned piece neither threatens nor defends anything on its owner's next turn.
+    if (s < 0 || b.stun[i] > 0) continue;
     const side = b.owner[i];
-    const n = genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, attackBuf, 0, true, b.dir[i], b.storm, b.absorb[i], b.waste);
+    const n = genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, attackBuf, 0, true, b.dir[i], b.storm, b.absorb[i], b.waste, b.trap);
     const v = b.value[i];
     for (let k = 0; k < n; k++) {
       const t = attackBuf[k];
@@ -177,7 +187,15 @@ export function evaluate(b: FastBoard, side: number): number {
       sc += centerC * 3 + Math.min(room, 6);
       // An unused wasteland is worth keeping until it wins something (before the storm closes in).
       if (b.storm === 0 && b.skills[p] < SKILL_USES_PER_MATCH) sc += SKILL_POTENTIAL[b.lvl[i]];
+    } else if (ch === CH_MICHELLE) {
+      // Sideways / backward mover: central files, and unspent traps are worth a little.
+      sc += centerC * 3 + Math.min(room, 6);
+      sc += (TRAPS_PER_MICHELLE - b.trapsLaid[p]) * TRAP_POTENTIAL;
+    } else if (ch === CH_PICKER) {
+      // Diagonal hopper: centre and room in front give him the most hop lanes.
+      sc += centerC * 4 + (5.5 - Math.abs(r - 5.5)) * 2;
     }
+    if (b.stun[i] > 0) sc -= v * STUN_PENALTY;
     // storm: standing next to (or on) the columns that vanish next is a liability
     if (b.stormIn >= 0) {
       const dist = Math.min(c - b.storm, 11 - b.storm - c);
@@ -200,6 +218,23 @@ export function evaluate(b: FastBoard, side: number): number {
   }
   score[0] += mob[0] * 3;
   score[1] += mob[1] * 3;
+  // Doll traps close to enemy pieces restrict where they can safely land.
+  if (b.trapsLaid[0] > 0 || b.trapsLaid[1] > 0) {
+    for (let t = 0; t < N_SQUARES; t++) {
+      const m = b.trap[t];
+      if (m === 0) continue;
+      const tr = (t / 12) | 0;
+      const tc = t - tr * 12;
+      for (let i = 0; i < b.n; i++) {
+        const q = b.sq[i];
+        if (q < 0) continue;
+        const enemyOf = 1 - b.owner[i];
+        if (!(m & trapBit(enemyOf))) continue;
+        const qr = (q / 12) | 0;
+        if (Math.abs(qr - tr) <= 2 && Math.abs(q - qr * 12 - tc) <= 2) score[enemyOf] += TRAP_NEAR_ENEMY;
+      }
+    }
+  }
   return score[side] - score[1 - side];
 }
 
@@ -250,10 +285,13 @@ function orderMoves(ctx: SearchCtx, moves: Int32Array, scores: Int32Array, n: nu
   for (let k = 0; k < n; k++) {
     const mv = moves[k];
     const to = mv & 255;
+    const pi = mv >> 8;
     const cap = b.occ[to];
-    if (cap >= 0) scores[k] = 10000 + b.value[cap] * 100 - b.value[mv >> 8];
-    else if (b.waste[to]) scores[k] = -10000; // suicide: search last
+    const gain = (cap >= 0 ? b.value[cap] : 0) + fastHopGain(b, pi, to);
+    if (b.waste[to]) scores[k] = gain > 0 ? gain * 100 - 10000 : -10000; // suicide: search last
+    else if (gain > 0) scores[k] = 10000 + gain * 100 - b.value[pi];
     else scores[k] = mv === killer ? 5000 : 0;
+    if (b.trap[to] & trapBit(1 - b.owner[pi])) scores[k] += TRAP_LANDING_ORDER;
   }
   // insertion sort (n is small)
   for (let i = 1; i < n; i++) {
@@ -284,7 +322,10 @@ function qsearch(ctx: SearchCtx, alpha: number, beta: number, ply: number, qd: n
   const scores = ctx.scoreBufs[ply];
   const all = fastGenMoves(b, side, moves, 0);
   let n = 0;
-  for (let k = 0; k < all; k++) if (b.occ[moves[k] & 255] >= 0) moves[n++] = moves[k];
+  for (let k = 0; k < all; k++) {
+    const mv = moves[k];
+    if (b.occ[mv & 255] >= 0 || fastHopGain(b, mv >> 8, mv & 255) > 0) moves[n++] = mv;
+  }
   if (n === 0) return alpha;
   orderMoves(ctx, moves, scores, n, ply);
   for (let k = 0; k < n; k++) {
@@ -315,7 +356,8 @@ function negamax(ctx: SearchCtx, depth: number, alpha: number, beta: number, ply
   const n = fastGenMoves(b, side, moves, 0);
   if (n === 0) {
     // No move (or a boxed-in chain move): the turn passes, exactly like the engine's auto-pass.
-    if (b.bonus < 0 && !fastHasMoves(b, 1 - side)) return adjudicateScore(b, side, ply);
+    // Stuns wear off, so it is only a stalemate when neither side could move even without them.
+    if (b.bonus < 0 && !fastHasMoves(b, side, true) && !fastHasMoves(b, 1 - side, true)) return adjudicateScore(b, side, ply);
     fastPass(b);
     try {
       return -negamax(ctx, depth - 1, -beta, -alpha, ply + 1);
@@ -327,7 +369,7 @@ function negamax(ctx: SearchCtx, depth: number, alpha: number, beta: number, ply
   let best = -INF;
   for (let k = 0; k < n; k++) {
     const mv = moves[k];
-    const isCap = b.occ[mv & 255] >= 0;
+    const isCap = b.occ[mv & 255] >= 0 || fastHopGain(b, mv >> 8, mv & 255) > 0;
     const undo = fastMake(b, mv);
     let v: number;
     try {
@@ -375,8 +417,10 @@ function searchRoot(
     [moves[i], moves[j]] = [moves[j], moves[i]];
   }
   const capScore = (mv: number) => {
+    if (mv & SKILL_FLAG) return 0;
     const cap = b.occ[mv & 255];
-    return cap >= 0 ? 1000 + b.value[cap] * 10 - b.value[mv >> 8] : 0;
+    const gain = (cap >= 0 ? b.value[cap] : 0) + fastHopGain(b, mv >> 8, mv & 255);
+    return gain > 0 ? 1000 + gain * 10 - b.value[mv >> 8] : 0;
   };
   moves.sort((a, c) => capScore(c) - capScore(a));
   // Wasteland candidates are searched like moves (only at the root); suicide moves go last.
@@ -470,8 +514,8 @@ function skillCandidates(b: FastBoard, max: number): number[] {
 function isAttackedBy(b: FastBoard, sq: number, attacker: number): boolean {
   for (let i = 0; i < b.n; i++) {
     const s = b.sq[i];
-    if (s < 0 || b.owner[i] !== attacker) continue;
-    const n = genTargets(b.occ, b.owner, attacker, b.ch[i], b.lvl[i], s, attackBuf, 0, false, b.dir[i], b.storm, b.absorb[i], b.waste);
+    if (s < 0 || b.owner[i] !== attacker || b.stun[i] > 0) continue;
+    const n = genTargets(b.occ, b.owner, attacker, b.ch[i], b.lvl[i], s, attackBuf, 0, false, b.dir[i], b.storm, b.absorb[i], b.waste, b.trap);
     for (let k = 0; k < n; k++) if (attackBuf[k] === sq) return true;
   }
   return false;
@@ -495,13 +539,15 @@ function chooseEasy(b: FastBoard, rng: () => number, allowSkill = true): number 
     fastUnmake(b, mv, undo);
     return safe;
   };
-  const captures = moves.filter((mv) => b.occ[mv & 255] >= 0);
+  const gainOf = (mv: number) => {
+    const cap = b.occ[mv & 255];
+    return (cap >= 0 ? b.value[cap] : 0) + fastHopGain(b, mv >> 8, mv & 255);
+  };
+  const captures = moves.filter((mv) => gainOf(mv) > 0);
   if (captures.length) {
-    const free = captures.filter(
-      (mv) => b.value[b.occ[mv & 255]] >= b.value[mv >> 8] || safeAfter(mv),
-    );
+    const free = captures.filter((mv) => gainOf(mv) >= b.value[mv >> 8] || safeAfter(mv));
     if (free.length && rng() < 0.9) {
-      free.sort((a, c) => b.value[b.occ[c & 255]] - b.value[b.occ[a & 255]]);
+      free.sort((a, c) => gainOf(c) - gainOf(a));
       return free[0];
     }
     if (rng() < 0.4) return pick(captures);

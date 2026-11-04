@@ -250,7 +250,7 @@ function switchSide(b: FastBoard): void {
 
 function undoSwitch(b: FastBoard): void {
   const h = b.hist;
-  const stunMask = h[--b.histTop];
+  let stunMask = h[--b.histTop];
   b.bonus = h[--b.histTop];
   b.storm = h[--b.histTop];
   b.stormIn = h[--b.histTop];

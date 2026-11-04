@@ -79,6 +79,10 @@ export interface Onboarding {
   tutorialSeen: boolean;
   /** The player made their first move with the in-game coach hints. */
   firstMoveDone: boolean;
+  /** The coach toast explaining Michelle's doll trap was shown (first trap laid in a match). */
+  trapTip: boolean;
+  /** The coach toast explaining the stun was shown (first piece caught by a trap). */
+  stunTip: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = { sound: true, music: true, voice: true, haptics: true, view: 'tilt' };
@@ -139,7 +143,7 @@ export function createDefaultProfile(): Profile {
     dungeonLevel: DEFAULT_DUNGEON_LEVEL,
     stats: { wins: 0, losses: 0, draws: 0 },
     settings: { ...DEFAULT_SETTINGS },
-    onboarding: { tutorialSeen: false, firstMoveDone: false },
+    onboarding: { tutorialSeen: false, firstMoveDone: false, trapTip: false, stunTip: false },
   };
 }
 
@@ -302,6 +306,9 @@ export function sanitizeProfile(input: unknown): Profile {
     onboarding: {
       tutorialSeen: asBool(onboarding.tutorialSeen, veteran),
       firstMoveDone: asBool(onboarding.firstMoveDone, veteran),
+      // New-character tips are new to everyone, veterans included.
+      trapTip: asBool(onboarding.trapTip, false),
+      stunTip: asBool(onboarding.stunTip, false),
     },
   };
 }

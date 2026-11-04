@@ -19,6 +19,33 @@ import { CHAR_SFX, GENERIC_SFX, VOICE_CLIPS, WASTE_DEATH_SFX, type CharAudioEven
 
 export type { CharAudioEvent };
 
+/**
+ * Game events the voice system reacts to: the generated manifest's events plus the new-character
+ * moments (Michelle laying a doll trap / a trap catching an enemy, Picker capturing several pieces
+ * in one hop). The manifest may list clips under these names too; until it does, each falls back to
+ * the closest manifest event of the same character, and to silence when that is missing as well.
+ */
+export type VoiceEvent = CharAudioEvent | 'trap-set' | 'trap-sprung' | 'hop-multi';
+const EVENT_FALLBACK: Partial<Record<VoiceEvent, CharAudioEvent>> = { 'trap-set': 'skill', 'trap-sprung': 'skill', 'hop-multi': 'capture' };
+
+/** Clip list of a character for an event (or its fallback), tolerant of missing characters. */
+function clipList(character: CharacterId, event: VoiceEvent): readonly string[] | undefined {
+  const byEvent = (VOICE_CLIPS as Partial<Record<CharacterId, Partial<Record<string, readonly string[]>>>>)[character];
+  if (!byEvent) return undefined;
+  const own = byEvent[event];
+  if (own && own.length) return own;
+  const fb = EVENT_FALLBACK[event];
+  return fb ? byEvent[fb] : undefined;
+}
+
+/** Character sound effect for an event (or its fallback), tolerant of missing characters. */
+function sfxClip(character: CharacterId, event: VoiceEvent): string | undefined {
+  const byEvent = (CHAR_SFX as Partial<Record<CharacterId, Partial<Record<string, string>>>>)[character];
+  const fb = EVENT_FALLBACK[event];
+  const generic = GENERIC_SFX as Partial<Record<string, string>>;
+  return byEvent?.[event] ?? (fb ? byEvent?.[fb] : undefined) ?? generic[event] ?? (fb ? generic[fb] : undefined);
+}
+
 export interface VoiceOptions {
   /** Unit grade: 1-star lines are pitched a touch younger/brighter, 3-star a touch heavier. */
   level?: 1 | 2 | 3;
@@ -32,29 +59,35 @@ const ENEMY_VOICE_GAIN = 0.68;
 const CHAR_SFX_GAIN = 0.75;
 
 /** Higher wins: a lower-priority line never cuts off a higher-priority one that is still playing. */
-const PRIORITY: Record<CharAudioEvent, number> = {
+const PRIORITY: Record<VoiceEvent, number> = {
   select: 1,
   move: 1,
   capture: 2,
   skill: 2,
+  'trap-set': 2,
+  'trap-sprung': 3,
+  'hop-multi': 3,
   chain: 3,
   death: 3,
   victory: 4,
 };
 
 /** Minimum gap between two voice lines of the same event (any character). */
-const VOICE_COOLDOWN_MS: Record<CharAudioEvent, number> = {
+const VOICE_COOLDOWN_MS: Record<VoiceEvent, number> = {
   select: 650,
   move: 1100,
   capture: 250,
   skill: 350,
+  'trap-set': 350,
+  'trap-sprung': 300,
+  'hop-multi': 300,
   chain: 300,
   death: 250,
   victory: 2000,
 };
 
 /** Probability that a voice line is spoken at all (keeps frequent events from getting repetitive). */
-const VOICE_CHANCE: Partial<Record<CharAudioEvent, number>> = { move: 0.6 };
+const VOICE_CHANCE: Partial<Record<VoiceEvent, number>> = { move: 0.6 };
 
 /** Playback-rate tint per grade (pitch and speed move together; +-3% is subtle but audible). */
 const LEVEL_RATE: Record<1 | 2 | 3, number> = { 1: 1.035, 2: 1, 3: 0.97 };
@@ -74,7 +107,7 @@ interface Playing {
 const bytes = new Map<string, Promise<ArrayBuffer | null>>();
 const decoding = new Map<string, Promise<AudioBuffer | null>>();
 const ready = new Map<string, AudioBuffer>();
-const lastVoiceAt = new Map<CharAudioEvent, number>();
+const lastVoiceAt = new Map<VoiceEvent, number>();
 const lastVariant = new Map<string, number>();
 const lastSfxAt = new Map<string, number>();
 let current: Playing | null = null;
@@ -228,10 +261,10 @@ function playBuffer(buf: AudioBuffer, gain: number, rate = 1): { src: AudioBuffe
  * before the first user gesture, or without Web Audio). Returns the clip chosen (a key of
  * VOICE_TEXT, so the UI can caption exactly what is spoken) or null when nothing will play.
  */
-export function playVoice(character: CharacterId, event: CharAudioEvent, opts: VoiceOptions = {}): string | null {
+export function playVoice(character: CharacterId, event: VoiceEvent, opts: VoiceOptions = {}): string | null {
   try {
     if (!hasBrowserAudio() || !voiceOn()) return null;
-    const list = VOICE_CLIPS[character]?.[event];
+    const list = clipList(character, event);
     if (!list || list.length === 0) return null;
     const chance = VOICE_CHANCE[event];
     if (chance !== undefined && Math.random() > chance) return null;
@@ -281,8 +314,8 @@ export function playVoice(character: CharacterId, event: CharAudioEvent, opts: V
 }
 
 /** Character-specific sound effect (falls back to a shared effect for death). Overlaps freely. */
-export function playCharSfx(character: CharacterId, event: CharAudioEvent): void {
-  playSfx(CHAR_SFX[character]?.[event] ?? GENERIC_SFX[event]);
+export function playCharSfx(character: CharacterId, event: VoiceEvent): void {
+  playSfx(sfxClip(character, event));
 }
 
 /**
@@ -313,9 +346,9 @@ function playSfx(rel: string | null | undefined): void {
 /** Every clip (voice + sfx) a character can use. */
 function clipsFor(character: CharacterId): string[] {
   const out = new Set<string>();
-  const v = VOICE_CLIPS[character] ?? {};
+  const v = (VOICE_CLIPS as Partial<typeof VOICE_CLIPS>)[character] ?? {};
   for (const list of Object.values(v)) for (const rel of list ?? []) out.add(rel);
-  for (const rel of Object.values(CHAR_SFX[character] ?? {})) if (rel) out.add(rel);
+  for (const rel of Object.values((CHAR_SFX as Partial<typeof CHAR_SFX>)[character] ?? {})) if (rel) out.add(rel);
   for (const rel of Object.values(GENERIC_SFX)) if (rel) out.add(rel);
   // Wasteland only exists when brutile is on the board.
   if (character === 'brutile' && WASTE_DEATH_SFX) out.add(WASTE_DEATH_SFX);

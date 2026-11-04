@@ -179,6 +179,31 @@ export function slideDuration(m: Move): number {
   return Math.min(ANIM.slideMax, ANIM.slideMin + moveDistance(m) * 12);
 }
 
+/**
+ * Picker's hop-through plays as square-by-square hops (both boards): every Picker move, and any
+ * diagonal move that captured pieces on the way (an Insaner using Picker's absorbed hop).
+ */
+export function isHopMove(p: Pick<Piece, 'character'>, m: Move): boolean {
+  const dr = Math.abs(m.to.r - m.from.r);
+  if (dr === 0 || dr !== Math.abs(m.to.c - m.from.c)) return false;
+  return p.character === 'picker' || (m.captureIds?.length ?? 0) > 0;
+}
+
+/** The squares a hop lands on in order, `to` included (`from` excluded). */
+export function hopSquares(m: Move): Pos[] {
+  const n = Math.abs(m.to.r - m.from.r);
+  const sr = Math.sign(m.to.r - m.from.r);
+  const sc = Math.sign(m.to.c - m.from.c);
+  const out: Pos[] = [];
+  for (let k = 1; k <= n; k++) out.push({ r: m.from.r + sr * k, c: m.from.c + sc * k });
+  return out;
+}
+
+/** Hop timing (ms per hop, landing squash) and arc height (cells); flattened for reduced motion. */
+export function hopTiming(reduced: boolean): { stepMs: number; landMs: number; arc: number } {
+  return reduced ? { stepMs: 90, landMs: 40, arc: 0.06 } : { stepMs: 230, landMs: 120, arc: 0.42 };
+}
+
 /** Shallow equality check used to decide whether a piece's visual must be rebuilt. */
 export function sameLook(a: Piece, b: Piece): boolean {
   return a.owner === b.owner && a.character === b.character && a.level === b.level;

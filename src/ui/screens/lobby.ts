@@ -13,6 +13,7 @@ import { getProfile, squadOfProfile, subscribeProfile } from '../../meta/profile
 import { arenaProgress, dungeonRewardAvailable, type DungeonLevel } from '../../meta/progression';
 import { preloadArt } from '../backdrops';
 import { arenaBadge, topBar } from '../components/currency';
+import { artMissing } from '../components/piece';
 import { showDungeonPicker } from '../components/dungeonSheet';
 import { isTutorialOpen, showTutorial } from '../components/tutorial';
 import { Disposables, h, replaceChildren } from '../dom';
@@ -59,7 +60,7 @@ function squadStage(levels: Record<CharacterId, Level>): HTMLElement {
       ? h(
           'div',
           { class: `arena__fig arena__fig--${pos} rarity-${CHARACTERS[id].rarity}`, style: `--i:${i}` },
-          h('img', { src: artSrc(id, levels[id]), alt: '', decoding: 'async', draggable: 'false', fetchpriority: pos === 'c' ? 'high' : undefined }),
+          h('img', { src: artSrc(id, levels[id]), alt: '', decoding: 'async', draggable: 'false', fetchpriority: pos === 'c' ? 'high' : undefined, onerror: artMissing }),
         )
       : null;
   return h('div', { class: 'arena__stage', 'aria-hidden': 'true' }, fig(left, 'l', 1), fig(right, 'r', 2), fig(main, 'c', 0));

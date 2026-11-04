@@ -26,12 +26,13 @@
  * dissolve the mover in green, and deadly move targets show a skull instead of the dot.
  */
 import { BOARD_SIZE, ZONE_DEPTH } from '../engine/types';
-import type { CharacterId, Level, Move, Piece, PlayerId, Pos } from '../engine/types';
+import type { CharacterId, Level, Move, Piece, PlayerId, Pos, Trap } from '../engine/types';
 import type { BoardHighlights, IBoardView, ScreenRect, SkillPreview } from './types';
 import { ANIM, BOARD_COLORS, CHARACTER_FX, CHARACTER_RARITY, RARITY_RING, TEAM_COLORS, WASTE_COLORS } from './palette';
 import { STORM_COLORS } from './storm';
 import { wasteMask } from './waste';
 import { Waste2DSprites, wasteVariant } from './waste2d';
+import { DOLL_CORNER_OFFSET, DOLL_CORNER_SIZE, DOLL_SIZE, STUN_BOX, dollSprite, stunSprite, wobbleAngle } from './trapFx';
 import {
   clamp01,
   containerSize,
@@ -39,7 +40,10 @@ import {
   easeOutCubic,
   faceUrl,
   hexToRgb,
+  hopSquares,
+  hopTiming,
   indexHighlights,
+  isHopMove,
   mixRgb,
   posKey,
   prefersReducedMotion,
@@ -69,6 +73,8 @@ import {
 const TAP_SLOP_PX = 14;
 /** Opacity of a piece while it is being dragged (its DOM ghost follows the finger). */
 const DRAG_SOURCE_ALPHA = 0.3;
+/** Opacity of a stunned piece (with the "속박" badge above it). */
+const STUN_ALPHA = 0.55;
 const MAX_PIXEL_RATIO = 2;
 const IDLE_FRAME_MS = 32;
 /** Storm removal: dissolve length (ms). */
@@ -147,7 +153,19 @@ interface Anim2D {
   /** The mover steps onto wasteland and dissolves there (absent from piecesAfter). */
   wasted: boolean;
   piecesAfter: Piece[];
+  /** Picker's hop-through (square by square), or null for every other move. */
+  hop: Hop2D | null;
   resolve: () => void;
+}
+
+/** Picker's hop: landing squares in order, timing, and the victims struck on landing. */
+interface Hop2D {
+  squares: Pos[];
+  stepMs: number;
+  landMs: number;
+  arc: number;
+  victims: { piece: Piece; impactAt: number; fired: boolean }[];
+  landed: number;
 }
 
 /** Shared face images (the browser caches the files; one decode per session). */
@@ -237,6 +255,8 @@ export class Board2DView implements IBoardView {
   private hasLegendary = false;
   /** Pre-rendered tokens keyed by look + pixel size. */
   private readonly sprites = new Map<string, HTMLCanvasElement>();
+  /** Michelle's doll traps (setTraps). */
+  private traps: Trap[] = [];
   /** Wasteland squares, their reveal (< 1 only while the cast cracks them open), sprites. */
   private readonly waste = new Set<number>();
   private readonly wasteOpen = new Map<number, number>();
@@ -314,6 +334,13 @@ export class Board2DView implements IBoardView {
     for (const q of [...this.wasteOpen.keys()]) if (!next.includes(q)) this.wasteOpen.delete(q);
     this.waste.clear();
     for (const q of next) this.waste.add(q);
+    this.requestRender();
+  }
+
+  /** Michelle's doll traps (full list). */
+  setTraps(traps: readonly Trap[]): void {
+    if (this.disposed) return;
+    this.traps = traps.filter((t) => Number.isInteger(t.sq) && t.sq >= 0 && t.sq < BOARD_SIZE * BOARD_SIZE).map((t) => ({ sq: t.sq, owner: t.owner }));
     this.requestRender();
   }
 
@@ -421,12 +448,13 @@ export class Board2DView implements IBoardView {
   }
 
   /** Pieces missing from `next` (other than `skipId`) that stood near the storm edge dissolve. */
-  private collectStormVictims(next: Piece[], skipId: string | null): void {
+  private collectStormVictims(next: Piece[], skip: string | readonly string[] | null): void {
     if (!this.stormActive) return;
     const seen = new Set(next.map((p) => p.id));
+    if (skip !== null) for (const id of typeof skip === 'string' ? [skip] : skip) seen.add(id);
     const now = performance.now();
     for (const p of this.pieces) {
-      if (seen.has(p.id) || p.id === skipId || !this.stormColumn(p.pos.c, 1)) continue;
+      if (seen.has(p.id) || !this.stormColumn(p.pos.c, 1)) continue;
       this.fading.push({ piece: { ...p, pos: { ...p.pos } }, start: now });
     }
   }
@@ -441,6 +469,7 @@ export class Board2DView implements IBoardView {
       if (move.captureId) this.emitImpact(move);
       return Promise.resolve();
     }
+    if (isHopMove(mover, move)) return this.animateHop(mover, move, piecesAfter);
     const now = performance.now();
     const ch = mover.character;
     const chain = ch === 'insaner' && this.lastCapture?.id === move.pieceId && now - this.lastCapture.t < CHAIN_WINDOW_MS;
@@ -499,10 +528,94 @@ export class Board2DView implements IBoardView {
         landed: false,
         wasted,
         piecesAfter: clonePieces(piecesAfter),
+        hop: null,
         resolve,
       };
       this.requestRender();
     });
+  }
+
+  /**
+   * Picker's hop-through: short arcs square by square with a "콩" squash on each landing; every
+   * enemy on the way is struck the moment he lands on it (capture FX + onImpact per victim).
+   * Reduced motion: fast, flat hops.
+   */
+  private animateHop(mover: Piece, move: Move, piecesAfter: Piece[]): Promise<void> {
+    const now = performance.now();
+    this.lastCapture = null;
+    const timing = hopTiming(this.reducedMotion);
+    const squares = hopSquares(move);
+    const ids = move.captureIds ?? (move.captureId ? [move.captureId] : []);
+    const victims: Hop2D['victims'] = [];
+    for (const id of ids) {
+      const v = this.pieces.find((p) => p.id === id);
+      if (!v) continue;
+      const step = squares.findIndex((q) => q.r === v.pos.r && q.c === v.pos.c);
+      victims.push({ piece: v, impactAt: (Math.max(0, step) + 1) * timing.stepMs, fired: false });
+    }
+    const moveDur = squares.length * timing.stepMs;
+    const lastImpact = victims.reduce((m, v) => Math.max(m, v.impactAt), 0);
+    const wasted = !!move.wasted;
+    const duration = Math.max(moveDur + timing.landMs, lastImpact ? lastImpact + HIT_MS + DEATH_MS : 0, wasted ? moveDur + WASTE_DIE_MS : 0) + 30;
+    this.trail.length = 0;
+    this.trailColor = CHARACTER_FX[mover.character].primary;
+    return new Promise<void>((resolve) => {
+      this.anim = {
+        move,
+        start: now,
+        duration,
+        moveDur,
+        moverId: move.pieceId,
+        character: mover.character,
+        from: { ...move.from },
+        to: { ...move.to },
+        strike: { ...move.to },
+        jump: true,
+        charge: false,
+        chain: false,
+        capture: false,
+        captured: null,
+        impactAt: Infinity,
+        impactFired: true,
+        deathStart: Infinity,
+        stepStart: Infinity,
+        landed: false,
+        wasted,
+        piecesAfter: clonePieces(piecesAfter),
+        hop: { squares, stepMs: timing.stepMs, landMs: timing.landMs, arc: timing.arc, victims, landed: -1 },
+        resolve,
+      };
+      this.requestRender();
+    });
+  }
+
+  /** Hop landings ("콩" ring) and victim impacts up to time `t`. */
+  private tickHop(a: Anim2D, hop: Hop2D, t: number, now: number): void {
+    const done = Math.min(hop.squares.length, Math.floor(t / hop.stepMs)) - 1;
+    while (hop.landed < done) {
+      hop.landed++;
+      this.tLand = now;
+      this.landAt = { ...hop.squares[hop.landed] };
+      this.landColor = CHARACTER_FX[a.character].primary;
+    }
+    if (done >= hop.squares.length - 1) a.landed = true;
+    for (const v of hop.victims) {
+      if (v.fired || t < v.impactAt) continue;
+      v.fired = true;
+      this.tCap = now;
+      this.tShake = now;
+      this.capKind = a.character;
+      this.capAt = { ...v.piece.pos };
+      const dc = a.to.c - a.from.c;
+      const dr = a.to.r - a.from.r;
+      const l = Math.hypot(dc, dr) || 1;
+      this.capDir = { x: dc / l, y: -dr / l };
+      this.capBurst = Array.from({ length: 12 }, (_, i) => ({ a: (i / 12) * Math.PI * 2 + Math.sin(now + i * 7.3) * 0.35, v: 0.8 + 0.5 * (0.5 + 0.5 * Math.sin(now * 0.37 + i * 3.1)) }));
+      this.shakeAmp = this.reducedMotion ? 0.5 : 1.3;
+      this.shakeMs = ANIM.shake;
+      this.soulTo = null;
+      this.emitImpact({ ...a.move, captureId: v.piece.id });
+    }
   }
 
   /** Register the strike-impact listener (called once per capturing move, at the impact frame). */
@@ -747,7 +860,7 @@ export class Board2DView implements IBoardView {
     const busy = !!this.anim || !!this.skill || this.fxActive(now);
     const ringLoop = this.hasLegendary && !this.reducedMotion && !document.hidden;
     // Wasteland glow / bubbles and the targeting ghost breathe at <= ~30 fps (static if reduced motion).
-    const wasteLoop = !this.reducedMotion && !document.hidden && (this.waste.size > 0 || this.anchors.length > 0 || this.preview !== null);
+    const wasteLoop = !this.reducedMotion && !document.hidden && (this.waste.size > 0 || this.traps.length > 0 || this.anchors.length > 0 || this.preview !== null);
     const loop = this.pulsing || ringLoop || wasteLoop || this.storm > 0 || (this.stormActive && this.stormNext !== null && this.stormNext <= 2);
     if (!busy && loop && now - this.lastFrame < IDLE_FRAME_MS) {
       this.requestRender();
@@ -764,6 +877,10 @@ export class Board2DView implements IBoardView {
     const t = now - a.start;
     if (t >= a.duration) {
       this.finishAnimation(true);
+      return;
+    }
+    if (a.hop) {
+      this.tickHop(a, a.hop, t, now);
       return;
     }
     if (!a.landed && t >= a.moveDur) {
@@ -816,11 +933,20 @@ export class Board2DView implements IBoardView {
     if (!a) return;
     this.anim = null;
     // A mover destroyed on the wasteland already dissolved: never a storm ghost too.
-    this.collectStormVictims(a.piecesAfter, a.wasted ? a.moverId : (a.captured?.id ?? null));
+    const skip = [a.moverId, ...(a.captured ? [a.captured.id] : []), ...(a.hop ? a.hop.victims.map((v) => v.piece.id) : [])];
+    this.collectStormVictims(a.piecesAfter, a.wasted || a.hop ? skip : (a.captured?.id ?? null));
     this.setPieceList(a.piecesAfter);
     if (a.capture && !a.impactFired) {
       a.impactFired = true;
       if (!this.disposing) this.emitImpact(a.move);
+    }
+    // A hop cut short still reports every victim once.
+    if (a.hop) {
+      for (const v of a.hop.victims) {
+        if (v.fired) continue;
+        v.fired = true;
+        if (!this.disposing) this.emitImpact({ ...a.move, captureId: v.piece.id });
+      }
     }
     this.requestRender();
     a.resolve();
@@ -949,6 +1075,7 @@ export class Board2DView implements IBoardView {
       ctx.restore();
     }
 
+    this.drawTrapsUnder(now);
     const sk = this.skill;
     if (sk && sk.casterId) this.drawRune(this.cx(sk.from.c), this.cy(sk.from.r), cell * 1.15, (now - sk.start) / SKILL_RUNE_MS, (now - sk.start) * 0.0016);
     // Pieces (back rows first so overlaps read naturally).
@@ -958,6 +1085,53 @@ export class Board2DView implements IBoardView {
     let moverDraw: (() => void) | null = null;
     let moverXY = { x: 0, y: 0 };
     for (const p of list) {
+      if (a && a.hop && p.id === a.moverId) {
+        const hop = a.hop;
+        const n = hop.squares.length;
+        const i = Math.min(n - 1, Math.floor(t / hop.stepMs));
+        let fr: number;
+        let fc: number;
+        let lift = 0;
+        let sq = 1;
+        if (t < a.moveDur) {
+          const k = clamp01((t - i * hop.stepMs) / hop.stepMs);
+          const p0 = i === 0 ? a.from : hop.squares[i - 1];
+          const e = easeInOutCubic(k);
+          fr = p0.r + (hop.squares[i].r - p0.r) * e;
+          fc = p0.c + (hop.squares[i].c - p0.c) * e;
+          lift = Math.sin(Math.PI * k) * hop.arc * 8;
+          const since = t - i * hop.stepMs;
+          sq = i > 0 && since < hop.landMs ? 1 + 0.16 * Math.sin(Math.PI * (since / hop.landMs)) : 1 + 0.08 * Math.sin(Math.PI * k);
+        } else {
+          fr = a.to.r;
+          fc = a.to.c;
+          const since = t - a.moveDur;
+          sq = since < hop.landMs ? 1 + 0.18 * Math.sin(Math.PI * (since / hop.landMs)) : 1;
+        }
+        const x = this.cx(fc);
+        const y = this.cy(fr);
+        moverXY = { x, y: y - lift * cell * 0.12 };
+        if (t < a.moveDur) this.pushTrail(moverXY.x, moverXY.y, now);
+        if (a.wasted && t >= a.moveDur) {
+          const tx = this.cx(a.to.c);
+          const ty = this.cy(a.to.r);
+          moverDraw = () => this.drawWastedPiece(p, tx, ty, t - a.moveDur, now);
+          continue;
+        }
+        // Squash: wider and a touch flatter on landing (top-down coin).
+        moverDraw = () => this.drawPiece(p, x, y, sq, 2 - sq, 1, lift, now);
+        continue;
+      }
+      if (a && a.hop) {
+        const v = a.hop.victims.find((q) => q.piece.id === p.id);
+        if (v) {
+          const x = this.cx(p.pos.c);
+          const y = this.cy(p.pos.r);
+          if (t < v.impactAt) this.drawPiece(p, x, y, 1, 1, 1, 0, now);
+          else this.drawVictim(p, x, y, t - v.impactAt, t, a, now, v.impactAt + HIT_MS);
+          continue;
+        }
+      }
       if (a && p.id === a.moverId) {
         const k = clamp01(t / a.moveDur);
         const e = easeInOutCubic(k);
@@ -1016,8 +1190,10 @@ export class Board2DView implements IBoardView {
         sc *= 1 + 0.2 * bump(0, 420, tk) + 0.08 * bump(sk.boltAt, sk.boltAt + 260, tk);
         flash = 0.4 * Math.max(0, 1 - tk / 260);
       }
-      this.drawPiece(p, this.cx(p.pos.c), this.cy(p.pos.r), sc, sc, p.id === this.draggingId ? DRAG_SOURCE_ALPHA : 1, bob, now, flash);
+      const alpha = (p.id === this.draggingId ? DRAG_SOURCE_ALPHA : 1) * (p.stun ? STUN_ALPHA : 1);
+      this.drawPiece(p, this.cx(p.pos.c), this.cy(p.pos.r), sc, sc, alpha, bob, now, flash);
     }
+    this.drawTrapsOver(now);
     // Capture targets sit on top of the threatened tokens.
     const cp = pulse01(now, 700);
     for (const p of h.captures ?? []) this.drawMarker('capture', BOARD_COLORS.capture, this.cx(p.c), this.cy(p.r), cell * (0.96 + 0.07 * cp));
@@ -1029,8 +1205,61 @@ export class Board2DView implements IBoardView {
     this.drawFx(now, a ? moverXY : null);
   }
 
+  /** Squares a resting (not animating) piece stands on. */
+  private occupiedSquares(): Set<number> {
+    const occ = new Set<number>();
+    for (const p of this.pieces) if (!this.anim || (p.id !== this.anim.moverId && !this.anim.hop?.victims.some((v) => v.piece.id === p.id))) occ.add(p.pos.r * BOARD_SIZE + p.pos.c);
+    return occ;
+  }
+
+  /** Doll traps on empty squares (under the pieces), with their idle wobble. */
+  private drawTrapsUnder(now: number): void {
+    if (this.traps.length === 0) return;
+    const ctx = this.ctx;
+    const cell = this.layout.cell;
+    const occ = this.occupiedSquares();
+    const d = cell * DOLL_SIZE;
+    for (const t of this.traps) {
+      if (occ.has(t.sq)) continue;
+      const x = this.cx(t.sq % BOARD_SIZE);
+      const y = this.cy(Math.floor(t.sq / BOARD_SIZE));
+      const spr = dollSprite(t.owner, d * this.dpr);
+      const ang = this.reducedMotion ? 0 : wobbleAngle(now, t.sq);
+      ctx.save();
+      ctx.translate(x, y + d * 0.35);
+      ctx.rotate(ang);
+      ctx.drawImage(spr, -d / 2, -d * 0.85, d, d);
+      ctx.restore();
+    }
+  }
+
+  /** The "속박" marks of stunned pieces, then mini dolls peeking out of occupied trap squares. */
+  private drawTrapsOver(now: number): void {
+    const ctx = this.ctx;
+    const cell = this.layout.cell;
+    const box = cell * STUN_BOX;
+    for (const p of this.pieces) {
+      if (!p.stun || (this.anim && p.id === this.anim.moverId)) continue;
+      ctx.drawImage(stunSprite(box * this.dpr), this.cx(p.pos.c) - box / 2, this.cy(p.pos.r) - box / 2, box, box);
+    }
+    if (this.traps.length === 0) return;
+    const occ = this.occupiedSquares();
+    const d = cell * DOLL_CORNER_SIZE;
+    for (const t of this.traps) {
+      if (!occ.has(t.sq)) continue;
+      const x = this.cx(t.sq % BOARD_SIZE) - cell * DOLL_CORNER_OFFSET;
+      const y = this.cy(Math.floor(t.sq / BOARD_SIZE)) + cell * DOLL_CORNER_OFFSET;
+      const ang = this.reducedMotion ? 0 : wobbleAngle(now, t.sq);
+      ctx.save();
+      ctx.translate(x, y + d * 0.35);
+      ctx.rotate(ang);
+      ctx.drawImage(dollSprite(t.owner, d * this.dpr), -d / 2, -d * 0.85, d, d);
+      ctx.restore();
+    }
+  }
+
   /** Victim of a strike: white hit flash + shake, then it swells, burns away and shatters. */
-  private drawVictim(p: Piece, x: number, y: number, tk: number, t: number, a: Anim2D, now: number): void {
+  private drawVictim(p: Piece, x: number, y: number, tk: number, t: number, a: Anim2D, now: number, deathStart = a.deathStart): void {
     const ctx = this.ctx;
     const cell = this.layout.cell;
     const l = Math.hypot(this.capDir.x, this.capDir.y) || 1;
@@ -1038,7 +1267,7 @@ export class Board2DView implements IBoardView {
     const shake = tk < HIT_MS ? Math.sin(tk * 0.11) * cell * 0.05 * (1 - tk / HIT_MS) : 0;
     const vx = x + (this.capDir.x / l) * kb - (this.capDir.y / l) * shake;
     const vy = y + (this.capDir.y / l) * kb + (this.capDir.x / l) * shake;
-    const ck = clamp01((t - a.deathStart) / DEATH_MS);
+    const ck = clamp01((t - deathStart) / DEATH_MS);
     const s = 1 + 0.15 * easeOutCubic(ck);
     if (ck < 1) this.drawPiece(p, vx, vy, s, s, 1 - ck * ck, 0, now, Math.max(0, 1 - tk / 160) * 0.85);
     if (ck > 0) {

@@ -5,14 +5,16 @@
  */
 import { CHARACTERS, type CharacterId, type Level, type PlayerId } from '../../engine';
 import { VOICE_CLIPS, VOICE_TEXT } from '../../audio/voiceManifest';
-import { starsOf } from '../components/piece';
+import { artMissing, starsOf } from '../components/piece';
 import { h } from '../dom';
 
 export type CutInKind = 'capture' | 'skill' | 'chain';
 
 /** Caption lines per character and cut-in kind: the texts of the matching voice clips. */
 function linesFor(character: CharacterId, kind: CutInKind): string[] {
-  const out = (VOICE_CLIPS[character][kind] ?? VOICE_CLIPS[character].capture ?? []).map((rel) => VOICE_TEXT[rel]).filter(Boolean);
+  // A character without recorded voices yet (no manifest entry) still gets a caption: its name.
+  const clips = (VOICE_CLIPS as Partial<typeof VOICE_CLIPS>)[character];
+  const out = (clips?.[kind] ?? clips?.capture ?? []).map((rel) => VOICE_TEXT[rel]).filter(Boolean);
   return out.length ? out : [CHARACTERS[character].nameKo];
 }
 
@@ -60,7 +62,7 @@ export function cutInEl(spec: CutInSpec): HTMLElement {
     },
     h('div', { class: 'cutin__band' }),
     h('div', { class: 'cutin__lines' }),
-    h('div', { class: 'cutin__art' }, h('img', { src: cardUrl(spec.character, spec.level), alt: '', decoding: 'async', draggable: 'false' })),
+    h('div', { class: 'cutin__art' }, h('img', { src: cardUrl(spec.character, spec.level), alt: '', decoding: 'async', draggable: 'false', onerror: artMissing })),
     h(
       'div',
       { class: 'cutin__text' },

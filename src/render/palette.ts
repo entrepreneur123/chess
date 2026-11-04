@@ -87,6 +87,9 @@ export const CHARACTER_FX: Record<CharacterId, { primary: string; secondary: str
   walk: { primary: '#7CC8FF', secondary: '#DDF2FF', core: '#FFFFFF' },
   insaner: { primary: '#B24BFF', secondary: '#FF2A5C', core: '#F4DCFF' },
   brutile: { primary: '#6BFF3A', secondary: '#5B1F86', core: '#E8FFC2' },
+  // Michelle: pale doll lavender over a dusk plum. Picker: desert sun amber and rope tan.
+  michelle: { primary: '#B9A6FF', secondary: '#4B3B6E', core: '#F3EEFF' },
+  picker: { primary: '#FFB547', secondary: '#C9894A', core: '#FFF1D6' },
 };
 
 /**
@@ -141,6 +144,8 @@ export const CHARACTER_RARITY: Record<CharacterId, Rarity> = {
   walk: 'epic',
   insaner: 'legendary',
   brutile: 'legendary',
+  michelle: 'common',
+  picker: 'rare',
 };
 
 /**

@@ -7,6 +7,8 @@
 import {
   applyMove,
   applyTimeout,
+  capturedIds,
+  trapsLeft,
   applySkill,
   isLegalSkill,
   getLegalMoves,
@@ -57,6 +59,12 @@ export type ControllerEvent =
   | { type: 'absorb'; player: PlayerId; pieceId: string; character: CharacterId }
   /** `pieceId` (Brutile) laid wasteland on `squares`. */
   | { type: 'skill'; player: PlayerId; pieceId: string; squares: number[] }
+  /** `pieceId` (Michelle) left a doll trap on `square` (her `trapsLeft` traps remain). */
+  | { type: 'trap'; player: PlayerId; pieceId: string; square: Pos; trapsLeft: number }
+  /** `pieceId` (owned by `player`) ended its move on an enemy doll trap and is stunned. */
+  | { type: 'stun'; player: PlayerId; pieceId: string; square: Pos }
+  /** `pieceId` (Picker, or an Insaner with his hop) captured several pieces in one move. */
+  | { type: 'multiCapture'; player: PlayerId; pieceId: string; captured: string[] }
   /** The storm advanced to `storm` columns per side, removing `killed`. */
   | { type: 'storm'; storm: number; killed: string[]; /** The removed pieces as they stood. */ lost: Piece[] }
   | { type: 'ended'; state: GameState };
@@ -432,6 +440,13 @@ export class GameController {
    */
   private announce(prev: GameState, next: GameState, skip: number): void {
     const action = next.history[prev.history.length];
+    if (action?.kind === 'move') {
+      const m = action.move;
+      if (m.trap) this.emit({ type: 'trap', player: action.player, pieceId: m.pieceId, square: { ...m.from }, trapsLeft: trapsLeft(next, action.player) });
+      if (m.stunned) this.emit({ type: 'stun', player: action.player, pieceId: m.pieceId, square: { ...m.to } });
+      const all = capturedIds(m);
+      if (all.length > 1) this.emit({ type: 'multiCapture', player: action.player, pieceId: m.pieceId, captured: [...all] });
+    }
     if (action?.kind === 'move' && action.move.captureId) {
       const before = getPieceById(prev, action.move.pieceId);
       const after = getPieceById(next, action.move.pieceId);
@@ -450,6 +465,13 @@ export class GameController {
         this.emit({
           type: 'toast',
           message: e.player === HUMAN ? '움직일 수 있는 말이 없어 턴을 넘깁니다' : '상대가 움직일 수 없어 턴이 넘어옵니다',
+          kind: 'pass',
+          player: e.player,
+        });
+      } else if (e.kind === 'pass' && e.reason === 'stunned') {
+        this.emit({
+          type: 'toast',
+          message: e.player === HUMAN ? '내 말이 인형 함정에 속박돼 이번 턴을 넘깁니다' : '상대 말이 속박돼 턴이 넘어옵니다',
           kind: 'pass',
           player: e.player,
         });

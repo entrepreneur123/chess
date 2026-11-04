@@ -62,7 +62,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { BOARD_SIZE, ZONE_DEPTH } from '../engine/types';
-import type { Level, Move, Piece, PlayerId, Pos, Rarity } from '../engine/types';
+import type { Level, Move, Piece, PlayerId, Pos, Rarity, Trap } from '../engine/types';
 import type { BoardHighlights, BoardViewMode, BoardViewOptions, IBoardView, ScreenRect, SkillPreview } from './types';
 import type { UnitActor } from './units/actor';
 import { loadUnitAssets, unitAssetsIfLoaded } from './units/assets';
@@ -74,13 +74,17 @@ import { GROUND_MODE, StrikeFx } from './strikeFx';
 import { RingMaterials, TokenKit } from './tokens';
 import { STORM_COLORS, StormFx } from './storm';
 import { WasteFx } from './waste';
+import { TrapMarks3D } from './trapFx';
 import {
   clamp01,
   containerSize,
   easeInOutCubic,
   easeOutCubic,
   hexToRgb,
+  hopSquares,
+  hopTiming,
   indexHighlights,
+  isHopMove,
   makeRng,
   mixRgb,
   posKey,
@@ -121,6 +125,8 @@ const SELECT_LIFT = 0.12;
 const TAP_SLOP_PX = 14;
 /** Token opacity of a piece while it is being dragged (its DOM ghost follows the finger). */
 const DRAG_SOURCE_OPACITY = 0.3;
+/** Token opacity of a stunned piece (with the "속박" badge above it). */
+const STUN_OPACITY = 0.55;
 /** Camera blend between the tilted arena view and the top-down view. */
 const VIEW_TRANSITION_MS = 520;
 const TILT_FOV = 34;
@@ -251,7 +257,31 @@ interface RunningAnim {
   wasted: boolean;
   wasteFired: boolean;
   piecesAfter: Piece[];
+  /** Picker's hop-through (square by square), or null for every other move. */
+  hop: HopData | null;
   resolve: () => void;
+}
+
+/** One victim of a hop: captured the moment the hopper lands on its square. */
+interface HopVictim {
+  id: string;
+  visual: PieceVisual | null;
+  at: THREE.Vector3;
+  /** Landing time (ms since start) on its square. */
+  impactAt: number;
+  fired: boolean;
+  deathFired: boolean;
+}
+
+interface HopData {
+  /** Landing squares in order (world, y = 0); the hop starts at `RunningAnim.from`. */
+  squares: THREE.Vector3[];
+  stepMs: number;
+  landMs: number;
+  arc: number;
+  victims: HopVictim[];
+  /** Index of the last hop whose landing effect has been played (-1 = none yet). */
+  landed: number;
 }
 
 /** Brutile laying wasteland (animateSkill). */
@@ -643,6 +673,9 @@ export class BoardView implements IBoardView {
   private turnFxPlayer: PlayerId = 0;
 
   private readonly visuals = new Map<string, PieceVisual>();
+  /** Michelle's doll traps (setTraps) and the dolls / stun badges drawn for them. */
+  private traps: Trap[] = [];
+  private trapMarks!: TrapMarks3D;
   /** glTF unit factory (null until the models are loaded, or if loading failed). */
   private units: UnitLibrary | null = null;
   /** Point-sprite scale shared with the unit FX (drawing-buffer px per world unit at distance 1). */
@@ -781,6 +814,8 @@ export class BoardView implements IBoardView {
     this.scene.add(this.stormFx.mesh);
     this.wasteFx = new WasteFx(OVERLAY_Y + 0.0005);
     this.scene.add(this.wasteFx.group);
+    this.trapMarks = new TrapMarks3D(cellX, cellZ, OVERLAY_Y + 0.006, TILE_TOP + TOKEN_Y + 0.05);
+    this.scene.add(this.trapMarks.group);
 
     const fx = this.buildFx(glowTex);
     this.landRing = fx.landRing;
@@ -1255,6 +1290,7 @@ export class BoardView implements IBoardView {
       if (move.captureId) this.emitImpact(move);
       return Promise.resolve();
     }
+    if (isHopMove(mover.piece, move)) return this.animateHop(mover, move, piecesAfter);
     const now = performance.now();
     const ch = mover.piece.character;
     const chain = ch === 'insaner' && this.lastCapture?.id === move.pieceId && now - this.lastCapture.t < CHAIN_WINDOW_MS;
@@ -1385,10 +1421,177 @@ export class BoardView implements IBoardView {
         wasted,
         wasteFired: false,
         piecesAfter,
+        hop: null,
         resolve,
       };
       this.requestRender();
     });
+  }
+
+  /**
+   * Picker's hop-through: short arcs square by square with a small "콩" squash on every landing.
+   * Each enemy on the way is struck the moment he lands on it (capture FX, onImpact with that
+   * victim as `captureId`). Reduced motion: fast, flat hops.
+   */
+  private animateHop(mover: PieceVisual, move: Move, piecesAfter: Piece[]): Promise<void> {
+    const now = performance.now();
+    this.lastCapture = null;
+    const timing = hopTiming(this.reducedMotion || !this.idleAnim);
+    const cells = hopSquares(move);
+    const squares = cells.map((p) => new THREE.Vector3(cellX(p.c), 0, cellZ(p.r)));
+    const victims: HopVictim[] = [];
+    const ids = move.captureIds ?? (move.captureId ? [move.captureId] : []);
+    for (const id of ids) {
+      const v = this.visuals.get(id) ?? null;
+      const pos = v?.piece.pos;
+      const step = pos ? cells.findIndex((q) => q.r === pos.r && q.c === pos.c) : cells.length - 1;
+      if (v) this.visuals.delete(id);
+      victims.push({
+        id,
+        visual: v,
+        at: v ? v.root.position.clone() : squares[squares.length - 1].clone(),
+        impactAt: (Math.max(0, step) + 1) * timing.stepMs,
+        fired: false,
+        deathFired: false,
+      });
+    }
+    const from = mover.root.position.clone();
+    from.y = 0;
+    const to = squares[squares.length - 1].clone();
+    let dirX = to.x - from.x;
+    let dirZ = to.z - from.z;
+    const len = Math.hypot(dirX, dirZ) || 1;
+    dirX /= len;
+    dirZ /= len;
+    const moveDur = squares.length * timing.stepMs;
+    const lastImpact = victims.reduce((m, v) => Math.max(m, v.impactAt), 0);
+    const wasted = !!move.wasted;
+    const duration = Math.max(moveDur + timing.landMs, lastImpact ? lastImpact + HIT_MS + DEATH_MS : 0, wasted ? moveDur + WASTE_DIE_MS : 0) + 30;
+    if (mover.actor && mover.actor.has('jump')) mover.actor.face(Math.atan2(dirX, dirZ), 0.1);
+    return new Promise<void>((resolve) => {
+      this.anim = {
+        move,
+        start: now,
+        duration,
+        moveDur,
+        mover,
+        from,
+        to,
+        strikeAt: to.clone(),
+        dirX,
+        dirZ,
+        jump: true,
+        jumpHeight: timing.arc,
+        landed: false,
+        capture: false,
+        captured: null,
+        capturedAt: to.clone(),
+        attackStart: Infinity,
+        attackFired: true,
+        impactAt: Infinity,
+        impactFired: true,
+        deathStart: Infinity,
+        deathFired: true,
+        stepStart: Infinity,
+        stepFired: true,
+        charge: false,
+        chain: false,
+        trail: false,
+        nextDust: Infinity,
+        wasted,
+        wasteFired: false,
+        piecesAfter,
+        hop: { squares, stepMs: timing.stepMs, landMs: timing.landMs, arc: timing.arc, victims, landed: -1 },
+        resolve,
+      };
+      this.requestRender();
+    });
+  }
+
+  /** Advance a hop animation (see animateHop). */
+  private tickHop(a: RunningAnim, hop: HopData, t: number, now: number): boolean {
+    const root = a.mover.root;
+    const inner = a.mover.inner;
+    const n = hop.squares.length;
+    const i = Math.min(n - 1, Math.floor(t / hop.stepMs));
+    const airborne = t < a.moveDur;
+    if (airborne) {
+      const k = clamp01((t - i * hop.stepMs) / hop.stepMs);
+      const p0 = i === 0 ? a.from : hop.squares[i - 1];
+      root.position.lerpVectors(p0, hop.squares[i], easeInOutCubic(k));
+      inner.position.y = TILE_TOP + Math.sin(Math.PI * k) * hop.arc;
+      let sxz = 1 + 0.09 * Math.sin(Math.PI * k);
+      // "콩": a quick squash right after each landing (the previous hop's), stretched take-off.
+      const since = t - i * hop.stepMs;
+      if (i > 0 && since < hop.landMs) sxz = 1 + 0.16 * Math.sin(Math.PI * (since / hop.landMs));
+      inner.scale.set(sxz, 1, sxz);
+    } else {
+      root.position.copy(hop.squares[n - 1]);
+      inner.position.y = TILE_TOP;
+      const since = t - a.moveDur;
+      const sxz = since < hop.landMs ? 1 + 0.18 * Math.sin(Math.PI * (since / hop.landMs)) : 1;
+      inner.scale.set(sxz, 1, sxz);
+    }
+    // Landing effects for every hop completed so far (one "콩" ring + dust puff each).
+    const done = Math.min(n, Math.floor(t / hop.stepMs)) - 1;
+    while (hop.landed < done) {
+      hop.landed++;
+      const at = hop.squares[hop.landed];
+      const fx = CHARACTER_FX[a.mover.piece.character];
+      // Just the "콩" ring: a dust puff per hop would cover the coin in the top-down view.
+      this.startLandFx(at, fx.primary, now);
+    }
+    // Victims: struck when he lands on their square.
+    for (const v of hop.victims) {
+      if (!v.fired && t >= v.impactAt) {
+        v.fired = true;
+        this.hopImpact(a, v, now);
+      }
+      if (v.fired && v.visual) this.dissolveHopVictim(a, v, t - v.impactAt);
+    }
+    if (a.wasted && !airborne) {
+      this.tickWasted(a, t, now);
+      return true;
+    }
+    return true;
+  }
+
+  /** A hop lands on a victim: impact FX in the hopper's colours, then onImpact for that victim. */
+  private hopImpact(a: RunningAnim, v: HopVictim, now: number): void {
+    const fx = CHARACTER_FX[a.mover.piece.character];
+    const at = v.at;
+    const gy = TILE_TOP + 0.012;
+    this.strike.ground(0, GROUND_MODE.ring, at.x, gy, at.z, 1.05, fx.primary, fx.core, 520, now);
+    this.sparks.burst(at.x, 0.7, at.z, 18, 3.4, fx.primary, now % 97);
+    this.startCaptureFx(at, fx.primary, 0.5, now, this.reducedMotion ? 0.5 : 1.4, ANIM.shake);
+    if (v.visual?.actor?.has('hit')) v.visual.actor.play('hit', { once: true, hold: true, fade: 0.04 });
+    this.emitImpact({ ...a.move, captureId: v.id });
+  }
+
+  /** Victim of a hop: white flash + shake, then the token burns away (like a strike's victim). */
+  private dissolveHopVictim(a: RunningAnim, v: HopVictim, tk: number): void {
+    const cv = v.visual!;
+    if (!v.deathFired && tk >= HIT_MS) {
+      v.deathFired = true;
+      const act = cv.actor;
+      if (act) {
+        act.play('death', { once: true, hold: true, fade: 0.06, timeScale: act.clipDuration('death') / ((DEATH_MS + 60) / 1000) });
+        if (this.units) act.setDying(this.units.dyingMaterial(cv.piece));
+      }
+    }
+    const kb = 0.2 * easeOutCubic(clamp01(tk / (HIT_MS + DEATH_MS)));
+    const ck = clamp01((tk - HIT_MS) / DEATH_MS);
+    cv.root.position.set(v.at.x + a.dirX * kb, 0.06 * easeOutCubic(ck), v.at.z + a.dirZ * kb);
+    if (!cv.actor) cv.inner.scale.setScalar(Math.max(0.001, 1 - easeOutCubic(clamp01((ck - 0.3) / 0.7))));
+    const u = cv.tokenMat.uniforms;
+    u.uFlash.value = Math.max(0, 1 - tk / 160) * 0.85;
+    const shake = tk < HIT_MS ? Math.sin(tk * 0.11) * 0.045 * (1 - tk / HIT_MS) : 0;
+    cv.token.position.set(-a.dirZ * shake, TOKEN_Y, a.dirX * shake);
+    u.uDissolve.value = ck;
+    const sw = 1 + 0.14 * easeOutCubic(ck);
+    cv.token.scale.set(sw, 1, sw);
+    const rs = Math.max(0.001, 1 - easeOutCubic(ck));
+    cv.ring.scale.set(rs, 1, rs);
   }
 
   /** Register the strike-impact listener (called once per capturing move, at the impact frame). */
@@ -1576,6 +1779,25 @@ export class BoardView implements IBoardView {
   }
 
   /** Skill targeting: anchors get a subtle green tint, the preview area a green (or red) ghost. */
+  setTraps(traps: readonly Trap[]): void {
+    if (this.disposed) return;
+    this.traps = traps.filter((t) => Number.isInteger(t.sq) && t.sq >= 0 && t.sq < BOARD_SIZE * BOARD_SIZE).map((t) => ({ sq: t.sq, owner: t.owner }));
+    this.applyTrapMarks();
+    this.requestRender();
+  }
+
+  /** Dolls (corner minis where a piece stands) and the stun badges, from the synced visuals. */
+  private applyTrapMarks(): void {
+    const occupied = new Set<number>();
+    const stunned: Pos[] = [];
+    for (const v of this.visuals.values()) {
+      occupied.add(v.piece.pos.r * BOARD_SIZE + v.piece.pos.c);
+      if (v.piece.stun) stunned.push(v.piece.pos);
+    }
+    this.trapMarks.setTraps(this.traps.map((t) => ({ sq: t.sq, owner: t.owner, covered: occupied.has(t.sq) })));
+    this.trapMarks.setStunned(stunned);
+  }
+
   setSkillPreview(anchors: number[] | null, preview: SkillPreview | null): void {
     if (this.disposed) return;
     this.wasteFx.setPreview(anchors, preview);
@@ -1815,6 +2037,7 @@ export class BoardView implements IBoardView {
     this.pieceLayer.clear();
     this.stormFx.dispose();
     this.wasteFx.dispose();
+    this.trapMarks.dispose();
     this.units?.dispose();
     this.units = null;
     this.dust.dispose();
@@ -1880,9 +2103,13 @@ export class BoardView implements IBoardView {
       }
     }
     let legend = 0;
-    for (const v of this.visuals.values()) if (CHARACTER_RARITY[v.piece.character] === 'legendary') legend++;
+    for (const v of this.visuals.values()) {
+      if (CHARACTER_RARITY[v.piece.character] === 'legendary') legend++;
+      this.blendVisual(v); // stun dim follows the piece state
+    }
     this.legendaryCount = legend;
     this.applyLift();
+    this.applyTrapMarks();
   }
 
   /**
@@ -1905,7 +2132,9 @@ export class BoardView implements IBoardView {
     v.figure.visible = modelK > 0.002;
     v.figure.scale.set(Math.max(0.002, modelK), Math.max(0.002, modelK * modelK), Math.max(0.002, modelK));
     v.token.visible = tokenK > 0.002;
-    v.tokenMat.uniforms.uOpacity.value = v.piece.id === this.draggingId ? tokenK * DRAG_SOURCE_OPACITY : tokenK;
+    // A stunned piece (doll trap) is dimmed until it is free again.
+    const stun = v.piece.stun ? STUN_OPACITY : 1;
+    v.tokenMat.uniforms.uOpacity.value = (v.piece.id === this.draggingId ? tokenK * DRAG_SOURCE_OPACITY : tokenK) * stun;
   }
 
   /** The storm takes a piece: death clip + magenta dissolve, sparks and a purple dust ring. */
@@ -2299,8 +2528,10 @@ export class BoardView implements IBoardView {
     const ringLoop = this.idleAnim && this.legendaryCount > 0 && !document.hidden;
     // Wasteland cracks / bubbles, skill ghost and danger marks breathe at the same light rate.
     const wasteLoop = this.idleAnim && this.wasteFx.animated && !document.hidden;
+    // Doll traps wobble gently (~30 fps idle tick; resting with prefers-reduced-motion).
+    const trapLoop = this.idleAnim && this.trapMarks.hasDolls && !document.hidden;
     const scanLoop = this.tickScan(now);
-    if (!busy && (this.pulsing || idleLoop || stormLoop || ringLoop || wasteLoop || scanLoop)) {
+    if (!busy && (this.pulsing || idleLoop || stormLoop || ringLoop || wasteLoop || trapLoop || scanLoop)) {
       const cap = this.pulsing ? IDLE_FRAME_MS : idleLoop ? IDLE_ANIM_FRAME_MS : IDLE_FRAME_MS;
       if (now - this.lastFrame < cap) {
         this.requestRender(); // idle pulse / idle loops are throttled; skip drawing this tick
@@ -2325,11 +2556,12 @@ export class BoardView implements IBoardView {
       this.wasteFx.update(now / 1000, pulse01(now, 800));
     }
     if (stormLoop) this.stormFx.update(now / 1000);
+    if (this.trapMarks.hasDolls) this.trapMarks.update(now, trapLoop);
     this.lastFrame = now;
     this.updatePulse(now);
     if (this.topOnly) this.applyTopLift();
     this.renderer.render(this.scene, this.camera);
-    if (busy || this.pulsing || idleLoop || stormLoop || ringLoop || wasteLoop || scanLoop) {
+    if (busy || this.pulsing || idleLoop || stormLoop || ringLoop || wasteLoop || trapLoop || scanLoop) {
       this.requestRender();
     } else {
       this.lastTick = 0;
@@ -2356,6 +2588,7 @@ export class BoardView implements IBoardView {
       this.finishAnimation(true);
       return false;
     }
+    if (a.hop) return this.tickHop(a, a.hop, t, now);
     const root = a.mover.root;
     const inner = a.mover.inner;
     const k = clamp01(t / a.moveDur);
@@ -2534,6 +2767,20 @@ export class BoardView implements IBoardView {
         if (a.captured) (a.captured.tokenMat.uniforms.uEdge.value as THREE.Color).set(fx.primary);
         shake = this.reducedMotion ? 0.6 : 1.6;
         flash = 0.75;
+        break;
+      case 'michelle':
+        // Doll curse: a lavender stitched sigil and a puff of grey-violet threads.
+        this.strike.ground(0, GROUND_MODE.sigil, at.x, gy, at.z, 1.0, fx.primary, fx.secondary, 620, now);
+        this.sparks.burst(at.x, 0.7, at.z, 16, 3.0, fx.primary, seed);
+        this.dust.ring(at.x, TILE_TOP + 0.08, at.z, 10, 1.3, 0.5, 0.9, SMOKE_CURSE, 0.4);
+        if (a.captured) (a.captured.tokenMat.uniforms.uEdge.value as THREE.Color).set(fx.primary);
+        flash = 0.55;
+        break;
+      case 'picker':
+        this.strike.ground(0, GROUND_MODE.ring, at.x, gy, at.z, 1.05, fx.primary, fx.core, 520, now);
+        this.sparks.burst(at.x, 0.7, at.z, 18, 3.4, fx.primary, seed);
+        this.dust.ring(at.x, TILE_TOP + 0.05, at.z, 12, 1.8, 0.6, 0.8, DUST, 0.25);
+        shake = this.reducedMotion ? 0.5 : 1.4;
         break;
     }
     this.startCaptureFx(at, fx.primary, flash, now, shake, shakeMs);
@@ -2850,6 +3097,16 @@ export class BoardView implements IBoardView {
     a.mover.token.scale.set(1, 1, 1);
     if (a.trail) this.strike.trailEnd();
     if (a.captured) this.removeVisual(a.captured);
+    if (a.hop) {
+      for (const v of a.hop.victims) {
+        if (v.visual) this.removeVisual(v.visual);
+        // onImpact fires once per victim, even if the hop is cut short.
+        if (!v.fired) {
+          v.fired = true;
+          if (!this.disposing) this.emitImpact({ ...a.move, captureId: v.id });
+        }
+      }
+    }
     if (a.wasted && this.visuals.get(a.mover.piece.id) === a.mover && !a.piecesAfter.some((p) => p.id === a.mover.piece.id)) {
       // Destroyed on the wasteland: drop it here (never a storm fade / pop-out).
       this.visuals.delete(a.mover.piece.id);

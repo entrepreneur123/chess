@@ -7,7 +7,7 @@
  * The drawer does NOT pause the turn clock (no free thinking time); it re-renders on every
  * controller change while open, but only when something it shows actually changed.
  */
-import { BOARD_SIZE, CHARACTERS, SKILL_UNLOCK_PLY, WASTE_SIZE, getTargetsForPiece, inStorm, pieceDir, skillUnlockIn, type FormationSlot, type GameState, type Piece, type PlayerId } from '../../engine';
+import { BOARD_SIZE, CHARACTERS, SKILL_UNLOCK_PLY, WASTE_SIZE, getTargetsForPiece, inStorm, isStunned, pieceDir, skillUnlockIn, trapsLeft, type FormationSlot, type GameState, type Piece, type PlayerId } from '../../engine';
 import { movementDiagram, rarityChip, starsOf, unitArt } from '../components/piece';
 import { overlayRoot, pushOverlay, registerForceClose } from '../components/overlay';
 import { h, replaceChildren } from '../dom';
@@ -36,8 +36,8 @@ export interface FieldPanel {
 
 function pieceKey(s: GameState): string {
   return (
-    s.pieces.map((p) => `${p.id}@${p.pos.r},${p.pos.c}:${(p.absorbed ?? []).map((a) => a.character + a.level).join('')}`).join('|') +
-    `#${s.storm}#${s.waste.length}#${s.skillsUsed.join(',')}#${s.ply >= SKILL_UNLOCK_PLY}`
+    s.pieces.map((p) => `${p.id}@${p.pos.r},${p.pos.c}:${(p.absorbed ?? []).map((a) => a.character + a.level).join('')}:${p.stun ?? 0}`).join('|') +
+    `#${s.storm}#${s.waste.length}#${s.skillsUsed.join(',')}#${s.ply >= SKILL_UNLOCK_PLY}#${(s.traps ?? []).length}`
   );
 }
 
@@ -49,7 +49,8 @@ function miniMap(s: GameState, focus: string | null, onPick: (id: string) => voi
   for (let r = BOARD_SIZE - 1; r >= 0; r--) {
     for (let c = 0; c < BOARD_SIZE; c++) {
       const p = byPos.get(r * BOARD_SIZE + c);
-      const cls = `fmap__cell${(r + c) % 2 === 0 ? ' is-dark' : ''}${inStorm(c, s.storm) ? ' is-storm' : ''}${s.waste.includes(r * BOARD_SIZE + c) ? ' is-waste' : ''}${r <= 2 ? ' is-home-0' : r >= 9 ? ' is-home-1' : ''}`;
+      const trap = (s.traps ?? []).find((t) => t.sq === r * BOARD_SIZE + c);
+      const cls = `fmap__cell${(r + c) % 2 === 0 ? ' is-dark' : ''}${inStorm(c, s.storm) ? ' is-storm' : ''}${s.waste.includes(r * BOARD_SIZE + c) ? ' is-waste' : ''}${trap ? ` is-trap trap-${trap.owner}` : ''}${r <= 2 ? ' is-home-0' : r >= 9 ? ' is-home-1' : ''}`;
       if (p) {
         grid.appendChild(
           h(
@@ -76,6 +77,7 @@ function infoCard(slot: FormationSlot, owner: PlayerId, s: GameState, focus: str
   const level = piece?.level ?? slot.level;
   let status: string;
   if (!piece) status = '격파됨';
+  else if (isStunned(piece)) status = `${squareLabel(piece.pos.r, piece.pos.c)} · 속박 · 1턴 쉬어요`;
   else {
     const reach = getTargetsForPiece(s, piece);
     const caps = reach.filter((m) => m.captureId).length;
@@ -117,6 +119,17 @@ function infoCard(slot: FormationSlot, owner: PlayerId, s: GameState, focus: str
                   : piece
                     ? '사용 가능 · 닿으면 소멸'
                     : '—',
+          )
+        : null,
+      def.trait
+        ? h(
+            'div',
+            { class: 'fcard__passive fcard__trait' },
+            icon('magic', 14),
+            h('b', null, def.trait.nameKo),
+            ' ',
+            slot.character === 'michelle' ? `${trapsLeft(s, owner)}개 남음 · ` : '',
+            def.trait.descKo,
           )
         : null,
       piece?.absorbed?.length
