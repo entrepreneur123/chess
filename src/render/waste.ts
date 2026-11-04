@@ -10,7 +10,7 @@
  *  - beam: green black-magic bolt along a quadratic curve (vertex-shader bent strip);
  *  - rune: witch rune circle (hexagram + glyph ring over a black-purple smoke disc) under a caster.
  * One shared `uTime` uniform; the board re-renders it at <= ~30 fps (or never with reduced motion).
- * Positions follow BoardView: x = c - 5.5, z = 5.5 - r, plane uv.y grows toward +r (screen up).
+ * Positions follow BoardView: x = c - HALF, z = HALF - r (HALF = (BOARD_SIZE - 1) / 2), plane uv.y grows toward +r (screen up).
  */
 import * as THREE from 'three';
 import { BOARD_SIZE } from '../engine/types';

@@ -1,3 +1,4 @@
+import type { RenderDiagnostics } from './diag';
 import type { Move, Piece, Pos, Trap } from '../engine/types';
 
 /** Visual state of board squares. All positions are ABSOLUTE board coordinates. */
@@ -65,6 +66,8 @@ export interface IBoardView {
   resize(): void;
   /** Stop the render loop and free GPU resources. */
   dispose(): void;
+  /** Optional: what the board renders with (the ?diag=1 panel). */
+  getDiagnostics?(): RenderDiagnostics;
   /** Switch camera view (optional: the flat 2D fallback is always top-down). */
   setViewMode?(mode: BoardViewMode, animate?: boolean): void;
   /**

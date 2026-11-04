@@ -1,7 +1,9 @@
 import {
+  BOARD_SIZE,
   CHARACTERS,
   CHARACTER_IDS,
   PIECES_PER_SIDE,
+  ZONE_DEPTH,
   defaultFormation,
   josa,
   randomFormation,
@@ -331,7 +333,7 @@ export function formationScreen(router: Router): Screen {
         { class: 'zone-board enter', style: '--i:0' },
         h('div', { class: 'enemy-hint' }, h('span', { class: 'enemy-hint__chev', 'aria-hidden': 'true' }, icon('up', 16), icon('up', 16)), '적 진영 방향'),
         gridHost,
-        h('div', { class: 'zone-caption' }, '내 배치 구역 · 3 × 12'),
+        h('div', { class: 'zone-caption' }, `내 배치 구역 · ${ZONE_DEPTH} × ${BOARD_SIZE}`),
       ),
       statusHost,
       h('h3', { class: 'section-title section-title--display section-title--pad' }, '내 캐릭터'),

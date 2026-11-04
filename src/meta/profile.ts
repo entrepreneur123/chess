@@ -1,5 +1,5 @@
 /**
- * Player profile: localStorage-backed, versioned, corruption-safe (schema v4).
+ * Player profile: localStorage-backed, versioned, corruption-safe (schema v5).
  *
  * Progression (docs/design/progression.md, numbers in ./progression.ts):
  *  - `owned[id]` is the highest star owned (0 = locked). The three starters are always owned.
@@ -11,7 +11,7 @@
  * Security note: all of this lives in localStorage and can be edited by the user. Real PvP,
  * leaderboards or purchases need server-side authority first.
  */
-import { CHARACTERS, CHARACTER_IDS, defaultFormation, isCharacterId, squadOf, validateFormation, type CharacterId, type Formation, type Level } from '../engine';
+import { BOARD_SIZE, CHARACTERS, CHARACTER_IDS, PIECES_PER_SIDE, ZONE_DEPTH, defaultFormation, isCharacterId, squadOf, validateFormation, type CharacterId, type Formation, type Level } from '../engine';
 import {
   DUNGEON_LEVELS,
   DUNGEON_REWARD,
@@ -33,7 +33,7 @@ import {
 } from './progression';
 import type { Rng } from './rng';
 
-export const PROFILE_VERSION = 4;
+export const PROFILE_VERSION = 5;
 const STORAGE_KEY = 'tactics12.profile';
 
 /** 0 = locked, otherwise the highest star owned. */
@@ -165,6 +165,24 @@ export function formationAllowed(f: Formation, owned: Record<CharacterId, Owned>
   return validateFormation(f).ok && f.every((s) => isCharacterId(s.character) && owned[s.character] > 0 && s.level <= owned[s.character]);
 }
 
+/** True when a raw saved slot lies inside the current ZONE_DEPTH x BOARD_SIZE home zone. */
+function slotFits(s: Record<string, unknown>): boolean {
+  const row = Number(s.row);
+  const col = Number(s.col);
+  return Number.isInteger(row) && Number.isInteger(col) && row >= 0 && row < ZONE_DEPTH && col >= 0 && col < BOARD_SIZE;
+}
+
+/**
+ * The squad of a raw saved formation when it is usable as a squad (PIECES_PER_SIDE distinct known
+ * characters, all owned), else null. Its squares are not checked.
+ */
+function savedSquad(raw: unknown, owned: Record<CharacterId, Owned>): CharacterId[] | null {
+  if (!Array.isArray(raw)) return null;
+  const ids = raw.filter(isObj).map((s) => s.character);
+  if (ids.length !== PIECES_PER_SIDE || new Set(ids).size !== ids.length) return null;
+  return ids.every((id) => isCharacterId(id) && owned[id] > 0) ? (ids as CharacterId[]) : null;
+}
+
 /** Migrations from older schema versions. Each step takes raw data of version N and returns N+1. */
 const MIGRATIONS: Record<number, (raw: Record<string, unknown>) => Record<string, unknown>> = {
   // v1 -> v2: gems introduced.
@@ -201,6 +219,17 @@ const MIGRATIONS: Record<number, (raw: Record<string, unknown>) => Record<string
       dungeon: { lastClaimDay: null },
       dungeonLevel: DUNGEON_LEVELS.includes(difficulty as DungeonLevel) ? difficulty : DEFAULT_DUNGEON_LEVEL,
     };
+  },
+  // v4 -> v5: the board shrank from 12 x 12 with a 3 x 12 home zone to 10 x 10 with a 2 x 10 zone.
+  // A saved formation with any piece outside the new zone (row > 1 or col > 9) is reset to the
+  // preset squares for the same squad (sanitizing keeps that squad if it is still owned, the
+  // starters otherwise) and counts as unsaved, so the editor and matchmaking say so. Everything
+  // else (currencies, rating, owned stars, grades, stats, settings) is kept as is.
+  4: (raw) => {
+    const f = raw.formation;
+    if (!Array.isArray(f) || f.every((s) => isObj(s) && slotFits(s))) return { ...raw, version: 5 };
+    const ids = f.filter(isObj).map((s) => s.character).filter(isCharacterId);
+    return { ...raw, version: 5, formation: defaultFormation(undefined, ids), formationSaved: false };
   },
 };
 
@@ -267,7 +296,8 @@ export function sanitizeProfile(input: unknown): Profile {
     }
   }
   if (!formationOk) {
-    formation = defaultFormation(grades);
+    // Keep the saved squad on the preset squares when it is still owned; the starters otherwise.
+    formation = defaultFormation(grades, savedSquad(raw.formation, owned) ?? undefined);
     formationSaved = false;
   }
 

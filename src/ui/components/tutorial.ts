@@ -3,7 +3,7 @@
  * Re-playable from the lobby. Resolves when closed (completed or skipped).
  */
 import { sfx } from '../../audio/sfx';
-import { CHARACTERS, CHARACTER_IDS, STARTER_IDS, TURN_TIME_1_MS, TURN_TIME_2_MS, TURN_TIME_MS, type CharacterId } from '../../engine';
+import { BOARD_SIZE, CHARACTERS, CHARACTER_IDS, STARTER_IDS, ZONE_DEPTH, TURN_TIME_1_MS, TURN_TIME_2_MS, TURN_TIME_MS, type CharacterId } from '../../engine';
 import { getProfile, updateProfile } from '../../meta/profile';
 import { h, prefersReducedMotion, type Child } from '../dom';
 import { icon } from '../icons';
@@ -99,7 +99,7 @@ function zoneArt(): Child {
     { class: 'tut-art tut-art--zone' },
     h('div', { class: 'tut-zone__enemy' }, icon('up', 14), '적 방향'),
     h('div', { class: 'tut-zone__grid' }, formationGrid(getProfile().formation, { mini: true })),
-    h('div', { class: 'tut-zone__label' }, '내 배치 구역 · 3줄 × 12칸'),
+    h('div', { class: 'tut-zone__label' }, `내 배치 구역 · ${ZONE_DEPTH}줄 × ${BOARD_SIZE}칸`),
   );
 }
 
@@ -138,10 +138,10 @@ function growArt(): Child {
 }
 
 const SLIDES: Slide[] = [
-  { key: 'goal', art: goalArt, title: '상대 말 3개를 모두 잡으면 승리!', body: '12×12 보드 위 1:1 대결. 이동 경로에서 처음 만나는 상대 말을 잡을 수 있어요.' },
+  { key: 'goal', art: goalArt, title: '상대 말 3개를 모두 잡으면 승리!', body: `${BOARD_SIZE}×${BOARD_SIZE} 보드 위 1:1 대결. 이동 경로에서 처음 만나는 상대 말을 잡을 수 있어요.` },
   { key: 'chars', art: charactersArt, title: '일곱 캐릭터, 분대는 3명', body: '파란 칸이 갈 수 있는 곳이에요. 미셸은 물러나며 인형 함정을 남기고, 피커는 대각선으로 콩콩 뛰며 지나는 적을 모두 잡아요.' },
   { key: 'tap', art: tapArt, title: '탭하고, 한 번 더 탭!', body: '내 말을 탭하면 갈 수 있는 칸이 빛나요. 빛나는 칸을 탭하면 이동해요.' },
-  { key: 'zone', art: zoneArt, title: '진형은 아래 3줄에서', body: '대전 전에 내 구역(3×12) 안에 말을 자유롭게 배치해 작전을 짜세요.' },
+  { key: 'zone', art: zoneArt, title: `진형은 아래 ${ZONE_DEPTH}줄에서`, body: `대전 전에 내 구역(${ZONE_DEPTH}×${BOARD_SIZE}) 안에 말을 자유롭게 배치해 작전을 짜세요.` },
   { key: 'timer', art: timerArt, title: '한 수 45초, 넘기면 몰수패', body: '말이 줄면 제한시간이 40초 → 20초로 줄고, 시간을 넘기면 즉시 몰수패! 한쪽 말이 1개만 남거나 40턴이 지나면 자기장이 발동해 3턴마다 좌우 바깥 줄이 좁혀오고, 닿은 말은 소멸해요.' },
   { key: 'grow', art: growArt, title: '토큰으로 성급 강화', body: '던전 첫 승리로 받은 토큰으로 1성 → 2성 → 3성 강화! 전장전 · 견습전투에서 모은 에센셜로는 상점에서 새 캐릭터를 영입해요.' },
 ];

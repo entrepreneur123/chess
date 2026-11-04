@@ -38,7 +38,7 @@ const DAY2 = new Date(2026, 10, 4, 0, 1, 0);
 
 const withP = (patch: Partial<Profile>): Profile => ({ ...createDefaultProfile(), ...patch });
 
-describe('migration v3 -> v4', () => {
+describe('migration v3 -> v4 (-> v5)', () => {
   const v3 = {
     version: 3,
     grades: { sad: 3, marki: 2, walk: 1, insaner: 3, brutile: 2 },
@@ -58,21 +58,22 @@ describe('migration v3 -> v4', () => {
     let saved: string | null = JSON.stringify(v3);
     const storage: KeyValueStorage = { getItem: () => saved, setItem: (_k, v) => void (saved = v) };
     const p = loadProfile(storage);
-    expect(p.version).toBe(4);
+    expect(p.version).toBe(PROFILE_VERSION);
     expect(p.owned).toEqual({ sad: 1, marki: 1, walk: 1, insaner: 0, brutile: 0, michelle: 0, picker: 0 });
     expect(Object.values(p.grades)).toEqual([1, 1, 1, 1, 1, 1, 1]);
     expect([p.tokens, p.essence, p.rating, p.bestRating]).toEqual([0, 0, 0, 0]);
     expect(p.dungeon.lastClaimDay).toBeNull();
     expect(p.dungeonLevel).toBe('easy');
-    // Kept: stats, settings (music defaults on), onboarding, the all-owned formation's squares.
+    // Kept: stats, settings (music defaults on), onboarding, the all-owned squad. Its squares
+    // used the old 3-row zone (row 2), so v4 -> v5 puts the same squad on the preset squares.
     expect(p.stats).toEqual({ wins: 9, losses: 4, draws: 1 });
     expect(p.settings).toEqual({ sound: false, music: true, voice: true, haptics: false, view: 'top' });
     expect(p.onboarding.tutorialSeen).toBe(true);
-    expect(p.formationSaved).toBe(true);
+    expect(p.formationSaved).toBe(false);
     expect(p.formation).toEqual([
-      { character: 'sad', level: 1, row: 2, col: 7 },
-      { character: 'marki', level: 1, row: 2, col: 4 },
-      { character: 'walk', level: 1, row: 1, col: 5 },
+      { character: 'sad', level: 1, row: 1, col: 6 },
+      { character: 'marki', level: 1, row: 1, col: 3 },
+      { character: 'walk', level: 1, row: 0, col: 4 },
     ]);
     const stored = JSON.parse(saved!);
     expect(stored.version).toBe(PROFILE_VERSION);

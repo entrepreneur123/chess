@@ -800,7 +800,8 @@
 /* Mini map: obsidian tiles in an iron frame with a gold trim, home zones tinted. */
 .fmap {
   display: grid;
-  grid-template-columns: repeat(12, 1fr);
+  /* --board-n is set from BOARD_SIZE by fieldPanel.ts. */
+  grid-template-columns: repeat(var(--board-n, 10), 1fr);
   gap: 1.5px;
   padding: 5px;
   border-radius: 12px;

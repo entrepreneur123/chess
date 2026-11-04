@@ -10,9 +10,11 @@
  *  - a pulsing warning frame on the next column to be consumed (when nextIn <= 2).
  * The geometry is static (unit quads tagged by kind/side); the vertex shader places them from the
  * `uStorm` uniform, so a storm change costs one uniform write. Positions follow the board mapping of
- * BoardView (x = c - 5.5, column 0 spans x in [-6, -5], z = 5.5 - r).
+ * BoardView (x = c - HALF_CELL with HALF_CELL = (BOARD_SIZE - 1) / 2: on 10 x 10, x = c - 4.5, column 0
+ * spans x in [-5, -4], z = 4.5 - r).
  */
 import * as THREE from 'three';
+import { BOARD_SIZE, STORM_FULL_STEPS } from '../engine/types';
 
 export const STORM_COLORS = {
   /** Deep purple field. */
@@ -33,7 +35,7 @@ uniform float uFloorY;
 varying vec2 vUv;
 varying float vKind;
 varying vec3 vWorld;
-const float HALF = 6.0;
+const float HALF = ${(BOARD_SIZE / 2).toFixed(1)};
 void main() {
   vUv = uv;
   vKind = aKind;
@@ -187,8 +189,8 @@ export class StormFx {
 
   /** `storm` = consumed columns per side; `nextIn` = plies until the next shrink (null = inactive). */
   set(storm: number, nextIn: number | null): void {
-    this.storm = Math.max(0, Math.min(6, Math.floor(storm)));
-    this.warn = nextIn !== null && nextIn <= 2 && this.storm < 6;
+    this.storm = Math.max(0, Math.min(STORM_FULL_STEPS, Math.floor(storm)));
+    this.warn = nextIn !== null && nextIn <= 2 && this.storm < STORM_FULL_STEPS;
     this.mat.uniforms.uStorm.value = this.storm;
     this.mat.uniforms.uWarn.value = this.warn ? 1 : 0;
     this.mesh.visible = this.storm > 0 || this.warn;

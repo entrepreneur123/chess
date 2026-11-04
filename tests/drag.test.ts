@@ -1,20 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { defaultFormation, PIECES_PER_SIDE, validateFormation, type Formation, type Move } from '../src/engine';
+import { BOARD_SIZE, defaultFormation, PIECES_PER_SIDE, validateFormation, type Formation, type Move } from '../src/engine';
 import { dropKind } from '../src/ui/components/boardDrag';
 import { placeInFormation } from '../src/ui/components/formationGrid';
 
 const f3: Formation = [
   { character: 'sad', level: 1, row: 0, col: 0 },
   { character: 'marki', level: 2, row: 1, col: 5 },
-  { character: 'walk', level: 1, row: 2, col: 11 },
+  { character: 'walk', level: 1, row: 1, col: 9 },
 ];
 
 describe('placeInFormation (formation editor tap + drag)', () => {
   it('moves a fielded unit to an empty square', () => {
-    const r = placeInFormation(f3, 'sad', 1, 2, 3);
+    const r = placeInFormation(f3, 'sad', 1, 1, 3);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.formation.find((s) => s.character === 'sad')).toMatchObject({ row: 2, col: 3 });
+    expect(r.formation.find((s) => s.character === 'sad')).toMatchObject({ row: 1, col: 3 });
     expect(r.formation).toHaveLength(3);
     expect(validateFormation(r.formation).ok).toBe(true);
   });
@@ -45,7 +45,7 @@ describe('placeInFormation (formation editor tap + drag)', () => {
   it('never mutates the input formation', () => {
     const f = defaultFormation();
     const copy = JSON.parse(JSON.stringify(f));
-    placeInFormation(f, f[0].character, f[0].level, 2, 6);
+    placeInFormation(f, f[0].character, f[0].level, 1, 8);
     expect(f).toEqual(copy);
   });
 });
@@ -56,8 +56,8 @@ describe('dropKind (board drag-to-move)', () => {
     expect(dropKind(undefined, [])).toBeNull();
     expect(dropKind(mv({ r: 1, c: 0 }), [])).toBe('move');
     expect(dropKind(mv({ r: 1, c: 0 }, 'p1-sad'), [])).toBe('capture');
-    // Wasteland square (r * 12 + c): deadly, whatever stands there.
-    expect(dropKind(mv({ r: 1, c: 0 }), [12])).toBe('deadly');
+    // Wasteland square (r * BOARD_SIZE + c): deadly, whatever stands there.
+    expect(dropKind(mv({ r: 1, c: 0 }), [BOARD_SIZE])).toBe('deadly');
   });
 });
 

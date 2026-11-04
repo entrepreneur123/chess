@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BOARD_SIZE,
   SKILL_UNLOCK_PLY,
   applyMove,
   applySkill,
@@ -24,7 +25,7 @@ describe('Brutile movement', () => {
   it('1-star: the two forward diagonals', () => {
     const s = makeState([
       [0, 'brutile', 1, 5, 5],
-      [1, 'sad', 1, 11, 11],
+      [1, 'sad', 1, 9, 9],
     ]);
     expect(targetKeys(getLegalMoves(s, 'p0-brutile'))).toEqual(keys([[6, 4], [6, 6]]));
     // Red moves down the board: its forward diagonals are one row lower.
@@ -38,21 +39,21 @@ describe('Brutile movement', () => {
   it('2-star adds one step straight back; 3-star moves to any of the 8 neighbours', () => {
     const s2 = makeState([
       [0, 'brutile', 2, 5, 5],
-      [1, 'sad', 1, 11, 11],
+      [1, 'sad', 1, 9, 9],
     ]);
     expect(targetKeys(getLegalMoves(s2, 'p0-brutile'))).toEqual(keys([[6, 4], [6, 6], [4, 5]]));
     const s3 = makeState([
       [0, 'brutile', 3, 5, 5],
-      [1, 'sad', 1, 11, 11],
+      [1, 'sad', 1, 9, 9],
     ]);
     expect(getLegalMoves(s3, 'p0-brutile')).toHaveLength(8);
   });
 
   it('captures like everyone else and turns around at the far row', () => {
     const s = makeState([
-      [0, 'brutile', 1, 10, 5],
-      [1, 'sad', 1, 11, 6],
-      [1, 'walk', 1, 11, 0],
+      [0, 'brutile', 1, 8, 5],
+      [1, 'sad', 1, 9, 6],
+      [1, 'walk', 1, 9, 0],
     ]);
     const m = getLegalMoves(s, 'p0-brutile').find((x) => x.to.c === 6)!;
     expect(m.captureId).toBe('p1-sad');
@@ -60,7 +61,7 @@ describe('Brutile movement', () => {
     const b = after.pieces.find((p) => p.id === 'p0-brutile')!;
     expect(b.dir).toBe(-1);
     // Facing back down, the 1-star witch now steps down-diagonally (no longer stuck).
-    expect(targetKeys(getTargetsForPiece(after, b))).toEqual(keys([[10, 5], [10, 7]]));
+    expect(targetKeys(getTargetsForPiece(after, b))).toEqual(keys([[8, 5], [8, 7]]));
   });
 });
 
@@ -70,7 +71,7 @@ describe('Insaner vs Brutile', () => {
       [0, 'insaner', 1, 5, 5],
       [0, 'sad', 1, 0, 0],
       [1, 'brutile', 3, 5, 6],
-      [1, 'sad', 1, 11, 11],
+      [1, 'sad', 1, 9, 9],
     ]);
     const m = getLegalMoves(s, 'p0-insaner').find((x) => x.captureId === 'p1-brutile')!;
     const after = applyMove(s, m);
@@ -87,11 +88,11 @@ describe('wasteland', () => {
     const s = makeState(
       [
         [0, 'sad', 3, 2, 2],
-        [1, 'walk', 1, 11, 11],
-        [1, 'marki', 1, 10, 0],
+        [1, 'walk', 1, 9, 9],
+        [1, 'marki', 1, 8, 0],
       ],
       0,
-      { waste: [4 * 12 + 2] },
+      { waste: [4 * BOARD_SIZE + 2] },
     );
     const t = targetKeys(getLegalMoves(s, 'p0-sad'));
     expect(t).toContain('3,2');
@@ -112,10 +113,10 @@ describe('wasteland', () => {
       [
         [0, 'walk', 1, 2, 5],
         [0, 'sad', 1, 0, 0],
-        [1, 'sad', 1, 11, 11],
+        [1, 'sad', 1, 9, 9],
       ],
       0,
-      { waste: [3 * 12 + 4] },
+      { waste: [3 * BOARD_SIZE + 4] },
     );
     const m = getLegalMoves(s, 'p0-walk').find((x) => x.to.r === 3 && x.to.c === 4)!;
     const after = applyMove(s, m);
@@ -131,17 +132,17 @@ describe('Brutile skill: 불모지', () => {
       [
         [0, 'brutile', level, 1, 5],
         [0, 'sad', 1, 0, 0],
-        [1, 'sad', 1, 10, 6],
-        [1, 'marki', 1, 11, 0],
+        [1, 'sad', 1, 8, 6],
+        [1, 'marki', 1, 9, 0],
       ],
       0,
       { ply: SKILL_UNLOCK_PLY, ...extra },
     );
 
   it('area grows 1, 2x2, 3x3 with the grade', () => {
-    expect(wasteArea(1, { r: 5, c: 5 })).toEqual([65]);
-    expect(wasteArea(2, { r: 5, c: 5 })).toEqual([65, 66, 77, 78]);
-    expect(wasteArea(3, { r: 0, c: 0 })).toEqual([0, 1, 2, 12, 13, 14, 24, 25, 26]);
+    expect(wasteArea(1, { r: 5, c: 5 })).toEqual([55]);
+    expect(wasteArea(2, { r: 5, c: 5 })).toEqual([55, 56, 65, 66]);
+    expect(wasteArea(3, { r: 0, c: 0 })).toEqual([0, 1, 2, 10, 11, 12, 20, 21, 22]);
   });
 
   it('unlocks on the 7th turn (each side has played 3 turns)', () => {
@@ -153,19 +154,21 @@ describe('Brutile skill: 불모지', () => {
   it('can only cover empty squares that are fully on the board', () => {
     const s = base(3);
     expect(isLegalSkill(s, sk('p0-brutile', 5, 5))).toBe(true);
-    expect(isLegalSkill(s, sk('p0-brutile', 9, 5))).toBe(false); // (10,6) holds a piece
-    expect(isLegalSkill(s, sk('p0-brutile', 10, 10))).toBe(false); // off the board
-    expect(skillAnchors(s, 'p0-brutile').every((a) => a.r + 3 <= 12 && a.c + 3 <= 12)).toBe(true);
+    expect(isLegalSkill(s, sk('p0-brutile', 6, 5))).toBe(false); // (8,6) holds a piece
+    expect(isLegalSkill(s, sk('p0-brutile', 7, 7))).toBe(true); // the far 3 x 3 corner fits exactly
+    expect(isLegalSkill(s, sk('p0-brutile', 8, 7))).toBe(false); // off the board
+    expect(isLegalSkill(s, sk('p0-brutile', 7, 8))).toBe(false); // off the board
+    expect(skillAnchors(s, 'p0-brutile').every((a) => a.r + 3 <= BOARD_SIZE && a.c + 3 <= BOARD_SIZE)).toBe(true);
   });
 
   it('is the action of the turn, once per match, and stops once the storm closes in', () => {
     const s = base(2);
     const after = applySkill(s, sk('p0-brutile', 5, 5));
-    expect(after.waste).toEqual([65, 66, 77, 78]);
+    expect(after.waste).toEqual([55, 56, 65, 66]);
     expect(after.turn).toBe(1);
     expect(after.skillsUsed).toEqual([1, 0]);
     const h = after.history[after.history.length - 1];
-    expect(h).toEqual({ kind: 'skill', player: 0, pieceId: 'p0-brutile', squares: [65, 66, 77, 78] });
+    expect(h).toEqual({ kind: 'skill', player: 0, pieceId: 'p0-brutile', squares: [55, 56, 65, 66] });
     const back = { ...after, turn: 0 as const };
     expect(skillBlock(back, 'p0-brutile')).toBe('used');
     expect(() => applySkill(back, sk('p0-brutile', 7, 7))).toThrow();
@@ -185,15 +188,15 @@ describe('no auto-pass while the wasteland can still be cast', () => {
   const boxed = (extra: Partial<GameState> = {}) =>
     makeState(
       [
-        [0, 'brutile', 1, 11, 0],
-        [1, 'sad', 1, 10, 1],
+        [0, 'brutile', 1, 9, 0],
+        [1, 'sad', 1, 8, 1],
         [1, 'walk', 1, 5, 9],
       ],
       1,
       { ply: 20, ...extra },
     );
   it('the side is not passed when it can cast, and is passed once it cannot', () => {
-    // Blue's Brutile at (11,0) faces up (dir +1): no row ahead, it has not turned around (dir set by moves only).
+    // Blue's Brutile at (9,0) faces up (dir +1): no row ahead, it has not turned around (dir set by moves only).
     const s = boxed();
     expect(getLegalMoves({ ...s, turn: 0 }, 'p0-brutile')).toHaveLength(0);
     // Red plays a quiet move; Blue must get its turn (to cast) instead of an automatic pass.
@@ -247,7 +250,7 @@ describe('fast board and bot with Brutile', () => {
           const a = anchors[Math.floor(rng() * anchors.length)];
           const ci = b.ids.indexOf(caster!.id);
           expect(fastCanSkill(b, ci)).toBe(true);
-          const mv = SKILL_FLAG | (ci << 8) | (a.r * 12 + a.c);
+          const mv = SKILL_FLAG | (ci << 8) | (a.r * BOARD_SIZE + a.c);
           const u = fastMake(b, mv);
           const next = applySkill(g, { kind: 'skill', pieceId: caster!.id, anchor: a });
           expect(Array.from(b.waste).flatMap((v, i) => (v ? [i] : []))).toEqual(next.waste);
@@ -259,7 +262,7 @@ describe('fast board and bot with Brutile', () => {
           continue;
         }
         // Prefer moves into wasteland now and then so deaths are exercised.
-        const deadly = legal.filter((m) => g.waste.includes(m.to.r * 12 + m.to.c));
+        const deadly = legal.filter((m) => g.waste.includes(m.to.r * BOARD_SIZE + m.to.c));
         const pick = deadly.length && rng() < 0.3 ? deadly[0] : legal[Math.floor(rng() * legal.length)];
         const code = Array.from(buf.subarray(0, n)).find((m) => {
           const x = fastMoveToMove(b, m);
@@ -284,12 +287,12 @@ describe('fast board and bot with Brutile', () => {
     const s = makeState(
       [
         [1, 'sad', 2, 6, 5],
-        [1, 'brutile', 3, 10, 5],
-        [0, 'walk', 1, 0, 11],
+        [1, 'brutile', 3, 8, 5],
+        [0, 'walk', 1, 0, 9],
         [0, 'sad', 1, 0, 0],
       ],
       1,
-      { waste: [5 * 12 + 5, 6 * 12 + 4], ply: 20 },
+      { waste: [5 * BOARD_SIZE + 5, 6 * BOARD_SIZE + 4], ply: 20 },
     );
     const rng = rngFrom(5);
     let casts = 0;
@@ -298,7 +301,7 @@ describe('fast board and bot with Brutile', () => {
         const a = chooseAction({ ...s, skillsUsed: [0, 1] }, d, { timeBudgetMs: 20, rng });
         expect(a).not.toBeNull();
         if (isSkillAction(a)) throw new Error('used a spent skill');
-        expect(s.waste.includes(a!.to.r * 12 + a!.to.c)).toBe(false);
+        expect(s.waste.includes(a!.to.r * BOARD_SIZE + a!.to.c)).toBe(false);
         if (isSkillAction(chooseAction(s, d, { timeBudgetMs: 20, rng }))) casts++;
       }
     }

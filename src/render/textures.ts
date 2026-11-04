@@ -4,28 +4,61 @@ import { BOARD_SIZE } from '../engine/types';
 import { BOARD_COLORS, TEAM_COLORS } from './palette';
 import { hexToRgb, makeRng, rgbToCss } from './common';
 import type { RGB } from './common';
+import { ctx2d, releaseCanvas } from './diag';
 import {
   FIELD_OVERLAY_MARGIN,
-  FRAME_EXTENT,
+  FRAME_REGULAR,
   MARKER_QUAD,
+  SEE_THROUGH_MAX_ALPHA,
   TILE_FACE_GRAD,
   TILE_HIGHLIGHT,
   TILE_INSET,
   TILE_RADIUS,
   TILE_RIM,
+  alphaAt,
+  frameExtent,
   paintCaptureRing,
   paintFieldOverlay,
   paintFrame,
   paintGlowDot,
   paintSelectGlow,
+  paintTile,
   paintTurnGlow,
 } from './arena';
+import type { FrameStyle } from './arena';
+
+/**
+ * Largest canvas side we ever allocate. iOS Safari caps a canvas at 16.7 M pixels (4096 x 4096) and
+ * all canvases together at a few hundred MB; a bigger one silently gets no context. The board's
+ * largest texture is ~1.5k px.
+ */
+export const MAX_CANVAS_SIDE = 4096;
 
 function canvas(w: number, h: number): { cvs: HTMLCanvasElement; ctx: CanvasRenderingContext2D | null } {
   const cvs = document.createElement('canvas');
-  cvs.width = w;
-  cvs.height = h;
-  return { cvs, ctx: cvs.getContext('2d') };
+  cvs.width = Math.max(1, Math.min(MAX_CANVAS_SIDE, Math.round(w)));
+  cvs.height = Math.max(1, Math.min(MAX_CANVAS_SIDE, Math.round(h)));
+  return { cvs, ctx: ctx2d(cvs) };
+}
+
+/** Result of painting a static arena texture: the texture plus self-test notes. */
+export interface PaintedTexture {
+  tex: THREE.CanvasTexture;
+  /** False if the canvas had no 2D context (the texture is blank). */
+  ok: boolean;
+  notes: string[];
+}
+
+/**
+ * Free the texture's canvas once three has uploaded it (static textures only: three never reads
+ * the canvas again unless the WebGL context is lost, and the board repaints its arena textures on
+ * restore). Saves ~4-8 MB of iOS canvas memory per large texture.
+ */
+export function releaseAfterUpload(tex: THREE.Texture): void {
+  tex.onUpdate = () => {
+    tex.onUpdate = null;
+    releaseCanvas(tex.image);
+  };
 }
 
 function toTexture(cvs: HTMLCanvasElement, srgb = true): THREE.CanvasTexture {
@@ -228,45 +261,63 @@ export function makeSlabTexture(slabSize: number, margin: number): THREE.CanvasT
   return tex;
 }
 
-/** Cells -> texture pixels of the frame texture (sharp on phones at DPR 2). */
-const FRAME_PX = 72;
-
 /**
- * The iron frame + field well as one texture, and its world-space plane size / centre offset
- * (the frame is taller than wide: the lip and the shadow hang below the field).
+ * The bezel + field well as one texture, and its world-space plane size / centre offset (the frame
+ * is taller than wide: the lip and the shadow hang below the field). `px` = texture pixels per
+ * cell (the board picks it from the on-screen cell size so the ticks and brackets stay crisp).
  */
-export function makeFrameTexture(): { tex: THREE.CanvasTexture; width: number; depth: number; offsetZ: number } {
-  const E = FRAME_EXTENT;
+export function makeFrameTexture(
+  st: FrameStyle = FRAME_REGULAR,
+  px = 72,
+): PaintedTexture & { width: number; depth: number; offsetZ: number } {
+  const E = frameExtent(st);
   const width = BOARD_SIZE + E.side * 2;
   const depth = BOARD_SIZE + E.top + E.bottom;
-  const w = Math.round(width * FRAME_PX);
-  const h = Math.round(depth * FRAME_PX);
-  const { cvs, ctx } = canvas(w, h);
-  if (ctx) paintFrame(ctx, FRAME_PX, E.side * FRAME_PX, E.top * FRAME_PX);
+  const k = Math.min(px, MAX_CANVAS_SIDE / Math.max(width, depth));
+  const { cvs, ctx } = canvas(width * k, depth * k);
+  if (ctx) paintFrame(ctx, k, E.side * k, E.top * k, st);
   const tex = toTexture(cvs);
   tex.generateMipmaps = false;
   tex.minFilter = THREE.LinearFilter;
   tex.magFilter = THREE.LinearFilter;
   // Plane centre relative to the field centre (world +z = screen down).
   const offsetZ = (E.bottom - E.top) / 2;
-  return { tex, width, depth, offsetZ };
+  return { tex, ok: !!ctx, notes: ctx ? [] : ['frame: no 2d context'], width, depth, offsetZ };
+}
+
+/** Centre of the middle cell (canvas px) of a field painted at (ox, oy) with cell size s. */
+function midCell(s: number, ox: number, oy: number): [number, number] {
+  const k = Math.floor(BOARD_SIZE / 2) - 0.5;
+  return [ox + k * s, oy + k * s];
 }
 
 /**
  * Hologram field overlay (team washes, centre glow, hex texture, glowing grid, edge shadow) over
- * the 12x12 field plus FIELD_OVERLAY_MARGIN on every side; `size` = plane size in cells.
- * 1024 px keeps the thin grid lines crisp on phones (the field is ~700-850 device px wide there).
+ * the field plus FIELD_OVERLAY_MARGIN on every side; `size` = plane size in cells. `px` = texture
+ * pixels per cell. Self-test: the middle of the field must stay see-through, or it is repainted
+ * without the hole-based edge shadow (see arena.ts fillFrameHole).
  */
-export function makeFieldOverlayTexture(): { tex: THREE.CanvasTexture; size: number } {
-  const px = 1024;
+export function makeFieldOverlayTexture(px = 100): PaintedTexture & { size: number } {
   const size = BOARD_SIZE + FIELD_OVERLAY_MARGIN * 2;
-  const s = px / size;
-  const { cvs, ctx } = canvas(px, px);
-  if (ctx) paintFieldOverlay(ctx, s, FIELD_OVERLAY_MARGIN * s, FIELD_OVERLAY_MARGIN * s);
+  const side = Math.min(MAX_CANVAS_SIDE, Math.round(size * px));
+  const s = side / size;
+  const { cvs, ctx } = canvas(side, side);
+  const notes: string[] = [];
+  if (ctx) {
+    const o = FIELD_OVERLAY_MARGIN * s;
+    paintFieldOverlay(ctx, s, o, o);
+    const [mx, my] = midCell(s, o, o);
+    const a = alphaAt(ctx, mx, my);
+    if (a > SEE_THROUGH_MAX_ALPHA) {
+      notes.push(`overlay centre alpha ${a.toFixed(2)}: repainted without edge shadow`);
+      ctx.clearRect(0, 0, side, side);
+      paintFieldOverlay(ctx, s, o, o, { edgeShadow: false });
+    }
+  } else notes.push('overlay: no 2d context');
   const tex = toTexture(cvs);
   tex.generateMipmaps = false;
   tex.minFilter = THREE.LinearFilter;
-  return { tex, size };
+  return { tex, ok: !!ctx, notes, size };
 }
 
 /** Cells -> texture pixels of the turn glow texture (a soft glow: low resolution is enough). */
@@ -274,18 +325,31 @@ const GLOW_PX = 40;
 
 /**
  * Turn glow (setTurnGlow) painted white over the frame plane's extents (same size / offset as
- * makeFrameTexture); tinted by the material colour and blended additively.
+ * makeFrameTexture); tinted by the material colour and blended additively. Self-tested like the
+ * overlay (the spill must not cover the field).
  */
-export function makeTurnGlowTexture(): THREE.CanvasTexture {
-  const E = FRAME_EXTENT;
+export function makeTurnGlowTexture(st: FrameStyle = FRAME_REGULAR): PaintedTexture {
+  const E = frameExtent(st);
   const w = Math.round((BOARD_SIZE + E.side * 2) * GLOW_PX);
   const h = Math.round((BOARD_SIZE + E.top + E.bottom) * GLOW_PX);
   const { cvs, ctx } = canvas(w, h);
-  if (ctx) paintTurnGlow(ctx, GLOW_PX, E.side * GLOW_PX, E.top * GLOW_PX, [1, 1, 1]);
+  const notes: string[] = [];
+  if (ctx) {
+    const ox = E.side * GLOW_PX;
+    const oy = E.top * GLOW_PX;
+    paintTurnGlow(ctx, GLOW_PX, ox, oy, [1, 1, 1], st);
+    const [mx, my] = midCell(GLOW_PX, ox, oy);
+    const a = alphaAt(ctx, mx, my);
+    if (a > SEE_THROUGH_MAX_ALPHA) {
+      notes.push(`turn glow centre alpha ${a.toFixed(2)}: repainted without spill`);
+      ctx.clearRect(0, 0, w, h);
+      paintTurnGlow(ctx, GLOW_PX, ox, oy, [1, 1, 1], st, { spill: false });
+    }
+  } else notes.push('turn glow: no 2d context');
   const tex = toTexture(cvs);
   tex.generateMipmaps = false;
   tex.minFilter = THREE.LinearFilter;
-  return tex;
+  return { tex, ok: !!ctx, notes };
 }
 
 /** Glowing selection frame in its own colour (additive); quad = MARKER_QUAD.select cells. */
@@ -334,7 +398,8 @@ vec3 toSRGB(vec3 l) {
 }
 void main() {
   vec2 p = vP;
-  float aa = max(fwidth(p.x), fwidth(p.y)) * 0.8;
+  // Floor: smoothstep(e0, e1, x) is undefined for e0 >= e1 (fwidth can be 0 on some drivers).
+  float aa = max(max(fwidth(p.x), fwidth(p.y)) * 0.8, 1e-4);
   float d = sdRR(p, vec2(0.5), vec2(${f(0.5 - TILE_INSET)}), ${f(TILE_RADIUS)});
   float a = 1.0 - smoothstep(-aa, aa, d);
   if (a <= 0.0) discard;
@@ -342,7 +407,7 @@ void main() {
   // Top-lit face: brighter at the top, darker at the bottom (as paintTile's gradient).
   float fy = clamp((p.y - ${f(TILE_INSET)}) / ${f(1 - 2 * TILE_INSET)}, 0.0, 1.0);
   float fk = 1.0 + ${f(TILE_FACE_GRAD)} - ${f(2 * TILE_FACE_GRAD)} * fy;
-  vec3 face = fk > 1.0 ? mix(c, vec3(1.0), fk - 1.0) : c * fk;
+  vec3 face = mix(c * fk, mix(c, vec3(1.0), fk - 1.0), step(1.0, fk));
   // Thin glass rim inside the edge, brightest along the top.
   float rim = 1.0 - smoothstep(${f(TILE_RIM)} - aa, ${f(TILE_RIM)} + aa, -d);
   face = mix(face, vec3(1.0), ${f(TILE_HIGHLIGHT)} * mix(1.0, 0.35, fy) * rim);
@@ -351,10 +416,28 @@ void main() {
 
 /** Instanced flat-cell material (per-instance colour = InstancedMesh.setColorAt). */
 export function makeTileMaterial(): THREE.ShaderMaterial {
-  return new THREE.ShaderMaterial({
+  const mat = new THREE.ShaderMaterial({
     vertexShader: TILE_VS,
     fragmentShader: TILE_FS,
     transparent: true,
     depthWrite: false,
   });
+  mat.name = 'cell-shader';
+  return mat;
+}
+
+/**
+ * Portable cell material: three's built-in unlit material with the cell painted into a small
+ * texture (white, multiplied by the per-instance colour). Used when the cell shader does not link
+ * on a device (BoardView self-check); same shape and tint, without the white rim highlight.
+ */
+export function makePortableTileMaterial(): { mat: THREE.MeshBasicMaterial; tex: THREE.CanvasTexture } {
+  const s = 128;
+  const { cvs, ctx } = canvas(s, s);
+  if (ctx) paintTile(ctx, 0, 0, s, [1, 1, 1]);
+  const tex = toTexture(cvs);
+  tex.anisotropy = 4;
+  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
+  mat.name = 'cell-portable';
+  return { mat, tex };
 }

@@ -139,7 +139,9 @@ function computePattern(character: CharacterId, level: Level): Pattern | null {
   if (patternCache.has(key)) return patternCache.get(key)!;
   let result: Pattern | null = null;
   try {
-    const origin = { r: 4, c: 6 };
+    // Room for the longest reach of every pattern on 10 x 10: 6 rows ahead (Marki 3성), 3 behind
+    // (Sad / Insaner), 4 to each side (Walk 3성's 9-wide landing row).
+    const origin = { r: 3, c: 4 };
     const piece: Piece = { id: `p0-${character}`, owner: 0, character, level, pos: origin };
     const state: GameState = {
       pieces: [piece],

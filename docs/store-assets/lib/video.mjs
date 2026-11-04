@@ -43,7 +43,7 @@ const LAYOUT = {
 const BEATS = [
   { id: 'hook', anchor: 'sound:sfx/walk-capture', from: -0.55, to: 1.4, eyebrow: '월크 · 기습 점프', title: '뛰어넘어 <em>격파!</em>', title16: '뛰어넘어<br><em>격파!</em>', art: 'walk' },
   { id: 'formation', anchor: 'mark:formTab', from: -0.1, to: null, toAnchor: 'mark:formPick', toOffset: 1.1, eyebrow: '진형 편성', title: '<em>진형</em>이 곧 전략', title16: '<em>진형</em>이<br>곧 전략', art: 'sad' },
-  { id: 'lobby', anchor: 'mark:tapStart', from: -1.2, to: 0.55, eyebrow: '1:1 전술 보드게임', title: '말 <em>3</em>개, <em>144</em>칸', title16: '말 <em>3</em>개<br><em>144</em>칸', art: 'insaner' },
+  { id: 'lobby', anchor: 'mark:tapStart', from: -1.2, to: 0.55, eyebrow: '1:1 전술 보드게임', title: '말 <em>3</em>개, <em>100</em>칸', title16: '말 <em>3</em>개<br><em>100</em>칸', art: 'insaner' },
   { id: 'versus', anchor: 'mark:versus', from: 0.05, to: 1.5, eyebrow: 'AI와 1:1 대전', title: '한 수 <em>45초</em> 심리전', title16: '한 수 <em>45초</em><br>심리전', art: 'sad' },
   { id: 'select', anchor: 'mark:insanerBegin', from: -0.05, to: null, toAnchor: 'mark:insanerGo', toOffset: 0.95, eyebrow: '카드나 말을 탭', title: '<em>이동 범위</em>가 한눈에', title16: '<em>이동 범위</em>가<br>한눈에', art: 'insaner' },
   { id: 'skill', anchor: 'mark:brutileBegin', from: -0.05, to: null, toAnchor: 'sound:sfx/brutile-skill', toOffset: 1.45, eyebrow: '브루타일 · 전설 스킬', title: '땅을 <em>저주하라</em>', title16: '땅을<br><em>저주하라</em>', art: 'brutile' },

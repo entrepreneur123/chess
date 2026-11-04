@@ -1,6 +1,7 @@
 /**
  * Marketing landing page (/landing/). Standalone: no engine import, so the page stays tiny.
- * - Animated hero showcase (a scripted 12x12 mini match loop)
+ * - Animated hero showcase (a scripted 10x10 mini match loop; keep N / HOME in step with the
+ *   engine's BOARD_SIZE / ZONE_DEPTH, the page does not import the engine to stay tiny)
  * - Per-character level tabs that redraw the movement diagram
  */
 import './landing.css';
@@ -113,13 +114,15 @@ interface Step {
   moves: Array<{ who: 'b' | 'r'; idx: number; to: [number, number]; capture?: { who: 'b' | 'r'; idx: number } }>;
 }
 
-const N = 12;
+/** Board size and home-zone depth (the engine's BOARD_SIZE and ZONE_DEPTH). */
+const N = 10;
+const HOME = 2;
 const SCRIPT: Step[] = [
-  { caption: '마르키가 앞으로 미끄러지며 전진합니다.', moves: [{ who: 'b', idx: 1, to: [6, 4] }] },
-  { caption: '상대 월크가 앞줄로 점프해 기습을 노립니다.', moves: [{ who: 'r', idx: 2, to: [8, 7] }] },
-  { caption: '사드가 옆으로 이동해 길을 엽니다.', moves: [{ who: 'b', idx: 0, to: [2, 5] }] },
-  { caption: '상대 마르키가 돌진합니다.', moves: [{ who: 'r', idx: 1, to: [5, 6] }] },
-  { caption: '월크가 뛰어넘어 상대 마르키를 잡았습니다!', moves: [{ who: 'b', idx: 2, to: [5, 6], capture: { who: 'r', idx: 1 } }] },
+  { caption: '마르키가 앞으로 미끄러지며 전진합니다.', moves: [{ who: 'b', idx: 1, to: [5, 3] }] },
+  { caption: '상대 월크가 앞줄로 점프해 기습을 노립니다.', moves: [{ who: 'r', idx: 2, to: [6, 5] }] },
+  { caption: '사드가 옆으로 이동해 길을 엽니다.', moves: [{ who: 'b', idx: 0, to: [8, 7] }] },
+  { caption: '상대 마르키가 돌진합니다.', moves: [{ who: 'r', idx: 1, to: [4, 6] }] },
+  { caption: '월크가 뛰어넘어 상대 마르키를 잡았습니다!', moves: [{ who: 'b', idx: 2, to: [4, 6], capture: { who: 'r', idx: 1 } }] },
 ];
 
 function initShowcase(): void {
@@ -130,21 +133,21 @@ function initShowcase(): void {
   for (let i = 0; i < N * N; i++) {
     const sq = document.createElement('i');
     const r = Math.floor(i / N);
-    if (r >= 9) sq.className = 'z-red';
-    else if (r <= 2) sq.className = 'z-blue';
+    if (r >= N - HOME) sq.className = 'z-red';
+    else if (r < HOME) sq.className = 'z-blue';
     board.appendChild(sq);
   }
   // Start positions (row 0 = top of the screen = red home). Blue is at the bottom.
   const start: Record<'b' | 'r', Array<[number, number, Char]>> = {
     b: [
-      [9, 7, 'sad'],
-      [9, 4, 'marki'],
-      [10, 5, 'walk'],
+      [8, 6, 'sad'],
+      [8, 3, 'marki'],
+      [9, 4, 'walk'],
     ],
     r: [
-      [2, 4, 'sad'],
-      [2, 6, 'marki'],
-      [1, 7, 'walk'],
+      [1, 3, 'sad'],
+      [1, 6, 'marki'],
+      [0, 5, 'walk'],
     ],
   };
   const tokens: Record<'b' | 'r', Token[]> = { b: [], r: [] };

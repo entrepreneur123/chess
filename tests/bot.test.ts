@@ -64,10 +64,10 @@ describe('bot tactics', () => {
     const s = makeState([
       [0, 'sad', 2, 5, 5],
       [0, 'marki', 1, 0, 0],
-      [0, 'walk', 1, 0, 11],
+      [0, 'walk', 1, 0, 9],
       [1, 'walk', 3, 5, 7],
-      [1, 'sad', 1, 11, 0],
-      [1, 'marki', 1, 11, 11],
+      [1, 'sad', 1, 9, 0],
+      [1, 'marki', 1, 9, 9],
     ]);
     for (const d of ['normal', 'hard'] as Difficulty[]) {
       for (let seed = 0; seed < 5; seed++) {
@@ -81,7 +81,7 @@ describe('bot tactics', () => {
     const s = makeState([
       [0, 'sad', 2, 5, 5],
       [1, 'walk', 3, 5, 7],
-      [1, 'sad', 1, 11, 0],
+      [1, 'sad', 1, 9, 0],
     ]);
     let hits = 0;
     for (let seed = 0; seed < 50; seed++) {
@@ -96,10 +96,10 @@ describe('bot tactics', () => {
     const s = makeState([
       [0, 'walk', 3, 5, 6],
       [0, 'sad', 1, 0, 0],
-      [0, 'marki', 1, 0, 11],
+      [0, 'marki', 1, 0, 9],
       [1, 'sad', 3, 5, 9],
-      [1, 'marki', 1, 11, 0],
-      [1, 'walk', 1, 11, 11],
+      [1, 'marki', 1, 9, 0],
+      [1, 'walk', 1, 9, 9],
     ]);
     for (let seed = 0; seed < 5; seed++) {
       const m = chooseMove(s, 'hard', { timeBudgetMs: 200, rng: rngFrom(seed) })!;

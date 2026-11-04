@@ -5,6 +5,7 @@ import { haptic, sfx } from '../../audio/sfx';
 import { playCharSfx, playVoice, playWasteDeath, preloadCharacterAudio, stopVoice } from '../../audio/voice';
 import { VOICE_TEXT } from '../../audio/voiceManifest';
 import {
+  BOARD_SIZE,
   CHARACTERS,
   SKILL_UNLOCK_PLY,
   WASTE_SIZE,
@@ -17,6 +18,7 @@ import {
   skillAnchors,
   skillBlock,
   skillUnlockIn,
+  sqOf,
   suddenDeathIn,
   turnNumber,
   wasteArea,
@@ -67,6 +69,11 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   const topRoster = h('div', { class: 'pbar__roster-host' });
   // My hand: one card per fielded piece; a tap selects it like tapping it on the board.
   const hand = createHand(params.playerFormation, HUMAN, (pieceId) => onHandTap(pieceId));
+  // Tablet landscape only (CSS hides it elsewhere): the opponent's lineup as a mirrored hand in
+  // the left column. A tap previews that piece's reach in red, like tapping it on the board.
+  const oppHand = createHand(params.botFormation, BOT, (pieceId) => onOppHandTap(pieceId));
+  oppHand.el.classList.add('hand--opp');
+  oppHand.el.setAttribute('aria-label', '상대 말');
   // The pill is built once; only its text/class change so screen readers announce real changes.
   const pillText = h('span', { class: 'turn-pill__text' });
   const pill = h(
@@ -219,7 +226,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   const hudStrip = h('div', { class: 'hud-strip' }, turnCount, pill);
   const notes = h('div', { class: 'hud-notes board-overlay' }, stormChip, passChip, coach);
   const boardWrap = h('div', { class: 'board-wrap' }, boardHost, fx);
-  const el = h('main', { class: 'game no-select' }, topBar, hudStrip, notes, boardWrap, infoHost, bottomBar);
+  const oppPanel = h('aside', { class: 'pbar opp-hand', 'aria-label': `${params.opponentName} · 레드` }, oppHand.el);
+  const el = h('main', { class: 'game no-select' }, topBar, oppPanel, hudStrip, notes, boardWrap, infoHost, bottomBar);
 
   // ---------- runtime objects (created on mount)
   let board: IBoardView | null = null;
@@ -395,6 +403,22 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     }
   };
 
+  /** Opponent card tap (tablet landscape): preview that piece's reach, as a board tap does. */
+  const onOppHandTap = (pieceId: string) => {
+    const c = ctrl;
+    if (!c) return;
+    if (targeting) {
+      stopTargeting();
+      renderSnapshot(c.snapshot());
+    }
+    const p = getPieceById(c.state, pieceId);
+    if (p) c.tapCell(p.pos);
+    else {
+      sfx('tap');
+      haptic('light');
+    }
+  };
+
   const stopTargeting = () => {
     if (!targeting) return;
     targeting = null;
@@ -406,7 +430,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     if (!c) return;
     const p = getPieceById(c.state, pieceId);
     if (!p || skillBlock(c.state, pieceId) !== null) return;
-    const anchorList = skillAnchors(c.state, pieceId).map((a) => a.r * 12 + a.c);
+    const anchorList = skillAnchors(c.state, pieceId).map(sqOf);
     targeting = { pieceId, level: p.level, anchors: new Set(anchorList), preview: null };
     // Only the area under consideration is drawn (valid corners would tint nearly the whole board).
     board?.setSkillPreview?.([], null);
@@ -417,13 +441,13 @@ export function gameScreen(router: Router, params: GameParams): Screen {
 
   /** Anchor (lowest corner) of the area for a tapped square: the tap sits at the area's centre. */
   const anchorFor = (pos: Pos, k: number): Pos => {
-    const clamp = (v: number) => Math.max(0, Math.min(12 - k, v));
+    const clamp = (v: number) => Math.max(0, Math.min(BOARD_SIZE - k, v));
     return { r: clamp(pos.r - Math.floor((k - 1) / 2)), c: clamp(pos.c - Math.floor((k - 1) / 2)) };
   };
 
   const confirmSkill = () => {
     const t = targeting;
-    if (!t || !t.preview || !t.anchors.has(t.preview.r * 12 + t.preview.c)) return;
+    if (!t || !t.preview || !t.anchors.has(sqOf(t.preview))) return;
     const action: SkillAction = { kind: 'skill', pieceId: t.pieceId, anchor: t.preview };
     stopTargeting();
     if (!ctrl?.trySkill(action)) toast('지금은 불모지를 쓸 수 없어요', { tone: 'warn' });
@@ -435,7 +459,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     const k = WASTE_SIZE[t.level];
     const anchor = anchorFor(pos, k);
     const same = t.preview && t.preview.r === anchor.r && t.preview.c === anchor.c;
-    const valid = t.anchors.has(anchor.r * 12 + anchor.c);
+    const valid = t.anchors.has(sqOf(anchor));
     // Tapping the previewed area again confirms it.
     if (same && valid) {
       confirmSkill();
@@ -464,7 +488,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     } else if (targeting) {
       const t = targeting;
       const k = WASTE_SIZE[t.level];
-      const valid = !!t.preview && t.anchors.has(t.preview.r * 12 + t.preview.c);
+      const valid = !!t.preview && t.anchors.has(sqOf(t.preview));
       key = `aim|${t.preview?.r},${t.preview?.c}|${valid}`;
       content = [
         h('span', { class: 'action-bar__text' }, icon('target', 16), t.preview ? (valid ? '한 번 더 탭하거나 설치를 누르세요' : '말이 있는 칸에는 깔 수 없어요') : `불모지(${k}×${k})를 깔 곳을 탭하세요`),
@@ -530,7 +554,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
           // A tapped enemy shows its reach in red; own pieces keep the white markers.
           tone: selPiece && selPiece.owner === BOT ? 'enemy' : 'own',
           // Moves that end on wasteland are suicide: marked as deadly.
-          deadly: sel ? sel.moves.filter((m) => s.waste.includes(m.to.r * 12 + m.to.c)).map((m) => m.to) : [],
+          deadly: sel ? sel.moves.filter((m) => s.waste.includes(sqOf(m.to))).map((m) => m.to) : [],
         });
       }
       board.setInteractive(snap.phase !== 'animating' && snap.phase !== 'ended' && !snap.paused);
@@ -591,6 +615,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       replaceChildren(topRoster, rosterChips(params.botFormation, BOT, s));
     }
     hand.update(handModel(params.playerFormation, HUMAN, snap));
+    oppHand.update(handModel(params.botFormation, BOT, snap));
     const tp = turnPillContent(snap);
     if (tp.cls !== pillCls) {
       pillCls = tp.cls;
@@ -776,7 +801,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
         animate: async (move, after) => {
           if (move.pieceId.startsWith(`p${HUMAN}-`)) finishCoach();
           // Stepping on wasteland destroys the mover: the board plays the toxic dissolve.
-          const m: Move = c.state.waste.includes(move.to.r * 12 + move.to.c) ? { ...move, wasted: true } : move;
+          const m: Move = c.state.waste.includes(sqOf(move.to)) ? { ...move, wasted: true } : move;
           moveFeedbackStart(m, c.state);
           if (b) {
             b.setInteractive(false);

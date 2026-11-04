@@ -54,15 +54,15 @@ function harness(initial: GameState, opts: { botMove?: (s: GameState) => Move | 
   return { ctrl, botCalls, anims, flush, advance, finishAnims };
 }
 
-// Player 0: sad (2,5), marki (0,0), walk (0,11). Player 1: marki L3 (9,5) can capture along column 5.
+// Player 0: sad (2,5), marki (0,0), walk (0,9). Player 1: marki L3 (9,5) can capture along column 5.
 const position = () =>
   makeState([
     [0, 'sad', 1, 2, 5],
     [0, 'marki', 1, 0, 0],
-    [0, 'walk', 1, 0, 11],
+    [0, 'walk', 1, 0, 9],
     [1, 'marki', 3, 9, 5],
-    [1, 'sad', 1, 11, 11],
-    [1, 'walk', 1, 11, 0],
+    [1, 'sad', 1, 9, 9],
+    [1, 'walk', 1, 9, 0],
   ]);
 
 describe('GameController selection after the opponent moves', () => {
@@ -97,7 +97,7 @@ describe('GameController selection after the opponent moves', () => {
     await h.finishAnims();
     h.ctrl.tapCell({ r: 2, c: 5 }); // preview own sad while the bot thinks
     expect(h.ctrl.snapshot().selection?.actionable).toBe(false);
-    h.botCalls[0].resolve({ pieceId: 'p1-sad', from: { r: 11, c: 11 }, to: { r: 10, c: 11 } });
+    h.botCalls[0].resolve({ pieceId: 'p1-sad', from: { r: 9, c: 9 }, to: { r: 8, c: 9 } });
     await h.flush();
     await h.finishAnims();
     expect(h.ctrl.phase).toBe('humanTurn');
@@ -126,7 +126,7 @@ describe('GameController races', () => {
     expect(h.ctrl.phase).toBe('humanTurn');
     const last = h.ctrl.state.history[h.ctrl.state.history.length - 1];
     expect(last.kind === 'move' && last.player).toBe(1);
-    h.botCalls[0].resolve({ pieceId: 'p1-sad', from: { r: 11, c: 11 }, to: { r: 10, c: 11 } });
+    h.botCalls[0].resolve({ pieceId: 'p1-sad', from: { r: 9, c: 9 }, to: { r: 8, c: 9 } });
     await h.flush();
     expect(h.ctrl.phase).toBe('humanTurn');
     expect(h.anims.length).toBe(0);
@@ -135,7 +135,7 @@ describe('GameController races', () => {
   it('a bot failure (null, illegal move, rejection) falls back to a legal move, never a forfeit', async () => {
     const answers: (() => Move | null | Promise<Move | null>)[] = [
       () => null,
-      () => ({ pieceId: 'p1-sad', from: { r: 11, c: 11 }, to: { r: 0, c: 0 } }),
+      () => ({ pieceId: 'p1-sad', from: { r: 9, c: 9 }, to: { r: 0, c: 0 } }),
       () => Promise.reject(new Error('worker crashed')),
     ];
     for (const answer of answers) {
@@ -177,7 +177,7 @@ describe('GameController races', () => {
     h.ctrl.tapCell({ r: 1, c: 0 });
     await h.finishAnims();
     h.ctrl.pause();
-    h.botCalls[0].resolve({ pieceId: 'p1-sad', from: { r: 11, c: 11 }, to: { r: 10, c: 11 } });
+    h.botCalls[0].resolve({ pieceId: 'p1-sad', from: { r: 9, c: 9 }, to: { r: 8, c: 9 } });
     await h.advance(10 * 60_000);
     expect(h.ctrl.phase).toBe('botThinking');
     expect(h.ctrl.state.consecutiveTimeouts).toEqual([0, 0]);
@@ -191,9 +191,9 @@ describe('GameController races', () => {
 
   it('one human timeout forfeits exactly once, and dispose stops everything', async () => {
     const h = harness(position(), {
-      botMove: (s) => (s.pieces.find((p) => p.id === 'p1-sad')!.pos.r === 11
-        ? { pieceId: 'p1-sad', from: { r: 11, c: 11 }, to: { r: 10, c: 11 } }
-        : { pieceId: 'p1-sad', from: { r: 10, c: 11 }, to: { r: 11, c: 11 } }),
+      botMove: (s) => (s.pieces.find((p) => p.id === 'p1-sad')!.pos.r === 9
+        ? { pieceId: 'p1-sad', from: { r: 9, c: 9 }, to: { r: 8, c: 9 } }
+        : { pieceId: 'p1-sad', from: { r: 8, c: 9 }, to: { r: 9, c: 9 } }),
     });
     const ended: GameState[] = [];
     h.ctrl.on((e) => e.type === 'ended' && ended.push(e.state));
@@ -219,8 +219,8 @@ describe('chain move, storm and timer scaling in the controller', () => {
     makeState([
       [0, 'insaner', 3, 5, 5],
       [1, 'walk', 1, 5, 6],
-      [1, 'sad', 1, 11, 11],
-      [1, 'marki', 1, 11, 0],
+      [1, 'sad', 1, 9, 9],
+      [1, 'marki', 1, 9, 0],
       [0, 'sad', 1, 0, 0],
     ]);
 
@@ -258,7 +258,7 @@ describe('chain move, storm and timer scaling in the controller', () => {
     const initial = makeState([
       [0, 'sad', 3, 5, 5],
       [1, 'sad', 3, 8, 8],
-      [1, 'marki', 1, 11, 0],
+      [1, 'marki', 1, 9, 0],
     ]);
     const bot = (s: GameState) => {
       // Red shuffles its sad back and forth; the marki stays on column 0 and will be swallowed.
@@ -299,9 +299,9 @@ describe('chain move, storm and timer scaling in the controller', () => {
 describe('GameController without a match clock', () => {
   it('has no match clock: a long game is never ended by wall-clock time', async () => {
     const h = harness(position(), {
-      botMove: (s) => (s.pieces.find((p) => p.id === 'p1-sad')!.pos.r === 11
-        ? { pieceId: 'p1-sad', from: { r: 11, c: 11 }, to: { r: 10, c: 11 } }
-        : { pieceId: 'p1-sad', from: { r: 10, c: 11 }, to: { r: 11, c: 11 } }),
+      botMove: (s) => (s.pieces.find((p) => p.id === 'p1-sad')!.pos.r === 9
+        ? { pieceId: 'p1-sad', from: { r: 9, c: 9 }, to: { r: 8, c: 9 } }
+        : { pieceId: 'p1-sad', from: { r: 8, c: 9 }, to: { r: 9, c: 9 } }),
     });
     expect('matchRemainingMs' in h.ctrl).toBe(false);
     h.ctrl.start();
@@ -325,8 +325,8 @@ describe('GameController without a match clock', () => {
       makeState([
         [0, 'insaner', 3, 5, 5],
         [1, 'walk', 1, 5, 6],
-        [1, 'sad', 1, 11, 11],
-        [1, 'marki', 1, 11, 0],
+        [1, 'sad', 1, 9, 9],
+        [1, 'marki', 1, 9, 0],
         [0, 'sad', 1, 0, 0],
       ]),
     );

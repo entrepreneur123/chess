@@ -4,19 +4,19 @@
 
 ## 앱 이름 (30자 이내)
 
-`GRID CLASH: 12×12 전술 아레나` — 21자
+`GRID CLASH: 10×10 전술 아레나` — 21자
 
 ## 간단한 설명 (80자 이내)
 
-`말 3개, 144칸, 한 수에 갈리는 심리전. 능력이 다른 캐릭터로 진형을 짜고 1:1로 겨루는 전술 보드게임` — 61자
+`말 3개, 100칸, 한 수에 갈리는 심리전. 능력이 다른 캐릭터로 진형을 짜고 1:1로 겨루는 전술 보드게임` — 61자
 
 ## 자세한 설명 (4,000자 이내)
 
 ```
-⚔️ 말 3개로 승부하는 12×12 전술 아레나
+⚔️ 말 3개로 승부하는 10×10 전술 아레나
 
 GRID CLASH는 체스처럼 간단한 규칙 위에 '캐릭터 능력'을 얹은 1:1 전략 보드게임입니다.
-일곱 캐릭터 중 셋으로 분대를 짜 내 진영(3×12)에 배치하고, 45초 안에 한 수를 두세요. 시간을 넘기면 그대로 몰수패! 상대 말 3개를 먼저 모두 잡으면 승리!
+일곱 캐릭터 중 셋으로 분대를 짜 내 진영(2×10)에 배치하고, 45초 안에 한 수를 두세요. 시간을 넘기면 그대로 몰수패! 상대 말 3개를 먼저 모두 잡으면 승리!
 
 🧩 일곱 캐릭터, 일곱 가지 움직임
 • 사드 (일반) — 상하좌우로 미끄러지듯 이동하는 든든한 수비수. 유일하게 후퇴할 수 있습니다.
@@ -29,7 +29,7 @@ GRID CLASH는 체스처럼 간단한 규칙 위에 '캐릭터 능력'을 얹은 
 성급이 오를수록 이동 범위가 넓어져 전혀 다른 전개가 펼쳐집니다.
 
 🎯 진형이 곧 전략
-매칭 전에 내 3×12 구역 안에서 세 말의 자리를 정하세요. 어디에 두느냐가 첫 수입니다.
+매칭 전에 내 2×10 구역 안에서 세 말의 자리를 정하세요. 어디에 두느냐가 첫 수입니다.
 
 ⏱️ 짧고 굵은 한 판
 한 수 45초, 말이 줄면 40초 → 20초로 더 빠르게. 제한시간을 넘기면 즉시 몰수패. 40턴이 지나면 자기장이 좁혀와 승부가 반드시 납니다.
@@ -105,12 +105,12 @@ starts at turn 40 or when a side is down to 1 piece).
 
 | # | Key | Screen | Eyebrow | Title | Sub |
 | --- | --- | --- | --- | --- | --- |
-| 1 | lobby | Lobby: arena card with rating and progress, 전장전 CTA, 견습전투 / 던전 row, tab bar | 1:1 전술 보드게임 | 말 3개, 144칸 / 한 수의 심리전 | 12×12 아레나에서 펼치는 1:1 대전 |
+| 1 | lobby | Lobby: arena card with rating and progress, 전장전 CTA, 견습전투 / 던전 row, tab bar | 1:1 전술 보드게임 | 말 3개, 100칸 / 한 수의 심리전 | 10×10 아레나에서 펼치는 1:1 대전 |
 | 2 | board | 인세이너 picked from the hand: card highlighted, reach markers on the board | 카드나 말을 탭 | 탭 한 번에 / 이동 범위가 한눈에 | 말마다 다른 움직임 · 끌어서 이동도 가능 |
 | 3 | walk | 월크's jump capture over my own 인세이너, the real capture cut-in frozen mid-sweep | 월크 · 영웅 | 뛰어넘어 잡는 / 기습 점프 | 사이의 말을 넘어 앞줄로 착지 |
 | 4 | brutile | 브루타일 skill targeting: 3×3 wasteland preview, 설치 dock | 브루타일 · 전설 | 닿으면 소멸 / 땅을 저주하라 | 스킬 불모지 · 아군이든 적이든 소멸 |
 | 5 | storm | Storm active (opponent down to 1 piece), wasteland skull, capture ring | 서든데스 | 자기장이 / 좁혀온다 | 40턴이 지나거나 말이 1개만 남으면 발동 |
-| 6 | formation | 진형 tab: 인세이너 picked up, legal squares lit | 진형 편성 | 진형이 곧 전략 | 내 구역 3×12 어디든 배치 |
+| 6 | formation | 진형 tab: 인세이너 picked up, legal squares lit | 진형 편성 | 진형이 곧 전략 | 내 구역 2×10 어디든 배치 |
 | 7 | collection | 캐릭터 tab: 브루타일 card with the token upgrade and the 1성/2성/3성 picker | 토큰으로 강화 | 성급을 / 끌어올려라 | 던전 토큰으로 1성 → 2성 → 3성 |
 | 8 | victory | Result screen after the last capture | 한 수 45초 | 상대 말을 모두 / 잡으면 승리 | 시간을 넘기면 즉시 몰수패 |
 
@@ -121,7 +121,7 @@ The caption copy lives in `SHOTS` in `docs/store-assets/capture.mjs`.
 Hook (월크's jump capture with its cut-in, from the first frame) → 진형 tab → lobby and 대전 시작 →
 VS card → 인세이너 picked from the hand → 브루타일's skill and cut-in → the opponent's 월크 dissolving
 on the wasteland → storm chip → 인세이너's final capture and cut-in → victory → end card (wordmark,
-"지금 플레이"). Captions: 뛰어넘어 격파! · 진형이 곧 전략 · 말 3개, 144칸 · 한 수 45초 심리전 ·
+"지금 플레이"). Captions: 뛰어넘어 격파! · 진형이 곧 전략 · 말 3개, 100칸 · 한 수 45초 심리전 ·
 이동 범위가 한눈에 · 땅을 저주하라 · 닿으면 소멸 · 자기장이 좁혀온다 · 모두 잡으면 승리!
 The soundtrack is the game's own `public/audio` clips placed at the moments the game played them,
 normalised to -16 LUFS / -1.5 dBTP. The cut is defined by `BEATS` in `docs/store-assets/lib/video.mjs`.

@@ -17,8 +17,8 @@ describe('Sad (orthogonal slide up to L)', () => {
   it('corner clips to board', () => {
     const s = makeState([[0, 'sad', 3, 0, 0]]);
     expect(t(s, 'p0-sad')).toEqual(keys([[1, 0], [2, 0], [3, 0], [0, 1], [0, 2], [0, 3]]));
-    const s2 = makeState([[1, 'sad', 2, 11, 11]]);
-    expect(t(s2, 'p1-sad')).toEqual(keys([[10, 11], [9, 11], [11, 10], [11, 9]]));
+    const s2 = makeState([[1, 'sad', 2, 9, 9]]);
+    expect(t(s2, 'p1-sad')).toEqual(keys([[8, 9], [7, 9], [9, 8], [9, 7]]));
   });
   it('blocked by ally, captures first enemy only, cannot slide past enemy', () => {
     const s = makeState([
@@ -52,8 +52,8 @@ describe('Marki (forward-only slide)', () => {
     });
   }
   it('clipped at the far edge and stuck on the last row', () => {
-    expect(t(makeState([[0, 'marki', 3, 9, 0]]), 'p0-marki')).toEqual(keys([[10, 0], [11, 0]]));
-    expect(t(makeState([[0, 'marki', 3, 11, 0]]), 'p0-marki')).toEqual([]);
+    expect(t(makeState([[0, 'marki', 3, 7, 0]]), 'p0-marki')).toEqual(keys([[8, 0], [9, 0]]));
+    expect(t(makeState([[0, 'marki', 3, 9, 0]]), 'p0-marki')).toEqual([]);
     expect(t(makeState([[1, 'marki', 3, 0, 3]]), 'p1-marki')).toEqual([]);
   });
   it('blocked by ally / captures first enemy / no sideways', () => {
@@ -87,7 +87,7 @@ describe('Walk (jump to row in front)', () => {
   }
   it('clipped at side edges', () => {
     expect(t(makeState([[0, 'walk', 3, 0, 0]]), 'p0-walk')).toEqual(keys([[1, 0], [1, 1], [1, 2], [1, 3], [1, 4]]));
-    expect(t(makeState([[0, 'walk', 1, 3, 11]]), 'p0-walk')).toEqual(keys([[4, 9], [4, 10], [4, 11]]));
+    expect(t(makeState([[0, 'walk', 1, 3, 9]]), 'p0-walk')).toEqual(keys([[4, 7], [4, 8], [4, 9]]));
   });
   it('jumps over pieces, cannot land on ally, captures on enemy', () => {
     const s = makeState([
@@ -101,7 +101,7 @@ describe('Walk (jump to row in front)', () => {
     expect(moves.find((m) => m.to.c === 7)!.captureId).toBe('p1-sad');
   });
   it('at last row has no moves', () => {
-    expect(t(makeState([[0, 'walk', 3, 11, 5]]), 'p0-walk')).toEqual([]);
+    expect(t(makeState([[0, 'walk', 3, 9, 5]]), 'p0-walk')).toEqual([]);
     expect(t(makeState([[1, 'walk', 3, 0, 5]]), 'p1-walk')).toEqual([]);
   });
 });

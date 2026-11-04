@@ -306,10 +306,10 @@ p {
   }
 }
 .mini-board {
-  --cell: calc((min(100vw, 380px) - 56px) / 12);
+  --cell: calc((min(100vw, 380px) - 56px) / 10); /* 10 x 10 board (engine BOARD_SIZE) */
   position: relative;
   display: grid;
-  grid-template-columns: repeat(12, 1fr);
+  grid-template-columns: repeat(10, 1fr);
   gap: 2px;
   aspect-ratio: 1;
   padding: 6px;
@@ -331,7 +331,7 @@ p {
   background: rgba(61, 139, 255, 0.3);
 }
 .sc-token {
-  --size: calc((100% - 12px) / 12);
+  --size: calc((100% - 12px) / 10); /* 10 x 10 board */
   position: absolute;
   left: 6px;
   top: 6px;
@@ -996,7 +996,7 @@ p {
 }
 .storm-board {
   display: grid;
-  grid-template-columns: repeat(12, 16px);
+  grid-template-columns: repeat(10, 16px);
   gap: 2px;
   padding: 4px;
   border-radius: 8px;

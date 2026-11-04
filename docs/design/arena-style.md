@@ -45,10 +45,10 @@ layouts; take only the qualities below.
 | red-zone | #ff7a7a at ~22% over tiles | opponent home rows |
 
 ## Board (top-down arena)
-- A grassy field of 12 x 12 chunky tiles, alternating grass-light / grass-dark, each tile with a
+- A grassy field of 10 x 10 chunky tiles (BOARD_SIZE), alternating grass-light / grass-dark, each tile with a
   1–2px lighter top-left bevel and darker bottom-right edge so the board reads as raised
   tiles, plus a soft inner shadow where the field meets the frame.
-- Home rows tinted blue (bottom 3) and red (top 3), clearly but softly; the centre line between
+- Home rows tinted blue (bottom 2) and red (top 2), clearly but softly; the centre line between
   the halves can be a subtle path or river-like strip, not a hard neon line.
 - The field sits on a chunky stone/wood plinth (stone palette) with rounded corners, a light
   top bevel and a dark lip, casting a soft shadow onto the sky-blue background.

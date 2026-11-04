@@ -46,6 +46,24 @@ describe('dungeon opponents (fixed tiers)', () => {
     });
   }
 
+  it('above easy, the bot sets up inside the 2 x 10 zone on columns 2..7 (off the first storm columns)', () => {
+    for (const level of ['normal', 'hard', 'extreme'] as const) {
+      const rows = new Set<number>();
+      for (const opp of run(level, 31)) {
+        for (const s of opp.formation) {
+          expect(s.row).toBeGreaterThanOrEqual(0);
+          expect(s.row).toBeLessThanOrEqual(1);
+          expect(s.col).toBeGreaterThanOrEqual(2);
+          expect(s.col).toBeLessThanOrEqual(7);
+          if (s.character === 'marki' || s.character === 'michelle') expect(s.row).toBe(1);
+          if (s.character === 'brutile') expect(s.row).toBe(0);
+          rows.add(s.row);
+        }
+      }
+      expect([...rows].sort()).toEqual([0, 1]);
+    }
+  });
+
   it('easy: every member is 2-star, characters drawn from the whole roster (legendaries too)', () => {
     const seen = new Set<string>();
     for (const opp of run('easy', 21)) {

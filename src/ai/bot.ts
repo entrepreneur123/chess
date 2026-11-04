@@ -104,8 +104,12 @@ const now: () => number =
 
 // ---------------------------------------------------------------- evaluation
 
+/** Last row / column index, and the board's centre line (4.5 on 10 x 10). */
+const LAST = BOARD_SIZE - 1;
+const MID = LAST / 2;
+
 const attackBuf = new Int32Array(MAX_MOVES);
-/** attackCount[side*144 + sq], minAttacker[side*144+sq] */
+/** attackCount[side * N_SQUARES + sq], minAttacker[side * N_SQUARES + sq] */
 const attackCount = new Int16Array(2 * N_SQUARES);
 const minAttacker = new Int16Array(2 * N_SQUARES);
 const touched: number[] = [];
@@ -150,25 +154,26 @@ export function evaluate(b: FastBoard, side: number): number {
     if (s < 0) continue;
     const p = b.owner[i];
     const v = b.value[i] * UNIT;
-    const r = (s / 12) | 0;
-    const c = s - r * 12;
+    const r = (s / BOARD_SIZE) | 0;
+    const c = s - r * BOARD_SIZE;
     let sc = v;
     const dir = b.dir[i];
-    const room = dir > 0 ? 11 - r : r; // rows left in front of the piece (it turns around at 0)
+    const room = dir > 0 ? LAST - r : r; // rows left in front of the piece (it turns around at 0)
     // Facing the enemy side is worth more than walking back home after a turn-around.
     const facingEnemy = dir === (p === 0 ? 1 : -1);
-    const centerC = 5.5 - Math.abs(c - 5.5); // 0.5..5.5
+    const centerC = MID - Math.abs(c - MID); // 0.5..4.5 on 10 columns
+    const centerR = MID - Math.abs(r - MID);
     const ch = b.ch[i];
     if (ch === CH_SAD) {
-      sc += centerC * 3 + (5.5 - Math.abs(r - 5.5)) * 2;
+      sc += centerC * 3 + centerR * 2;
     } else if (ch === CH_INSANER) {
-      sc += centerC * 4 + (5.5 - Math.abs(r - 5.5)) * 2 + absorbWorth(b.absorb[i]);
+      sc += centerC * 4 + centerR * 2 + absorbWorth(b.absorb[i]);
     } else if (ch === CH_MARKI) {
       if (!facingEnemy) sc -= v * 0.2;
       {
         // free squares straight ahead (blocked by ally = less potential)
         let free = 0;
-        const dr = dir > 0 ? 12 : -12;
+        const dr = dir > 0 ? BOARD_SIZE : -BOARD_SIZE;
         for (let t = s + dr, k = 0; k < room; k++, t += dr) {
           const o = b.occ[t];
           if (o >= 0 && b.owner[o] === p) break;
@@ -193,12 +198,12 @@ export function evaluate(b: FastBoard, side: number): number {
       sc += (TRAPS_PER_MICHELLE - b.trapsLaid[p]) * TRAP_POTENTIAL;
     } else if (ch === CH_PICKER) {
       // Diagonal hopper: centre and room in front give him the most hop lanes.
-      sc += centerC * 4 + (5.5 - Math.abs(r - 5.5)) * 2;
+      sc += centerC * 4 + centerR * 2;
     }
     if (b.stun[i] > 0) sc -= v * STUN_PENALTY;
     // storm: standing next to (or on) the columns that vanish next is a liability
     if (b.stormIn >= 0) {
-      const dist = Math.min(c - b.storm, 11 - b.storm - c);
+      const dist = Math.min(c - b.storm, LAST - b.storm - c);
       const urgency = b.stormIn <= 2 ? 1 : 0.5;
       if (dist <= 0) sc -= v * 0.6 * urgency;
       else if (dist === 1) sc -= v * 0.25 * urgency;
@@ -223,15 +228,15 @@ export function evaluate(b: FastBoard, side: number): number {
     for (let t = 0; t < N_SQUARES; t++) {
       const m = b.trap[t];
       if (m === 0) continue;
-      const tr = (t / 12) | 0;
-      const tc = t - tr * 12;
+      const tr = (t / BOARD_SIZE) | 0;
+      const tc = t - tr * BOARD_SIZE;
       for (let i = 0; i < b.n; i++) {
         const q = b.sq[i];
         if (q < 0) continue;
         const enemyOf = 1 - b.owner[i];
         if (!(m & trapBit(enemyOf))) continue;
-        const qr = (q / 12) | 0;
-        if (Math.abs(qr - tr) <= 2 && Math.abs(q - qr * 12 - tc) <= 2) score[enemyOf] += TRAP_NEAR_ENEMY;
+        const qr = (q / BOARD_SIZE) | 0;
+        if (Math.abs(qr - tr) <= 2 && Math.abs(q - qr * BOARD_SIZE - tc) <= 2) score[enemyOf] += TRAP_NEAR_ENEMY;
       }
     }
   }

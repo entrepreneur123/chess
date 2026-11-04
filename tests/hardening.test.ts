@@ -5,6 +5,9 @@
 import { describe, expect, it } from 'vitest';
 import { fallbackAction } from '../src/ai/bot';
 import {
+  BOARD_SIZE,
+  MAX_MATCH_PLIES,
+  STORM_FULL_STEPS,
   SUDDEN_DEATH_PLY,
   STORM_INTERVAL_PLIES,
   applyMove,
@@ -129,7 +132,7 @@ describe('end reasons', () => {
         [1, 'sad', 1, 8, 8],
       ],
       0,
-      { stormIn: 1, waste: [5 * 12 + 6] },
+      { stormIn: 1, waste: [5 * BOARD_SIZE + 6] },
     );
     const t = applyMove(s, mv(s, 'p0-sad', 5, 6));
     expect(t.status).toBe('ended');
@@ -143,7 +146,7 @@ describe('end reasons', () => {
       [
         [0, 'sad', 1, 5, 5],
         [1, 'sad', 1, 8, 0],
-        [1, 'marki', 1, 10, 11],
+        [1, 'marki', 1, 8, 9],
       ],
       0,
       { stormIn: 1 },
@@ -158,9 +161,11 @@ describe('end reasons', () => {
 });
 
 describe('sudden death at the new constant', () => {
-  it('SUDDEN_DEATH_PLY is turn 41 and the match is bounded by 116 plies', () => {
+  it('SUDDEN_DEATH_PLY is turn 41 and the match is bounded by 110 plies on 10 columns', () => {
     expect(SUDDEN_DEATH_PLY).toBe(80);
-    expect(SUDDEN_DEATH_PLY + 6 * STORM_INTERVAL_PLIES).toBe(116);
+    expect(STORM_FULL_STEPS).toBe(5);
+    expect(SUDDEN_DEATH_PLY + STORM_FULL_STEPS * STORM_INTERVAL_PLIES).toBe(110);
+    expect(MAX_MATCH_PLIES).toBe(110);
   });
 
   it('FastBoard activates and ticks the storm exactly like the engine around ply 80', () => {
@@ -169,7 +174,7 @@ describe('sudden death at the new constant', () => {
         [0, 'sad', 2, 5, 5],
         [0, 'walk', 1, 1, 3],
         [1, 'sad', 2, 8, 8],
-        [1, 'walk', 1, 10, 9],
+        [1, 'walk', 1, 8, 9],
       ],
       0,
       { ply: SUDDEN_DEATH_PLY - 3 },
@@ -188,7 +193,7 @@ describe('sudden death at the new constant', () => {
       expect(n).toBe(legal.length);
       // Shuffle the sads sideways, never capturing, so the storm decides the game.
       const pick = legal.find((m) => !m.captureId && m.pieceId.endsWith('sad')) ?? legal[0];
-      const enc = Array.from(buf.subarray(0, n)).find((e) => b.ids[(e >> 8) & 255] === pick.pieceId && (e & 255) === pick.to.r * 12 + pick.to.c)!;
+      const enc = Array.from(buf.subarray(0, n)).find((e) => b.ids[(e >> 8) & 255] === pick.pieceId && (e & 255) === pick.to.r * BOARD_SIZE + pick.to.c)!;
       expect(enc).toBeDefined();
       s = applyMove(s, pick);
       fastMake(b, enc);
@@ -206,7 +211,7 @@ describe('bot fallback', () => {
         [1, 'sad', 1, 8, 8],
       ],
       0,
-      { waste: [5 * 12 + 6, 4 * 12 + 5, 6 * 12 + 5] },
+      { waste: [5 * BOARD_SIZE + 6, 4 * BOARD_SIZE + 5, 6 * BOARD_SIZE + 5] },
     );
     for (let i = 0; i < 30; i++) {
       const a = fallbackAction(s);

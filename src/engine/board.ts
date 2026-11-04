@@ -19,6 +19,8 @@ import {
 } from './characters';
 
 export const N_SQUARES = BOARD_SIZE * BOARD_SIZE;
+// The fast generator packs a square into 8 bits (moves, undo tokens, storm-kill records).
+if (N_SQUARES > 256) throw new Error('board too large: squares no longer fit in 8 bits');
 
 export function forwardDir(owner: PlayerId): 1 | -1 {
   return owner === 0 ? 1 : -1;
@@ -40,7 +42,7 @@ export function isOnBoard(pos: Pos): boolean {
   );
 }
 
-/** Is the ABSOLUTE position inside `owner`'s 3 x 12 home zone? */
+/** Is the ABSOLUTE position inside `owner`'s ZONE_DEPTH x BOARD_SIZE home zone? */
 export function isInZone(owner: PlayerId, pos: Pos): boolean {
   if (!isOnBoard(pos)) return false;
   return owner === 0 ? pos.r < ZONE_DEPTH : pos.r >= BOARD_SIZE - ZONE_DEPTH;
@@ -249,14 +251,14 @@ let stamp = 0;
 /**
  * Core move generator shared by the public engine API and the AI.
  *
- * @param occ     length-144 array: -1 = empty, otherwise an index into `owners`
+ * @param occ     length-N_SQUARES array: -1 = empty, otherwise an index into `owners`
  * @param owners  owner of each piece index
  * @param includeAllies if true, squares occupied by allies are also emitted (attack/defence maps)
- * @param dir     forward direction of this piece (+1 toward r=11); defaults to the owner's base direction
+ * @param dir     forward direction of this piece (+1 toward r = BOARD_SIZE - 1); defaults to the owner's base direction
  * @param storm   columns swallowed by the storm per side (blocked squares)
  * @param absorb  bitmask of absorbed (character, level) patterns, see `abilityBit`
- * @param waste   optional length-144 wasteland flags: slides end ON a wasteland square
- * @param traps   optional length-144 doll-trap masks (see `trapBit`): Picker's hop stops on an enemy trap
+ * @param waste   optional length-N_SQUARES wasteland flags: slides end ON a wasteland square
+ * @param traps   optional length-N_SQUARES doll-trap masks (see `trapBit`): Picker's hop stops on an enemy trap
  * @returns new write offset into `out`
  */
 export function genTargets(

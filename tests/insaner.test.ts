@@ -61,13 +61,13 @@ describe('insaner absorption', () => {
     const s = makeState([
       [0, 'insaner', 1, 5, 5],
       [1, 'walk', 1, 5, 6],
-      [1, 'sad', 1, 11, 11],
+      [1, 'sad', 1, 9, 9],
     ]);
     const after = applyMove(s, mv(s, 'p0-insaner', 5, 6));
     const me = getPieceById(after, 'p0-insaner')!;
     expect(me.absorbed).toEqual([{ character: 'walk', level: 1 }]);
     // Now, on its next turn, it can jump like a Lv1 Walk (row ahead, 5 wide) in addition to its own moves.
-    const next = applyMove(after, mv(after, 'p1-sad', 10, 11));
+    const next = applyMove(after, mv(after, 'p1-sad', 8, 9));
     const t = targetKeys(getLegalMoves(next, 'p0-insaner'));
     expect(t).toContain('6,8'); // walk jump: row 6, cols 4..8
     expect(t).toContain('6,4');
@@ -80,7 +80,7 @@ describe('insaner absorption', () => {
     const s = makeState([
       [0, 'insaner', 2, 5, 5],
       [1, 'insaner', 1, 5, 6],
-      [1, 'sad', 1, 11, 11],
+      [1, 'sad', 1, 9, 9],
     ]);
     s.pieces[1].absorbed = [{ character: 'marki', level: 3 }, { character: 'insaner', level: 2 }];
     const after = applyMove(s, mv(s, 'p0-insaner', 5, 6));
@@ -94,7 +94,7 @@ describe('insaner absorption', () => {
     const s = makeState([
       [0, 'sad', 1, 5, 5],
       [1, 'walk', 1, 5, 6],
-      [1, 'sad', 1, 11, 11],
+      [1, 'sad', 1, 9, 9],
     ]);
     const after = applyMove(s, mv(s, 'p0-sad', 5, 6));
     expect(getPieceById(after, 'p0-sad')!.absorbed).toBeUndefined();
@@ -107,7 +107,7 @@ describe('insaner chain move (Lv3)', () => {
       [0, 'insaner', 3, 5, 5],
       [1, 'walk', 1, 5, 6],
       [1, 'sad', 1, 5, 8],
-      [1, 'marki', 1, 11, 0],
+      [1, 'marki', 1, 9, 0],
       [0, 'sad', 1, 0, 0],
     ]);
 
@@ -153,7 +153,7 @@ describe('insaner chain move (Lv3)', () => {
       [1, 'walk', 1, 0, 1],
       [0, 'sad', 1, 1, 1],
       [0, 'marki', 1, 1, 0],
-      [1, 'sad', 1, 11, 11],
+      [1, 'sad', 1, 9, 9],
     ]);
     s.pieces[2].pos = { r: 1, c: 1 }; // blocks the diagonal
     // After capturing on (0,1) the insaner sits at (0,1): neighbours (0,0) empty... make (0,0) blocked too
@@ -177,9 +177,9 @@ describe('insaner chain move (Lv3)', () => {
 
 describe('turn timer scaling', () => {
   it('60 s at 3v3, 40 s once either side has 2, 20 s once either side has 1', () => {
-    expect(turnTimeMsFor(makeState([[0, 'sad', 1, 0, 0], [0, 'marki', 1, 0, 1], [0, 'walk', 1, 0, 2], [1, 'sad', 1, 11, 0], [1, 'marki', 1, 11, 1], [1, 'walk', 1, 11, 2]]))).toBe(TURN_TIME_MS);
-    expect(turnTimeMsFor(makeState([[0, 'sad', 1, 0, 0], [0, 'marki', 1, 0, 1], [0, 'walk', 1, 0, 2], [1, 'sad', 1, 11, 0], [1, 'marki', 1, 11, 1]]))).toBe(TURN_TIME_2_MS);
-    expect(turnTimeMsFor(makeState([[0, 'sad', 1, 0, 0], [1, 'sad', 1, 11, 0], [1, 'marki', 1, 11, 1], [1, 'walk', 1, 11, 2]]))).toBe(TURN_TIME_1_MS);
+    expect(turnTimeMsFor(makeState([[0, 'sad', 1, 0, 0], [0, 'marki', 1, 0, 1], [0, 'walk', 1, 0, 2], [1, 'sad', 1, 9, 0], [1, 'marki', 1, 9, 1], [1, 'walk', 1, 9, 2]]))).toBe(TURN_TIME_MS);
+    expect(turnTimeMsFor(makeState([[0, 'sad', 1, 0, 0], [0, 'marki', 1, 0, 1], [0, 'walk', 1, 0, 2], [1, 'sad', 1, 9, 0], [1, 'marki', 1, 9, 1]]))).toBe(TURN_TIME_2_MS);
+    expect(turnTimeMsFor(makeState([[0, 'sad', 1, 0, 0], [1, 'sad', 1, 9, 0], [1, 'marki', 1, 9, 1], [1, 'walk', 1, 9, 2]]))).toBe(TURN_TIME_1_MS);
   });
 });
 
@@ -188,11 +188,11 @@ describe('storm', () => {
     makeState([
       [0, 'sad', 3, 5, 5],
       [1, 'sad', 3, 8, 8],
-      [1, 'marki', 1, 11, 0],
+      [1, 'marki', 1, 9, 0],
     ]);
 
   it('activates as soon as either side is down to one piece', () => {
-    const three = makeState([[0, 'sad', 1, 0, 0], [0, 'marki', 1, 0, 1], [1, 'sad', 1, 11, 0], [1, 'marki', 1, 11, 1]]);
+    const three = makeState([[0, 'sad', 1, 0, 0], [0, 'marki', 1, 0, 1], [1, 'sad', 1, 9, 0], [1, 'marki', 1, 9, 1]]);
     expect(three.stormIn).toBeNull();
     const a = applyMove(three, mv(three, 'p0-sad', 1, 0));
     expect(a.stormIn).toBeNull();
@@ -212,7 +212,7 @@ describe('storm', () => {
       ['p0-sad', 5, 5],
       ['p1-sad', 8, 8],
       ['p0-sad', 5, 6],
-      ['p1-marki', 10, 0],
+      ['p1-marki', 8, 0],
     ];
     for (const [id, r, c] of seq) {
       expect(s.storm).toBe(0);
@@ -224,13 +224,14 @@ describe('storm', () => {
     const stormEntry = s.history[s.history.length - 1];
     expect(stormEntry).toEqual({ kind: 'storm', storm: 1, killed: ['p1-marki'] });
     expect(s.status).toBe('playing');
-    // Column 0 and 11 are gone: nothing may enter them.
+    // Columns 0 and 9 are gone: nothing may enter them.
     s = applyMove(s, mv(s, 'p0-sad', 5, 3));
-    s = applyMove(s, mv(s, 'p1-sad', 8, 10));
+    s = applyMove(s, mv(s, 'p1-sad', 8, 7));
     expect(targetKeys(getLegalMoves(s, 'p0-sad'))).not.toContain('5,0');
     expect(targetKeys(getLegalMoves(s, 'p0-sad'))).toContain('5,1');
     s = applyMove(s, mv(s, 'p0-sad', 5, 1));
-    expect(targetKeys(getLegalMoves(s, 'p1-sad'))).not.toContain('8,11');
+    expect(targetKeys(getLegalMoves(s, 'p1-sad'))).not.toContain('8,9');
+    expect(targetKeys(getLegalMoves(s, 'p1-sad'))).toContain('8,8');
   });
 
   it('ends the game with reason storm when a side loses its last piece to it', () => {
@@ -247,12 +248,12 @@ describe('storm', () => {
 
   it('is decided by material when the storm takes the last pieces of both sides at once', () => {
     let s = makeState([
-      [0, 'sad', 1, 5, 11],
+      [0, 'sad', 1, 5, 9],
       [1, 'sad', 1, 8, 0],
       [1, 'marki', 1, 7, 0],
     ]);
     s = { ...s, stormIn: 1 };
-    s = applyMove(s, mv(s, 'p0-sad', 6, 11));
+    s = applyMove(s, mv(s, 'p0-sad', 6, 9));
     expect(s.status).toBe('ended');
     expect(s.endReason).toBe('storm');
     expect(s.pieces).toHaveLength(0);

@@ -95,7 +95,7 @@ later be served by a real server.
 - **Dungeon** uses fixed squads per difficulty: the existing easy, normal and hard tiers, and 극악 =
   three 3성 including at least one legendary at extreme strength.
 
-## Profile (schema v4)
+## Profile (schema v5; v4 plus the 10 x 10 board migration)
 | Field | Meaning |
 | --- | --- |
 | `owned: Record<CharacterId, 0\|1\|2\|3>` | 0 = locked; otherwise the highest star owned. |
@@ -111,6 +111,10 @@ later be served by a real server.
 - **Migration v3 → v4** (pre-release, so it is a reset): own the 3 starters at 1성, set all grades
   to 1, and set tokens, essence and rating to 0. The formation keeps its positions only if every
   piece is owned; otherwise it falls back to the default.
+- **Migration v4 → v5** (the board went from 12 x 12 with a 3 x 12 home zone to 10 x 10 with a
+  2 x 10 zone): every field is kept, except a saved formation with any piece outside the new zone
+  (local row > 1 or column > 9). It is reset to the preset squares for the same squad (the
+  starters if that squad is not owned) and marked unsaved (`formationSaved: false`).
 - **Validation.** A formation may contain only owned characters, at grades ≤ owned.
 - **Security note.** All of this lives in localStorage and can be edited by the user. Real PvP,
   leaderboards or purchases need server-side authority first.

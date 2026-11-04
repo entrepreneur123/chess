@@ -16,7 +16,7 @@
  *    and a glowing capture ring, unchanged from v5. They are painted once into textures / sprites
  *    and blended additively (dots, selection) or normally (capture ring, which sits over a coin).
  * Everything is painted in raw canvas pixels from a cell size `s` and the pixel position (ox, oy)
- * of the field's top-left corner (col 0, row 11).
+ * of the field's top-left corner (col 0, row BOARD_SIZE - 1).
  * Pure Canvas2D: no three.js, so the 2D fallback stays light.
  */
 import { BOARD_SIZE, ZONE_DEPTH } from '../engine/types';
@@ -24,32 +24,87 @@ import { hexToRgb, mixRgb, rgbToCss } from './common';
 import type { RGB } from './common';
 import { ARENA, HOLO, TEAM_COLORS } from './palette';
 
-/** Bezel width around the 12x12 field (cells). */
-export const FRAME_WIDTH = 0.28;
-/** Outer corner radius of the bezel (cells). */
-const FRAME_RADIUS = 0.16;
-/** Depth of the dark lip visible under the bezel's bottom edge (cells, screen-down). */
-const FRAME_LIP = 0.05;
-/** Soft outer shadow of the bezel onto the page (cells). */
-const FRAME_SHADOW = { dy: 0.1, blur: 0.3, alpha: 0.75 } as const;
+/**
+ * Bezel geometry, in cells. Two looks share every painter: the regular bezel (tablets, desktop) and
+ * a slim one for narrow boards (phones), where every pixel of width should go to the cells.
+ */
+export interface FrameStyle {
+  readonly id: 'regular' | 'slim';
+  /** Bezel width around the field. */
+  readonly width: number;
+  /** Outer corner radius. */
+  readonly radius: number;
+  /** Depth of the dark lip visible under the bottom edge (screen-down). */
+  readonly lip: number;
+  /** Soft outer shadow onto the page. */
+  readonly shadow: { readonly dy: number; readonly blur: number; readonly alpha: number };
+  /** HUD corner brackets: inset from the outer edge, arm length, line width. */
+  readonly bracket: { readonly inset: number; readonly arm: number; readonly width: number };
+  /** Ruler tick lengths: minor, major (zone edges and the centre line). */
+  readonly ticks: readonly [number, number];
+  /** Gold accent bars: length on the top / bottom edge, on the sides, and thickness. */
+  readonly gold: { readonly h: number; readonly v: number; readonly t: number };
+  /** Room the views keep around the bezel for its glow (fit margin). */
+  readonly glowRoom: number;
+}
+
+export const FRAME_REGULAR: FrameStyle = {
+  id: 'regular',
+  width: 0.28,
+  radius: 0.16,
+  lip: 0.05,
+  shadow: { dy: 0.1, blur: 0.3, alpha: 0.75 },
+  bracket: { inset: 0.075, arm: 0.95, width: 0.045 },
+  ticks: [0.07, 0.13],
+  gold: { h: 2.4, v: 1.6, t: 0.03 },
+  glowRoom: 0.1,
+};
+
+/** Phones: a hairline-slim bezel (~5 px at 390 px wide) so the field spans almost the full width. */
+export const FRAME_SLIM: FrameStyle = {
+  id: 'slim',
+  width: 0.12,
+  radius: 0.09,
+  lip: 0.025,
+  shadow: { dy: 0.04, blur: 0.1, alpha: 0.6 },
+  bracket: { inset: 0.025, arm: 0.6, width: 0.04 },
+  ticks: [0.035, 0.065],
+  gold: { h: 1.8, v: 1.2, t: 0.024 },
+  glowRoom: 0.02,
+};
+
+/** Boards narrower than this (CSS px) use the slim bezel. */
+export const SLIM_FRAME_BELOW_PX = 600;
+
+export function frameStyleFor(cssWidth: number): FrameStyle {
+  return cssWidth < SLIM_FRAME_BELOW_PX ? FRAME_SLIM : FRAME_REGULAR;
+}
+
 /** Field well reveal around the cells (cells). */
 const WELL = 0.035;
+
 /**
- * Extents of everything the frame paints, in cells outside the 12x12 field (the WebGL board sizes
- * its frame plane from these; both views fit the camera / layout to FRAME_FIT).
+ * Extents of everything the frame paints, in cells outside the field (the WebGL board sizes its
+ * frame plane from these).
  */
-export const FRAME_EXTENT = {
-  side: FRAME_WIDTH + FRAME_SHADOW.blur,
-  top: FRAME_WIDTH + FRAME_SHADOW.blur * 0.8,
-  bottom: FRAME_WIDTH + FRAME_LIP + FRAME_SHADOW.dy + FRAME_SHADOW.blur,
-} as const;
+export function frameExtent(st: FrameStyle): { side: number; top: number; bottom: number } {
+  return {
+    side: st.width + st.shadow.blur,
+    top: st.width + st.shadow.blur * 0.8,
+    bottom: st.width + st.lip + st.shadow.dy + st.shadow.blur,
+  };
+}
+
 /** What the views fit into the viewport: the bezel and its lip plus a little room for its glow. */
-export const FRAME_FIT = {
-  side: FRAME_WIDTH + 0.1,
-  top: FRAME_WIDTH + 0.1,
-  bottom: FRAME_WIDTH + FRAME_LIP + 0.12,
-} as const;
-/** Margin (cells) the field overlay paints beyond the 12x12 field (outer grid line glow). */
+export function frameFit(st: FrameStyle): { side: number; top: number; bottom: number } {
+  return {
+    side: st.width + st.glowRoom,
+    top: st.width + st.glowRoom,
+    bottom: st.width + st.lip + st.glowRoom * 1.2,
+  };
+}
+
+/** Margin (cells) the field overlay paints beyond the field (outer grid line glow). */
 export const FIELD_OVERLAY_MARGIN = 0.1;
 
 /**
@@ -92,6 +147,38 @@ function roundRectSub(g: CanvasRenderingContext2D, x: number, y: number, w: numb
   g.closePath();
 }
 
+/**
+ * Fill a frame-shaped region: the outer rect minus the inner rect (the inner one is a hole).
+ * Used to cast a soft inner shadow / glow from the edges of the field.
+ *
+ * Never build such a hole with `rect(x, y, -w, h)`. The spec says a negative width reverses the
+ * sub-path's winding, so a nonzero fill leaves a hole, and Chromium does that. WebKit builds rect()
+ * with CoreGraphics' CGPathAddRect, which normalises the rect, so the winding never flips and the
+ * "hole" fills solid on Safari: the field overlay turned opaque black and the additive turn glow
+ * solid team blue (iPad report, v6). Here both sub-paths are explicit, wound in opposite
+ * directions, and filled with the even-odd rule, which ignores winding altogether.
+ */
+export function fillFrameHole(
+  g: CanvasRenderingContext2D,
+  outer: readonly [number, number, number, number],
+  inner: readonly [number, number, number, number],
+): void {
+  const [ox, oy, ow, oh] = outer;
+  const [ix, iy, iw, ih] = inner;
+  g.beginPath();
+  g.moveTo(ox, oy);
+  g.lineTo(ox + ow, oy);
+  g.lineTo(ox + ow, oy + oh);
+  g.lineTo(ox, oy + oh);
+  g.closePath();
+  g.moveTo(ix, iy);
+  g.lineTo(ix, iy + ih);
+  g.lineTo(ix + iw, iy + ih);
+  g.lineTo(ix + iw, iy);
+  g.closePath();
+  g.fill('evenodd');
+}
+
 /** The four HUD corner brackets as one path (bezel corners). Arm length / inset in px. */
 function bracketPath(g: CanvasRenderingContext2D, x0: number, y0: number, w: number, h: number, inset: number, arm: number): void {
   const xa = x0 + inset;
@@ -113,26 +200,24 @@ function bracketPath(g: CanvasRenderingContext2D, x0: number, y0: number, w: num
   g.lineTo(xa, yb - arm);
 }
 
-/** Bracket geometry (cells): inset from the bezel's outer edge, arm length, line width. */
-const BRACKET = { inset: 0.075, arm: 0.95, width: 0.045 } as const;
-
 /** Bezel (shadow, lip, face, hairlines, ruler ticks, corner brackets, gold accents, field well). */
-export function paintFrame(g: CanvasRenderingContext2D, s: number, ox: number, oy: number): void {
+export function paintFrame(g: CanvasRenderingContext2D, s: number, ox: number, oy: number, st: FrameStyle = FRAME_REGULAR): void {
   const n = BOARD_SIZE;
-  const F = FRAME_WIDTH;
+  const F = st.width;
+  const BRACKET = st.bracket;
   const x0 = ox - F * s;
   const y0 = oy - F * s;
   const w = (n + F * 2) * s;
   const h = (n + F * 2) * s;
-  const R = FRAME_RADIUS * s;
-  const lip = FRAME_LIP * s;
+  const R = st.radius * s;
+  const lip = st.lip * s;
   const px = Math.max(1, s * 0.022);
 
   // 1. Soft outer shadow (cast by the whole block, lip included) so the board floats.
   g.save();
-  g.shadowColor = rgbToCss(NIGHT0, FRAME_SHADOW.alpha);
-  g.shadowBlur = FRAME_SHADOW.blur * s;
-  g.shadowOffsetY = FRAME_SHADOW.dy * s;
+  g.shadowColor = rgbToCss(NIGHT0, st.shadow.alpha);
+  g.shadowBlur = st.shadow.blur * s;
+  g.shadowOffsetY = st.shadow.dy * s;
   g.fillStyle = rgbToCss(IRON_LIP);
   roundRectPath(g, x0, y0 + lip, w, h, R);
   g.fill();
@@ -165,12 +250,14 @@ export function paintFrame(g: CanvasRenderingContext2D, s: number, ox: number, o
   g.stroke();
 
   // 5. Ruler ticks along the inner edge at every cell line (longer every 3 cells).
-  const ti = (F - 0.02) * s; // tick base: just outside the field well
+  const ti = Math.max(F * 0.5, F - 0.02) * s; // tick base: just outside the field well
   g.strokeStyle = rgbToCss(GRID, 0.3);
   g.lineWidth = Math.max(1, s * 0.016);
   g.beginPath();
   for (let k = 1; k < n; k++) {
-    const len = (k % 3 === 0 ? 0.13 : 0.07) * s;
+    // Major ticks on the zone edge lines and the centre line.
+    const major = k === ZONE_DEPTH || k === n - ZONE_DEPTH || k * 2 === n;
+    const len = (major ? st.ticks[1] : st.ticks[0]) * s;
     const p = k * s;
     g.moveTo(ox + p, y0 + ti);
     g.lineTo(ox + p, y0 + ti - len);
@@ -204,7 +291,7 @@ export function paintFrame(g: CanvasRenderingContext2D, s: number, ox: number, o
 
   // 7. Thin gold accents: a short gilded bar centred on each side of the bezel.
   const gold = (cx: number, cy: number, horizontal: boolean, len: number): void => {
-    const t = Math.max(1, s * 0.03);
+    const t = Math.max(1, s * st.gold.t);
     const gg = horizontal ? g.createLinearGradient(cx - len / 2, 0, cx + len / 2, 0) : g.createLinearGradient(0, cy - len / 2, 0, cy + len / 2);
     gg.addColorStop(0, rgbToCss(GOLD_DEEP, 0));
     gg.addColorStop(0.2, rgbToCss(GOLD_DEEP, 0.9));
@@ -216,10 +303,10 @@ export function paintFrame(g: CanvasRenderingContext2D, s: number, ox: number, o
     else g.fillRect(cx - t / 2, cy - len / 2, t, len);
   };
   const mid = (F * s) / 2;
-  gold(ox + (n * s) / 2, y0 + mid, true, 2.4 * s);
-  gold(ox + (n * s) / 2, y0 + h - mid, true, 2.4 * s);
-  gold(x0 + mid, oy + (n * s) / 2, false, 1.6 * s);
-  gold(x0 + w - mid, oy + (n * s) / 2, false, 1.6 * s);
+  gold(ox + (n * s) / 2, y0 + mid, true, st.gold.h * s);
+  gold(ox + (n * s) / 2, y0 + h - mid, true, st.gold.h * s);
+  gold(x0 + mid, oy + (n * s) / 2, false, st.gold.v * s);
+  gold(x0 + w - mid, oy + (n * s) / 2, false, st.gold.v * s);
 
   // 8. Field well: the near-black bed between the cells, with a faint cyan inner rim.
   const wx = ox - WELL * s;
@@ -276,7 +363,13 @@ export function paintTile(g: CanvasRenderingContext2D, x: number, y: number, s: 
  * micro-texture, the glowing grid (team-tinted in the home zones) with intersection crosses, and a
  * light edge shadow under the bezel. Covers the field plus FIELD_OVERLAY_MARGIN; static.
  */
-export function paintFieldOverlay(g: CanvasRenderingContext2D, s: number, ox: number, oy: number): void {
+export function paintFieldOverlay(
+  g: CanvasRenderingContext2D,
+  s: number,
+  ox: number,
+  oy: number,
+  opts: { edgeShadow?: boolean } = {},
+): void {
   const n = BOARD_SIZE;
   const size = n * s;
   const m = FIELD_OVERLAY_MARGIN * s;
@@ -344,7 +437,7 @@ export function paintFieldOverlay(g: CanvasRenderingContext2D, s: number, ox: nu
     return vg;
   };
   const hColor = (k: number): RGB => {
-    // k = line index from the top (0..12); zone edges (3, 9) are drawn by the zone edge lines.
+    // k = line index from the top (0..BOARD_SIZE); the zone edges (ZONE_DEPTH, BOARD_SIZE - ZONE_DEPTH) are drawn by the zone edge lines.
     if (k < ZONE_DEPTH) return mixRgb(GRID, TEAM_GLOW[1], 0.75);
     if (k > n - ZONE_DEPTH) return mixRgb(GRID, TEAM_GLOW[0], 0.45);
     return GRID;
@@ -387,7 +480,11 @@ export function paintFieldOverlay(g: CanvasRenderingContext2D, s: number, ox: nu
   g.lineWidth = Math.max(1, s * 0.022);
   g.stroke();
 
-  // 6. Soft edge shadow where the field meets the bezel.
+  // 6. Soft edge shadow where the field meets the bezel (skipped by the self-test retry).
+  if (opts.edgeShadow === false) {
+    g.restore();
+    return;
+  }
   g.beginPath();
   g.rect(ox, oy, size, size);
   g.clip();
@@ -395,10 +492,7 @@ export function paintFieldOverlay(g: CanvasRenderingContext2D, s: number, ox: nu
   g.shadowBlur = 0.35 * s;
   g.shadowOffsetY = 0.06 * s;
   g.fillStyle = '#000';
-  g.beginPath();
-  g.rect(ox - s * 4, oy - s * 4, size + s * 8, size + s * 8);
-  g.rect(ox + size, oy, -size, size); // opposite winding: a frame-shaped hole
-  g.fill('nonzero');
+  fillFrameHole(g, [ox - s * 4, oy - s * 4, size + s * 8, size + s * 8], [ox, oy, size, size]);
   g.restore();
 }
 
@@ -408,28 +502,36 @@ export function paintFieldOverlay(g: CanvasRenderingContext2D, s: number, ox: nu
  * the frame's coordinates (field top-left at (ox, oy)); blend additively. The WebGL board paints it
  * white and tints it with the material colour.
  */
-export function paintTurnGlow(g: CanvasRenderingContext2D, s: number, ox: number, oy: number, color: RGB): void {
+export function paintTurnGlow(
+  g: CanvasRenderingContext2D,
+  s: number,
+  ox: number,
+  oy: number,
+  color: RGB,
+  st: FrameStyle = FRAME_REGULAR,
+  opts: { spill?: boolean } = {},
+): void {
   const n = BOARD_SIZE;
-  const F = FRAME_WIDTH;
+  const F = st.width;
   const size = n * s;
   const x0 = ox - F * s;
   const y0 = oy - F * s;
   const w = (n + F * 2) * s;
-  const R = FRAME_RADIUS * s;
+  const R = st.radius * s;
   g.save();
   // Inward spill over the outer cells (shadow of a frame-shaped hole, clipped to the field).
-  g.save();
-  g.beginPath();
-  g.rect(ox - WELL * s, oy - WELL * s, size + WELL * 2 * s, size + WELL * 2 * s);
-  g.clip();
-  g.shadowColor = rgbToCss(color, 0.5);
-  g.shadowBlur = 0.9 * s;
-  g.fillStyle = rgbToCss(color, 1);
-  g.beginPath();
-  g.rect(ox - s * 3, oy - s * 3, size + s * 6, size + s * 6);
-  g.rect(ox + size, oy, -size, size);
-  g.fill('nonzero');
-  g.restore();
+  // Skipped by the self-test retry if an engine fills the hole.
+  if (opts.spill !== false) {
+    g.save();
+    g.beginPath();
+    g.rect(ox - WELL * s, oy - WELL * s, size + WELL * 2 * s, size + WELL * 2 * s);
+    g.clip();
+    g.shadowColor = rgbToCss(color, 0.5);
+    g.shadowBlur = 0.9 * s;
+    g.fillStyle = rgbToCss(color, 1);
+    fillFrameHole(g, [ox - s * 3, oy - s * 3, size + s * 6, size + s * 6], [ox, oy, size, size]);
+    g.restore();
+  }
   // Rim light on the bezel's inner edge (wide soft + bright core).
   const wx = ox - WELL * s;
   const wy = oy - WELL * s;
@@ -455,11 +557,28 @@ export function paintTurnGlow(g: CanvasRenderingContext2D, s: number, ox: number
   g.lineCap = 'square';
   g.shadowBlur = s * 0.16;
   g.strokeStyle = rgbToCss(mixRgb(color, WHITE, 0.25), 1);
-  g.lineWidth = Math.max(1.5, BRACKET.width * s * 1.3);
-  bracketPath(g, x0, y0, w, w, BRACKET.inset * s, BRACKET.arm * s);
+  g.lineWidth = Math.max(1.5, st.bracket.width * s * 1.3);
+  bracketPath(g, x0, y0, w, w, st.bracket.inset * s, st.bracket.arm * s);
   g.stroke();
   g.restore();
 }
+
+/**
+ * Self-test for the painted field layers: alpha (0..1) of one pixel at (x, y), or -1 if it cannot
+ * be read. The field centre of the overlay and of the turn glow must stay see-through; if a canvas
+ * engine fills a frame-shaped hole solid (WebKit's rect() normalisation was one such case), the
+ * caller repaints without the hole-based effect instead of hiding the cells.
+ */
+export function alphaAt(g: CanvasRenderingContext2D, x: number, y: number): number {
+  try {
+    return g.getImageData(Math.round(x), Math.round(y), 1, 1).data[3] / 255;
+  } catch {
+    return -1;
+  }
+}
+
+/** Highest alpha the field centre of a see-through layer may have (overlay washes are ~0.1). */
+export const SEE_THROUGH_MAX_ALPHA = 0.5;
 
 // ---------------------------------------------------------------- markers (sprites / textures)
 

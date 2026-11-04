@@ -24,7 +24,10 @@ body.in-game,
   --vh: 100vh;
   /* Everything but the board, with the hand at its minimum. */
   --chrome: calc(var(--bar-h) + 12px + var(--sat) + var(--strip-h) + var(--notes-h) + var(--dock-row-h) + var(--hand-min) + var(--hand-mb));
-  --board-h: max(160px, min(100vw - 4px, 640px, var(--vh) - var(--chrome)));
+  /* Phones: the square board spans the full width (its slim bezel is a hair taller than wide,
+     hence the +2px, so the width is what limits it). Tablets cap it in their own block below. */
+  --board-max: calc(100vw + 2px);
+  --board-h: max(160px, min(var(--board-max), var(--vh) - var(--chrome)));
   /* The hand grows into what is left, up to its max. */
   --hand-h: clamp(var(--hand-min), var(--vh) - var(--chrome) + var(--hand-min) - var(--board-h), var(--hand-max));
   display: grid;
@@ -558,12 +561,13 @@ body.in-game,
   }
 }
 @media (max-height: 720px) {
+  /* 360x640: 278px of chrome leaves a full-width board (touch targets stay >= 48px). */
   .game {
-    --bar-h: 56px;
-    --strip-h: 36px;
-    --notes-h: 28px;
-    --dock-row-h: 52px;
-    --hand-min: 100px;
+    --bar-h: 52px;
+    --strip-h: 34px;
+    --notes-h: 26px;
+    --dock-row-h: 50px;
+    --hand-min: 96px;
   }
   .pbar--hand {
     padding: 4px;
@@ -580,6 +584,12 @@ body.in-game,
   }
   .pbar--top {
     margin-top: calc(6px + var(--sat));
+    min-height: var(--bar-h);
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+  .info-host {
+    padding-bottom: 2px;
   }
   .game .action-bar,
   .skill-btn {
@@ -612,7 +622,7 @@ body.in-game,
     font-size: 21px;
   }
   .coach {
-    height: 28px;
+    height: 26px;
     font-size: var(--fs-caption);
   }
   .coach__icon {
@@ -642,12 +652,16 @@ body.in-game,
   }
 }
 
-/* ---- Wide screens: bars stay a comfortable width ------------------------------------ */
+/* ---- Wide screens (tablets in portrait): the board keeps a margin and grows to 900px; the
+   bars, notes and dock match its width. ---------------------------------------------------- */
 @media (min-width: 600px) {
+  .game {
+    --board-max: min(100vw - 48px, 900px);
+  }
   .pbar,
   .info-host,
   .hud-notes {
-    width: min(640px, calc(100% - 16px));
+    width: min(var(--board-h), calc(100% - 16px));
     justify-self: center;
   }
   .pbar--top,
@@ -656,73 +670,176 @@ body.in-game,
     margin-right: 0;
   }
 }
-/* Landscape (tablets, phones on their side): the board is height-bound and centred, so the
-   strip and notes dock to the left of the board and the action dock to the right. */
+/* The opponent's mirrored hand only exists in the landscape layout below. */
+.opp-hand {
+  display: none;
+}
+.hand--opp .hand-card {
+  --hc-rim: rgba(255, 106, 90, 0.6);
+}
+
+/* ---- Landscape (tablets, phones on their side): three balanced columns ------------------------
+   Left = the opponent: their bar (name, timer, the field drawer) above their three cards.
+   Centre = the board, as large as the height allows. Right = me: the turn strip, the notes /
+   coach line and the action dock above my three cards, timer and resign. Both side columns get the
+   same width (what the board leaves, at least --side-min), their panels hug the board, and the grid
+   is exactly as tall as the board (vertical padding centres it), so both columns line up with the
+   board's top and bottom edges: no dead bands, mirrored sides. */
 @media (orientation: landscape) and (min-width: 700px) {
   .game {
-    grid-template-columns: minmax(0, 1fr) minmax(0, calc(var(--vh) - 96px)) minmax(0, 1fr);
-    grid-template-rows: auto auto auto minmax(0, 1fr);
+    --pad: clamp(10px, 1.6vw, 24px);
+    --side-min: clamp(172px, 15vw, 250px);
+    --side-max: 300px;
+    --avail-h: calc(var(--vh) - var(--sat) - var(--sab) - 2 * var(--pad));
+    --board-h: max(240px, min(var(--avail-h), 100vw - var(--sal) - var(--sar) - 2 * var(--side-min) - 4 * var(--pad)));
+    grid-template-columns: minmax(0, 1fr) var(--board-h) minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(60px, auto) minmax(0, 1fr);
     grid-template-areas:
-      'top top top'
-      'strip board hand'
-      'notes board hand'
-      'dock board hand';
+      'top board strip'
+      'top board notes'
+      'top board dock'
+      'opp board hand';
+    column-gap: var(--pad);
+    padding: calc((var(--avail-h) - var(--board-h)) / 2 + var(--pad) + var(--sat)) var(--pad)
+      calc((var(--avail-h) - var(--board-h)) / 2 + var(--pad) + var(--sab));
   }
+  /* Side panels share one width and hug the board. */
+  .pbar--top,
+  .opp-hand {
+    width: min(100%, var(--side-max));
+    justify-self: end;
+    margin: 0;
+  }
+  .hud-strip,
+  .hud-notes,
+  .info-host,
   .pbar--hand {
-    width: auto;
-    max-width: 300px;
-    align-self: center;
+    width: min(100%, var(--side-max));
     justify-self: start;
-    margin: var(--s-3);
-    flex-direction: column;
+    margin: 0;
   }
-  .pbar--hand .hand {
-    flex-direction: column;
+  /* Opponent bar as a compact card: avatar + name on top, their timer + the field drawer below
+     (their lineup is the card column under it, so the roster chips step aside). */
+  .pbar--top {
+    flex-wrap: wrap;
+    align-content: center;
+    align-self: stretch;
+    row-gap: 10px;
+    padding: 10px;
   }
-  .pbar--hand .hand-card {
-    flex: none;
-    width: 180px;
-    height: calc((var(--vh) - 260px) / 3);
-    max-height: 150px;
+  .pbar--top .pbar__avatar {
+    margin: 0;
   }
-  .pbar--hand .pbar__side {
-    flex-direction: row;
+  .pbar--top .pbar__info {
+    flex: 1 1 calc(100% - 64px);
+  }
+  .pbar--top .pbar__roster-host {
+    display: none;
+  }
+  .pbar--top .menu-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1 1 auto;
     width: auto;
+    gap: 6px;
+    padding: 0 12px;
+    font-family: var(--font-display);
+    font-size: 15px;
+    color: var(--ink);
+  }
+  .pbar--top .menu-btn::after {
+    content: '진형';
+    white-space: nowrap;
+  }
+  .opp-hand {
+    grid-area: opp;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    align-self: stretch;
+    min-height: 0;
+    padding: 8px;
+  }
+  /* Turn strip: the turn count and whose turn, side by side when they fit, else stacked. */
+  .hud-strip {
+    flex-wrap: wrap;
+    justify-content: stretch;
+    gap: 8px;
+    padding: 0;
+  }
+  .hud-strip > * {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+  .hud-notes {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    padding: 8px 0 0;
+  }
+  .hud-notes:empty,
+  .hud-notes:not(:has(> :not([hidden]))) {
+    padding: 0;
   }
   /* The side column is narrow: the coach line wraps instead of running off-screen. */
-  .hud-notes {
-    min-width: 0;
-    align-items: stretch;
-  }
   .coach {
     height: auto;
     min-height: 30px;
-    padding: 4px 12px 4px 3px;
+    padding: 6px 12px 6px 4px;
     border-radius: var(--r-m);
   }
   .coach__text {
     white-space: normal;
   }
-  .hud-strip {
-    flex-direction: column;
-    align-items: flex-end;
-    justify-content: flex-start;
-    padding: var(--s-3);
-  }
-  .hud-notes {
-    width: auto;
-    flex-direction: column;
-    align-items: flex-end;
-    justify-content: flex-start;
-    padding: 0 var(--s-3);
-  }
+  /* Action dock: a reserved slot above my cards (the selection chip, chain / skill / aim). */
   .info-host {
-    width: auto;
     flex-direction: column;
     align-items: stretch;
     justify-content: flex-end;
-    justify-self: stretch;
-    padding: var(--s-3);
+    gap: 6px;
+    padding: 8px 0;
+  }
+  .game .action-bar {
+    flex-wrap: wrap;
+    margin-bottom: 0;
+  }
+  /* My hand fills the rest of the board's height, cards stacked. */
+  .pbar--hand {
+    max-width: none;
+    height: auto;
+    align-self: stretch;
+    flex-direction: column;
+    padding: 8px;
+  }
+  .opp-hand .hand,
+  .pbar--hand .hand {
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    gap: 8px;
+  }
+  .opp-hand .hand-card,
+  .pbar--hand .hand-card {
+    flex: 1 1 0;
+    width: auto;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+  }
+  .pbar--hand .pbar__side {
+    flex-direction: row;
+    justify-content: space-around;
+    width: auto;
+    padding-top: 2px;
+  }
+  /* The two card panels start level, just under the opponent bar / the action dock. */
+  .opp-hand,
+  .pbar--hand {
+    margin-top: 10px;
+  }
+  .info-host {
+    padding-bottom: 0;
   }
 }
 @media (prefers-reduced-motion: reduce) {

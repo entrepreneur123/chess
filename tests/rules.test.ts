@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BOARD_SIZE,
+  MAX_MATCH_PLIES,
+  STORM_FULL_STEPS,
   SUDDEN_DEATH_PLY,
   STORM_INTERVAL_PLIES,
   suddenDeathIn,
@@ -26,23 +29,23 @@ describe('applyMove', () => {
   it('moves, alternates turns, is pure', () => {
     const g = createGame(defaultFormation(), defaultFormation());
     const snapshot = structuredClone(g);
-    const m = mv(g, 'p0-marki', 5, 4);
+    const m = mv(g, 'p0-marki', 4, 3);
     const g2 = applyMove(g, { pieceId: m.pieceId, from: m.from, to: m.to });
     expect(g).toEqual(snapshot);
     expect(g2.turn).toBe(1);
     expect(g2.ply).toBe(1);
     expect(g2.pliesSinceCapture).toBe(1);
-    expect(g2.history).toEqual([{ kind: 'move', player: 0, move: { pieceId: 'p0-marki', from: { r: 2, c: 4 }, to: { r: 5, c: 4 } } }]);
+    expect(g2.history).toEqual([{ kind: 'move', player: 0, move: { pieceId: 'p0-marki', from: { r: 1, c: 3 }, to: { r: 4, c: 3 } } }]);
     expect(structuredClone(g2)).toEqual(g2);
   });
   it('throws on illegal moves', () => {
     const g = createGame(defaultFormation(), defaultFormation());
-    expect(() => applyMove(g, { pieceId: 'p0-marki', from: { r: 2, c: 4 }, to: { r: 6, c: 4 } })).toThrow();
-    expect(() => applyMove(g, { pieceId: 'p1-marki', from: { r: 9, c: 7 }, to: { r: 8, c: 7 } })).toThrow();
-    expect(() => applyMove(g, { pieceId: 'p0-marki', from: { r: 2, c: 5 }, to: { r: 3, c: 4 } })).toThrow();
-    expect(isLegalMove(g, { pieceId: 'p0-marki', from: { r: 2, c: 4 }, to: { r: 3, c: 4 } })).toBe(true);
+    expect(() => applyMove(g, { pieceId: 'p0-marki', from: { r: 1, c: 3 }, to: { r: 5, c: 3 } })).toThrow();
+    expect(() => applyMove(g, { pieceId: 'p1-marki', from: { r: 8, c: 6 }, to: { r: 7, c: 6 } })).toThrow();
+    expect(() => applyMove(g, { pieceId: 'p0-marki', from: { r: 1, c: 4 }, to: { r: 2, c: 3 } })).toThrow();
+    expect(isLegalMove(g, { pieceId: 'p0-marki', from: { r: 1, c: 3 }, to: { r: 2, c: 3 } })).toBe(true);
     const ended = resign(g, 0);
-    expect(() => applyMove(ended, { pieceId: 'p0-marki', from: { r: 2, c: 4 }, to: { r: 3, c: 4 } })).toThrow();
+    expect(() => applyMove(ended, { pieceId: 'p0-marki', from: { r: 1, c: 3 }, to: { r: 2, c: 3 } })).toThrow();
   });
   it('captures fill captureId, reset pliesSinceCapture, elimination wins', () => {
     const s = makeState(
@@ -131,11 +134,11 @@ describe('no moves / stalemate / sudden death', () => {
   });
   it('reaching the last row no longer stalls the game: the mover turns around', () => {
     const s = makeState([
-      [0, 'marki', 1, 10, 3],
-      [0, 'walk', 3, 11, 0],
+      [0, 'marki', 1, 8, 3],
+      [0, 'walk', 3, 9, 0],
       [1, 'walk', 1, 0, 5],
     ]);
-    const s2 = applyMove(s, { pieceId: 'p0-marki', from: { r: 10, c: 3 }, to: { r: 11, c: 3 } });
+    const s2 = applyMove(s, { pieceId: 'p0-marki', from: { r: 8, c: 3 }, to: { r: 9, c: 3 } });
     expect(s2.status).toBe('playing');
     expect(s2.pieces.find((p) => p.id === 'p0-marki')!.dir).toBe(-1);
     // p1's walk was placed on row 0 facing the edge (artificial), so p1 auto-passes and p0 moves again.
@@ -152,10 +155,10 @@ describe('no moves / stalemate / sudden death', () => {
         [0, 'marki', 1, 1, 0],
         [0, 'walk', 1, 0, 1],
         [0, 'brutile', 1, 5, 5],
-        [1, 'walk', 1, 11, 5],
+        [1, 'walk', 1, 9, 5],
       ],
       0,
-      { waste: [6 * 12 + 4, 6 * 12 + 6] },
+      { waste: [6 * BOARD_SIZE + 4, 6 * BOARD_SIZE + 6] },
     );
     const s = {
       ...base,
@@ -174,7 +177,7 @@ describe('no moves / stalemate / sudden death', () => {
         [0, 'sad', 2, 5, 5],
         [0, 'walk', 1, 0, 0],
         [1, 'sad', 2, 8, 8],
-        [1, 'walk', 1, 11, 0],
+        [1, 'walk', 1, 9, 0],
       ],
       0,
       { ply: SUDDEN_DEATH_PLY - 2, pliesSinceCapture: 30 },
@@ -194,7 +197,7 @@ describe('no moves / stalemate / sudden death', () => {
     const base = makeState(
       [
         [0, 'sad', 3, 5, 1],
-        [1, 'sad', 1, 7, 10],
+        [1, 'sad', 1, 7, 8],
       ],
       0,
       { stormIn: 1, storm: 1 },
@@ -207,7 +210,7 @@ describe('no moves / stalemate / sudden death', () => {
     const eq = makeState(
       [
         [0, 'sad', 2, 5, 1],
-        [1, 'sad', 2, 7, 10],
+        [1, 'sad', 2, 7, 8],
       ],
       0,
       { stormIn: 1, storm: 1 },
@@ -220,8 +223,8 @@ describe('no moves / stalemate / sudden death', () => {
     // Shuffle back and forth without ever capturing: sudden death + storm must end it.
     let s = makeState(
       [
-        [0, 'sad', 1, 1, 5],
-        [1, 'sad', 1, 10, 6],
+        [0, 'sad', 1, 1, 4],
+        [1, 'sad', 1, 8, 5],
       ],
       0,
     );
@@ -232,8 +235,12 @@ describe('no moves / stalemate / sudden death', () => {
       s = applyMove(s, (moves.length ? moves : legal)[guard % (moves.length || legal.length)]);
     }
     expect(s.status).toBe('ended');
-    expect(SUDDEN_DEATH_PLY + 6 * STORM_INTERVAL_PLIES).toBe(116);
-    expect(s.ply).toBeLessThanOrEqual(SUDDEN_DEATH_PLY + 6 * STORM_INTERVAL_PLIES);
+    // 10 columns: 5 storm advances swallow the board, so 80 + 5 * 6 = 110 plies at most.
+    expect(BOARD_SIZE).toBe(10);
+    expect(STORM_FULL_STEPS).toBe(5);
+    expect(MAX_MATCH_PLIES).toBe(SUDDEN_DEATH_PLY + STORM_FULL_STEPS * STORM_INTERVAL_PLIES);
+    expect(MAX_MATCH_PLIES).toBe(110);
+    expect(s.ply).toBeLessThanOrEqual(MAX_MATCH_PLIES);
   });
 });
 

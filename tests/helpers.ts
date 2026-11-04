@@ -1,4 +1,4 @@
-import type { CharacterId, GameState, Level, Move, Piece, PlayerId, Pos } from '../src/engine';
+import type { CharacterId, GameState, HistoryEntry, Level, Move, Piece, PlayerId, Pos } from '../src/engine';
 
 export type Spec = [PlayerId, CharacterId, Level, number, number];
 
@@ -44,4 +44,19 @@ export function rngFrom(seed: number): () => number {
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+/**
+ * Plies that were NOT a turn change: a level-3 Insaner's chain moves (an action of the same player
+ * right after its capturing move). Every other ply hands the turn over, which the storm bounds.
+ */
+export function chainPlies(history: readonly HistoryEntry[]): number {
+  let n = 0;
+  let prev: PlayerId | null = null;
+  for (const e of history) {
+    if (e.kind === 'storm') continue;
+    if (prev !== null && e.player === prev) n++;
+    prev = e.player;
+  }
+  return n;
 }

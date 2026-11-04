@@ -69,16 +69,21 @@ function lv(levels: Partial<Record<CharacterId, Level>> | undefined, id: Charact
   return isLevel(l) ? l : 1;
 }
 
-/** Preset square per character: Marki and Sad on the front row, Walk / Insaner behind them. */
+/**
+ * Preset square per character (local coordinates, 2 x 10 zone): Marki, Sad and Michelle on the
+ * front row, Walk / Insaner / Picker / Brutile on the back rank. Every square is distinct, so any
+ * squad of three gets a valid preset, and all of them stay off the two outer columns per side
+ * that the storm swallows first.
+ */
 const DEFAULT_SLOT: Record<CharacterId, { row: number; col: number }> = {
-  sad: { row: 2, col: 7 },
-  marki: { row: 2, col: 4 },
-  walk: { row: 1, col: 5 },
-  insaner: { row: 1, col: 6 },
-  brutile: { row: 0, col: 6 },
-  // Michelle lays traps by stepping back, so she starts in front; Picker hops in from the middle row.
-  michelle: { row: 2, col: 5 },
-  picker: { row: 1, col: 7 },
+  sad: { row: 1, col: 6 },
+  marki: { row: 1, col: 3 },
+  walk: { row: 0, col: 4 },
+  insaner: { row: 0, col: 5 },
+  brutile: { row: 0, col: 3 },
+  // Michelle lays traps by stepping back, so she starts in front; Picker hops in from behind.
+  michelle: { row: 1, col: 4 },
+  picker: { row: 0, col: 6 },
 };
 
 /** Normalise a squad: distinct known characters, exactly PIECES_PER_SIDE of them (starters fill in). */

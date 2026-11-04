@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SKILL_UNLOCK_PLY, type FormationSlot, type GameState, type Move } from '../src/engine';
+import { BOARD_SIZE, SKILL_UNLOCK_PLY, type FormationSlot, type GameState, type Move } from '../src/engine';
 import { GameController, type ControllerPorts } from '../src/ui/game/GameController';
 import { handModel, selectFromHand, skillReadiness } from '../src/ui/game/hand';
 import { makeState } from './helpers';
@@ -13,13 +13,13 @@ const ports = (): ControllerPorts => ({
   clearTimer: () => {},
 });
 
-// Player 0: sad (2,5), brutile (0,0), walk (0,11). Player 1: marki (9,5).
+// Player 0: sad (2,5), brutile (0,0), walk (0,9). Player 1: marki (9,5).
 const position = (extra: Partial<GameState> = {}) =>
   makeState(
     [
       [0, 'sad', 1, 2, 5],
       [0, 'brutile', 2, 0, 0],
-      [0, 'walk', 1, 0, 11],
+      [0, 'walk', 1, 0, 9],
       [1, 'marki', 3, 9, 5],
     ],
     0,
@@ -29,7 +29,7 @@ const position = (extra: Partial<GameState> = {}) =>
 const slots: FormationSlot[] = [
   { character: 'sad', level: 1, row: 2, col: 5 },
   { character: 'brutile', level: 2, row: 0, col: 0 },
-  { character: 'walk', level: 1, row: 0, col: 11 },
+  { character: 'walk', level: 1, row: 0, col: 9 },
 ];
 
 describe('hand cards: selection goes through the board tap path', () => {
@@ -103,14 +103,14 @@ describe('hand cards: Michelle traps and doll-trap stuns', () => {
   const mslots: FormationSlot[] = [
     { character: 'michelle', level: 2, row: 2, col: 5 },
     { character: 'picker', level: 1, row: 1, col: 1 },
-    { character: 'sad', level: 1, row: 0, col: 11 },
+    { character: 'sad', level: 1, row: 0, col: 9 },
   ];
   const mpos = (extra: Partial<GameState> = {}) =>
     makeState(
       [
         [0, 'michelle', 2, 5, 5],
         [0, 'picker', 1, 1, 1],
-        [0, 'sad', 1, 0, 11],
+        [0, 'sad', 1, 0, 9],
         [1, 'marki', 3, 9, 5],
       ],
       0,
@@ -143,7 +143,7 @@ describe('hand cards: Michelle traps and doll-trap stuns', () => {
         [0, 'michelle', 1, 5, 5],
         [0, 'picker', 3, 0, 0],
         [1, 'sad', 1, 6, 5],
-        [1, 'marki', 1, 11, 11],
+        [1, 'marki', 1, 9, 9],
       ],
       0,
     );
@@ -156,7 +156,7 @@ describe('hand cards: Michelle traps and doll-trap stuns', () => {
     ctrl.start();
     expect(ctrl.tryHumanMove({ pieceId: 'p0-michelle', from: { r: 5, c: 5 }, to: { r: 4, c: 5 } })).toBe(true);
     for (let i = 0; i < 6; i++) await new Promise((r) => setTimeout(r, 0));
-    expect(ctrl.state.traps).toEqual([{ sq: 5 * 12 + 5, owner: 0 }]);
+    expect(ctrl.state.traps).toEqual([{ sq: 5 * BOARD_SIZE + 5, owner: 0 }]);
     expect(events).toEqual(['trap:0', 'stun:1']);
     expect(ctrl.state.pieces.find((q) => q.id === 'p1-sad')?.stun).toBe(1);
   });

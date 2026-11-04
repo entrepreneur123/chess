@@ -7,15 +7,16 @@
  * The drawer does NOT pause the turn clock (no free thinking time); it re-renders on every
  * controller change while open, but only when something it shows actually changed.
  */
-import { BOARD_SIZE, CHARACTERS, SKILL_UNLOCK_PLY, WASTE_SIZE, getTargetsForPiece, inStorm, isStunned, pieceDir, skillUnlockIn, trapsLeft, type FormationSlot, type GameState, type Piece, type PlayerId } from '../../engine';
+import { BOARD_SIZE, CHARACTERS, ZONE_DEPTH, SKILL_UNLOCK_PLY, WASTE_SIZE, getTargetsForPiece, inStorm, isStunned, pieceDir, skillUnlockIn, trapsLeft, type FormationSlot, type GameState, type Piece, type PlayerId } from '../../engine';
 import { movementDiagram, rarityChip, starsOf, unitArt } from '../components/piece';
 import { overlayRoot, pushOverlay, registerForceClose } from '../components/overlay';
 import { h, replaceChildren } from '../dom';
 import { icon } from '../icons';
 
-const COLS = 'ABCDEFGHIJKL';
+/** Column letters, one per board column (A..J on 10 columns). */
+const COLS = Array.from({ length: BOARD_SIZE }, (_, i) => String.fromCharCode(65 + i)).join('');
 
-/** Square label as the player sees it: columns A..L left to right, rows 1..12 from the bottom. */
+/** Square label as the player sees it: columns A..J left to right, rows 1..10 from the bottom. */
 export function squareLabel(r: number, c: number): string {
   return `${COLS[c]}${r + 1}`;
 }
@@ -43,14 +44,15 @@ function pieceKey(s: GameState): string {
 
 function miniMap(s: GameState, focus: string | null, onPick: (id: string) => void): HTMLElement {
   const grid = h('div', { class: 'fmap', role: 'img', 'aria-label': '보드 전체 미니맵 (아래쪽이 내 진영)' });
+  grid.style.setProperty('--board-n', String(BOARD_SIZE));
   const byPos = new Map<number, Piece>();
   for (const p of s.pieces) byPos.set(p.pos.r * BOARD_SIZE + p.pos.c, p);
-  // Row 11 (the opponent's back rank) at the top, like the board.
+  // The last row (the opponent's back rank) at the top, like the board.
   for (let r = BOARD_SIZE - 1; r >= 0; r--) {
     for (let c = 0; c < BOARD_SIZE; c++) {
       const p = byPos.get(r * BOARD_SIZE + c);
       const trap = (s.traps ?? []).find((t) => t.sq === r * BOARD_SIZE + c);
-      const cls = `fmap__cell${(r + c) % 2 === 0 ? ' is-dark' : ''}${inStorm(c, s.storm) ? ' is-storm' : ''}${s.waste.includes(r * BOARD_SIZE + c) ? ' is-waste' : ''}${trap ? ` is-trap trap-${trap.owner}` : ''}${r <= 2 ? ' is-home-0' : r >= 9 ? ' is-home-1' : ''}`;
+      const cls = `fmap__cell${(r + c) % 2 === 0 ? ' is-dark' : ''}${inStorm(c, s.storm) ? ' is-storm' : ''}${s.waste.includes(r * BOARD_SIZE + c) ? ' is-waste' : ''}${trap ? ` is-trap trap-${trap.owner}` : ''}${r < ZONE_DEPTH ? ' is-home-0' : r >= BOARD_SIZE - ZONE_DEPTH ? ' is-home-1' : ''}`;
       if (p) {
         grid.appendChild(
           h(

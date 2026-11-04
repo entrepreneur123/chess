@@ -81,7 +81,7 @@
   object-position: 50% 6%;
   opacity: 0.95;
 }
-/* Holo grid floor: a 12x12 field in perspective, team glows at the near / far edges. */
+/* Holo grid floor: a board-like field in perspective, team glows at the near / far edges. */
 .arena__floor {
   position: absolute;
   left: -20%;

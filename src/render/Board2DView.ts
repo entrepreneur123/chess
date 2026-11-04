@@ -25,7 +25,7 @@
  * targeting overlay, animateSkill the cast (rune, green bolt, squares cracking open), wasted moves
  * dissolve the mover in green, and deadly move targets show a skull instead of the dot.
  */
-import { BOARD_SIZE, ZONE_DEPTH } from '../engine/types';
+import { BOARD_SIZE, STORM_FULL_STEPS, ZONE_DEPTH } from '../engine/types';
 import type { CharacterId, Level, Move, Piece, PlayerId, Pos, Trap } from '../engine/types';
 import type { BoardHighlights, IBoardView, ScreenRect, SkillPreview } from './types';
 import { ANIM, BOARD_COLORS, CHARACTER_FX, CHARACTER_RARITY, RARITY_RING, TEAM_COLORS, WASTE_COLORS } from './palette';
@@ -57,9 +57,12 @@ import type { HighlightIndex } from './common';
 import {
   DOT_WHITEN,
   FIELD_OVERLAY_MARGIN,
-  FRAME_FIT,
-  FRAME_WIDTH,
+  FRAME_REGULAR,
   MARKER_QUAD,
+  SEE_THROUGH_MAX_ALPHA,
+  alphaAt,
+  frameFit,
+  frameStyleFor,
   paintCaptureRing,
   paintFieldOverlay,
   paintFrame,
@@ -69,6 +72,9 @@ import {
   paintTurnGlow,
   tileOuterPath,
 } from './arena';
+import type { FrameStyle } from './arena';
+import { canvasStats, ctx2d, getFallbackReason, releaseCanvas } from './diag';
+import type { RenderDiagnostics } from './diag';
 
 const TAP_SLOP_PX = 14;
 /** Opacity of a piece while it is being dragged (its DOM ghost follows the finger). */
@@ -105,7 +111,7 @@ const SKILL_RUNE_MS = 1000;
 /** Turn glow (setTurnGlow): fade length (ms), full opacity and sprite margin around the field (cells). */
 const TURN_GLOW_MS = 320;
 const TURN_GLOW_OPACITY = 0.45;
-const TURN_GLOW_MARGIN = FRAME_WIDTH + 0.2;
+const turnGlowMargin = (st: FrameStyle): number => st.width + 0.2;
 
 interface Skill2D {
   start: number;
@@ -207,6 +213,10 @@ export class Board2DView implements IBoardView {
   private disposed = false;
   private disposing = false;
   private resizeObserver: ResizeObserver | null = null;
+  /** Bezel look for the current width (slim on phones). */
+  private frameStyle: FrameStyle = FRAME_REGULAR;
+  /** Self-test notes for the ?diag=1 panel. */
+  private readonly diagNotes: string[] = [];
   private down: { id: number; x: number; y: number } | null = null;
   /** Piece being dragged by the UI (drawn faded on its square), see setDragging. */
   private draggingId: string | null = null;
@@ -277,7 +287,7 @@ export class Board2DView implements IBoardView {
   constructor(container: HTMLElement) {
     this.container = container;
     this.canvas = document.createElement('canvas');
-    const ctx = this.canvas.getContext('2d');
+    const ctx = ctx2d(this.canvas);
     if (!ctx) throw new Error('Canvas2D unavailable');
     this.ctx = ctx;
     const st = this.canvas.style;
@@ -322,7 +332,7 @@ export class Board2DView implements IBoardView {
    */
   setStorm(storm: number, nextIn: number | null): void {
     if (this.disposed) return;
-    this.storm = Math.max(0, Math.min(6, Math.floor(storm)));
+    this.storm = Math.max(0, Math.min(STORM_FULL_STEPS, Math.floor(storm)));
     this.stormNext = nextIn;
     this.requestRender();
   }
@@ -709,14 +719,22 @@ export class Board2DView implements IBoardView {
     if (cached) return cached;
     const d = this.dpr;
     const s = this.layout.cell * d;
-    const m = TURN_GLOW_MARGIN * s;
+    const m = turnGlowMargin(this.frameStyle) * s;
     const px = Math.max(1, Math.round(BOARD_SIZE * s + m * 2));
     const cvs = document.createElement('canvas');
     cvs.width = px;
     cvs.height = px;
-    const g = cvs.getContext('2d');
+    const g = ctx2d(cvs);
     if (!g) return null;
-    paintTurnGlow(g, s, m, m, [1, 1, 1]);
+    paintTurnGlow(g, s, m, m, [1, 1, 1], this.frameStyle);
+    // Self-test: the spill must leave the field see-through (see arena.ts fillFrameHole).
+    const mid = (Math.floor(BOARD_SIZE / 2) - 0.5) * s + m;
+    const a = alphaAt(g, mid, mid);
+    if (a > SEE_THROUGH_MAX_ALPHA) {
+      this.note(`turn glow centre alpha ${a.toFixed(2)}: repainted without spill`);
+      g.clearRect(0, 0, px, px);
+      paintTurnGlow(g, s, m, m, [1, 1, 1], this.frameStyle, { spill: false });
+    }
     g.globalCompositeOperation = 'source-in';
     g.fillStyle = TEAM_COLORS[team].glow;
     g.fillRect(0, 0, px, px);
@@ -732,6 +750,26 @@ export class Board2DView implements IBoardView {
     this.requestRender();
   }
 
+  private note(n: string): void {
+    if (!this.diagNotes.includes(n)) this.diagNotes.push(n);
+  }
+
+  /** Diagnostics for the ?diag=1 panel. */
+  getDiagnostics(): RenderDiagnostics {
+    return {
+      renderer: '2d',
+      dpr: this.dpr,
+      canvas: [this.canvas.width, this.canvas.height],
+      css: [Math.round(this.cssW), Math.round(this.cssH)],
+      frame: this.frameStyle.id,
+      programs: [],
+      notes: [...this.diagNotes],
+      nullCtx: canvasStats.nullCtx,
+      canvases: canvasStats.created,
+      fallbackReason: getFallbackReason(),
+    };
+  }
+
   resize(): void {
     if (this.disposed) return;
     const { w, h } = containerSize(this.container);
@@ -740,12 +778,15 @@ export class Board2DView implements IBoardView {
     this.dpr = Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO);
     this.canvas.width = Math.round(w * this.dpr);
     this.canvas.height = Math.round(h * this.dpr);
-    // Same framing as the WebGL board: the iron frame (+ its lip) fills the limiting side.
-    const F = FRAME_FIT;
+    // Same framing as the WebGL board: the bezel (+ its lip) fills the limiting side; phones get
+    // the slim bezel edge to edge.
+    this.frameStyle = frameStyleFor(w);
+    const slim = this.frameStyle.id === 'slim';
+    const F = frameFit(this.frameStyle);
     const spanX = BOARD_SIZE + F.side * 2;
     const topE = F.top;
     const botE = F.bottom;
-    const cell = Math.max(1, Math.min((w * 0.985) / spanX, (h * 0.975) / (BOARD_SIZE + topE + botE)));
+    const cell = Math.max(1, Math.min((w * (slim ? 1 : 0.985)) / spanX, (h * (slim ? 1 : 0.975)) / (BOARD_SIZE + topE + botE)));
     const size = cell * BOARD_SIZE;
     const pad = F.side * cell;
     this.layout = { x0: (w - size) / 2, y0: (h - (BOARD_SIZE + topE + botE) * cell) / 2 + topE * cell, cell, pad };
@@ -774,6 +815,11 @@ export class Board2DView implements IBoardView {
     this.canvas.removeEventListener('contextmenu', this.onContextMenu);
     this.canvas.width = 0;
     this.canvas.height = 0;
+    // Free every backing store now (iOS counts live canvases against a page-wide budget).
+    releaseCanvas(this.boardLayer);
+    releaseCanvas(this.overlayLayer);
+    releaseCanvas(this.glowSprites[0]);
+    releaseCanvas(this.glowSprites[1]);
     this.boardLayer = null;
     this.overlayLayer = null;
     this.glowSprites[0] = null;
@@ -788,7 +834,7 @@ export class Board2DView implements IBoardView {
   // ---------------------------------------------------------------- render loop
 
   /**
-   * Paint the static arena once per size (arena.ts): the bezel + field well and the 144 flat cells
+   * Paint the static arena once per size (arena.ts): the bezel + field well and the BOARD_SIZE x BOARD_SIZE flat cells
    * in their base colours (home tints included) into the board layer, and the hologram overlay into
    * its own field-sized layer. Per frame only highlight / storm / wasteland tints are drawn between
    * the two.
@@ -800,12 +846,12 @@ export class Board2DView implements IBoardView {
     cvs.height = Math.max(1, Math.round(this.cssH * d));
     const { x0, y0, cell } = this.layout;
     const s = cell * d;
-    const g = cvs.getContext('2d');
+    const g = ctx2d(cvs);
     if (g) {
       const ox = x0 * d;
       const oy = y0 * d;
       g.clearRect(0, 0, cvs.width, cvs.height);
-      paintFrame(g, s, ox, oy);
+      paintFrame(g, s, ox, oy, this.frameStyle);
       const base = indexHighlights({});
       for (let r = 0; r < BOARD_SIZE; r++) {
         for (let c = 0; c < BOARD_SIZE; c++) paintTile(g, ox + c * s, oy + (BOARD_SIZE - 1 - r) * s, s, tileRgb(r, c, base));
@@ -816,10 +862,18 @@ export class Board2DView implements IBoardView {
     const m = FIELD_OVERLAY_MARGIN * s;
     ov.width = Math.max(1, Math.round(BOARD_SIZE * s + m * 2));
     ov.height = ov.width;
-    const og = ov.getContext('2d');
+    const og = ctx2d(ov);
     if (og) {
       og.clearRect(0, 0, ov.width, ov.height);
       paintFieldOverlay(og, s, m, m);
+      // Self-test: the field must stay see-through, or repaint without the hole-based shadow.
+      const mid = (Math.floor(BOARD_SIZE / 2) - 0.5) * s + m;
+      const a = alphaAt(og, mid, mid);
+      if (a > SEE_THROUGH_MAX_ALPHA) {
+        this.note(`overlay centre alpha ${a.toFixed(2)}: repainted without edge shadow`);
+        og.clearRect(0, 0, ov.width, ov.height);
+        paintFieldOverlay(og, s, m, m, { edgeShadow: false });
+      }
     }
     this.overlayLayer = ov;
   }
@@ -1014,7 +1068,7 @@ export class Board2DView implements IBoardView {
     if (this.glowLevel > 0.002) {
       const spr = this.glowSprite(this.glowColor);
       if (spr) {
-        const m = TURN_GLOW_MARGIN * cell;
+        const m = turnGlowMargin(this.frameStyle) * cell;
         const sz = BOARD_SIZE * cell + m * 2;
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
@@ -1330,7 +1384,7 @@ export class Board2DView implements IBoardView {
     const { x0, y0, cell } = this.layout;
     const size = cell * BOARD_SIZE;
     const t = now / 1000;
-    const warn = this.stormActive && this.stormNext !== null && this.stormNext <= 2 && this.storm < 6;
+    const warn = this.stormActive && this.stormNext !== null && this.stormNext <= 2 && this.storm < STORM_FULL_STEPS;
     ctx.save();
     for (const side of [-1, 1] as const) {
       // Consumed band: [x0, xIn] on the left, [xIn, x0 + size] on the right.
@@ -2185,7 +2239,7 @@ export class Board2DView implements IBoardView {
       c = document.createElement('canvas');
       c.width = S;
       c.height = S;
-      const g = c.getContext('2d');
+      const g = ctx2d(c);
       if (g) {
         const rgb = hexToRgb(color);
         if (kind === 'dot') paintGlowDot(g, S / 2, S / 2, S / 2, rgb, color === BOARD_COLORS.moveDot ? DOT_WHITEN.own : DOT_WHITEN.enemy);
@@ -2208,7 +2262,7 @@ export class Board2DView implements IBoardView {
     c = document.createElement('canvas');
     c.width = S;
     c.height = S;
-    const g = c.getContext('2d');
+    const g = ctx2d(c);
     if (g) paintToken(g, S, img, level, owner);
     this.sprites.set(key, c);
     return c;

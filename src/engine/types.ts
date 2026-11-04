@@ -2,15 +2,20 @@
  * Shared engine contract. Every module (engine, AI, renderer, UI) depends on these types.
  * Do not change shapes without updating all consumers.
  *
- * Coordinate system (absolute, board-wide):
- *   r = row 0..11, c = column 0..11.
- *   Player 0 (you / "Blue") owns home rows 0..2 and moves "forward" toward r = 11 (+1).
- *   Player 1 (opponent / "Red") owns home rows 9..11 and moves "forward" toward r = 0 (-1).
+ * Coordinate system (absolute, board-wide), with N = BOARD_SIZE (10) and Z = ZONE_DEPTH (2):
+ *   r = row 0..N-1, c = column 0..N-1.
+ *   Player 0 (you / "Blue") owns home rows 0..Z-1 and moves "forward" toward r = N-1 (+1).
+ *   Player 1 (opponent / "Red") owns home rows N-Z..N-1 and moves "forward" toward r = 0 (-1).
  *   The renderer shows player 0 at the bottom of the screen.
+ *
+ * Every board-size assumption in the code base derives from these two constants (square indices
+ * are r * BOARD_SIZE + c and must stay below 256: moves pack them into 8 bits).
  */
 
-export const BOARD_SIZE = 12;
-export const ZONE_DEPTH = 3; // each player places pieces only within their own 3 x 12 home zone
+/** Rows and columns of the (square) board. */
+export const BOARD_SIZE = 10;
+/** Home-zone depth in rows: each player places pieces only within their own ZONE_DEPTH x BOARD_SIZE zone. */
+export const ZONE_DEPTH = 2;
 export const PIECES_PER_SIDE = 3; // a squad is any 3 distinct characters
 /** Base time per turn. It shrinks as pieces are lost: see `turnTimeMsFor`. */
 export const TURN_TIME_MS = 45_000;
@@ -32,10 +37,20 @@ export const STORM_INTERVAL_PLIES = 6;
 /**
  * Sudden death: the storm activates when either side is down to its last piece, or on its own once
  * this many plies were played (40 turns each, see `turnNumber`: turn 41 starts at ply 80).
- * Together with STORM_INTERVAL_PLIES this bounds a match to SUDDEN_DEATH_PLY + 6 *
- * STORM_INTERVAL_PLIES = 116 plies (after 6 shrinks the storm has swallowed the whole board).
  */
 export const SUDDEN_DEATH_PLY = 80;
+/**
+ * Storm advances needed to swallow the whole board: each one closes a column on BOTH sides, so
+ * ceil(BOARD_SIZE / 2) = 5 on 10 columns (after the 5th, columns 0..4 and 5..9 are all storm).
+ */
+export const STORM_FULL_STEPS = Math.ceil(BOARD_SIZE / 2);
+/**
+ * Upper bound on the turn changes of a match: the storm starts at SUDDEN_DEATH_PLY at the latest
+ * and swallows the board STORM_FULL_STEPS * STORM_INTERVAL_PLIES turn changes later, so
+ * 80 + 5 * 6 = 110 plies (55 turns). Only a level-3 Insaner's chain moves (an extra ply that is
+ * not a turn change) can push `GameState.ply` past it, by one ply per chain move.
+ */
+export const MAX_MATCH_PLIES = SUDDEN_DEATH_PLY + STORM_FULL_STEPS * STORM_INTERVAL_PLIES;
 /**
  * Brutile's skill "불모지" (wasteland) unlocks once both players have taken 3 turns (ply 6: turn 4 as
  * `turnNumber` counts it) and is forbidden once the storm has started to close in (storm >= 1).
@@ -75,7 +90,7 @@ export interface Piece {
   level: Level;
   pos: Pos;
   /**
-   * Forward direction (+1 toward r=11, -1 toward r=0). Defaults to forwardDir(owner).
+   * Forward direction (+1 toward r = BOARD_SIZE - 1, -1 toward r = 0). Defaults to forwardDir(owner).
    * Forward-only movers (marki, walk) turn around when they reach the last row they can advance to,
    * so they are never stuck at the far edge. Renderers should face the piece by this value.
    */
@@ -93,7 +108,7 @@ export interface Piece {
   stun?: number;
 }
 
-/** A doll trap Michelle left on square `sq` (r * 12 + c). It never disappears during a match. */
+/** A doll trap Michelle left on square `sq` (r * BOARD_SIZE + c). It never disappears during a match. */
 export interface Trap {
   sq: number;
   owner: PlayerId;
@@ -101,15 +116,16 @@ export interface Trap {
 
 /**
  * Formation slot in LOCAL coordinates of its owner:
- *   row 0 = owner's back rank, row 2 = front of the zone; col 0 = owner's left.
+ *   row 0 = owner's back rank, row ZONE_DEPTH - 1 = front of the zone; col 0 = owner's left.
  *   For player 0: absolute = { r: row, c: col }.
- *   For player 1 (rotated 180deg like a real chess board): absolute = { r: 11 - row, c: 11 - col }.
+ *   For player 1 (rotated 180deg like a real chess board):
+ *   absolute = { r: BOARD_SIZE - 1 - row, c: BOARD_SIZE - 1 - col }.
  */
 export interface FormationSlot {
   character: CharacterId;
   level: Level;
-  row: number; // 0..2
-  col: number; // 0..11
+  row: number; // 0..ZONE_DEPTH-1
+  col: number; // 0..BOARD_SIZE-1
 }
 
 /** Exactly PIECES_PER_SIDE slots, distinct characters, distinct squares, all inside the zone. */
@@ -166,7 +182,7 @@ export type HistoryEntry =
   | { kind: 'pass'; player: PlayerId; reason: PassReason }
   /** The storm advanced to `storm` columns per side and removed the listed pieces. */
   | { kind: 'storm'; storm: number; killed: string[] }
-  /** `pieceId` (Brutile) laid wasteland on `squares` (square indices r * 12 + c). */
+  /** `pieceId` (Brutile) laid wasteland on `squares` (square indices r * BOARD_SIZE + c). */
   | { kind: 'skill'; player: PlayerId; pieceId: string; squares: number[] };
 
 export interface GameState {
@@ -184,7 +200,7 @@ export interface GameState {
    * piece (one extra move per turn). Null when no chain move is pending.
    */
   bonusPieceId: string | null;
-  /** Columns swallowed by the storm on each side (0 = none; 2 = columns 0,1 and 10,11 are gone). */
+  /** Columns swallowed by the storm on each side (0 = none; 2 = columns 0,1 and 8,9 are gone on 10 columns). */
   storm: number;
   /**
    * Turn changes until the storm advances next; null while the storm is not active yet. The storm
@@ -192,7 +208,7 @@ export interface GameState {
    */
   stormIn: number | null;
   /**
-   * Wasteland squares (r * 12 + c), sorted. A piece whose move touches wasteland (stops on it, or
+   * Wasteland squares (r * BOARD_SIZE + c), sorted. A piece whose move touches wasteland (stops on it, or
    * slides into it: slides end there) is destroyed. Wasteland never holds a piece.
    */
   waste: number[];

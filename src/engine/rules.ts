@@ -64,7 +64,7 @@ export function buildOccupancy(pieces: Piece[]): { occ: Int8Array; owners: Uint8
 
 const tmpTargets = new Int16Array(128);
 
-/** Length-144 wasteland flags for a state's `waste` list (shared scratch: read it before the next call). */
+/** Length-N_SQUARES wasteland flags for a state's `waste` list (shared scratch: read it before the next call). */
 const wasteScratch = new Uint8Array(N_SQUARES);
 let wasteScratchKey: number[] | null = null;
 export function wasteFlags(waste: readonly number[] | undefined): Uint8Array | null {
@@ -77,7 +77,7 @@ export function wasteFlags(waste: readonly number[] | undefined): Uint8Array | n
   return wasteScratch;
 }
 
-/** Length-144 doll-trap masks (bit `trapBit(owner)` per trap) for a state's `traps` (shared scratch). */
+/** Length-N_SQUARES doll-trap masks (bit `trapBit(owner)` per trap) for a state's `traps` (shared scratch). */
 const trapScratch = new Uint8Array(N_SQUARES);
 let trapScratchKey: readonly Trap[] | null = null;
 export function trapFlags(traps: readonly Trap[] | undefined): Uint8Array | null {
@@ -445,7 +445,7 @@ export function applyMove(state: GameState, move: Move): GameState {
   return settle(switchTurn(base, entry, psc));
 }
 
-/** Squares (r * 12 + c) of a k x k wasteland whose lowest-row, lowest-column square is `anchor`. */
+/** Squares (r * BOARD_SIZE + c) of a k x k wasteland whose lowest-row, lowest-column square is `anchor`. */
 export function wasteArea(level: number, anchor: Pos): number[] {
   const k = WASTE_SIZE[level] ?? 1;
   const out: number[] = [];

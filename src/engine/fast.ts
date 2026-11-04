@@ -230,7 +230,7 @@ function switchSide(b: FastBoard): void {
       for (let i = 0; i < b.n; i++) {
         const s = b.sq[i];
         if (s < 0) continue;
-        if (inStorm(s % 12, b.storm)) {
+        if (inStorm(s % BOARD_SIZE, b.storm)) {
           if (killed === 0) b.wipe = b.material[0] - b.material[1];
           kill(b, i);
           killed++;
@@ -331,12 +331,12 @@ export function fastMake(b: FastBoard, mv: number): number {
   b.occ[to] = pi;
   b.sq[pi] = to;
   let undo = ((cap + 1) << 8) | from;
-  if (!keepsDirection(b.ch[pi]) && atTurnRow((to / 12) | 0, b.dir[pi])) {
+  if (!keepsDirection(b.ch[pi]) && atTurnRow((to / BOARD_SIZE) | 0, b.dir[pi])) {
     b.dir[pi] = -b.dir[pi];
     undo |= FLIP_BIT;
   }
   // Michelle's backward move leaves a doll trap on `from` (her first TRAPS_PER_MICHELLE ones).
-  if (b.ch[pi] === CH_MICHELLE && ((((to / 12) | 0) - ((from / 12) | 0)) * b.dir[pi] < 0) && b.trapsLaid[own] < TRAPS_PER_MICHELLE) {
+  if (b.ch[pi] === CH_MICHELLE && ((((to / BOARD_SIZE) | 0) - ((from / BOARD_SIZE) | 0)) * b.dir[pi] < 0) && b.trapsLaid[own] < TRAPS_PER_MICHELLE) {
     h[b.histTop++] = (from << 8) | b.trap[from];
     b.trap[from] |= trapBit(own);
     b.trapsLaid[own]++;

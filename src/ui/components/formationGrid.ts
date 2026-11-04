@@ -2,7 +2,9 @@ import { BOARD_SIZE, PIECES_PER_SIDE, ZONE_DEPTH, type CharacterId, type Formati
 import { h } from '../dom';
 import { pieceToken } from './piece';
 
-export const ROW_LABELS = ['후열', '중열', '전열']; // index = local row (0 = back rank)
+/** Row names, index = local row (0 = back rank, ZONE_DEPTH - 1 = front). */
+export const ROW_LABELS: readonly string[] = ['후열', '전열'];
+if (ROW_LABELS.length !== ZONE_DEPTH) throw new Error('ROW_LABELS must name every home row');
 
 export type PlaceResult =
   | { ok: true; formation: Formation }
@@ -32,7 +34,8 @@ export interface FormationGridOptions {
 }
 
 /**
- * 3 x 12 home-zone grid. The front row (local row 2) is drawn at the top because the enemy is "up".
+ * ZONE_DEPTH x BOARD_SIZE (2 x 10) home-zone grid. The front row (local row ZONE_DEPTH - 1) is
+ * drawn at the top because the enemy is "up".
  */
 export function formationGrid(f: Formation, opts: FormationGridOptions = {}): HTMLElement {
   const grid = h('div', {
@@ -40,6 +43,8 @@ export function formationGrid(f: Formation, opts: FormationGridOptions = {}): HT
     role: opts.onCell ? 'grid' : 'img',
     'aria-label': opts.onCell ? '배치 구역 (위쪽이 적 방향)' : '현재 진형 미리보기',
   });
+  // Column count for the CSS grid (styles/formation.css reads it).
+  grid.style.setProperty('--board-n', String(BOARD_SIZE));
   for (let row = ZONE_DEPTH - 1; row >= 0; row--) {
     if (!opts.mini) grid.appendChild(h('span', { class: 'fgrid__label', 'aria-hidden': 'true' }, ROW_LABELS[row].slice(0, 1)));
     for (let col = 0; col < BOARD_SIZE; col++) {

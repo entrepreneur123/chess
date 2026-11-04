@@ -1,7 +1,7 @@
 /**
- * Three.js WebGL board view: a premium "tactical fantasy arena" (12x12, procedural, render-on-demand).
+ * Three.js WebGL board view: a premium "tactical fantasy arena" (BOARD_SIZE x BOARD_SIZE = 10 x 10, procedural, render-on-demand).
  *
- * World mapping: x = c - 5.5 (col 0 at screen left), z = 5.5 - r (row 0 nearest the camera,
+ * World mapping: x = c - HALF (col 0 at screen left), z = HALF - r with HALF = 4.5 (row 0 nearest the camera,
  * i.e. player 0 at the bottom of the screen), y = up. Tile tops are at y = TILE_TOP.
  *
  * Units are animated glTF characters (src/render/units, public/models/*.glb): one merged skinned
@@ -40,7 +40,7 @@
  * loop), no shadow pass. The 3D path stays intact for topOnly = false.
  * Their look is the v6 "tactical hologram" of docs/design/v6-clean-tactical.md (arena.ts): a
  * transparent canvas over the page's dark backdrop, a painted slim bezel (HUD corner brackets, ruler
- * ticks, thin gold accents, soft outer shadow) under 144 flat deep-navy cells drawn by one unlit
+ * ticks, thin gold accents, soft outer shadow) under 100 flat deep-navy cells drawn by one unlit
  * instanced cell shader (exact palette colours, faint top light + glass rim), a hologram overlay
  * (home-zone team washes, hex micro-texture, thin glowing cyan grid, intersection crosses), bright
  * thin team zone-edge lines, an optional team-coloured edge glow (setTurnGlow), a faint periodic
@@ -61,7 +61,7 @@
  */
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { BOARD_SIZE, ZONE_DEPTH } from '../engine/types';
+import { BOARD_SIZE, STORM_FULL_STEPS, ZONE_DEPTH } from '../engine/types';
 import type { Level, Move, Piece, PlayerId, Pos, Rarity, Trap } from '../engine/types';
 import type { BoardHighlights, BoardViewMode, BoardViewOptions, IBoardView, ScreenRect, SkillPreview } from './types';
 import type { UnitActor } from './units/actor';
@@ -105,15 +105,20 @@ import {
   makeFieldOverlayTexture,
   makeFrameTexture,
   makeGlowTexture,
+  makePortableTileMaterial,
   makeSelectGlowTexture,
   makeSlabTexture,
   makeTileMaterial,
   makeTileTexture,
   makeTurnGlowTexture,
+  releaseAfterUpload,
 } from './textures';
-import { DOT_WHITEN, FRAME_FIT, MARKER_QUAD } from './arena';
+import { DOT_WHITEN, FRAME_REGULAR, MARKER_QUAD, frameFit, frameStyleFor } from './arena';
+import type { FrameStyle } from './arena';
+import { canvasStats, getFallbackReason, glIdentity, releaseCanvas } from './diag';
+import type { ProgramDiag, RenderDiagnostics } from './diag';
 
-const HALF = (BOARD_SIZE - 1) / 2; // 5.5
+const HALF = (BOARD_SIZE - 1) / 2; // 4.5 on 10 x 10
 const TILE_SIZE = 0.93;
 const TILE_H = 0.09;
 const TILE_TOP = TILE_H;
@@ -133,6 +138,13 @@ const TILT_FOV = 34;
 const TOP_FOV = 24;
 const TOP_ELEVATION_DEG = 89;
 const MAX_PIXEL_RATIO = 2;
+/**
+ * Texture pixels per cell of the painted arena (bezel + field overlay): the on-screen device px per
+ * cell rounded up to a 32 px step (so ordinary resizes do not repaint), 64..160.
+ */
+function arenaPxFor(devicePxPerCell: number): number {
+  return Math.min(160, Math.max(64, Math.ceil(devicePxPerCell / 32) * 32));
+}
 const IDLE_FRAME_MS = 32; // idle pulse (selection / targets) is capped at ~30 fps
 const IDLE_ANIM_FRAME_MS = 41; // unit idle loops alone run at ~24 fps
 /** Attack clip length on the board (ms). */
@@ -640,6 +652,18 @@ export class BoardView implements IBoardView {
   private readonly zoneHaloMat: Record<PlayerId, THREE.MeshBasicMaterial> = {} as Record<PlayerId, THREE.MeshBasicMaterial>;
   private readonly comet: THREE.Mesh;
   private readonly cometMat: THREE.MeshBasicMaterial;
+  /** Painted arena (top-only): bezel plane, hologram overlay plane and their current look. */
+  private frameMesh: THREE.Mesh | null = null;
+  private frameMat: THREE.MeshBasicMaterial | null = null;
+  private overlayMesh: THREE.Mesh | null = null;
+  private overlayMat: THREE.MeshBasicMaterial | null = null;
+  private frameStyle: FrameStyle = FRAME_REGULAR;
+  /** Texture px per cell the arena textures were painted at (0 = not painted yet). */
+  private arenaPx = 0;
+  /** Diagnostics (?diag=1): cell path, shader program status, self-test notes. */
+  private tilePath: 'shader' | 'portable' = 'shader';
+  private programDiag: ProgramDiag[] = [];
+  private readonly diagNotes: string[] = [];
   /** Turn glow (top-only arena): additive edge glow in the team colour, fading in / out. */
   private turnGlowMesh: THREE.Mesh | null = null;
   private turnGlowMat: THREE.MeshBasicMaterial | null = null;
@@ -835,6 +859,11 @@ export class BoardView implements IBoardView {
     this.applyHighlights();
     this.applyZoneLines(0);
 
+    // Size the canvas and paint the arena at its real size, then verify every shader program
+    // links on this device (throws -> createBoardView falls back to the Canvas2D board).
+    this.resize();
+    this.selfCheck();
+
     canvas.addEventListener('pointerdown', this.onPointerDown);
     canvas.addEventListener('pointerup', this.onPointerUp);
     canvas.addEventListener('pointercancel', this.onPointerCancel);
@@ -850,6 +879,112 @@ export class BoardView implements IBoardView {
     // Top-down only: the glTF models (and the unit code) are never loaded.
     if (!this.topOnly) this.initUnits();
     this.scheduleWarmUp();
+  }
+
+  /**
+   * Start-up self-check (WebKit / ANGLE-Metal portability): compile the visible scene with shader
+   * error checking on and read each program's link status. If the cell shader does not link, the
+   * cells switch to the portable built-in material; if a built-in unlit program fails too (the
+   * bezel, the overlay), the WebGL board cannot draw the field at all and the constructor throws,
+   * so createBoardView falls back to the Canvas2D board.
+   */
+  private selfCheck(): void {
+    const r = this.renderer;
+    r.debug.checkShaderErrors = true;
+    const programOf = (mat: THREE.Material): { getUniforms(): unknown; diagnostics?: { runnable: boolean; programLog: string; fragmentShader: { log: string }; vertexShader: { log: string } } } | undefined =>
+      (r.properties.get(mat) as { currentProgram?: never }).currentProgram;
+    const runnable = (mat: THREE.Material): boolean => {
+      const prog = programOf(mat);
+      if (!prog) return true; // not compiled (hidden): nothing to judge
+      prog.getUniforms(); // forces the link check
+      return prog.diagnostics?.runnable !== false;
+    };
+    const collect = (): void => {
+      this.programDiag = [];
+      for (const prog of r.info.programs ?? []) {
+        const p = prog as unknown as { name: string; type: string; getUniforms(): unknown; diagnostics?: { runnable: boolean; programLog: string; fragmentShader: { log: string }; vertexShader: { log: string } } };
+        p.getUniforms();
+        const d = p.diagnostics;
+        const log = d ? (d.programLog || d.fragmentShader.log || d.vertexShader.log).split('\n')[0] : undefined;
+        this.programDiag.push({ name: p.name || p.type, runnable: d?.runnable !== false, log: log || undefined });
+      }
+    };
+    const fail = (why: string): never => {
+      this.disposed = true;
+      if (this.rafId) cancelAnimationFrame(this.rafId);
+      this.rafId = 0;
+      try {
+        this.renderer.dispose();
+        this.renderer.forceContextLoss();
+      } catch {
+        // Already gone.
+      }
+      throw new Error(why);
+    };
+    try {
+      r.compile(this.scene, this.camera);
+    } catch (e) {
+      fail(`shader compile threw: ${String(e)}`);
+    }
+    if (!runnable(this.tiles.material as THREE.Material)) {
+      this.diagNotes.push('cell shader failed to link: portable cells');
+      this.usePortableTiles();
+      try {
+        r.compile(this.scene, this.camera);
+      } catch (e) {
+        fail(`shader compile threw: ${String(e)}`);
+      }
+      if (!runnable(this.tiles.material as THREE.Material)) {
+        collect();
+        fail('portable cell program failed to link');
+      }
+    }
+    for (const m of [this.frameMat, this.overlayMat]) {
+      if (m && !runnable(m)) {
+        collect();
+        fail(`arena program failed to link (${m.type})`);
+      }
+    }
+    collect();
+  }
+
+  /** Swap the instanced cell shader for the built-in unlit material + a painted cell texture. */
+  private usePortableTiles(): void {
+    const old = this.tiles.material as THREE.Material;
+    const { mat, tex } = makePortableTileMaterial();
+    this.tiles.material = mat;
+    const i = this.ownMaterials.indexOf(old);
+    if (i >= 0) this.ownMaterials.splice(i, 1);
+    old.dispose();
+    this.ownMaterials.push(mat);
+    this.ownTextures.push(tex);
+    this.tilePath = 'portable';
+  }
+
+  /** Diagnostics for the ?diag=1 panel. */
+  getDiagnostics(): RenderDiagnostics {
+    const r = this.renderer;
+    const gl = r.getContext();
+    const id = glIdentity(gl);
+    const isGl2 = typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext;
+    const c = r.domElement;
+    const { w, h } = containerSize(this.container);
+    return {
+      renderer: isGl2 ? 'webgl2' : 'webgl1',
+      glVendor: id.vendor,
+      glRenderer: id.renderer,
+      maxTextureSize: id.maxTex,
+      dpr: r.getPixelRatio(),
+      canvas: [c.width, c.height],
+      css: [Math.round(w), Math.round(h)],
+      frame: this.frameStyle.id,
+      tilePath: this.tilePath,
+      programs: this.programDiag,
+      notes: [...this.diagNotes, `arena ${this.arenaPx}px/cell`],
+      nullCtx: canvasStats.nullCtx,
+      canvases: canvasStats.created,
+      fallbackReason: getFallbackReason(),
+    };
   }
 
   /**
@@ -971,32 +1106,28 @@ export class BoardView implements IBoardView {
    * colours); four draws (two only while idle without a turn glow), four small textures.
    */
   private buildArena(): void {
-    const frame = makeFrameTexture();
-    const pGeo = new THREE.PlaneGeometry(frame.width, frame.depth).rotateX(-Math.PI / 2);
-    const pMat = new THREE.MeshBasicMaterial({ map: frame.tex, transparent: true, depthWrite: false });
-    const pMesh = new THREE.Mesh(pGeo, pMat);
-    pMesh.position.set(0, TILE_TOP - 0.02, frame.offsetZ);
+    // The textures (and the frame plane's size) are painted by paintArena at the real cell size.
+    const pMat = new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false });
+    pMat.name = 'arena-frame';
+    const pMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), pMat);
     pMesh.renderOrder = -3;
     pMesh.raycast = noRaycast;
-    const ov = makeFieldOverlayTexture();
-    const oGeo = new THREE.PlaneGeometry(ov.size, ov.size).rotateX(-Math.PI / 2);
-    const oMat = new THREE.MeshBasicMaterial({ map: ov.tex, transparent: true, depthWrite: false });
-    const oMesh = new THREE.Mesh(oGeo, oMat);
+    const oMat = new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false });
+    oMat.name = 'arena-overlay';
+    const oMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), oMat);
     oMesh.position.y = TILE_TOP + 0.001;
     oMesh.renderOrder = 0;
     oMesh.raycast = noRaycast;
     // Turn glow: the same plane as the frame, painted white, tinted per team, additive.
-    const gTex = makeTurnGlowTexture();
     const gMat = new THREE.MeshBasicMaterial({
-      map: gTex,
       color: TEAM_COLORS[0].glow,
       transparent: true,
       opacity: 0,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
-    const gMesh = new THREE.Mesh(pGeo, gMat);
-    gMesh.position.set(0, TILE_TOP + 0.002, frame.offsetZ);
+    gMat.name = 'arena-turn-glow';
+    const gMesh = new THREE.Mesh(pMesh.geometry, gMat);
     gMesh.renderOrder = 0.5; // over the grid, under the wasteland (1) and the markers
     gMesh.visible = false;
     gMesh.raycast = noRaycast;
@@ -1016,14 +1147,74 @@ export class BoardView implements IBoardView {
     sMesh.renderOrder = 0.6;
     sMesh.visible = false;
     sMesh.raycast = noRaycast;
+    this.frameMesh = pMesh;
+    this.frameMat = pMat;
+    this.overlayMat = oMat;
+    this.overlayMesh = oMesh;
     this.turnGlowMesh = gMesh;
     this.turnGlowMat = gMat;
     this.scanMesh = sMesh;
     this.scanMat = sMat;
     this.scene.add(pMesh, oMesh, gMesh, sMesh);
-    this.ownGeometries.push(pGeo, oGeo, sGeo);
+    this.ownGeometries.push(sGeo);
     this.ownMaterials.push(pMat, oMat, gMat, sMat);
-    this.ownTextures.push(frame.tex, ov.tex, gTex, bandTex);
+    this.ownTextures.push(bandTex);
+    const { w, h } = containerSize(this.container);
+    this.paintArena(w, h, true);
+  }
+
+  /**
+   * (Re)paint the arena textures for a w x h CSS px board: the bezel look follows the board width
+   * (slim on phones) and the texture resolution the on-screen cell size. No-op unless one of them
+   * changed or `force` (first build, WebGL context restored: the canvases are freed after upload).
+   */
+  private paintArena(w: number, h: number, force = false): void {
+    const pMesh = this.frameMesh;
+    const oMesh = this.overlayMesh;
+    if (!pMesh || !oMesh || !this.frameMat || !this.overlayMat || !this.turnGlowMat || !this.turnGlowMesh) return;
+    const st = frameStyleFor(w);
+    const fit = frameFit(st);
+    const cssCell = Math.min(w / (BOARD_SIZE + fit.side * 2), h / (BOARD_SIZE + fit.top + fit.bottom));
+    const px = arenaPxFor(cssCell * Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO));
+    if (!force && st === this.frameStyle && px === this.arenaPx) return;
+    const styleChanged = st !== this.frameStyle || this.arenaPx === 0;
+    this.frameStyle = st;
+    this.arenaPx = px;
+    const frame = makeFrameTexture(st, px);
+    const ov = makeFieldOverlayTexture(px);
+    const glow = makeTurnGlowTexture(st);
+    for (const n of [...frame.notes, ...ov.notes, ...glow.notes]) if (!this.diagNotes.includes(n)) this.diagNotes.push(n);
+    const swap = (mat: THREE.MeshBasicMaterial, tex: THREE.Texture): void => {
+      const old = mat.map;
+      mat.map = tex;
+      mat.needsUpdate = true;
+      this.ownTextures.push(tex);
+      if (old) {
+        const i = this.ownTextures.indexOf(old);
+        if (i >= 0) this.ownTextures.splice(i, 1);
+        releaseCanvas(old.image);
+        old.dispose();
+      }
+    };
+    // The big static canvases are freed once uploaded (repainted on context restore).
+    releaseAfterUpload(frame.tex);
+    releaseAfterUpload(ov.tex);
+    swap(this.frameMat, frame.tex);
+    swap(this.overlayMat, ov.tex);
+    swap(this.turnGlowMat, glow.tex);
+    if (styleChanged || force) {
+      const old = pMesh.geometry;
+      const geo = new THREE.PlaneGeometry(frame.width, frame.depth).rotateX(-Math.PI / 2);
+      pMesh.geometry = geo;
+      this.turnGlowMesh.geometry = geo;
+      pMesh.position.set(0, TILE_TOP - 0.02, frame.offsetZ);
+      this.turnGlowMesh.position.set(0, TILE_TOP + 0.002, frame.offsetZ);
+      old.dispose();
+      if (oMesh.geometry.type === 'PlaneGeometry' && (oMesh.geometry as THREE.PlaneGeometry).parameters.width !== ov.size) {
+        oMesh.geometry.dispose();
+        oMesh.geometry = new THREE.PlaneGeometry(ov.size, ov.size).rotateX(-Math.PI / 2);
+      }
+    }
   }
 
   private buildTiles(): THREE.InstancedMesh {
@@ -1763,7 +1954,7 @@ export class BoardView implements IBoardView {
    */
   setStorm(storm: number, nextIn: number | null): void {
     if (this.disposed) return;
-    this.storm = Math.max(0, Math.min(6, Math.floor(storm)));
+    this.storm = Math.max(0, Math.min(STORM_FULL_STEPS, Math.floor(storm)));
     this.stormNext = nextIn;
     this.stormFx.set(this.storm, nextIn);
     this.applyHighlights();
@@ -1941,6 +2132,7 @@ export class BoardView implements IBoardView {
     this.renderer.setSize(w, h, false);
     this.lastAspect = w / h;
     this.lastHeightPx = h;
+    if (this.topOnly) this.paintArena(w, h);
     this.refitCamera();
     this.requestRender();
   }
@@ -2044,8 +2236,14 @@ export class BoardView implements IBoardView {
     this.sparks.dispose();
     this.kit.dispose();
     for (const g of this.ownGeometries) g.dispose();
+    this.frameMesh?.geometry.dispose();
+    this.overlayMesh?.geometry.dispose();
     for (const m of this.ownMaterials) m.dispose();
-    for (const t of this.ownTextures) t.dispose();
+    // Free the canvases now: iOS counts live canvases against a page-wide memory budget.
+    for (const t of this.ownTextures) {
+      releaseCanvas(t.image);
+      t.dispose();
+    }
     this.tiles.dispose();
     this.moveDots.dispose();
     this.captureRings.dispose();
@@ -2420,10 +2618,11 @@ export class BoardView implements IBoardView {
     const e = SLAB_SIZE / 2;
     const pts: THREE.Vector3[] = [];
     if (this.topOnly) {
-      // Iron frame + its lip and the start of its outer shadow (the rest fades on the backdrop).
-      const ex = HALF + 0.5 + FRAME_FIT.side;
-      const zTop = -(HALF + 0.5 + FRAME_FIT.top);
-      const zBottom = HALF + 0.5 + FRAME_FIT.bottom;
+      // Bezel + its lip and a little room for its glow (the shadow fades on the backdrop).
+      const fit = frameFit(this.frameStyle);
+      const ex = HALF + 0.5 + fit.side;
+      const zTop = -(HALF + 0.5 + fit.top);
+      const zBottom = HALF + 0.5 + fit.bottom;
       for (const x of [-ex, ex]) for (const z of [zTop, zBottom]) pts.push(new THREE.Vector3(x, 0, z));
     } else {
       for (const x of [-e, e]) {
@@ -2435,9 +2634,11 @@ export class BoardView implements IBoardView {
     // Tallest piece on the far row (only matters for the tilted view).
     const topY = 2.2 * (1 - t) + 0.4 * t; // TILE_TOP + PUCK_TOP + UNIT_MAX_HEIGHT
     pts.push(new THREE.Vector3(-HALF, topY, -HALF), new THREE.Vector3(HALF, topY, -HALF));
-    // Top-down: the flat board fills the limiting side edge to edge (phones: the full width).
-    const marginX = THREE.MathUtils.lerp(portrait ? 0.985 : 0.92, 0.985, t);
-    const marginY = THREE.MathUtils.lerp(portrait ? 0.95 : 0.92, 0.975, t);
+    // Top-down: the flat board fills the limiting side edge to edge (phones: the full width; the
+    // slim bezel's fit already keeps a hair of room for its glow).
+    const slim = this.topOnly && this.frameStyle.id === 'slim';
+    const marginX = THREE.MathUtils.lerp(portrait ? 0.985 : 0.92, slim ? 1 : 0.985, t);
+    const marginY = THREE.MathUtils.lerp(portrait ? 0.95 : 0.92, slim ? 1 : 0.975, t);
     const target = new THREE.Vector3(0, 0, 0);
     const right = new THREE.Vector3();
     const up = new THREE.Vector3();
@@ -2948,7 +3149,7 @@ export class BoardView implements IBoardView {
       const el = now - this.tSpawn;
       let done = true;
       for (const v of this.spawning) {
-        const delay = (v.piece.pos.c + (v.piece.owner === 0 ? v.piece.pos.r : 11 - v.piece.pos.r)) * 14;
+        const delay = (v.piece.pos.c + (v.piece.owner === 0 ? v.piece.pos.r : BOARD_SIZE - 1 - v.piece.pos.r)) * 14;
         const k = clamp01((el - delay) / SPAWN_MS);
         if (k < 1) done = false;
         v.inner.scale.setScalar(Math.max(0.001, easeOutBack(k)));
@@ -3190,6 +3391,12 @@ export class BoardView implements IBoardView {
   };
 
   private readonly onContextRestored = (): void => {
+    if (this.disposed) return;
+    // The arena canvases were freed after their first upload: repaint them for the new context.
+    if (this.topOnly) {
+      const { w, h } = containerSize(this.container);
+      this.paintArena(w, h, true);
+    }
     this.requestRender();
   };
 

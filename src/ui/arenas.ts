@@ -1,3 +1,5 @@
+import { APP_TAGLINE } from '../meta/economy';
+
 /**
  * Arenas shown in the lobby showcase. Today there is one; score-based arenas will be appended
  * here later (the lobby already renders the "다음 전장" teaser from `nextArena`).
@@ -12,7 +14,7 @@ export interface Arena {
   art: string;
 }
 
-export const ARENAS: readonly Arena[] = [{ id: 'moonrune', name: '달빛 룬 투기장', tagline: '12×12 전술 아레나', art: './bg/match.webp' }];
+export const ARENAS: readonly Arena[] = [{ id: 'moonrune', name: '달빛 룬 투기장', tagline: APP_TAGLINE, art: './bg/match.webp' }];
 
 /** The arena the player fights in now (score-based selection comes later). */
 export function currentArena(): Arena {
