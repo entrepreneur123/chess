@@ -99,6 +99,14 @@ export const VOICE_CLIPS: Record<CharacterId, Partial<Record<CharAudioEvent, rea
     death: ['vo/volkonov-death-1.m4a'],
     victory: ['vo/volkonov-victory-1.m4a'],
   },
+  verish: {
+    select: ['vo/verish-select-1.m4a', 'vo/verish-select-2.m4a'],
+    move: ['vo/verish-move-1.m4a', 'vo/verish-move-2.m4a'],
+    capture: ['vo/verish-capture-1.m4a', 'vo/verish-capture-2.m4a', 'vo/verish-capture-3.m4a'],
+    'hop-multi': ['vo/verish-hop-multi-1.m4a'],
+    death: ['vo/verish-death-1.m4a'],
+    victory: ['vo/verish-victory-1.m4a'],
+  },
 };
 
 /** Spoken text of each clip (Korean), for captions/debugging. */
@@ -223,6 +231,16 @@ export const VOICE_TEXT: Readonly<Record<string, string>> = {
   'vo/volkonov-skill-2.m4a': "발걸음에 날개를 달아 주지!",
   'vo/volkonov-death-1.m4a': "아… 마지막 소절이…",
   'vo/volkonov-victory-1.m4a': "브라보! 완벽한 무대였어.",
+  'vo/verish-select-1.m4a': "준비 완료! 부츠 충전 끝!",
+  'vo/verish-select-2.m4a': "속도라면 자신 있어!",
+  'vo/verish-move-1.m4a': "따라올 수 있으면 와 봐!",
+  'vo/verish-move-2.m4a': "부스트 온!",
+  'vo/verish-capture-1.m4a': "그대로 뚫고 간다!",
+  'vo/verish-capture-2.m4a': "길 막지 마!",
+  'vo/verish-capture-3.m4a': "정면 돌파!",
+  'vo/verish-hop-multi-1.m4a': "한 줄로 전부 꿰뚫었어!",
+  'vo/verish-death-1.m4a': "앗… 여기서 멈추다니…",
+  'vo/verish-victory-1.m4a': "골인! 오늘도 내가 일등이야!",
 };
 
 /** Character-specific sound effects per event. */
@@ -238,6 +256,7 @@ export const CHAR_SFX: Record<CharacterId, Partial<Record<CharAudioEvent, string
   rampid: { select: 'sfx/rampid-select.m4a', move: 'sfx/rampid-move.m4a', capture: 'sfx/rampid-capture.m4a' },
   larhen: { select: 'sfx/larhen-select.m4a', move: 'sfx/larhen-move.m4a', capture: 'sfx/larhen-capture.m4a' },
   volkonov: { select: 'sfx/volkonov-select.m4a', move: 'sfx/volkonov-move.m4a', capture: 'sfx/volkonov-capture.m4a', skill: 'sfx/volkonov-skill.m4a' },
+  verish: { select: 'sfx/verish-select.m4a', move: 'sfx/verish-move.m4a', capture: 'sfx/verish-capture.m4a', 'hop-multi': 'sfx/verish-hop-multi.m4a' },
 };
 
 /** Shared effects used when a character has no specific one. */

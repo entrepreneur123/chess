@@ -910,14 +910,14 @@
     "verish": {
       "concept": "A pink-haired young woman of about twenty who slides on high-tech power boots and pierces straight through every enemy in her lane: a bright, quick, confident young female voice, playful and sporty, crisp and energetic; not a child, not sultry.",
       "gender": "female",
-      "voice": "PLACEHOLDER",
+      "voice": "A sporty, confident young woman of about twenty, a speed racer. A bright, clear and crisp female voice in a natural medium pitch, not high-pitched: a grown young woman, never a little girl. Quick, energetic and playful with a cheeky smile, crisp articulation. Not breathy, not sultry, not shouting.",
       "clone": {
         "ref": "refs/verish-ref.flac",
-        "text": "PLACEHOLDER",
-        "style": "PLACEHOLDER",
-        "_from": "PLACEHOLDER"
+        "text": "내 부츠보다 빠른 건 없어. 한 줄로 전부 뚫고 갈게.",
+        "style": "Confident and cheeky, quick, relaxed, moderate volume.",
+        "_from": "VoiceDesign take (seed 11, take 1) of 24 over three prompts, trimmed (lead and tail only). All 24 takes were female on both QA classifiers (P 0.85-0.99 / 0.93-0.99) but sat at 321-492 Hz median; the first two prompts ('medium-high pitch' / 'mid-to-high') gave 326-492 Hz, shouted '!' reads in most takes, and the 400+ Hz ones read childish. The third prompt ('natural medium pitch, not high-pitched ... never a little girl', in 'voice') gave the only sub-300 Hz take. Kept: F0 294 Hz (228-473), CER 0, warble 0.066, HNR 13.1 dB, hiss -58.4 dB, bright (harshness -8.0 dB, sibilance -7.9 dB: crisp, left to the de-esser), P(female) 0.949 (wav2vec2) / 0.976 (ECAPA). Runner-up: prompt 1 take 2 (326 Hz, harshness -13.9 dB, but a drawn-out, creaky '없어')."
       },
-      "f0_target": 0,
+      "f0_target": 290,
       "lines": [
         {
           "id": "select-1",
@@ -964,9 +964,10 @@
         {
           "id": "capture-3",
           "event": "capture",
-          "text": "한 방에 관통!",
-          "style": "Crisp and triumphant.",
-          "say": "한 방에 관통."
+          "text": "정면 돌파!",
+          "style": "Crisp and triumphant, punchy.",
+          "say": "정면 돌파.",
+          "_note": "First written '한 방에 관통!': Whisper heard '한 방의 관통' in 6/6 takes (the particle 에/의 sound alike), so the line was replaced."
         },
         {
           "id": "hop-multi-1",
@@ -978,8 +979,9 @@
         {
           "id": "death-1",
           "event": "death",
-          "text": "앗… 부츠가… 방전됐어…",
-          "style": "Startled, then fading and deflated."
+          "text": "앗… 여기서 멈추다니…",
+          "style": "Startled, then fading and deflated.",
+          "_note": "First written '앗… 부츠가… 방전됐어…': Whisper heard 부추/부치/구치 for 부츠 in 5/6 takes (best CER 0.12), so the line was replaced."
         },
         {
           "id": "victory-1",

@@ -352,3 +352,66 @@ rest) after a lower carve band was added (they were 5.8-6.9 kHz).
 test's 1.75 MiB budget (1,835,008 B). The three new characters take 0.15 MiB each, under the
 roster's 0.21 MiB per character; 2.25 MiB (2,359,296 B) for 11 characters would leave 178,963 B.
 Nobody has listened to these files; every statement above is a measurement.
+
+## Verish (2026-11-05)
+
+The 12th character, a rare: a pink-haired young woman (about 20) on high-tech power boots who
+slides and pierces through every enemy in her lane (trait 관통, no active skill). Lines: the
+standard set (select x2, move x2, capture x3, death, victory) plus `hop-multi` x1, played when one
+slide captures two or more pieces (the event Picker already uses; `voice.ts` falls it back to
+`capture`). No skill line or effect. Same pipeline as the three characters above (Qwen3-TTS only).
+
+**Reference.** 24 VoiceDesign takes over three prompts, all female on both QA models (P 0.85-0.99
+wav2vec2 / 0.93-0.99 ECAPA) but high: the "medium-high" / "mid-to-high" prompts gave 326-492 Hz
+medians with mostly shouted '!' reads, and the 400+ Hz takes read childish. The third prompt ("a
+natural medium pitch, not high-pitched ... never a little girl") gave the only sub-300 Hz take,
+kept: 294 Hz (228-473), CER 0, warble 0.066, HNR 13.1 dB, hiss -58.4 dB, P(female) 0.949 / 0.976.
+It is bright (harshness -8.0 dB, sibilance -7.9 dB; "crisp", left to the de-esser). Runner-up:
+326 Hz, duller (-13.9 dB), with a drawn-out, creaky 없어. `f0_target` 290.
+
+**Takes.** 6 cloned takes per line, all fully processed and judged (`--shortlist 6`). Chain
+`fx_verish`: HP 100 Hz, +0.6 dB at 220 Hz, +1 dB air shelf at 10 kHz, 2.5:1, a short bright
+0.7 s space (LP 7 kHz, HP 450 Hz) at 10 %; harshness target -9 dB, de-esser threshold 0.28. Two lines
+were replaced after the first takes: `capture-3` `한 방에 관통!` (Whisper heard 한 방의 관통 in 6/6
+takes) became `정면 돌파!`, and `death-1` `앗… 부츠가… 방전됐어…` (부츠 heard as 부추/부치/구치,
+best CER 0.12) became `앗… 여기서 멈추다니…`. Results on the decoded .m4a (`qa-voice.json`):
+
+| Character | clips | dur s | F0 Hz | harsh dB | sib dB | tail dB | hiss dB | warble st | HNR dB | CER | P(female) w2v / ECAPA |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| verish (median) | 10 | 1.81 (1.07-2.90) | 279 (269-386) | -9.2 | -11.8 | -58.9 | -46.1 | 0.046 (max 0.104) | 9.9 | 0 (victory-1: 0.27) | 0.948 / 0.962 (min 0.72 / 0.92) |
+
+All 10 clips: -15.98..-16.19 LUFS, true peak <= -1.05 dBTP, tail <= -48.9 dB, 9.2-24.9 KB
+(166,279 B in all).
+
+- `victory-1` CER 0.27 is Whisper's spelling, the same in all 6 takes: 고린 for 골인 (the linked
+  pronunciation) and the digit 1등 for 일등.
+- `hop-multi-1` is the highest clip (386 Hz): the two takes that said 꿰뚫었어 were both excited
+  (390-395 Hz); the lower takes said 깨뜨렸어 or 꽤 뚫었어.
+- `move-1` has the lowest wav2vec2 P(female) (0.72; ECAPA 0.99) and the highest noise floor of the
+  set (hiss -35.6 dB vs -46 median). Listen to these two first.
+
+**SFX.** Appended after volkonov in `gen_sfx.py` (all 49 earlier effects regenerated and checked
+sample-identical, max difference 0.0; the 169 shipped .m4a of the other characters are byte-identical
+by md5). New building blocks: `servo_whine` (the boots spinning up or down: a gliding tone with a
+fast small vibrato), `electric_arc` (a jittery high-passed buzz flickering over fine crackle, soft
+edges), `boot_slide` (a falling friction sweep with a grainy texture) and `pierce_hit` (a rising
+zip, a 1.5 ms snap, a falling 'thwip' and a punchy low body with a 2 ms attack).
+
+| File | Concept | dur s | LUFS | peak dBFS | bytes |
+| --- | --- | --- | --- | --- | --- |
+| verish-select | boots power up: servo spin-up, two electric ticks, a rising-fifth "ready" ping | 0.704 | -16.81 | -4.17 | 6816 |
+| verish-move | power-boot slide: thrust whoosh, the whine dropping as she glides, an electric skid | 0.555 | -17.10 | -2.41 | 5638 |
+| verish-capture | a punchy pierce: zip, snap and low body, static burst, the air closing behind her | 0.683 | -17.24 | -1.14 | 6579 |
+| verish-hop-multi | three rapid pierces rising in pitch over one zip, an electric discharge, a short skid stop | 0.853 | -17.26 | -2.34 | 8099 |
+
+The capture first ended at -17.35 LUFS. The cause was not AAC overshoot: the hit had an 18 dB
+crest, so the -2 dBFS limiter could not bring it up to -17 LUFS. A longer static/air tail and a
+little saturation fixed it. The low body uses its own 2 ms attack instead of `thud()`'s 0.5 ms
+click. Distinctness proxy (log-mel cosine to the nearest effect of another character): select 0.78,
+move 0.93, capture 0.93, hop-multi 0.92 (insaner/brutile capture); as noted above, the measure
+mostly sees broadband noise.
+
+**Budget.** vo + sfx = 2,373,744 B (vo 1,943,189 + sfx 430,555). Verish adds 193,411 B (vo 166,279
++ sfx 27,132), 14,448 B over the 2.25 MiB budget, which was raised to 2.5 MiB (2,621,440 B, 0.21 MiB per
+character for 12); headroom 247,696 B. Nobody has listened to these files; every statement above is
+a measurement.

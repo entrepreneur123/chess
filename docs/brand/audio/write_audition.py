@@ -17,7 +17,8 @@ NAMES = {"sad": ("사드", "Paladin"), "marki": ("마르키", "Minotaur"), "walk
          "michelle": ("미셸", "Gloomy girl with a doll"), "picker": ("피커", "Frontier drifter"),
          "rakaeli": ("라카엘리", "Blindfolded fallen angel; transformed form 타천"),
          "rampid": ("램피드", "Teenage ice skater, forward dasher"), "larhen": ("라르헨", "Assassin with twin daggers"),
-         "volkonov": ("볼코노프", "Bard who buffs allies with music")}
+         "volkonov": ("볼코노프", "Bard who buffs allies with music"),
+         "verish": ("베리쉬", "Speedster on power boots who pierces through her lane")}
 EVENT_KO = {"select": "선택", "move": "이동", "capture": "잡기", "skill": "스킬", "chain": "연속",
             "trap-set": "함정 설치", "trap-sprung": "함정 발동", "hop-multi": "연속 잡기",
             "death": "사망", "victory": "승리",

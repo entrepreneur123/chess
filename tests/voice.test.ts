@@ -87,8 +87,11 @@ const sfxEvents = (c: CharacterId): CharAudioEvent[] => [
  * Raised to 2.25 MiB on 2026-11-05 for the three later commons (Rampid, Larhen, Volkonov): 29 voice
  * lines (386,729 bytes) and 10 effects (76,026 bytes), about 0.15 MiB per character, below the
  * average. Measured: 2,180,333 bytes for 11 characters; headroom 178,963 bytes.
+ * Raised to 2.5 MiB on 2026-11-05 for Verish, the 12th character (a rare): 10 voice lines (166,279
+ * bytes) and 4 effects (27,132 bytes), 193,411 bytes (0.18 MiB). Measured: 2,373,744 bytes (vo
+ * 1,943,189 + sfx 430,555), 14,448 bytes over 2.25 MiB; 0.19 MiB per character; headroom 247,696 bytes.
  */
-const AUDIO_BUDGET_BYTES = 2.25 * 1024 * 1024;
+const AUDIO_BUDGET_BYTES = 2.5 * 1024 * 1024;
 
 function allFiles(): string[] {
   const out = new Set<string>();
@@ -156,7 +159,7 @@ describe('character audio manifest', () => {
     }
   });
 
-  it('keeps the whole audio payload under the budget (2.25 MiB for 11 characters)', async () => {
+  it('keeps the whole audio payload under the budget (2.5 MiB for 12 characters)', async () => {
     const { readdirSync, statSync } = await fsP;
     let total = 0;
     for (const sub of ['vo', 'sfx']) {
@@ -190,12 +193,12 @@ describe('character audio manifest', () => {
   });
 
   it('new characters and their trait events never throw', async () => {
-    for (const c of ['michelle', 'picker'] as CharacterId[]) {
+    for (const c of ['michelle', 'picker', 'verish'] as CharacterId[]) {
       for (const e of ['select', 'move', 'capture', 'death', 'victory', 'trap-set', 'trap-sprung', 'hop-multi'] as const) {
         expect(() => playVoice(c, e, { level: 2, owner: 0 })).not.toThrow();
         expect(() => playCharSfx(c, e)).not.toThrow();
       }
     }
-    await expect(preloadCharacterAudio(['michelle', 'picker'])).resolves.toBeUndefined();
+    await expect(preloadCharacterAudio(['michelle', 'picker', 'verish'])).resolves.toBeUndefined();
   });
 });

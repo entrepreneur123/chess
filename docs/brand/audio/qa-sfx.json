@@ -399,6 +399,46 @@
   "trail_ms": 21,
   "bytes": 15722
  },
+ "verish-capture": {
+  "file": "sfx/verish-capture.m4a",
+  "dur": 0.683,
+  "lufs": -17.24,
+  "peak_db": -1.14,
+  "centroid": 4632,
+  "lead_ms": 8,
+  "trail_ms": 44,
+  "bytes": 6579
+ },
+ "verish-hop-multi": {
+  "file": "sfx/verish-hop-multi.m4a",
+  "dur": 0.853,
+  "lufs": -17.26,
+  "peak_db": -2.34,
+  "centroid": 3809,
+  "lead_ms": 8,
+  "trail_ms": 43,
+  "bytes": 8099
+ },
+ "verish-move": {
+  "file": "sfx/verish-move.m4a",
+  "dur": 0.555,
+  "lufs": -17.1,
+  "peak_db": -2.41,
+  "centroid": 3623,
+  "lead_ms": 3,
+  "trail_ms": 34,
+  "bytes": 5638
+ },
+ "verish-select": {
+  "file": "sfx/verish-select.m4a",
+  "dur": 0.704,
+  "lufs": -16.81,
+  "peak_db": -4.17,
+  "centroid": 2264,
+  "lead_ms": 3,
+  "trail_ms": 27,
+  "bytes": 6816
+ },
  "volkonov-capture": {
   "file": "sfx/volkonov-capture.m4a",
   "dur": 0.917,

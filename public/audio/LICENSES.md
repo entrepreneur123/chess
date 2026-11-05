@@ -16,10 +16,10 @@ music's only third-party material is the MIT-licensed FluidR3_GM SoundFont (see 
   have no separate LICENSE file). The `qwen-tts` 0.1.1 inference package (PyPI) ships the full
   Apache License 2.0 text. Apache-2.0 permits commercial use and places no restriction on
   generated audio.
-- **No real person's voice is used.** The eleven references
-  `docs/brand/audio/refs/{sad,marki,walk,insaner,brutile,michelle,picker,rakaeli,rampid,larhen,volkonov}-ref.flac`
+- **No real person's voice is used.** The twelve references
+  `docs/brand/audio/refs/{sad,marki,walk,insaner,brutile,michelle,picker,rakaeli,rampid,larhen,volkonov,verish}-ref.flac`
   are themselves VoiceDesign outputs (designed from text prompts recorded in `lines.json`; michelle
-  and picker added 2026-11-04, rakaeli later the same day, rampid, larhen and volkonov 2026-11-05). Rakaeli's transformed-form lines are his own cloned takes
+  and picker added 2026-11-04, rakaeli later the same day, rampid, larhen, volkonov and verish 2026-11-05). Rakaeli's transformed-form lines are his own cloned takes
   through extra post-processing, not a second voice.
 - **Post-processing** (EQ, de-essing, reverb, WORLD-vocoder layers for marki's growl, insaner's
   demon double, michelle's whispered double and rakaeli's detuned / octave-down transformed-form
@@ -64,7 +64,8 @@ characters were voiced with the Qwen3-TTS pipeline above instead.
   shared `death.m4a` and `waste-death.m4a` (a piece dissolving on brutile's wasteland), and the
   2026-11-05 effects of rampid (ice skate carves, shaved-ice stop, ice shatter, frost tinkle),
   larhen (dagger draws, blade whooshes, leap) and volkonov (Karplus-Strong plucked lute notes,
-  strums and the 선율 arpeggio swell).
+  strums and the 선율 arpeggio swell) and verish (power-boot servo whine, electric arc crackle,
+  boot skid, pierce hits).
 
 ## Music (`bgm/*.m4a`: the six arena loops and the lobby theme)
 
