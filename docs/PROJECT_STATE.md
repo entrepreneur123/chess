@@ -120,8 +120,9 @@ quoting a number.
 | 피커 picker | rare | diagonal 1 / 2 / 3 | trait 콩콩 |
 | 라카엘리 rakaeli | epic | jumps: front 1×3; 2×3; 2×3 + back 1 | skill 타천 |
 | 램피드 rampid | common | claw slide (forward + both forward diagonals) 1 / 2 / 3 | turns at the edge |
-| 라르헨 larhen | common | jumps: left/right 1 + forward diagonals 1; 2성 + back diagonals (H); 3성 left/right up to 5 + 4 diagonals | |
+| 라르헨 larhen | common | jumps: left/right 1 + forward diagonals 1; 2성 + back diagonals (H); 3성 the H one row taller (side columns ±2 rows too) | |
 | 볼코노프 volkonov | common | orthogonal slide 1 / 2 / 2 | skill 선율; never turns |
+| 베리쉬 verish | rare | slides: left/right 1 + forward 2; left/right 2 + forward 2; left/right 2 + forward 3 + back 1 | trait 관통 |
 
 - **인세이너:**
   - Capturing absorbs the victim's MOVEMENT PATTERN only, never traits or skills. An absorbed
@@ -139,6 +140,11 @@ quoting a number.
   - Casting takes the turn. He then makes 2 moves transformed (`Piece.awaken` 3 → 2 → 1).
   - Transformed reach: front 1×5; 2×5; 3×5 + back 1.
   - Insaner absorbs only his base pattern.
+- **베리쉬 관통 (2026-11-05):** each lane is a slide that captures and passes every enemy on it
+  (`canHop`, like Picker's hop but straight lines); her own piece, wasteland (she never enters it),
+  the edge and the storm stop her before the square; doll traps do not stop her (only the landing
+  catches). Insaner absorbs her lanes as a plain slide. Boards play her move square by square,
+  flat and fast (`hopTimingFor`).
 - **볼코노프 선율 (2026-11-05):**
   - Casting takes the turn; anchor = his own square; needs at least one other piece of his side
     (`SkillBlock` 'alone').
@@ -153,6 +159,7 @@ quoting a number.
   questions on these):** Larhen's back diagonals arrive at 2성 (the brief said "일성에서", which would
   make 1성 and 2성 identical); his 3성 keeps the four diagonals (an H); the melody buffs the other
   pieces only, not Volkonov himself; all three are common (일반); unlocks in arenas 2 / 3 / 4.
+  Larhen 3성 was later changed by the owner to the taller H (the 5-wide row is gone).
 - **Absorb masks:** 2 bits per character code holding the highest absorbed level (`absorbMerge`);
   exact because every pattern contains its lower grades (checked in `tests/commons3.test.ts`).
   Room for 15 character codes.
@@ -169,8 +176,9 @@ quoting a number.
   | picker | 3/5/7 |
   | rakaeli | 4/6/7 |
   | rampid | 3/4/5 |
-  | larhen | 3/4/6 |
+  | larhen | 3/4/5 |
   | volkonov | 3/4/5 |
+  | verish | 3/5/7 |
 
 - **Direction arrows:** shown when the reach depends on direction (`isDirectional`). Sad, Picker, Volkonov, 2성+ Larhen,
   3성 Brutile and an Insaner without directional absorbs show none.
@@ -198,7 +206,7 @@ quoting a number.
 | 2 | emberforge | 301–600 | 25–29 | 10–14 | brutile, volkonov |
 | 3 | blightmire | 601–1000 | 20–22 | 15–17 | insaner, larhen |
 | 4 | frostkeep | 1001–1500 | 18–22 | 17–20 | michelle, rampid |
-| 5 | madcrown | 1501–2000 | 15–17 | 19–21 | picker |
+| 5 | madcrown | 1501–2000 | 15–17 | 19–21 | picker, verish |
 | 6 | apex | 2001+ | 14–16 | 20–22 | rakaeli |
 
 **Modes**
@@ -233,7 +241,7 @@ legendary.
   game information).
 
 ## 5. Deploy and verify (the routine)
-1. **Gates:** `npx tsc --noEmit -p .`, `npx vitest run` (392 tests at last count) and
+1. **Gates:** `npx tsc --noEmit -p .`, `npx vitest run` (403 tests at last count) and
    `npm run build`.
    - Never leave temporary `tests/*.tmp.test.ts` or `zz-*` files; `node:` imports break tsc.
    - Vitest hides `console.log` from passing tests, so simulations write results to files.

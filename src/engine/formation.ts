@@ -91,6 +91,8 @@ const DEFAULT_SLOT: Record<CharacterId, { row: number; col: number }> = {
   larhen: { row: 1, col: 7 },
   // Volkonov supports from behind (his melody reaches every ally wherever they stand).
   volkonov: { row: 0, col: 2 },
+  // Verish pierces forward and sideways: the last free square, back rank.
+  verish: { row: 0, col: 7 },
 };
 
 /** Normalise a squad: distinct known characters, exactly PIECES_PER_SIDE of them (starters fill in). */

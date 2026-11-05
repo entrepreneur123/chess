@@ -101,6 +101,8 @@ const CORE_FX: Record<CoreCharacterId, { primary: string; secondary: string; cor
   rampid: { primary: '#7FE6FF', secondary: '#D8F7FF', core: '#FFFFFF' },
   larhen: { primary: '#C9D6F0', secondary: '#3B3F8C', core: '#F4F8FF' },
   volkonov: { primary: '#FF6FC2', secondary: '#F2C14E', core: '#FFE9F6' },
+  // Verish: electric teal boot energy over hot-pink hair.
+  verish: { primary: '#2EF2D0', secondary: '#FF5FA8', core: '#E8FFFA' },
 };
 
 /**
@@ -171,6 +173,7 @@ export const CHARACTER_RARITY = {
   rampid: 'common',
   larhen: 'common',
   volkonov: 'common',
+  verish: 'rare',
 } satisfies Record<CoreCharacterId, Rarity> & { rakaeli: Rarity } as Record<CharacterId, Rarity>;
 
 /**

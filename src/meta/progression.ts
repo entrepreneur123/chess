@@ -76,7 +76,7 @@ export interface ArenaDef {
  * Brutile unlocks in arena 2, Insaner in arena 3, Michelle in arena 4, Picker in arena 5 and
  * Rakaeli in arena 6. The three later commons arrive early, each in a fitting arena: Volkonov the
  * bard in arena 2, Larhen the assassin in arena 3 (the poison swamp) and Rampid the ice boy in
- * arena 4 (the frost keep).
+ * arena 4 (the frost keep). Verish, the second rare piercer, joins Picker in arena 5.
  */
 export const ARENA_DEFS: readonly ArenaDef[] = [
   {
@@ -101,7 +101,7 @@ export const ARENA_DEFS: readonly ArenaDef[] = [
   },
   {
     id: 'madcrown', index: 5, name: '광기의 왕좌', tagline: '부서진 사슬과 보랏빛 불꽃',
-    min: 1501, max: 2000, win: [15, 17], loss: [19, 21], unlocks: ['picker'],
+    min: 1501, max: 2000, win: [15, 17], loss: [19, 21], unlocks: ['picker', 'verish'],
     accent: '#c06cff', card: './arenas/madcrown/card.webp', backdrop: './arenas/madcrown/bg.webp', bgm: 'madcrown',
   },
   {

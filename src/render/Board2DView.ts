@@ -81,7 +81,7 @@ import {
   faceUrl,
   hexToRgb,
   hopSquares,
-  hopTiming,
+  hopTimingFor,
   indexHighlights,
   isHopMove,
   mixRgb,
@@ -1070,7 +1070,7 @@ export class Board2DView implements IBoardView {
   private animateHop(mover: Piece, move: Move, piecesAfter: Piece[]): Promise<void> {
     const now = performance.now();
     this.lastCapture = null;
-    const timing = hopTiming(this.reducedMotion);
+    const timing = hopTimingFor(mover.character, this.reducedMotion);
     const squares = hopSquares(move);
     const ids = move.captureIds ?? (move.captureId ? [move.captureId] : []);
     const victims: Hop2D['victims'] = [];

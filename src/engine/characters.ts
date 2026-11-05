@@ -1,7 +1,7 @@
 import type { AbsorbedAbility, CharacterDef, CharacterId, Level, SkillKind } from './types';
 
 /** Every character, in roster order. */
-export const CHARACTER_IDS: CharacterId[] = ['sad', 'marki', 'walk', 'insaner', 'brutile', 'michelle', 'picker', 'rakaeli', 'rampid', 'larhen', 'volkonov'];
+export const CHARACTER_IDS: CharacterId[] = ['sad', 'marki', 'walk', 'insaner', 'brutile', 'michelle', 'picker', 'rakaeli', 'rampid', 'larhen', 'volkonov', 'verish'];
 /** The default squad of a new profile (every character is available to everyone). */
 export const STARTER_IDS: CharacterId[] = ['sad', 'marki', 'walk'];
 
@@ -132,9 +132,9 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     descKo: [
       '좌우 1칸 + 앞쪽 좌우 대각선 1칸 점프 (뛰어넘기 가능)',
       '좌우 1칸 + 대각선 4방향 1칸 점프 (H자 · 뛰어넘기 가능)',
-      '좌우 최대 5칸 + 대각선 4방향 1칸 점프 (H자 · 뛰어넘기 가능)',
+      '좌우 1칸 + 양옆 줄 앞뒤 2칸까지 점프 (세로로 긴 H자 · 뛰어넘기 가능)',
     ],
-    value: [3, 4, 6],
+    value: [3, 4, 5],
   },
   volkonov: {
     id: 'volkonov',
@@ -153,6 +153,22 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
       ],
     },
   },
+  verish: {
+    id: 'verish',
+    nameKo: '베리쉬',
+    nameEn: 'Verish',
+    rarity: 'rare',
+    descKo: [
+      '좌우 1칸 + 앞으로 최대 2칸 관통 슬라이드 · 끝줄에서 방향 전환',
+      '좌우 최대 2칸 + 앞으로 최대 2칸 관통 슬라이드 · 끝줄에서 방향 전환',
+      '좌우 최대 2칸 + 앞으로 최대 3칸 + 뒤로 1칸 관통 슬라이드 · 끝줄에서 방향 전환',
+    ],
+    value: [3, 5, 7],
+    trait: {
+      nameKo: '관통',
+      descKo: '슬라이드하며 지나는 칸의 적을 모두 잡고 뚫고 지나갑니다. 아군 · 불모지 · 벽 · 자기장에는 막혀 그 앞에서 멈춥니다',
+    },
+  },
 };
 
 /** Numeric character codes used by the fast move generator. */
@@ -167,6 +183,7 @@ export const CH_RAKAELI = 7;
 export const CH_RAMPID = 8;
 export const CH_LARHEN = 9;
 export const CH_VOLKONOV = 10;
+export const CH_VERISH = 11;
 export const CHAR_CODE: Record<CharacterId, number> = {
   sad: CH_SAD,
   marki: CH_MARKI,
@@ -179,8 +196,9 @@ export const CHAR_CODE: Record<CharacterId, number> = {
   rampid: CH_RAMPID,
   larhen: CH_LARHEN,
   volkonov: CH_VOLKONOV,
+  verish: CH_VERISH,
 };
-export const CHAR_BY_CODE: CharacterId[] = ['sad', 'marki', 'walk', 'insaner', 'brutile', 'michelle', 'picker', 'rakaeli', 'rampid', 'larhen', 'volkonov'];
+export const CHAR_BY_CODE: CharacterId[] = ['sad', 'marki', 'walk', 'insaner', 'brutile', 'michelle', 'picker', 'rakaeli', 'rampid', 'larhen', 'volkonov', 'verish'];
 /**
  * Number of character codes. An absorb mask holds, per code, the highest absorbed level of that
  * character's pattern in ABSORB_FIELD_BITS bits (see `absorbMerge`), so it needs N_CHARS * 2 bits:
@@ -204,12 +222,21 @@ export function keepsDirection(ch: number): boolean {
 /** Rampid's three-pronged "claw" (forward, forward-left, forward-right) slide range by level. */
 export const RAMPID_RANGE = [0, 1, 2, 3];
 /**
- * Larhen jumps (nothing in between blocks him) by level: left / right up to LARHEN_SIDE squares
- * (every square on the way is a landing square), the two forward diagonals 1, and from
- * LARHEN_BACK_LEVEL the two backward diagonals 1 too (an "H" around him).
+ * Larhen jumps (nothing in between blocks him) by level: left / right 1, the two forward diagonals
+ * 1, from LARHEN_BACK_LEVEL the two backward diagonals 1 too (an "H" around him), and from
+ * LARHEN_TALL_LEVEL the H grows one row taller at both ends: the squares two rows ahead and two
+ * rows behind in the columns beside him (owner, 2026-11-05).
  */
-export const LARHEN_SIDE = [0, 1, 1, 5];
 export const LARHEN_BACK_LEVEL = 2;
+export const LARHEN_TALL_LEVEL = 3;
+/**
+ * Verish's pierce slides by level (index = level): sideways (left and right) and forward up to
+ * these lengths, and straight back from VERISH_BACK_LEVEL. Every enemy on the way is captured and
+ * passed; her own pieces, wasteland, the board edge and the storm stop her before the square.
+ */
+export const VERISH_SIDE = [0, 1, 2, 2];
+export const VERISH_FORWARD = [0, 2, 2, 3];
+export const VERISH_BACK = [0, 0, 0, 1];
 /** Volkonov's orthogonal slide range by level (index = level). */
 export const VOLKONOV_RANGE = [0, 1, 2, 2];
 

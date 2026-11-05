@@ -94,22 +94,20 @@ describe('라르헨 Larhen: H-shaped jumper', () => {
     expect(reach(s2, 'p0-larhen')).toEqual(keys([[4, 3], [4, 5], [5, 3], [5, 5], [3, 3], [3, 5]]));
   });
 
-  it('3성: left / right up to 5 each way plus all four diagonals, clipped at the edge', () => {
+  it('3성: the H one row taller at both ends (the side columns two rows ahead and behind too)', () => {
     const s = makeState([[0, 'larhen', 3, 4, 4], ...far]);
-    const exp: [number, number][] = [[5, 3], [5, 5], [3, 3], [3, 5]];
-    for (let c = 0; c < BOARD_SIZE; c++) if (c !== 4) exp.push([4, c]);
-    expect(reach(s, 'p0-larhen')).toEqual(keys(exp));
+    expect(reach(s, 'p0-larhen')).toEqual(keys([[4, 3], [4, 5], [5, 3], [5, 5], [3, 3], [3, 5], [6, 3], [6, 5], [2, 3], [2, 5]]));
+    // Clipped at the edge (from row 1 the two-behind squares are off the board).
+    const e = makeState([[0, 'larhen', 3, 1, 0], ...far]);
+    expect(reach(e, 'p0-larhen')).toEqual(keys([[1, 1], [2, 1], [0, 1], [3, 1]]));
   });
 
   it('jumps over pieces, captures on landing, never lands on his own piece', () => {
-    const s = makeState([[0, 'larhen', 3, 4, 4], [0, 'sad', 1, 4, 5], [1, 'marki', 1, 4, 7], [1, 'sad', 1, 4, 2], [1, 'walk', 1, 9, 9]]);
+    const s = makeState([[0, 'larhen', 3, 4, 4], [0, 'sad', 1, 5, 5], [1, 'marki', 1, 6, 5], [1, 'walk', 1, 9, 9]]);
     const r = reach(s, 'p0-larhen');
-    expect(r).not.toContain('4,5');
-    expect(r).toContain('4,6');
-    expect(r).toContain('4,7');
-    expect(r).toContain('4,8');
-    expect(r).toContain('4,1'); // past the enemy Sad on (4,2)
-    expect(getLegalMoves(s, 'p0-larhen').find((m) => m.to.c === 7 && m.to.r === 4)?.captureId).toBe('p1-marki');
+    expect(r).not.toContain('5,5'); // his own Sad
+    expect(r).toContain('6,5'); // over the Sad, onto the Marki
+    expect(getLegalMoves(s, 'p0-larhen').find((m) => m.to.r === 6 && m.to.c === 5)?.captureId).toBe('p1-marki');
   });
 
   it('1성 is directional (forward diagonals), 2성 / 3성 are not; player 1 jumps toward row 0', () => {
@@ -120,13 +118,12 @@ describe('라르헨 Larhen: H-shaped jumper', () => {
   });
 
   it('skips storm squares', () => {
-    const s = makeState([[0, 'larhen', 3, 4, 4], ...far.map((f) => [f[0], f[1], f[2], 4, 5] as typeof f)], 0, { storm: 2, stormIn: 4 });
+    const s = makeState([[0, 'larhen', 3, 4, 2], ...far.map((f) => [f[0], f[1], f[2], 4, 5] as typeof f)], 0, { storm: 2, stormIn: 4 });
     const r = reach(s, 'p0-larhen');
-    expect(r).not.toContain('4,0');
     expect(r).not.toContain('4,1');
-    expect(r).not.toContain('4,8');
-    expect(r).toContain('4,2');
-    expect(r).toContain('4,7');
+    expect(r).not.toContain('6,1');
+    expect(r).toContain('4,3');
+    expect(r).toContain('6,3');
   });
 });
 
@@ -169,14 +166,14 @@ describe('absorb masks: every pattern contains the lower grades of the same char
 });
 
 describe('Insaner absorbs the new commons (movement only)', () => {
-  it('takes Larhen 3성\'s whole-row jump and Volkonov\'s cross, never the melody or a buff', () => {
+  it('takes Larhen 3성\'s tall-H jump, never the melody or a buff', () => {
     let s = makeState([[0, 'insaner', 2, 4, 4], [1, 'larhen', 3, 4, 6], [1, 'volkonov', 2, 9, 9]], 0, { ply: 20 });
     s = withPiece(s, 'p1-larhen', { buff: 3 });
     s = play(s, 'p0-insaner', 4, 6);
     const ins = s.pieces.find((p) => p.id === 'p0-insaner')!;
     expect(ins.absorbed).toEqual([{ character: 'larhen', level: 3 }]);
     expect(ins.buff).toBeUndefined();
-    expect(reach(s, 'p0-insaner')).toContain('4,1'); // Larhen 3성 sideways jump of 5
+    expect(reach(s, 'p0-insaner')).toContain('6,7'); // Larhen 3성: two rows ahead, one column over
   });
 });
 
@@ -407,10 +404,10 @@ describe('UI models for the new commons', () => {
     expect(skillReadiness(alone, 'p0-volkonov')).toEqual({ state: 'sealed', label: '아군 없음' });
   });
 
-  it('the movement diagram measures both middle columns: Larhen 3성 shows all 14 squares', async () => {
+  it('the movement diagram shows the whole pattern (Larhen 3성 tall H: 10 squares, 5 rows)', async () => {
     const { movementReach, movementSpan } = await import('../src/ui/components/piece');
-    expect(movementReach('larhen', 3)).toBe(14);
-    expect(movementSpan('larhen', 3).cols).toBe(11);
+    expect(movementReach('larhen', 3)).toBe(10);
+    expect(movementSpan('larhen', 3)).toEqual({ rows: 5, cols: 3 });
     expect(movementReach('larhen', 1)).toBe(4);
     expect(movementReach('rampid', 3)).toBe(9);
     expect(movementReach('volkonov', 2)).toBe(8);

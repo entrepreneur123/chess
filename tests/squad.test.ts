@@ -18,7 +18,7 @@ describe('squads', () => {
 });
 
 const LEGENDS = ['insaner', 'brutile'];
-const ALL = ['sad', 'marki', 'walk', 'insaner', 'brutile', 'michelle', 'picker', 'rakaeli', 'rampid', 'larhen', 'volkonov'];
+const ALL = ['sad', 'marki', 'walk', 'insaner', 'brutile', 'michelle', 'picker', 'rakaeli', 'rampid', 'larhen', 'volkonov', 'verish'];
 
 describe('dungeon opponents (fixed tiers)', () => {
   const N = 400;
@@ -109,7 +109,7 @@ describe('dungeon opponents (fixed tiers)', () => {
         ids.forEach((id) => seen.add(id));
       }
       expect([...seen].sort()).toEqual([...ALL].sort());
-      // P(second legendary) = 1 - C(9,2)/C(10,2) = 1/5 (11 characters, 2 of them legendary).
+      // P(second legendary) = 1 - C(10,2)/C(11,2) = 2/11 (12 characters, 2 of them legendary).
       expect(two).toBeGreaterThan(N * 0.12);
       expect(two).toBeLessThan(N * 0.3);
     });

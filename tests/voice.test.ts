@@ -22,7 +22,7 @@ const fsP: Promise<Fs> = import(/* @vite-ignore */ nodeFs);
 const audioDir = decodeURIComponent(new URL('../public/audio/', import.meta.url).pathname);
 const join = (...parts: string[]) => parts.join('/').replace(/\/+/g, '/');
 // Typed as a full record so adding a CharacterId without listing it here fails to compile.
-const CHAR_SET: Record<CharacterId, true> = { sad: true, marki: true, walk: true, insaner: true, brutile: true, michelle: true, picker: true, rakaeli: true, rampid: true, larhen: true, volkonov: true };
+const CHAR_SET: Record<CharacterId, true> = { sad: true, marki: true, walk: true, insaner: true, brutile: true, michelle: true, picker: true, rakaeli: true, rampid: true, larhen: true, volkonov: true, verish: true };
 const ROSTER = Object.keys(CHAR_SET) as CharacterId[];
 /**
  * Characters the generated manifest already voices. A character ships before its recordings (the
@@ -41,6 +41,8 @@ const ORIGINAL: CharacterId[] = ['sad', 'marki', 'walk', 'insaner', 'brutile'];
 const TRAIT_EVENTS: Partial<Record<CharacterId, CharAudioEvent[]>> = {
   michelle: ['trap-set', 'trap-sprung'],
   picker: ['hop-multi'],
+  // Verish pierces through every enemy in her lane: one move can capture several, like Picker's hop.
+  verish: ['hop-multi'],
 };
 /**
  * Second-form events and their owner: Rakaeli's transformed form (타천) has its own lines for every
@@ -117,8 +119,10 @@ describe('character audio manifest', () => {
     // A character without a skill has no skill line, and trait events belong to their owner only.
     for (const c of CHARS) {
       if (!hasSkillAudio(c)) expect(VOICE_CLIPS[c].skill, `${c}.skill`).toBeUndefined();
+      // An event two characters share (hop-multi: picker and verish) is allowed for both.
+      const own = new Set([...(TRAIT_EVENTS[c] ?? []), ...(FORM_VOICE_EVENTS[c] ?? [])]);
       for (const [owner, evs] of Object.entries({ ...TRAIT_EVENTS, ...FORM_VOICE_EVENTS }))
-        if (owner !== c) for (const e of evs ?? []) expect(VOICE_CLIPS[c][e], `${c}.${e}`).toBeUndefined();
+        if (owner !== c) for (const e of evs ?? []) if (!own.has(e)) expect(VOICE_CLIPS[c][e], `${c}.${e}`).toBeUndefined();
     }
     // The transformed form captures often too: two variants.
     if (CHARS.includes('rakaeli')) expect(VOICE_CLIPS.rakaeli['awake-capture']?.length ?? 0).toBeGreaterThanOrEqual(2);

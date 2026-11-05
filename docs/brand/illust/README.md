@@ -726,3 +726,164 @@ The other candidates used variations of the same text:
   frost or moon light, with no crosses or sigils.
 - **Rights:** the images were generated through the project's Magic Patterns account. Usage rights
   follow Magic Patterns' terms for generated images.
+
+## 베리쉬 Verish (`verish`): 2026-11-05
+
+### Generation
+- **Tool, OS and date:**
+  - The same pipeline as Rampid, Larhen and Volkonov: the Magic Patterns `generate_image` MCP
+    tool, in the "GRID CLASH illustrations" OS (`mES6an8gxzuquCRoUq5cVM`).
+  - Aspect ratio `3:4`, which returned 896x1200. 2026-11-05. No paid third-party tool was used.
+- **References:**
+  - Grade-1 candidates `a`–`e` were generated from a text prompt that describes the house style
+    above.
+  - `b2` and `b3` are edits of `b` (with `b` as the reference image) that only shift the boot
+    energy from cyan (median hue 178°) to a greener electric teal, so it stays clear of Rampid's
+    ice cyan (192°–199°). `b2` came back at 157°, `b3` at 168°.
+  - Grades 2 and 3 were each generated with the chosen grade-1 image (`b2`) as the reference
+    image, so one face crop box serves all three grades.
+- **Candidates:** 13 requests and 13 images, with no provider blocks. All raw images are kept as
+  448x600 JPEGs in `generated/` (quality 78, progressive, matching the earlier raws).
+
+| Character | lv1 | lv2 | lv3 | Total images |
+| --- | --- | --- | --- | --- |
+| verish | 7 (`a`–`e` from text, plus `b2` and `b3`, edits of `b`) | 3 | 3 | 13 |
+
+- **Post-processing:**
+  - The picks are re-encoded at the original 896x1200 and PIL quality 88 as
+    `illust-verish-lv{n}.jpg` (baseline, 4:2:0, the same as the earlier masters). There is no
+    retouching.
+  - `process-illust.py` gained one `FACE` entry. It was then run, and all 96 existing files under
+    `public/chars/` (72 script outputs plus the 24 `unit-*` files) came out byte-identical (MD5
+    compared before and after).
+- **Review:** each candidate was checked in contact sheets next to the existing characters at
+  the same sizes:
+  - card art at 180x240;
+  - a hand-card crop at 100x180 (`object-fit: cover`, `50% 18%`);
+  - face crops at 160px, cut with the same code as `process-illust.py`;
+  - circular tokens at 40px and 80px, with both blue (`#3b8bff`) and red (`#ff4655`) rims.
+  Hands and boots were checked at full resolution for every pick.
+
+### Picks and reasons
+| File | Candidate | Why |
+| --- | --- | --- |
+| `illust-verish-lv1.jpg` | `verish-lv1-b2` | The clearest "sliding on special boots" read of the set: she rides low in a surfer's crouch on two glowing teal energy skids under chunky armoured power boots, with a long teal trail behind her. The biggest, best-lit face of the set, with a fierce grin and teal eyes. The long messy hot pink hair fills the 40px token. Both gloved hands and both boots are clean. `b2` is `b` with the energy recoloured from cyan to teal-green. |
+| `illust-verish-lv2.jpg` | `verish-lv2-c` | Heavy armoured speed greaves up to the knees (dark steel, hot pink stripes, teal seams) on long teal energy blade skids, an armoured vest with teal trim and armoured gloves, while the black hoodie and shorts from lv1 stay. Teal-lit goggles pushed up in her hair show in the face crop, so lv2 differs from lv1 even at 40px. |
+| `illust-verish-lv3.jpg` | `verish-lv3-a` | The strongest aura of the set: teal-green energy flames around her whole body and hair, a hot pink and teal sonic-boom ring behind her, pink speed streaks, glowing teal eyes. Gold filigree on the jacket, chest plate and knee greaves. She keeps the goggles and greaves of lv2. At 40px the token is pink hair on a teal glow, clearly brighter than lv1 and lv2. |
+
+### Rejected candidates
+- **verish-lv1:**
+  - `a`: clean and readable, but the pose reads as a running lunge rather than a slide.
+  - `b`: the composition that was picked, but the energy is cyan (hue 178°), close to Rampid.
+  - `b3`: the same recolour as `b2`, but it stayed bluer (168°).
+  - `c`: a true knee-drift slide, but the plain white top and grey sneaker-like boots look less
+    "power boots", and one boot sole fills the lower right.
+  - `d`: twin tails read well, but she already wears a shoulder guard (less room for lv2), and
+    the pose is a stride.
+  - `e`: a white jacket over a dark scarf is too close to Rampid's white jacket and navy scarf.
+- **verish-lv2:**
+  - `a`: good armoured greaves and a shoulder guard, but nothing changes in the face crop, so at
+    40px it matches lv1.
+  - `b`: the white and teal racing jacket turns the token white-green and drifts from the lv1
+    costume.
+- **verish-lv3:**
+  - `b`: a strong white sonic-boom ring, but the hoodie is replaced by a full bodysuit, which
+    reads as a different costume.
+  - `c`: a glow outline and swirl only; the aura is weaker and the boots are smaller than lv2's
+    greaves, so it reads as a step down.
+
+### Face crop boxes
+These are fractions of (w, h). One box serves all three grades.
+
+- `verish: (0.23, 0.08, 0.61, 0.38)`: the whole hot pink hair mass, the grin and the teal top
+  under the hoodie collar. At lv2 and lv3 the goggles show; at lv3 so does the teal aura.
+
+At 40px verish reads as hot pink hair over a dark hoodie, with teal goggles from lv2 and a teal
+glow at lv3. It does not collide with an existing token. The nearest hue is rakaeli-awake's
+crimson-magenta aura (median 344° against Verish's hair at 337°), but rakaeli-awake has black
+hair, horns and a ring halo. brutile's lv3 aura is also green, but yellower (139° against 161°),
+and brutile has dark hair under a green hat.
+
+### Prompts (winners)
+**verish-lv1-b** (text only, aspect 3:4; the composition of the pick):
+> Vertical character splash illustration for a dark fantasy mobile game. Angular shounen anime
+> cel-shaded style: thick clean black ink outlines, flat hard-edged cel shading, crisp angular
+> cloth folds. Background: deep navy blue-black with a soft vignette, sharp diagonal speed-slash
+> streaks in electric cyan and crimson from the upper corners, floating glass shards and sparks.
+> One dynamic figure fills the frame from head to boots, head in the upper third near the centre,
+> face fully lit. Subject: original character Verish, a speedy agile young woman about twenty,
+> alone. Messy shoulder-length vivid hot pink hair streaming behind her, bright teal-green eyes, a
+> focused determined grin. Outfit: sporty streetwear meets light armour, a short charcoal hooded
+> jacket worn with the hood down, open over a teal sports top, a light dark-grey chest plate,
+> fingerless gloves, black cargo shorts over dark leggings. On her feet: heavy high-tech power
+> boots with thick armoured soles and glowing electric teal energy skids. Pose: riding a fast low
+> slide like a surfer on her boots, knees deeply bent, body crouched and leaning into the motion,
+> arms spread for balance, gliding diagonally toward the viewer, a bright electric teal energy
+> trail streaking behind her boots across the ground with teal sparks. Hot pink and electric teal
+> palette. No text, no letters, no logo, no watermark.
+
+**verish-lv1-b2** (reference: verish-lv1-b):
+> Recreate the reference image exactly: the same pink-haired girl, the same face and grin, the
+> same hair, the same black hooded jacket, teal top, grey chest plate, fingerless gloves, black
+> shorts and leggings, the same surfing slide pose, the same framing and the same angular anime
+> cel-shaded style with thick black outlines on the dark navy background with diagonal slash
+> streaks and floating shards. The only change: the glowing energy skids under her power boots,
+> the energy trail behind her and the sparks are now a greener electric teal (a vivid teal-green,
+> like emerald turned to neon) instead of pale cyan, and the diagonal speed-slash streaks at the
+> upper left are also electric teal-green and crimson. Her hair stays hot pink. No text, no
+> letters, no logo, no watermark.
+
+**verish-lv2-c** (reference: verish-lv1-b2):
+> Same character, same pose, same composition and same art style as the reference image. This is
+> her upgraded 2-star form. Keep her face and grin, her long messy hot pink hair, her black hooded
+> jacket and her black shorts and leggings. Upgrades: her power boots become heavy armoured speed
+> greaves covering her shins and knees, dark steel with pink accent stripes and glowing electric
+> teal-green seams, with a long glowing teal-green energy blade skid under each sole; a fitted
+> armoured vest with teal-green trim over her teal top; a pair of slim teal-lit goggles pushed up
+> on her forehead in her pink hair; armoured fingerless gloves. More teal-green sparks fly off the
+> skids. No text, no letters, no logo, no watermark.
+
+**verish-lv3-a** (reference: verish-lv1-b2):
+> Redraw the slider girl from the reference image as her legendary 3-star version. Keep the same
+> girl, the same face and grin, the same long messy hot pink hair, the same surfing slide pose and
+> framing, and the same angular shounen anime cel-shaded style with thick black outlines on the
+> dark navy background. Legendary upgrades: a strong speed aura, bright electric teal-green energy
+> flaring around her whole body like wind-torn flames with hot pink highlights, a huge cone-shaped
+> sonic-boom shockwave ring of teal and pink light bursting behind her, long blazing teal-green
+> and pink speed trails streaking back from her boots; her eyes glow teal; slim teal-lit goggles
+> pushed up on her forehead in her pink hair; heavy armoured power greaves up to the knees, dark
+> steel with ornate gold legendary trim and glowing teal-green seams, riding on long glowing
+> teal-green energy blades; a black armoured racing jacket with gold trim and teal piping over an
+> armoured chest plate with gold edges; armoured gloves. The navy background stays dark so she
+> glows against it. No text, no letters, no logo, no watermark.
+
+The other candidates used variations of the same text:
+- lv1: other hair styles, outfits and slide poses (a high ponytail and a cropped track jacket, a
+  pink bob and a knee drift, twin tails and a bomber jacket, a white track jacket and a gaiter);
+- lv2 and lv3: other upgrade lists on the same reference.
+
+### Source URLs (Magic Patterns CDN)
+- verish-lv1-b: <https://cdn.magicpatterns.com/patterns/generated-images/6e86457e-90b2-4f4b-8ba8-81a309942848.jpg>
+- verish-lv1-b2: <https://cdn.magicpatterns.com/patterns/generated-images/45a713c1-239c-4ac9-866f-75eb33b9e16f.jpg>
+- verish-lv2-c: <https://cdn.magicpatterns.com/patterns/generated-images/5ef6c5c2-5910-4e63-9ee5-4b672eecce4a.jpg>
+- verish-lv3-a: <https://cdn.magicpatterns.com/patterns/generated-images/3f9364d8-5e45-4949-a59e-1b9b3153f05a.jpg>
+
+### Notes for review
+- **Hues:** median hues of the saturated pixels, measured on the masters: Verish's energy is 157°
+  at lv1 and 161° at lv3, Rampid's ice is 192°–199°, brutile's lv3 aura is 139°.
+- **Small-size escalation:** lv1 to lv2 shows at 40px through the goggles; lv3 through the teal
+  glow. At card size the greaves and the gold trim carry the change.
+- **lv3 details:** the trousers turn dark teal and the diagonal slash streaks give way to the
+  aura and the sonic-boom ring. Gloves, hair, face and pose stay the same.
+- **IP check (a visual judgement by the art director, not a legal clearance):**
+  - Pink-haired speedsters and rocket or skate boots are common genre tropes.
+  - She has no hoverboard, no wheels and no blue hedgehog-style motifs; her skids are energy
+    blades under armoured boots.
+  - She differs from Jinx (*Arcane*/*League of Legends*: blue braids), Vi (pink undercut,
+    gauntlets) and Tracer (*Overwatch*: short brown hair, chronal accelerator, orange goggles).
+  - I found no single known character with this combination of long messy hot pink hair, a black
+    hoodie and teal energy skid boots.
+- **Religious iconography:** none in the picks. The lv3 ring is a sonic-boom shockwave, with no
+  crosses or sigils.
+- **Rights:** the images were generated through the project's Magic Patterns account. Usage rights
+  follow Magic Patterns' terms for generated images.

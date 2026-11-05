@@ -14,7 +14,7 @@ import { h } from '../dom';
 export const RARITY_LABEL: Record<Rarity, string> = { common: '일반', rare: '희귀', epic: '영웅', legendary: '전설' };
 
 /** Character concept titles shown with the illustrations (UI copy only). */
-export const CONCEPT: Record<CharacterId, string> = { sad: '성기사', marki: '황소 전사', walk: '방패병', insaner: '꼬마 악마', brutile: '초록 마녀', michelle: '인형 소녀', picker: '사막의 카우보이', rakaeli: '타락 천사', rampid: '얼음 소년', larhen: '쌍단검 암살자', volkonov: '음유시인' };
+export const CONCEPT: Record<CharacterId, string> = { sad: '성기사', marki: '황소 전사', walk: '방패병', insaner: '꼬마 악마', brutile: '초록 마녀', michelle: '인형 소녀', picker: '사막의 카우보이', rakaeli: '타락 천사', rampid: '얼음 소년', larhen: '쌍단검 암살자', volkonov: '음유시인', verish: '관통 질주자' };
 
 /**
  * Neutral head-and-shoulders silhouette shown in place of an illustration that failed to load

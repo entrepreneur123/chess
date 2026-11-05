@@ -217,20 +217,40 @@ export function fastImmobile(b: FastBoard): boolean {
   return true;
 }
 
+
 /**
- * Material (base values) of the enemies piece `pi` would hop onto on the way to `to` (Picker's
- * hop-through; 0 for every other move). Only valid for a legal move, before it is made.
+ * Straight path of a move of two or more squares (orthogonal or diagonal): its length and the
+ * square-index step, or 0 when the move is not such a path. Picker's hops are diagonal, Verish's
+ * pierces orthogonal; both capture every enemy strictly between `from` and `to`.
  */
-export function fastHopGain(b: FastBoard, pi: number, to: number): number {
-  if (!canHop(b.ch[pi])) return 0;
-  const from = b.sq[pi];
+function pathOf(from: number, to: number): number {
   const fr = (from / BOARD_SIZE) | 0;
   const tr = (to / BOARD_SIZE) | 0;
   const dr = tr - fr;
   const dc = to - tr * BOARD_SIZE - (from - fr * BOARD_SIZE);
-  const len = dr < 0 ? -dr : dr;
-  if (len < 2 || len !== (dc < 0 ? -dc : dc)) return 0;
-  const step = (dr > 0 ? BOARD_SIZE : -BOARD_SIZE) + (dc > 0 ? 1 : -1);
+  const ar = dr < 0 ? -dr : dr;
+  const ac = dc < 0 ? -dc : dc;
+  if (!(ar === 0 || ac === 0 || ar === ac)) return 0;
+  const len = ar > ac ? ar : ac;
+  return len >= 2 ? len : 0;
+}
+function stepOf(from: number, to: number): number {
+  const fr = (from / BOARD_SIZE) | 0;
+  const tr = (to / BOARD_SIZE) | 0;
+  const dc = to - tr * BOARD_SIZE - (from - fr * BOARD_SIZE);
+  return (tr > fr ? BOARD_SIZE : tr < fr ? -BOARD_SIZE : 0) + (dc > 0 ? 1 : dc < 0 ? -1 : 0);
+}
+
+/**
+ * Material (base values) of the enemies piece `pi` would pass on the way to `to` (Picker's
+ * hop-through, Verish's pierce; 0 for every other move). Only valid for a legal move, before it is made.
+ */
+export function fastHopGain(b: FastBoard, pi: number, to: number): number {
+  if (!canHop(b.ch[pi])) return 0;
+  const from = b.sq[pi];
+  const len = pathOf(from, to);
+  if (len === 0) return 0;
+  const step = stepOf(from, to);
   const own = b.owner[pi];
   let gain = 0;
   for (let k = 1, s = from + step; k < len; k++, s += step) {
@@ -353,17 +373,13 @@ export function fastMake(b: FastBoard, mv: number): number {
   const from = b.sq[pi];
   const own = b.owner[pi];
   const h = b.hist;
-  // Picker's hop-through (a real Picker only): every enemy between `from` and `to` is captured first.
+  // Picker's hop-through / Verish's pierce (the real ones only): every enemy between `from` and `to` is captured first.
   let gain = 0;
   let hopN = 0;
   if (canHop(b.ch[pi])) {
-    const fr = (from / BOARD_SIZE) | 0;
-    const tr = (to / BOARD_SIZE) | 0;
-    const dr = tr - fr;
-    const dc = to - tr * BOARD_SIZE - (from - fr * BOARD_SIZE);
-    const len = dr < 0 ? -dr : dr;
-    if (len >= 2 && len === (dc < 0 ? -dc : dc)) {
-      const step = (dr > 0 ? BOARD_SIZE : -BOARD_SIZE) + (dc > 0 ? 1 : -1);
+    const len = pathOf(from, to);
+    if (len > 0) {
+      const step = stepOf(from, to);
       for (let k = 1, s = from + step; k < len; k++, s += step) {
         const o = b.occ[s];
         if (o < 0 || b.owner[o] === own) continue;
@@ -593,10 +609,8 @@ export function fastMoveToMove(b: FastBoard, mv: number): Move {
   if (cap >= 0) m.captureId = b.ids[cap];
   if (fastHopGain(b, pi, to) > 0) {
     const from = b.sq[pi];
-    const fr = (from / BOARD_SIZE) | 0;
-    const tr = (to / BOARD_SIZE) | 0;
-    const len = Math.abs(tr - fr);
-    const step = (tr > fr ? BOARD_SIZE : -BOARD_SIZE) + ((to % BOARD_SIZE) > (from % BOARD_SIZE) ? 1 : -1);
+    const len = pathOf(from, to);
+    const step = stepOf(from, to);
     const on: string[] = [];
     for (let k = 1, s = from + step; k < len; k++, s += step) {
       const o = b.occ[s];

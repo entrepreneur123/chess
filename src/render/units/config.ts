@@ -65,7 +65,7 @@ export interface CharacterLook {
   levels: Record<Level, LevelLook>;
 }
 
-const BASE_LOOKS: Record<Exclude<CharacterId, 'michelle' | 'picker' | 'rakaeli' | 'rampid' | 'larhen' | 'volkonov'>, CharacterLook> = {
+const BASE_LOOKS: Record<Exclude<CharacterId, 'michelle' | 'picker' | 'rakaeli' | 'rampid' | 'larhen' | 'volkonov' | 'verish'>, CharacterLook> = {
   // Holy paladin: Lv1 squire (dented steel over gambeson) -> Lv2 silver-blue knight with gold trim ->
   // Lv3 white-gold holy champion with a radiant greatsword.
   sad: {
@@ -277,6 +277,7 @@ export const LOOKS = {
   rampid: BASE_LOOKS.sad,
   larhen: BASE_LOOKS.sad,
   volkonov: BASE_LOOKS.sad,
+  verish: BASE_LOOKS.sad,
 } as Record<CharacterId, CharacterLook>;
 
 /** Clip used for each logical action (walk, picker and rakaeli jump, the others run). */
@@ -292,6 +293,7 @@ export const MOVE_CLIP = {
   rampid: 'run',
   larhen: 'jump',
   volkonov: 'run',
+  verish: 'run',
 } satisfies Record<Exclude<CharacterId, 'rakaeli'>, ClipName> & { rakaeli: ClipName } as Record<CharacterId, ClipName>;
 
 /**

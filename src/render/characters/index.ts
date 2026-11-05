@@ -42,6 +42,7 @@ export const CHARACTER_MODEL_HEIGHT = {
   rampid: 0.9,
   larhen: 1.0,
   volkonov: 1.0,
+  verish: 0.95,
 } satisfies Record<CoreCharacterId, number> & { rakaeli: number } as Record<CharacterId, number>;
 
 /** Uniform scale applied to each builder's output so that all units read at a similar size. */
@@ -57,6 +58,7 @@ const BODY_SCALE = {
   rampid: 0.88,
   larhen: 0.92,
   volkonov: 0.92,
+  verish: 0.9,
 } satisfies Record<CoreCharacterId, number> & { rakaeli: number } as Record<CharacterId, number>;
 
 /** Head-centre height per character (used by the 'head' marker). */
@@ -72,6 +74,7 @@ const HEAD_POS = {
   rampid: [0, 0.79, 0],
   larhen: [0, 0.79, 0],
   volkonov: [0, 0.79, 0],
+  verish: [0, 0.79, 0],
 } satisfies Record<CoreCharacterId, [number, number, number]> & { rakaeli: [number, number, number] } as Record<CharacterId, [number, number, number]>;
 
 const BUILDERS = {
@@ -89,6 +92,7 @@ const BUILDERS = {
   rampid: buildSad,
   larhen: buildSad,
   volkonov: buildSad,
+  verish: buildSad,
 } satisfies Record<CoreCharacterId, Builder> & { rakaeli: Builder } as Record<CharacterId, Builder>;
 
 /** Builds a THREE.Group ~1.0 unit tall (feet at y=0, facing +z). See file header for conventions. */

@@ -59,7 +59,7 @@ describe('migration v3 -> v4 (-> v5)', () => {
     const storage: KeyValueStorage = { getItem: () => saved, setItem: (_k, v) => void (saved = v) };
     const p = loadProfile(storage);
     expect(p.version).toBe(PROFILE_VERSION);
-    expect(p.owned).toEqual({ sad: 1, marki: 1, walk: 1, insaner: 0, brutile: 0, michelle: 0, picker: 0, rakaeli: 0, rampid: 0, larhen: 0, volkonov: 0 });
+    expect(p.owned).toEqual({ sad: 1, marki: 1, walk: 1, insaner: 0, brutile: 0, michelle: 0, picker: 0, rakaeli: 0, rampid: 0, larhen: 0, volkonov: 0, verish: 0 });
     expect(Object.values(p.grades).every((g) => g === 1)).toBe(true);
     expect(Object.keys(p.grades)).toHaveLength(CHARACTER_IDS.length);
     expect([p.tokens, p.essence, p.rating, p.bestRating]).toEqual([0, 0, 0, 0]);
@@ -112,8 +112,8 @@ describe('v4 sanitizing', () => {
       dungeon: { lastClaimDay: 'yesterday' },
       dungeonLevel: 'nightmare',
     });
-    expect(p.owned).toEqual({ sad: 1, marki: 1, walk: 2, insaner: 3, brutile: 0, michelle: 0, picker: 0, rakaeli: 0, rampid: 0, larhen: 0, volkonov: 0 });
-    expect(p.grades).toEqual({ sad: 1, marki: 1, walk: 2, insaner: 2, brutile: 1, michelle: 1, picker: 1, rakaeli: 1, rampid: 1, larhen: 1, volkonov: 1 });
+    expect(p.owned).toEqual({ sad: 1, marki: 1, walk: 2, insaner: 3, brutile: 0, michelle: 0, picker: 0, rakaeli: 0, rampid: 0, larhen: 0, volkonov: 0, verish: 0 });
+    expect(p.grades).toEqual({ sad: 1, marki: 1, walk: 2, insaner: 2, brutile: 1, michelle: 1, picker: 1, rakaeli: 1, rampid: 1, larhen: 1, volkonov: 1, verish: 1 });
     expect([p.tokens, p.essence, p.rating, p.bestRating]).toEqual([0, 12, 0, 0]);
     expect(p.dungeon.lastClaimDay).toBeNull();
     expect(p.dungeonLevel).toBe('easy');
@@ -127,12 +127,12 @@ describe('v4 sanitizing', () => {
 });
 
 describe('essence shop', () => {
-  it('pool per arena is cumulative: starters, + Brutile / Volkonov (2), + Insaner / Larhen (3), + Michelle / Rampid (4), + Picker (5), + Rakaeli (6)', () => {
+  it('pool per arena is cumulative: starters, + Brutile / Volkonov (2), + Insaner / Larhen (3), + Michelle / Rampid (4), + Picker / Verish (5), + Rakaeli (6)', () => {
     const starters = ['sad', 'marki', 'walk'];
     const a2 = [...starters, 'brutile', 'volkonov'];
     const a3 = [...a2, 'insaner', 'larhen'];
     const a4 = [...a3, 'michelle', 'rampid'];
-    expect(ARENA_DEFS.map((a) => shopPool(a))).toEqual([starters, a2, a3, a4, [...a4, 'picker'], [...a4, 'picker', 'rakaeli']]);
+    expect(ARENA_DEFS.map((a) => shopPool(a))).toEqual([starters, a2, a3, a4, [...a4, 'picker', 'verish'], [...a4, 'picker', 'verish', 'rakaeli']]);
   });
 
   it('Michelle opens in arena 4 for 30 essence and Picker in arena 5 for 50; upgrades follow rarity', () => {

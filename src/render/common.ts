@@ -253,13 +253,16 @@ export function slideDuration(m: Move): number {
  */
 export function isHopMove(p: Pick<Piece, 'character'>, m: Move): boolean {
   const dr = Math.abs(m.to.r - m.from.r);
-  if (dr === 0 || dr !== Math.abs(m.to.c - m.from.c)) return false;
+  const dc = Math.abs(m.to.c - m.from.c);
+  // Verish's pierce: every move is a straight lane, played square by square (flat, fast).
+  if (p.character === 'verish') return dr + dc > 0 && (dr === 0 || dc === 0);
+  if (dr === 0 || dr !== dc) return false;
   return p.character === 'picker';
 }
 
-/** The squares a hop lands on in order, `to` included (`from` excluded). */
+/** The squares a hop (or a pierce) passes in order, `to` included (`from` excluded). */
 export function hopSquares(m: Move): Pos[] {
-  const n = Math.abs(m.to.r - m.from.r);
+  const n = Math.max(Math.abs(m.to.r - m.from.r), Math.abs(m.to.c - m.from.c));
   const sr = Math.sign(m.to.r - m.from.r);
   const sc = Math.sign(m.to.c - m.from.c);
   const out: Pos[] = [];
@@ -270,6 +273,15 @@ export function hopSquares(m: Move): Pos[] {
 /** Hop timing (ms per hop, landing squash) and arc height (cells); flattened for reduced motion. */
 export function hopTiming(reduced: boolean): { stepMs: number; landMs: number; arc: number } {
   return reduced ? { stepMs: 90, landMs: 40, arc: 0.06 } : { stepMs: 230, landMs: 120, arc: 0.42 };
+}
+
+/**
+ * Per-character step timing of a square-by-square move: Picker's hops arc (`hopTiming`); Verish's
+ * pierce is a flat, fast power-boot slide (no arc, no landing squash between squares).
+ */
+export function hopTimingFor(character: string, reduced: boolean): { stepMs: number; landMs: number; arc: number } {
+  if (character === 'verish') return reduced ? { stepMs: 70, landMs: 0, arc: 0 } : { stepMs: 115, landMs: 0, arc: 0 };
+  return hopTiming(reduced);
 }
 
 /** Shallow equality check used to decide whether a piece's visual must be rebuilt. */

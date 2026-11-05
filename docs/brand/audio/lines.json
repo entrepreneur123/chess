@@ -906,6 +906,89 @@
           "say": "브라보. 완벽한 무대였어."
         }
       ]
+    },
+    "verish": {
+      "concept": "A pink-haired young woman of about twenty who slides on high-tech power boots and pierces straight through every enemy in her lane: a bright, quick, confident young female voice, playful and sporty, crisp and energetic; not a child, not sultry.",
+      "gender": "female",
+      "voice": "PLACEHOLDER",
+      "clone": {
+        "ref": "refs/verish-ref.flac",
+        "text": "PLACEHOLDER",
+        "style": "PLACEHOLDER",
+        "_from": "PLACEHOLDER"
+      },
+      "f0_target": 0,
+      "lines": [
+        {
+          "id": "select-1",
+          "event": "select",
+          "text": "준비 완료! 부츠 충전 끝!",
+          "style": "Upbeat and confident, ready to go.",
+          "say": "준비 완료. 부츠 충전 끝."
+        },
+        {
+          "id": "select-2",
+          "event": "select",
+          "text": "속도라면 자신 있어!",
+          "style": "Cheeky, confident grin.",
+          "say": "속도라면 자신 있어."
+        },
+        {
+          "id": "move-1",
+          "event": "move",
+          "text": "따라올 수 있으면 와 봐!",
+          "style": "Teasing, quick and playful.",
+          "say": "따라올 수 있으면 와 봐."
+        },
+        {
+          "id": "move-2",
+          "event": "move",
+          "text": "부스트 온!",
+          "style": "Quick and bright, sporty.",
+          "say": "부스트 온."
+        },
+        {
+          "id": "capture-1",
+          "event": "capture",
+          "text": "그대로 뚫고 간다!",
+          "style": "Energetic, determined, punchy.",
+          "say": "그대로 뚫고 간다."
+        },
+        {
+          "id": "capture-2",
+          "event": "capture",
+          "text": "길 막지 마!",
+          "style": "Cocky, quick taunt.",
+          "say": "길 막지 마."
+        },
+        {
+          "id": "capture-3",
+          "event": "capture",
+          "text": "한 방에 관통!",
+          "style": "Crisp and triumphant.",
+          "say": "한 방에 관통."
+        },
+        {
+          "id": "hop-multi-1",
+          "event": "hop-multi",
+          "text": "한 줄로 전부 꿰뚫었어!",
+          "style": "Thrilled and triumphant, laughing a little.",
+          "say": "한 줄로 전부 꿰뚫었어."
+        },
+        {
+          "id": "death-1",
+          "event": "death",
+          "text": "앗… 부츠가… 방전됐어…",
+          "style": "Startled, then fading and deflated."
+        },
+        {
+          "id": "victory-1",
+          "event": "victory",
+          "text": "골인! 오늘도 내가 일등이야!",
+          "style": "Delighted, sporty triumph.",
+          "say": "골인. 오늘도 내가 일등이야."
+        }
+      ]
     }
   }
 }

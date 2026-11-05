@@ -123,14 +123,17 @@ export function capturedIds(move: Pick<Move, 'captureId' | 'captureIds'>): strin
 }
 
 /**
- * Squares strictly between `from` and `to` of a diagonal hop (Picker's hop-through), or [] when the
- * move is not a diagonal of two or more squares.
+ * Squares strictly between `from` and `to` of a straight move of two or more squares (orthogonal
+ * or diagonal: Picker's hop-through, Verish's pierce), or [] otherwise.
  */
 export function hopPath(from: Pos, to: Pos): Pos[] {
   const dr = to.r - from.r;
   const dc = to.c - from.c;
-  const n = Math.abs(dr);
-  if (n < 2 || n !== Math.abs(dc)) return [];
+  const ar = Math.abs(dr);
+  const ac = Math.abs(dc);
+  if (!(ar === 0 || ac === 0 || ar === ac)) return [];
+  const n = Math.max(ar, ac);
+  if (n < 2) return [];
   const sr = Math.sign(dr);
   const sc = Math.sign(dc);
   const out: Pos[] = [];
@@ -139,9 +142,9 @@ export function hopPath(from: Pos, to: Pos): Pos[] {
 }
 
 /**
- * Enemies a piece of `owner` hops onto on the way from `from` to `to`. Only a hop-through (a real
- * Picker: an absorbed Picker pattern slides) can reach a diagonal square past pieces, so for any
- * LEGAL move of a Picker these are exactly the pieces it captures before landing.
+ * Enemies a piece of `owner` passes on the way from `from` to `to`. Only a hop-through or a pierce
+ * (a real Picker or Verish: absorbed patterns slide) can reach a square past pieces, so for any
+ * LEGAL move of theirs these are exactly the pieces captured before landing.
  */
 function hopVictims(pieces: Piece[], occ: Int8Array, owner: PlayerId, from: Pos, to: Pos): string[] {
   const out: string[] = [];
@@ -170,6 +173,7 @@ function patternIsDirectional(character: CharacterId, level: number): boolean {
     case 'michelle':
     case 'rakaeli':
     case 'rampid':
+    case 'verish':
       return true;
     case 'brutile':
       return level < 3;

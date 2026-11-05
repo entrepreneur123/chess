@@ -1071,6 +1071,104 @@ def volkonov_skill() -> np.ndarray:
     return finish(room(y, 1.0, 0.2, 0.015, 6500, 0.25))
 
 
+# --- verish (pink-haired speedster on high-tech power boots; pierces through her whole lane) -------
+
+def servo_whine(dur: float, f0: float, f1: float, wobble: float = 0.012) -> np.ndarray:
+    """The power boots spinning up (or down): a clean gliding tone with a few harmonics and a fast
+    small vibrato (a motor whine, not a musical note), swelling in and out."""
+    t = t_axis(dur)
+    f = np.geomspace(f0, f1, len(t)) * (1 + wobble * np.sin(2 * np.pi * 34 * t))
+    ph = 2 * np.pi * np.cumsum(f) / SR
+    y = np.sin(ph) + 0.35 * np.sin(2 * ph + 0.4) + 0.18 * np.sin(3.01 * ph + 1.1)
+    y *= bell_env(len(t), 0.6, 1.2)
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def electric_arc(dur: float, base: float = 118.0, density: float = 700, flicker: float = 0.6) -> np.ndarray:
+    """An electric arc / static discharge: a jittery, high-passed buzz that flickers on and off,
+    over fine crackle. Every edge is soft (a few ms), since hard clicks make AAC overshoot."""
+    n = int(dur * SR)
+    t = t_axis(dur)
+    jit = 1 + 0.06 * lowpass(rng.standard_normal(n), 60) / 0.05
+    ph = 2 * np.pi * np.cumsum(base * jit) / SR
+    buzz = highpass(signal.sawtooth(ph) + 0.5 * signal.square(2.01 * ph), 900)
+    gate = lowpass((rng.uniform(0, 1, n) < 0.004).astype(float), 25)  # random flicker bursts
+    gate = (1 - flicker) + flicker * np.clip(gate / (np.max(gate) + 1e-9) * 2.5, 0, 1)
+    fizz = bandpass(crackle(dur, density, 0.0012), 2500, 9000)
+    y = (buzz / (np.max(np.abs(buzz)) + 1e-9) * gate + 0.7 * fizz) * bell_env(n, 0.25, 1.1)
+    y *= np.clip(t / 0.003, 0, 1)
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def boot_slide(dur: float, f0: float = 2400, f1: float = 700, grit: float = 1.0) -> np.ndarray:
+    """A hard power-boot skid on stone: a mid-band friction sweep falling in pitch as she brakes,
+    roughened by a grainy amplitude texture (rubber and metal plates catching the floor)."""
+    n = int(dur * SR)
+    fr = swept_band(noise(dur), f0, f1, 2.2)
+    g = lowpass(np.abs(crackle(dur, 1400, 0.002)), 120)
+    grain = 0.4 + 0.6 * np.clip(g / (np.percentile(g, 95) + 1e-9), 0, 1.3)
+    body = swept_band(noise(dur), f0 * 0.3, f1 * 0.35, 1.2)
+    y = (fr / (np.max(np.abs(fr)) + 1e-9) * grain * grit
+         + 0.5 * body / (np.max(np.abs(body)) + 1e-9)) * bell_env(n, 0.18, 1.3)
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def pierce_hit(pitch: float = 1.0, body: float = 1.0) -> np.ndarray:
+    """One straight-through pierce: a very fast rising zip, a soft-edged (1.5 ms) snap, a short
+    falling 'thwip' tone and a tight, punchy low body. ~0.3 s; the impact sits at 0.08 s."""
+    y = silence(0.32)
+    zip_ = swept_band(noise(0.09), 1400 * pitch, 7200 * pitch, 3.0) * bell_env(int(0.09 * SR), 0.88, 1.6)
+    place(y, zip_ / (np.max(np.abs(zip_)) + 1e-9), 0.0, 0.55)
+    snap = bandpass(noise(0.03), 1800, 7500) * env_ad(int(0.03 * SR), 0.0015, 0.006)
+    place(y, snap / (np.max(np.abs(snap)) + 1e-9), 0.08, 0.45)
+    thwip = sweep_tone(0.16, 2100 * pitch, 1150 * pitch, "tri", 0.045, 0.0015)
+    place(y, lowpass(thwip, 7000), 0.08, 0.32)
+    # The low body: thud()'s 0.5 ms click made the AAC encoder overshoot on this dense hit, so the
+    # body and its knock both get a 2 ms attack.
+    knock = lowpass(noise(0.22), 900) * env_ad(int(0.22 * SR), 0.002, 0.018)
+    bod = sweep_tone(0.22, 210 * pitch, 72, "sine", 0.045, 0.002) + 0.45 * knock / (np.max(np.abs(knock)) + 1e-9)
+    place(y, lowpass(bod, 1400) / (np.max(np.abs(bod)) + 1e-9), 0.079, 0.8 * body)
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def verish_select() -> np.ndarray:
+    # The boots power up: a quick servo spin-up whine, two small electric ticks, a bright
+    # two-note "ready" ping (a rising fifth: cheeky and upbeat).
+    y = mix(0.75, (servo_whine(0.32, 380, 1500), 0, 0.5), (electric_arc(0.22, 140, 900, 0.7), 0.12, 0.22),
+            (chime(1568.0, 0.3, 0.08), 0.27, 0.28), (chime(2349.3, 0.35, 0.1), 0.34, 0.24))
+    return finish(room(y, 0.4, 0.1, 0.008, 7000, 0.15))
+
+
+def verish_move() -> np.ndarray:
+    # A fast power-boot slide: a thrust whoosh launching her forward, the boots' whine dropping
+    # as she glides, and an electric skid (friction sweep + arc crackle) as she brakes.
+    thrust = whoosh(0.3, 500, 3200, 1.6, 0.35)
+    y = mix(0.75, (thrust, 0, 0.6), (servo_whine(0.4, 1300, 620, 0.02), 0.02, 0.36),
+            (boot_slide(0.32, 2600, 800), 0.2, 0.6), (electric_arc(0.3, 112, 800, 0.6), 0.22, 0.3))
+    return finish(room(y, 0.35, 0.09, 0.006, 7000, 0.12))
+
+
+def verish_capture() -> np.ndarray:
+    # A punchy pierce: she shoots through the target (one strong hit), a burst of static where the
+    # boots strike and the rush of air closing behind her.
+    y = mix(0.9, (whoosh(0.16, 700, 3600, 1.8, 0.8), 0, 0.18), (pierce_hit(1.0, 1.35), 0.06, 1.0),
+            (electric_arc(0.45, 125, 1200, 0.5), 0.2, 0.24), (whoosh(0.4, 3000, 600, 1.5, 0.2), 0.18, 0.2))
+    return finish(saturate(room(y, 0.5, 0.11, 0.008, 7000, 0.25), 1.4))
+
+
+def verish_hop_multi() -> np.ndarray:
+    # Straight through the whole lane: three pierces in a rapid burst (each a little higher), one
+    # rising zip under them, a crackling electric discharge and a short skid to a stop.
+    y = silence(1.15)
+    place(y, whoosh(0.4, 600, 4200, 1.8, 0.75), 0.0, 0.25)
+    for k, (p, g) in enumerate(((1.0, 0.85), (1.12, 0.85), (1.26, 1.0))):
+        place(y, pierce_hit(p, 0.9), 0.05 + 0.105 * k, g)
+    place(y, electric_arc(0.45, 130, 1400, 0.55), 0.3, 0.32)
+    place(y, boot_slide(0.26, 2400, 900, 0.9), 0.5, 0.35)
+    place(y, chime(2637.0, 0.3, 0.09), 0.42, 0.12)
+    return finish(saturate(room(y, 0.5, 0.11, 0.008, 7000, 0.2), 1.3))
+
+
 SFX = {
     "sad-select": sad_select,
     "sad-move": sad_move,
@@ -1128,6 +1226,12 @@ SFX = {
     "volkonov-move": volkonov_move,
     "volkonov-capture": volkonov_capture,
     "volkonov-skill": volkonov_skill,
+    # 2026-11-05, appended after volkonov for the same reason. Verish has no active skill; her trait
+    # (piercing straight through every enemy in her lane) has a hop-multi effect for multi-captures.
+    "verish-select": verish_select,
+    "verish-move": verish_move,
+    "verish-capture": verish_capture,
+    "verish-hop-multi": verish_hop_multi,
 }
 
 

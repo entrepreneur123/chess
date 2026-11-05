@@ -10,10 +10,9 @@ import {
   CH_RAKAELI,
   CH_RAMPID,
   CH_SAD,
+  CH_VERISH,
   CH_VOLKONOV,
   INSANER_RANGE,
-  LARHEN_BACK_LEVEL,
-  LARHEN_SIDE,
   MARKI_RANGE,
   MARKI_SIDE_LEVEL,
   MICHELLE_FORWARD_RANGE,
@@ -27,6 +26,9 @@ import {
   RAKAELI_HALF,
   RAMPID_RANGE,
   SAD_RANGE,
+  VERISH_BACK,
+  VERISH_FORWARD,
+  VERISH_SIDE,
   VOLKONOV_RANGE,
   WALK_HALF,
   absorbedLevel,
@@ -251,10 +253,21 @@ function jumpBlock(
 }
 
 /**
- * Larhen: jump onto any of (0, ±1 .. ±side), the two forward diagonals and, with `back`, the two
- * backward diagonals. Nothing in between blocks him; off-board and storm squares are skipped; he
- * may land on an enemy (capture), never on his own piece. Wasteland and doll traps act on the
- * landing square (handled by the caller, like Walk and Rakaeli).
+ * Larhen's jumps as (forward rows, columns) offsets by level: left / right 1 and the forward
+ * diagonals; 2성 adds the backward diagonals (an H); 3성 makes the H a row taller at both ends.
+ * Rows are multiplied by the piece's direction.
+ */
+const LARHEN_OFFSETS: number[][] = [
+  [],
+  [0, -1, 0, 1, 1, -1, 1, 1],
+  [0, -1, 0, 1, 1, -1, 1, 1, -1, -1, -1, 1],
+  [0, -1, 0, 1, 1, -1, 1, 1, -1, -1, -1, 1, 2, -1, 2, 1, -2, -1, -2, 1],
+];
+
+/**
+ * Larhen: jump onto any square of his level's offsets. Nothing in between blocks him; off-board
+ * and storm squares are skipped; he may land on an enemy (capture), never on his own piece.
+ * Wasteland and doll traps act on the landing square (handled by the caller, like Walk).
  */
 function jumpLarhen(
   occ: ArrayLike<number>,
@@ -263,38 +276,114 @@ function jumpLarhen(
   r: number,
   c: number,
   dir: number,
-  side: number,
-  back: boolean,
+  level: number,
   out: { [i: number]: number },
   n: number,
   includeAllies: boolean,
   storm: number,
 ): number {
-  const land = (nr: number, nc: number): void => {
-    if (nr < 0 || nr >= BOARD_SIZE || nc < 0 || nc >= BOARD_SIZE || inStorm(nr, nc, storm)) return;
+  const offs = LARHEN_OFFSETS[level];
+  for (let k = 0; k < offs.length; k += 2) {
+    const nr = r + offs[k] * dir;
+    const nc = c + offs[k + 1];
+    if (nr < 0 || nr >= BOARD_SIZE || nc < 0 || nc >= BOARD_SIZE || inStorm(nr, nc, storm)) continue;
     const s = nr * BOARD_SIZE + nc;
     const o = occ[s];
     if (o < 0 || includeAllies || owners[o] !== owner) out[n++] = s;
-  };
-  for (let k = 1; k <= side; k++) {
-    land(r, c - k);
-    land(r, c + k);
-  }
-  land(r + dir, c - 1);
-  land(r + dir, c + 1);
-  if (back) {
-    land(r - dir, c - 1);
-    land(r - dir, c + 1);
   }
   return n;
 }
 
 /**
- * True when a piece of character code `ch` hops through (Picker's trait "콩콩"). Only a real Picker
- * does: an Insaner that absorbed Picker's pattern gets its diagonal RANGE as a plain slide.
+ * Verish's pierce ("관통"): a slide up to `L` squares along (dr, dc) that captures and passes every
+ * enemy on the way (each enemy square is a landing square too). Her own piece, wasteland, the board
+ * edge and the storm stop her BEFORE the square (with `includeAllies` the ally square is still
+ * emitted, as for every other slide). Doll traps do not stop her: only the landing square catches.
+ */
+function pierce(
+  occ: ArrayLike<number>,
+  owners: ArrayLike<number>,
+  owner: number,
+  r: number,
+  c: number,
+  dr: number,
+  dc: number,
+  L: number,
+  out: { [i: number]: number },
+  n: number,
+  includeAllies: boolean,
+  storm: number,
+  waste: ArrayLike<number> | null,
+): number {
+  let nr = r;
+  let nc = c;
+  for (let k = 0; k < L; k++) {
+    nr += dr;
+    nc += dc;
+    if (nr < 0 || nr >= BOARD_SIZE || nc < 0 || nc >= BOARD_SIZE || inStorm(nr, nc, storm)) break;
+    const s = nr * BOARD_SIZE + nc;
+    if (waste !== null && waste[s]) break;
+    const o = occ[s];
+    if (o >= 0 && owners[o] === owner) {
+      if (includeAllies) out[n++] = s;
+      break;
+    }
+    out[n++] = s;
+  }
+  return n;
+}
+
+/**
+ * Verish's four lanes by level: forward, left, right and (3성) straight back, each with its length.
+ * `piercing`: the real Verish (pierce); false = a plain slide (an Insaner's absorbed range).
+ */
+function genVerish(
+  occ: ArrayLike<number>,
+  owners: ArrayLike<number>,
+  owner: number,
+  r: number,
+  c: number,
+  dir: number,
+  level: number,
+  out: { [i: number]: number },
+  n: number,
+  includeAllies: boolean,
+  storm: number,
+  waste: ArrayLike<number> | null,
+  piercing: boolean,
+): number {
+  const fwd = VERISH_FORWARD[level];
+  const side = VERISH_SIDE[level];
+  const back = VERISH_BACK[level];
+  if (piercing) {
+    n = pierce(occ, owners, owner, r, c, dir, 0, fwd, out, n, includeAllies, storm, waste);
+    n = pierce(occ, owners, owner, r, c, 0, -1, side, out, n, includeAllies, storm, waste);
+    n = pierce(occ, owners, owner, r, c, 0, 1, side, out, n, includeAllies, storm, waste);
+    if (back > 0) n = pierce(occ, owners, owner, r, c, -dir, 0, back, out, n, includeAllies, storm, waste);
+    return n;
+  }
+  const d = dir > 0 ? 0 : 1;
+  n = slide(occ, owners, owner, r, c, VERISH_LANE[0][d], fwd, out, n, includeAllies, storm, waste);
+  n = slide(occ, owners, owner, r, c, VERISH_LANE[1][d], side, out, n, includeAllies, storm, waste);
+  n = slide(occ, owners, owner, r, c, VERISH_LANE[2][d], side, out, n, includeAllies, storm, waste);
+  if (back > 0) n = slide(occ, owners, owner, r, c, VERISH_LANE[3][d], back, out, n, includeAllies, storm, waste);
+  return n;
+}
+/** Verish's lanes as slide directions, per lane (forward, left, right, back) and direction (+1 / -1). */
+const VERISH_LANE: number[][][] = [
+  [[1, 0], [-1, 0]],
+  [[0, -1], [0, -1]],
+  [[0, 1], [0, 1]],
+  [[-1, 0], [1, 0]],
+];
+
+/**
+ * True when a piece of character code `ch` captures every enemy on the straight path of a move:
+ * Picker's hop-through ("콩콩", diagonals) and Verish's pierce ("관통", her lanes). Only the real
+ * characters do: an Insaner that absorbed their pattern gets the RANGE as a plain slide.
  */
 export function canHop(ch: number): boolean {
-  return ch === CH_PICKER;
+  return ch === CH_PICKER || ch === CH_VERISH;
 }
 
 /** One movement pattern (a character at a level) from square (r, c). */
@@ -332,7 +421,8 @@ function genPattern(
   if (ch === CH_PICKER) return hop(occ, owners, owner, r, c, PICKER_RANGE[level], out, n, includeAllies, storm, waste, traps);
   if (ch === CH_VOLKONOV) return slide(occ, owners, owner, r, c, ORTHO_DIRS, VOLKONOV_RANGE[level], out, n, includeAllies, storm, waste);
   if (ch === CH_RAMPID) return slide(occ, owners, owner, r, c, RAMPID_DIRS[dir], RAMPID_RANGE[level], out, n, includeAllies, storm, waste);
-  if (ch === CH_LARHEN) return jumpLarhen(occ, owners, owner, r, c, dir, LARHEN_SIDE[level], level >= LARHEN_BACK_LEVEL, out, n, includeAllies, storm);
+  if (ch === CH_LARHEN) return jumpLarhen(occ, owners, owner, r, c, dir, level, out, n, includeAllies, storm);
+  if (ch === CH_VERISH) return genVerish(occ, owners, owner, r, c, dir, level, out, n, includeAllies, storm, waste, true);
   if (ch === CH_RAKAELI) {
     const depth = awake ? RAKAELI_AWAKE_DEPTH[level] : RAKAELI_DEPTH[level];
     const half = awake ? RAKAELI_AWAKE_HALF[level] : RAKAELI_HALF[level];
@@ -487,7 +577,9 @@ export function genTargets(
     n =
       ach === CH_PICKER
         ? slide(occ, owners, owner, r, c, DIAG_DIRS, PICKER_RANGE[alvl], out, n, includeAllies, storm, waste)
-        : genPattern(occ, owners, owner, ach, alvl, r, c, out, n, includeAllies, dir, storm, waste, traps, false);
+        : ach === CH_VERISH
+          ? genVerish(occ, owners, owner, r, c, dir, alvl, out, n, includeAllies, storm, waste, false)
+          : genPattern(occ, owners, owner, ach, alvl, r, c, out, n, includeAllies, dir, storm, waste, traps, false);
     n = compactNew(out, from, n);
   }
   if (reach !== null) {

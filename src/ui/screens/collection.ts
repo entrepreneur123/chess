@@ -38,6 +38,7 @@ export const TIER_TITLE: Record<CharacterId, [string, string, string]> = {
   rampid: ['얼음 소년', '서리 질주자', '빙하의 폭풍'],
   larhen: ['그림자 단검', '달밤의 암살자', '은월의 처형자'],
   volkonov: ['떠돌이 음유시인', '궁정 음유시인', '선율의 거장'],
+  verish: ['질주하는 소녀', '강철 부츠의 질주자', '음속의 관통자'],
 };
 
 /** Role and one-line trait per character; `trait3` replaces `trait` on the 3-star card. */
@@ -51,8 +52,9 @@ export const ROLE: Record<CharacterId, { role: string; trait: string; trait3?: s
   picker: { role: '돌파형 사냥꾼', trait: '대각선 콩콩 점프 · 막히지 않고 지나는 적을 모두 잡음 · 상대 함정에서 멈춤' },
   rakaeli: { role: '변신형 점퍼', trait: '앞쪽 블록으로 점프 · 타천하면 2번 이동하는 동안 점프 범위가 크게 넓어짐' },
   rampid: { role: '돌격형 질주자', trait: '앞 · 앞쪽 대각선 세 갈래 발톱으로 직진 · 끝줄에서 방향 전환' },
-  larhen: { role: '도약형 암살자', trait: '사이의 말을 뛰어넘는 H자 점프 · 좌우와 대각선', trait3: '사이의 말을 뛰어넘는 점프 · 좌우 5칸까지 가로 한 줄 + 대각선 4방향' },
+  larhen: { role: '도약형 암살자', trait: '사이의 말을 뛰어넘는 H자 점프 · 좌우와 대각선', trait3: '사이의 말을 뛰어넘는 점프 · 세로로 한 칸 더 긴 H자 (양옆 줄 앞뒤 2칸)' },
   volkonov: { role: '지원형 음유시인', trait: '상하좌우 이동 · 스킬 선율로 아군 전원 상하좌우 이동 +1칸' },
+  verish: { role: '관통형 질주자', trait: '앞 · 좌우로 슬라이드하며 지나는 적을 모두 잡고 뚫고 감 · 아군 · 불모지 · 벽에는 막힘', trait3: '앞 · 좌우 · 뒤로 관통 슬라이드 · 지나는 적을 모두 잡음 · 아군 · 불모지 · 벽에는 막힘' },
 };
 
 /**

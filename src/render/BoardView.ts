@@ -102,7 +102,7 @@ import {
   hexToRgb,
   hopSquares,
   arrowSign,
-  hopTiming,
+  hopTimingFor,
   indexHighlights,
   isHopMove,
   makeRng,
@@ -1764,7 +1764,7 @@ export class BoardView implements IBoardView {
   private animateHop(mover: PieceVisual, move: Move, piecesAfter: Piece[]): Promise<void> {
     const now = performance.now();
     this.lastCapture = null;
-    const timing = hopTiming(this.reducedMotion || !this.idleAnim);
+    const timing = hopTimingFor(mover.piece.character, this.reducedMotion || !this.idleAnim);
     const cells = hopSquares(move);
     const squares = cells.map((p) => new THREE.Vector3(cellX(p.c), 0, cellZ(p.r)));
     const victims: HopVictim[] = [];
@@ -3607,6 +3607,19 @@ export class BoardView implements IBoardView {
         this.sparks.burst(at.x, 0.6, at.z, 10, 2.4, fx.secondary, (seed + 31) % 97);
         if (a.captured) (a.captured.tokenMat.uniforms.uEdge.value as THREE.Color).set(fx.primary);
         flash = 0.4;
+        break;
+      case 'verish':
+        // Power-boot pierce: a teal slash through the victim, a pink ring and streaks flung along the lane.
+        this.strike.slash(at.x - a.dirX * 0.1, 0.7, at.z - a.dirZ * 0.1, 2.1, fx.primary, fx.core, a.dirX < 0, now);
+        this.strike.ground(0, GROUND_MODE.ring, at.x, gy, at.z, 1.05, fx.secondary, fx.core, 460, now);
+        for (let i = 0; i < 8; i++) {
+          const spread = (i - 3.5) * 0.35;
+          this.sparks.streak(at.x, 0.3, at.z, a.dirX * 2.6 + a.dirZ * spread, 0.9 + (i % 2) * 0.5, a.dirZ * 2.6 - a.dirX * spread, 0.4, fx.primary, 0.4);
+        }
+        this.sparks.burst(at.x, 0.6, at.z, 12 + mp.level * 3, 3.2, fx.secondary, seed);
+        if (a.captured) (a.captured.tokenMat.uniforms.uEdge.value as THREE.Color).set(fx.primary);
+        shake = this.reducedMotion ? 0.5 : 1.2;
+        flash = 0.35;
         break;
     }
     this.startCaptureFx(at, col, flash, now, shake, shakeMs);

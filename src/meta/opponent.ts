@@ -158,6 +158,8 @@ const PREFERRED_ROWS: Record<CharacterId, number[]> = {
   larhen: [0, 1],
   // Volkonov is support (his melody needs no position): behind.
   volkonov: [0],
+  // Verish pierces forward and sideways: either row.
+  verish: [0, 1],
 };
 /**
  * Columns the bot prefers: away from the two outer columns per side, which the storm swallows

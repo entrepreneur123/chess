@@ -96,7 +96,7 @@ export const BUFF_TURNS = [0, 3, 3, 4] as const;
 export type PlayerId = 0 | 1;
 /** What an active skill does: lay wasteland (Brutile), transform (Rakaeli) or buff allies (Volkonov). */
 export type SkillKind = 'waste' | 'transform' | 'buff';
-export type CharacterId = 'sad' | 'marki' | 'walk' | 'insaner' | 'brutile' | 'michelle' | 'picker' | 'rakaeli' | 'rampid' | 'larhen' | 'volkonov';
+export type CharacterId = 'sad' | 'marki' | 'walk' | 'insaner' | 'brutile' | 'michelle' | 'picker' | 'rakaeli' | 'rampid' | 'larhen' | 'volkonov' | 'verish';
 export type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
 export type Level = 1 | 2 | 3;
 
@@ -187,8 +187,8 @@ export interface Move {
   /** Set on recorded moves: `to` was wasteland, so the mover was destroyed there. */
   wasted?: true;
   /**
-   * Picker's hop-through (a real Picker only, never an Insaner that absorbed his pattern): every
-   * enemy captured by this move in path order (the ones hopped onto on
+   * Picker's hop-through and Verish's pierce (the real characters only, never an Insaner that
+   * absorbed their pattern): every enemy captured by this move in path order (the ones passed on
    * the way, then the one on `to`). Only set when something was captured on the way; `captureId`
    * is then the piece on `to`, or the first piece hopped onto when `to` was empty, so `captureId`
    * stays the "is this a capture" flag for every consumer. See `capturedIds`.

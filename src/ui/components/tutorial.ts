@@ -28,8 +28,9 @@ const SHORT_MOVE: Record<CharacterId, string> = {
   picker: '대각선 콩콩 점프 · 지나는 적 모두 잡기',
   rakaeli: '앞쪽 블록 점프 · 타천하면 범위 확장',
   rampid: '앞쪽 세 갈래 발톱 직진 · 끝줄에서 뒤돌아요',
-  larhen: '좌우·대각선 점프 · 3성은 가로 한 줄',
+  larhen: '좌우·대각선 H자 점프 · 3성은 세로로 긴 H',
   volkonov: '상하좌우 이동 · 선율로 아군 이동 +1',
+  verish: '앞·좌우 관통 슬라이드 · 지나는 적 모두 잡기',
 };
 
 function goalArt(): Child {

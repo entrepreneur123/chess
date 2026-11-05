@@ -17,7 +17,7 @@ import {
 } from '../engine';
 import type { FastBoard } from '../engine';
 import { SKILL_FLAG, fastCanSkill, fastHopGain, fastSkillFits, fastSkillSize } from '../engine/fast';
-import { CHARACTERS, CHAR_BY_CODE, CH_BRUTILE, CH_INSANER, CH_LARHEN, CH_MARKI, CH_MICHELLE, CH_PICKER, CH_RAKAELI, CH_RAMPID, CH_SAD, CH_VOLKONOV, CH_WALK, MARKI_RANGE, MARKI_SIDE_LEVEL, N_CHARS, absorbedLevel } from '../engine/characters';
+import { CHARACTERS, CHAR_BY_CODE, CH_BRUTILE, CH_INSANER, CH_LARHEN, CH_MARKI, CH_MICHELLE, CH_PICKER, CH_RAKAELI, CH_RAMPID, CH_SAD, CH_VERISH, CH_VOLKONOV, CH_WALK, MARKI_RANGE, MARKI_SIDE_LEVEL, N_CHARS, absorbedLevel } from '../engine/characters';
 import { trapBit } from '../engine/board';
 import { BOARD_SIZE, STORM_ROWS_FROM, TRAPS_PER_MICHELLE, stormRows } from '../engine/types';
 
@@ -244,6 +244,10 @@ export function evaluate(b: FastBoard, side: number): number {
       // Forward claw slider: facing the enemy with open files ahead.
       if (!facingEnemy) sc -= v * 0.2;
       sc += centerC * 3 + Math.min(room, 6) * 2;
+    } else if (ch === CH_VERISH) {
+      // Forward piercer: facing the enemy with open lanes ahead and to the sides.
+      if (!facingEnemy) sc -= v * 0.15;
+      sc += centerC * 4 + Math.min(room, 6) * 2;
     } else if (ch === CH_LARHEN) {
       // Sideways jumper (3-star: whole rows): central files and rows keep both wings open.
       if (!facingEnemy && b.lvl[i] === 1) sc -= v * 0.1;

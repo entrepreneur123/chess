@@ -323,6 +323,17 @@ def fx_volkonov(x):
     return hall(y, 1.1, 0.14, predelay=0.022, lp=4800, hp=250)
 
 
+def fx_verish(x):
+    """Speedster on power boots: her own bright young voice (never pitch-shifted), a light touch of
+    body so it is not thin, a little air on top, firm compression for punchy barks and a short,
+    bright, airy space (open track, not a hall)."""
+    y = biquad(x, "hp", 100)
+    y = biquad(y, "lowshelf", 220, 0.6)
+    y = biquad(y, "highshelf", 10000, 1.0)                      # air above the de-essed band
+    y = compress(y, -20, 2.5, attack=0.005, release=0.09)
+    return hall(y, 0.7, 0.1, predelay=0.016, lp=7000, hp=450)
+
+
 RAKAELI_AWAKE_PITCH = 2 ** (-2.0 / 12)  # -2 semitones on the main voice
 RAKAELI_AWAKE_FORMANT = 0.94            # vocal tract ~6 % longer: deeper, not a different person
 
@@ -356,17 +367,17 @@ def fx_rakaeli_awake(x):
 
 FX = {"sad": fx_sad, "marki": fx_marki, "walk": fx_walk, "insaner": fx_insaner, "brutile": fx_brutile,
       "michelle": fx_michelle, "picker": fx_picker, "rakaeli": fx_rakaeli, "rakaeli-awake": fx_rakaeli_awake,
-      "rampid": fx_rampid, "larhen": fx_larhen, "volkonov": fx_volkonov}
+      "rampid": fx_rampid, "larhen": fx_larhen, "volkonov": fx_volkonov, "verish": fx_verish}
 # Brightness target (voice_qa harsh_db) for the adaptive presence cut; ElevenLabs takes measure
 # about -6..-1 dB raw. Humans sit warmer, the witch keeps a little more rasp.
 HARSH_TARGET = {"sad": -9.0, "marki": -11.0, "walk": -10.0, "insaner": -8.0, "brutile": -7.0,
                 "michelle": -9.0, "picker": -10.0, "rakaeli": -9.5, "rakaeli-awake": -11.0,
-                "rampid": -9.0, "larhen": -11.0, "volkonov": -10.0}
+                "rampid": -9.0, "larhen": -11.0, "volkonov": -10.0, "verish": -9.0}
 # De-esser threshold (share of the full-band envelope the >4.5 kHz band may carry before it is turned
 # down). walk's hard affricates ([ch] in 끝이다, [ss] in 쓰러뜨렸다) need a firmer hand.
 DEESS_THR = {"sad": 0.35, "marki": 0.35, "walk": 0.2, "insaner": 0.35, "brutile": 0.3,
              "michelle": 0.3, "picker": 0.3, "rakaeli": 0.3, "rakaeli-awake": 0.28,
-             "rampid": 0.3, "larhen": 0.3, "volkonov": 0.3}
+             "rampid": 0.3, "larhen": 0.3, "volkonov": 0.3, "verish": 0.28}
 
 
 # ------------------------------------------------------------------------------------------------
