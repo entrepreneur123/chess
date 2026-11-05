@@ -993,9 +993,9 @@ export class Board2DView implements IBoardView {
     const captured = move.captureId ? (this.pieces.find((p) => p.id === move.captureId) ?? null) : null;
     const capture = !!move.captureId;
     const wasted = !!move.wasted && !capture;
-    // Rakaeli leaps like Walk.
+    // Rakaeli and Larhen leap like Walk.
     const rk = rakaeliStyle(mover);
-    const jump = ch === 'walk' || rk !== null;
+    const jump = ch === 'walk' || ch === 'larhen' || rk !== null;
     const moveDur = jump ? ANIM.jump : slideDuration(move);
     const dr = move.to.r - move.from.r;
     const dc = move.to.c - move.from.c;

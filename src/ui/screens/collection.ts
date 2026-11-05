@@ -35,6 +35,9 @@ export const TIER_TITLE: Record<CharacterId, [string, string, string]> = {
   michelle: ['인형 소녀', '속삭이는 인형사', '저주 인형의 주인'],
   picker: ['카우보이', '사막의 올가미꾼', '황야의 전설'],
   rakaeli: ['눈가린 천사', '추락한 천사', '타천의 군주'],
+  rampid: ['얼음 소년', '서리 질주자', '빙하의 폭풍'],
+  larhen: ['그림자 단검', '달밤의 암살자', '은월의 처형자'],
+  volkonov: ['떠돌이 음유시인', '궁정 음유시인', '선율의 거장'],
 };
 
 /** Role and one-line trait per character; `trait3` replaces `trait` on the 3-star card. */
@@ -47,6 +50,9 @@ export const ROLE: Record<CharacterId, { role: string; trait: string; trait3?: s
   michelle: { role: '함정형 견제수', trait: '뒤로 물러날 때 인형 함정(한 판 3개) · 밟은 상대는 1턴 속박' },
   picker: { role: '돌파형 사냥꾼', trait: '대각선 콩콩 점프 · 막히지 않고 지나는 적을 모두 잡음 · 상대 함정에서 멈춤' },
   rakaeli: { role: '변신형 점퍼', trait: '앞쪽 블록으로 점프 · 타천하면 2번 이동하는 동안 점프 범위가 크게 넓어짐' },
+  rampid: { role: '돌격형 질주자', trait: '앞 · 앞쪽 대각선 세 갈래 발톱으로 직진 · 끝줄에서 방향 전환' },
+  larhen: { role: '도약형 암살자', trait: '사이의 말을 뛰어넘는 H자 점프 · 좌우와 대각선', trait3: '사이의 말을 뛰어넘는 점프 · 좌우 5칸까지 가로 한 줄 + 대각선 4방향' },
+  volkonov: { role: '지원형 음유시인', trait: '상하좌우 이동 · 스킬 선율로 아군 전원 상하좌우 이동 +1칸' },
 };
 
 /**

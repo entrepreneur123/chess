@@ -16,10 +16,10 @@ music's only third-party material is the MIT-licensed FluidR3_GM SoundFont (see 
   have no separate LICENSE file). The `qwen-tts` 0.1.1 inference package (PyPI) ships the full
   Apache License 2.0 text. Apache-2.0 permits commercial use and places no restriction on
   generated audio.
-- **No real person's voice is used.** The eight references
-  `docs/brand/audio/refs/{sad,marki,walk,insaner,brutile,michelle,picker,rakaeli}-ref.flac` are themselves
-  VoiceDesign outputs (designed from text prompts recorded in `lines.json`; michelle and picker added
-  2026-11-04, rakaeli later the same day). Rakaeli's transformed-form lines are his own cloned takes
+- **No real person's voice is used.** The eleven references
+  `docs/brand/audio/refs/{sad,marki,walk,insaner,brutile,michelle,picker,rakaeli,rampid,larhen,volkonov}-ref.flac`
+  are themselves VoiceDesign outputs (designed from text prompts recorded in `lines.json`; michelle
+  and picker added 2026-11-04, rakaeli later the same day, rampid, larhen and volkonov 2026-11-05). Rakaeli's transformed-form lines are his own cloned takes
   through extra post-processing, not a second voice.
 - **Post-processing** (EQ, de-essing, reverb, WORLD-vocoder layers for marki's growl, insaner's
   demon double, michelle's whispered double and rakaeli's detuned / octave-down transformed-form
@@ -44,11 +44,27 @@ plan under ElevenLabs' terms (free-tier output is non-commercial and needs attri
 library voices (e.g. "Kang", `8G6jifm9f1BhHXadvwOt`) are real voice actors' voices.
 `docs/brand/audio/post_voice.py` already accepts ElevenLabs downloads (`<line-id>_t<k>.mp3`).
 
+## ElevenLabs, second attempt (2026-11-05, nothing shipped)
+
+For rampid, larhen and volkonov the owner's ElevenLabs workspace was tried again through the
+ElevenLabs creative tools (model `eleven_v4`, library voices "taemin" `Ir7oQcBXWiq4oFGROCfj`,
+"Min-jun - Calm and composed" `7ZVPKvVmVZZERLd1Q6BS`, "Deok - Energetic Korean Narrator"
+`wisKdlUQEBMjkKqNAa3c`; flow `yxIytCdHCBxgD03bWuSo`). Most calls were refused ("free generations are
+busy", nothing charged); 6 generations of 5 rampid lines completed, then ElevenLabs disabled free-tier
+access for the account ("unusual activity ... upgrade to a paid subscription"). Those takes were
+kept outside the repository only: they are free-tier output (non-commercial under ElevenLabs'
+terms) in library voices that belong to real voice actors, and a character voiced half by one
+engine and half by another would not match. **No ElevenLabs audio is in this repository.** The three
+characters were voiced with the Qwen3-TTS pipeline above instead.
+
 ## Sound effects (`sfx/*.m4a`)
 
 - Fully synthesized by `docs/brand/audio/gen_sfx.py` (oscillators + seeded noise, numpy/scipy).
   Original work of this project; no samples or third-party sound libraries. This includes the
-  shared `death.m4a` and `waste-death.m4a` (a piece dissolving on brutile's wasteland).
+  shared `death.m4a` and `waste-death.m4a` (a piece dissolving on brutile's wasteland), and the
+  2026-11-05 effects of rampid (ice skate carves, shaved-ice stop, ice shatter, frost tinkle),
+  larhen (dagger draws, blade whooshes, leap) and volkonov (Karplus-Strong plucked lute notes,
+  strums and the 선율 arpeggio swell).
 
 ## Music (`bgm/*.m4a`: the six arena loops and the lobby theme)
 

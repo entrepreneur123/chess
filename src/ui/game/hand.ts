@@ -1,7 +1,8 @@
 /**
  * The in-game "hand": my three piece cards under the board (art, stars, a mini move diagram and
  * the skill readiness of Brutile / Rakaeli; while Rakaeli is transformed his card shows the
- * transformed art, pattern and "타천 · N"; Michelle's doll traps left; a "속박 · 1턴" band while a doll trap holds
+ * transformed art, pattern and "타천 · N"; Michelle's doll traps left; a rose "선율 · N턴" band (and the extra
+ * squares in the move diagram) while Volkonov's melody buffs the piece; a "속박 · 1턴" band while a doll trap holds
  * the piece, which cannot be selected then; a captured piece's card is greyed out; a small chevron chip
  * next to the stars shows a direction-dependent piece's forward direction on screen and flips, with
  * the move diagram, when it turns around at the far edge). Tapping a card selects that
@@ -45,6 +46,8 @@ export interface HandCardModel {
   skill: { state: SkillReadiness; label: string } | null;
   /** Rakaeli's transformed moves left (Piece.awaken; 0 = base form). */
   awaken: number;
+  /** Volkonov's melody: buffed turns left on this piece (Piece.buff; 0 = none). */
+  buff: number;
   /** A doll trap holds the piece: it sits out its next turn and its card cannot be selected. */
   stunned: boolean;
   /** Michelle only: doll traps she can still lay this match (null for everyone else). */
@@ -124,6 +127,8 @@ export function skillReadiness(state: GameState, pieceId: string): HandCardModel
       return { state: 'sealed', label: '봉인' };
     case 'stunned':
       return { state: 'locked', label: '속박' };
+    case 'alone':
+      return { state: 'sealed', label: '아군 없음' };
     default:
       return null;
   }
@@ -142,6 +147,7 @@ export function handModel(slots: readonly FormationSlot[], owner: PlayerId, snap
       skill: p ? skillReadiness(snap.state, pieceId) : null,
       stunned: !!p && isStunned(p),
       awaken: p?.awaken ?? 0,
+      buff: p?.buff ?? 0,
       traps: s.character === 'michelle' && p ? trapsLeft(snap.state, owner) : null,
       arrow: p && isDirectional(p) ? screenArrow(p) : null,
     };
@@ -166,10 +172,10 @@ export function selectFromHand(ctrl: { readonly state: GameState; tapCell(pos: {
 
 const DIAGRAM_BOX = 34;
 
-function diagramFor(character: CharacterId, level: Level, awake = false): HTMLElement {
-  const { rows, cols } = movementSpan(character, level, awake);
+function diagramFor(character: CharacterId, level: Level, awake = false, buff = false): HTMLElement {
+  const { rows, cols } = movementSpan(character, level, awake, buff);
   const cell = Math.max(3, Math.min(6, Math.floor(DIAGRAM_BOX / Math.max(rows, cols))));
-  return movementDiagram(character, level, { cell, awake });
+  return movementDiagram(character, level, { cell, awake, buff });
 }
 
 export interface HandView {
@@ -187,6 +193,9 @@ export function createHand(slots: readonly FormationSlot[], owner: PlayerId, onT
     const trapText = h('span', { class: 'hand-card__trap-text' });
     const trap = s.character === 'michelle' ? h('span', { class: 'hand-card__trap', 'aria-hidden': 'true' }, h('span', { class: 'hand-card__doll' }), trapText) : null;
     const stun = h('span', { class: 'hand-card__stun', 'aria-hidden': 'true', hidden: true }, icon('lock', 12), '속박 · 1턴');
+    // Volkonov's melody on this piece: a rose band with the buffed turns left.
+    const buffText = h('span', { class: 'hand-card__buff-text' });
+    const buff = h('span', { class: 'hand-card__buff', 'aria-hidden': 'true', hidden: true }, icon('music', 12), buffText);
     const art = h('img', { class: 'hand-card__art', src: cardArtUrl(s.character, s.level), alt: '', decoding: 'async', draggable: 'false', onerror: artMissing }) as HTMLImageElement;
     const md = h('span', { class: 'hand-card__md', 'aria-hidden': 'true' }, diagramFor(s.character, s.level));
     const dir = dirChip('hand-card__dir');
@@ -206,6 +215,7 @@ export function createHand(slots: readonly FormationSlot[], owner: PlayerId, onT
       h('span', { class: 'hand-card__shade', 'aria-hidden': 'true' }),
       md,
       stun,
+      buff,
       h(
         'span',
         { class: 'hand-card__foot' },
@@ -216,7 +226,7 @@ export function createHand(slots: readonly FormationSlot[], owner: PlayerId, onT
       ),
       h('span', { class: 'hand-card__ko', 'aria-hidden': 'true' }, icon('close', 16), '격파'),
     );
-    return { el, art, md, dir, skill, skillText, trap, trapText, stun, key: '', awake: false };
+    return { el, art, md, dir, skill, skillText, trap, trapText, stun, buff, buffText, key: '', awake: false, buffed: false };
   });
   const el = h('div', { class: 'hand', role: 'group', 'aria-label': '내 말' }, cards.map((c) => c.el));
   return {
@@ -225,7 +235,7 @@ export function createHand(slots: readonly FormationSlot[], owner: PlayerId, onT
       models.forEach((m, i) => {
         const c = cards[i];
         if (!c) return;
-        const key = `${m.alive}|${m.selected}|${m.skill?.state}|${m.skill?.label}|${m.stunned}|${m.traps}|${m.awaken}|${m.arrow}`;
+        const key = `${m.alive}|${m.selected}|${m.skill?.state}|${m.skill?.label}|${m.stunned}|${m.traps}|${m.awaken}|${m.buff}|${m.arrow}`;
         if (key === c.key) return;
         const first = !c.key;
         c.key = key;
@@ -234,12 +244,17 @@ export function createHand(slots: readonly FormationSlot[], owner: PlayerId, onT
         c.el.classList.toggle('is-dir-down', m.arrow === 'down');
         // Rakaeli's transform swaps the card to the transformed art and pattern (and back).
         const awake = m.alive && m.awaken > 0;
-        if (awake !== c.awake) {
+        const buffed = m.alive && m.buff > 0;
+        if (awake !== c.awake || buffed !== c.buffed) {
+          if (awake !== c.awake) setArtSrc(c.art, cardArtUrl(m.character, m.level, awake));
           c.awake = awake;
+          c.buffed = buffed;
           c.el.classList.toggle('is-awake', awake);
-          setArtSrc(c.art, cardArtUrl(m.character, m.level, awake));
-          replaceChildren(c.md, diagramFor(m.character, m.level, awake));
+          c.el.classList.toggle('is-buffed', buffed);
+          replaceChildren(c.md, diagramFor(m.character, m.level, awake, buffed));
         }
+        c.buff.hidden = !buffed;
+        if (buffed) replaceChildren(c.buffText, `선율 · ${m.buff}턴`);
         c.el.classList.toggle('is-dead', !m.alive);
         c.el.classList.toggle('is-selected', m.selected);
         c.el.classList.toggle('is-stunned', m.stunned);
@@ -260,7 +275,7 @@ export function createHand(slots: readonly FormationSlot[], owner: PlayerId, onT
         const name = CHARACTERS[m.character].nameKo;
         c.el.setAttribute(
           'aria-label',
-          `${name} ${m.level}성${m.alive ? '' : ' · 격파됨'}${m.arrow ? ` · ${arrowLabel(m.arrow)}` : ''}${m.stunned ? ' · 속박 1턴' : ''}${m.traps !== null ? ` · 함정 ${m.traps}개 남음` : ''}${m.skill ? (m.skill.state === 'active' ? ` · 타천 이동 ${m.awaken}번 남음` : ` · 스킬 ${m.skill.label}`) : ''}`,
+          `${name} ${m.level}성${m.alive ? '' : ' · 격파됨'}${m.arrow ? ` · ${arrowLabel(m.arrow)}` : ''}${m.stunned ? ' · 속박 1턴' : ''}${m.buff > 0 ? ` · 선율 ${m.buff}턴 남음` : ''}${m.traps !== null ? ` · 함정 ${m.traps}개 남음` : ''}${m.skill ? (m.skill.state === 'active' ? ` · 타천 이동 ${m.awaken}번 남음` : ` · 스킬 ${m.skill.label}`) : ''}`,
         );
       });
     },

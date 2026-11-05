@@ -67,8 +67,15 @@ export function pickLine(character: CharacterId, kind: CutInKind, awake = false)
 export function cutInEl(spec: CutInSpec): HTMLElement {
   const def = CHARACTERS[spec.character];
   const awake = !!spec.awake && !!def.awakeDescKo;
-  // The transform cut-in names the skill itself ("타천") instead of the generic "스킬" tag.
-  const label = spec.kind === 'capture' ? '격파' : spec.kind === 'chain' ? '연쇄' : awake && def.skill?.kind === 'transform' ? def.skill.nameKo : '스킬';
+  // The transform and melody cut-ins name the skill itself ("타천", "선율") instead of the generic "스킬" tag.
+  const label =
+    spec.kind === 'capture'
+      ? '격파'
+      : spec.kind === 'chain'
+        ? '연쇄'
+        : (awake && def.skill?.kind === 'transform') || (spec.kind === 'skill' && def.skill?.kind === 'buff')
+          ? def.skill!.nameKo
+          : '스킬';
   return h(
     'div',
     {

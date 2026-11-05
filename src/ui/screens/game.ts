@@ -13,10 +13,12 @@ import {
   capturedIds,
   createGame,
   AWAKEN_TURNS,
+  BUFF_TURNS,
   getLegalMoves,
   getPieceById,
   getTargetsForPiece,
   isAwake,
+  isBuffed,
   isDirectional,
   isStunned,
   josa,
@@ -46,6 +48,7 @@ import { useMatchBackdrop } from '../backdrops';
 import { duck, playArenaMusic } from '../musicBridge';
 import { isPowerSave, watchPowerSave } from '../powerSave';
 import { resultPanel } from '../game/resultPanel';
+import { createBuffBadges, playMelodyFx } from '../game/melodyFx';
 import { coinFlipFirst, randInt, defaultRng } from '../../meta/rng';
 import { installBoardDrag, type BoardDrag } from '../components/boardDrag';
 import { confetti } from '../components/celebrate';
@@ -292,6 +295,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   let prevPhase: Phase | null = null;
   let prevSel: string | null = null;
   let lastTickSec = -1;
+  /** Volkonov's buff badges over the board (created on mount). */
+  let buffBadges: ReturnType<typeof createBuffBadges> | null = null;
   /** Redraw the HUD clock now (set once the match runs; see the paced loop below). */
   let pokeClock: () => void = () => {};
   let stormKey = '';
@@ -445,6 +450,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     used: '이번 판에 이미 사용',
     active: '타천 중',
     storm: '자기장 이후 사용 불가',
+    alone: '함께할 아군이 없어요',
     stunned: '속박 · 다음 턴에 사용 가능',
     ended: '',
   };
@@ -570,11 +576,31 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     }
   };
 
-  /** Squares a piece would reach once transformed (the confirm preview). */
+  /**
+   * The confirm preview: the squares a Rakaeli would reach once transformed, or for Volkonov's
+   * melody the squares his allies would gain (their buffed reach minus their reach now).
+   */
   const transformedReach = (s: GameState, pieceId: string): Move[] => {
     const p = getPieceById(s, pieceId);
-    return p ? getTargetsForPiece(s, { ...p, awaken: AWAKEN_TURNS }) : [];
+    if (!p) return [];
+    if (skillKindOf(p.character) !== 'buff') return getTargetsForPiece(s, { ...p, awaken: AWAKEN_TURNS });
+    const out: Move[] = [];
+    const seen = new Set<number>();
+    for (const q of s.pieces) {
+      if (q.owner !== p.owner || q.id === p.id || isBuffed(q)) continue;
+      const now = new Set(getTargetsForPiece(s, q).map((m) => sqOf(m.to)));
+      for (const m of getTargetsForPiece(s, { ...q, buff: 2 })) {
+        const sq = sqOf(m.to);
+        if (now.has(sq) || seen.has(sq)) continue;
+        seen.add(sq);
+        out.push(m);
+      }
+    }
+    return out;
   };
+
+  /** "다른 아군 전원 3턴 동안 상하좌우 +1칸" (the melody's dock copy at Volkonov's grade). */
+  const melodyCopy = (level: number): string => `아군 전원 ${BUFF_TURNS[level]}턴 동안 상하좌우 +1칸`;
 
   /** The dock below the board: chain move, a skill button, wasteland targeting or the transform confirm. */
   const renderDock = (snap: ControllerSnapshot) => {
@@ -594,11 +620,21 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     } else if (transformAsk) {
       const p = getPieceById(s, transformAsk)!;
       const def = CHARACTERS[p.character];
-      key = `transform|${p.id}`;
+      const melody = def.skill!.kind === 'buff';
+      key = `${melody ? 'melody' : 'transform'}|${p.id}`;
       content = [
-        h('span', { class: 'action-bar__text' }, icon('magic', 16), `${def.skill!.nameKo} · ${AWAKEN_TURNS - 1}번 이동 동안 범위 확장`),
+        h(
+          'span',
+          { class: 'action-bar__text' },
+          icon(melody ? 'music' : 'magic', 16),
+          melody ? `${def.skill!.nameKo} · 아군 ${BUFF_TURNS[p.level]}턴 이동 +1` : `${def.skill!.nameKo} · ${AWAKEN_TURNS - 1}번 이동 동안 범위 확장`,
+        ),
         h('button', { class: 'btn btn--text btn--sm', type: 'button', 'data-action': 'skill-cancel', onclick: () => cancelTransform() }, '취소'),
-        h('button', { class: 'btn btn--success btn--sm action-bar__go action-bar__go--awake', type: 'button', 'data-action': 'skill-confirm', onclick: () => confirmTransform() }, def.skill!.nameKo),
+        h(
+          'button',
+          { class: `btn btn--success btn--sm action-bar__go ${melody ? 'action-bar__go--melody' : 'action-bar__go--awake'}`, type: 'button', 'data-action': 'skill-confirm', onclick: () => confirmTransform() },
+          def.skill!.nameKo,
+        ),
       ];
     } else if (targeting) {
       const t = targeting;
@@ -612,9 +648,10 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       ];
     } else if (myTurn && sel && sel.owner === HUMAN && CHARACTERS[sel.character].skill) {
       const block = skillBlock(s, sel.id);
-      const transform = skillKindOf(sel.character) === 'transform';
+      const kind = skillKindOf(sel.character);
+      const transform = kind === 'transform';
       const k = WASTE_SIZE[sel.level];
-      const ready = transform ? `${AWAKEN_TURNS - 1}번 이동 동안 범위 확장` : `빈 칸 ${k}×${k} · 닿으면 소멸`;
+      const ready = transform ? `${AWAKEN_TURNS - 1}번 이동 동안 범위 확장` : kind === 'buff' ? melodyCopy(sel.level) : `빈 칸 ${k}×${k} · 닿으면 소멸`;
       const reason =
         block === 'notYet' ? `${skillUnlockIn(s)}턴 후 사용 가능` : block === 'active' ? `타천 중 · ${sel.awaken ?? 0}번 더 이동` : block ? BLOCK_TEXT[block] : ready;
       key = `skill|${sel.id}|${block}|${reason}`;
@@ -622,11 +659,11 @@ export function gameScreen(router: Router, params: GameParams): Screen {
         h(
           'button',
           {
-            class: `skill-btn${block ? ' is-blocked' : ''}${transform ? ' skill-btn--awake' : ''}${block === 'active' ? ' is-active' : ''}`,
+            class: `skill-btn${block ? ' is-blocked' : ''}${transform ? ' skill-btn--awake' : ''}${kind === 'buff' ? ' skill-btn--melody' : ''}${block === 'active' ? ' is-active' : ''}`,
             type: 'button',
             'data-action': 'skill',
             disabled: !!block,
-            onclick: () => (transform ? askTransform(sel.id) : startTargeting(sel.id)),
+            onclick: () => (kind === 'waste' ? startTargeting(sel.id) : askTransform(sel.id)),
           },
           h('span', { class: 'skill-btn__icon', 'aria-hidden': 'true' }, icon('magic', 20)),
           h('span', { class: 'skill-btn__main' }, h('span', { class: 'skill-btn__name' }, `스킬 · ${CHARACTERS[sel.character].skill!.nameKo}`), h('span', { class: 'skill-btn__sub' }, reason)),
@@ -812,7 +849,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     const showSel = !!selPiece && snap.phase !== 'animating' && snap.phase !== 'ended';
     selChip.hidden = !showSel;
     if (selPiece && showSel) {
-      const k = `${selPiece.id}|${selPiece.level}|${snap.selection?.moves.length}|${snap.selection?.actionable}|${selPiece.stun ?? 0}|${selPiece.awaken ?? 0}`;
+      const k = `${selPiece.id}|${selPiece.level}|${snap.selection?.moves.length}|${snap.selection?.actionable}|${selPiece.stun ?? 0}|${selPiece.awaken ?? 0}|${selPiece.buff ?? 0}`;
       if (k !== selChipKey) {
         selChipKey = k;
         const sel = snap.selection!;
@@ -826,6 +863,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
         setText(
           selHint,
           (awake ? `타천 · ${selPiece.awaken} · ` : '') +
+          (isBuffed(selPiece) ? `선율 · ${selPiece.buff}턴 · ` : '') +
           (isStunned(selPiece)
             ? '속박 · 1턴 쉬어요'
             : selPiece.owner === BOT
@@ -839,7 +877,14 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       }
     } else selChipKey = '';
     field.update(s);
+    // Volkonov's melody: a "♪ N" badge on every buffed piece (hidden while pieces move).
+    buffBadges?.update(board, s.pieces, snap.phase === 'animating' || snap.phase === 'ended' || resultShown);
   };
+  /** Re-place the buff badges after the board moved or resized (next frame: layout settled). */
+  const placeBuffBadges = () =>
+    requestAnimationFrame(() => {
+      if (!bag.isDisposed && ctrl) buffBadges?.update(board, ctrl.state.pieces, ctrl.phase === 'animating' || ctrl.phase === 'ended' || resultShown);
+    });
 
   const outcomeOf = (s: GameState): MatchOutcome => (s.winner === null ? 'draw' : s.winner === HUMAN ? 'win' : 'loss');
 
@@ -939,6 +984,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
         replaceChildren(boardHost, h('div', { class: 'board-error' }, '보드를 표시할 수 없습니다.'));
       }
       bag.add(() => board?.dispose());
+      const badges = (buffBadges = createBuffBadges());
+      bag.add(() => badges.dispose());
       // 절전 모드 follows the setting live (it can be switched from the in-match settings too).
       bag.add(watchPowerSave((on) => board?.setLowPower?.(on)));
       bot = new BotClient();
@@ -965,7 +1012,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
         animateSkill: async (action, after) => {
           const b = board;
           const caster = getPieceById(c.state, action.pieceId);
-          const transform = !!caster && skillKindOf(caster.character) === 'transform';
+          const kind = caster ? skillKindOf(caster.character) : null;
+          const transform = kind === 'transform';
           if (caster) {
             const rel = playVoice(caster.character, 'skill', { level: caster.level, owner: caster.owner });
             playCharSfx(caster.character, 'skill');
@@ -978,6 +1026,16 @@ export function gameScreen(router: Router, params: GameParams): Screen {
             if (b) {
               b.setInteractive(false);
               await playAwaken(b, action.pieceId, 'on');
+            }
+            return;
+          }
+          if (kind === 'buff') {
+            // Volkonov's melody: notes fly to every ally (a DOM layer over either board view); the
+            // buff badges appear once the snapshot with `after` renders.
+            if (b && caster) {
+              b.setInteractive(false);
+              const allies = after.pieces.filter((q) => q.owner === caster.owner && q.id !== caster.id).map((q) => q.pos);
+              await playMelodyFx(b, caster.pos, allies);
             }
             return;
           }
@@ -1092,7 +1150,16 @@ export function gameScreen(router: Router, params: GameParams): Screen {
             sfx(e.player === HUMAN ? 'levelup' : 'turn');
             if (e.player === HUMAN) haptic('capture');
           } else if (e.type === 'skill') {
-            if (e.player === BOT) toast('상대 브루타일이 불모지를 깔았어요! 닿으면 소멸해요', { tone: 'warn', duration: 2600 });
+            const caster = getPieceById(c.state, e.pieceId);
+            const mine = e.player === HUMAN;
+            if (caster && skillKindOf(caster.character) === 'buff') {
+              // Volkonov's melody: a float text and what it does (with the opponent's warning).
+              spawnFx(h('div', { class: 'float-text float-text--melody' }, mine ? '선율!' : '상대 선율!'), 1300);
+              toast(`${mine ? '' : '상대 '}${CHARACTERS[caster.character].nameKo} 선율: ${mine ? '내 다른 말' : '상대 말'} 전원 ${BUFF_TURNS[caster.level]}턴 동안 상하좌우 +1칸`, {
+                tone: mine ? 'success' : 'warn',
+                duration: 2800,
+              });
+            } else if (!mine) toast('상대 브루타일이 불모지를 깔았어요! 닿으면 소멸해요', { tone: 'warn', duration: 2600 });
           } else if (e.type === 'awaken') {
             const who = getPieceById(c.state, e.pieceId);
             const mine = e.player === HUMAN;
@@ -1190,8 +1257,14 @@ export function gameScreen(router: Router, params: GameParams): Screen {
           void handle?.remove();
         });
       }
-      bag.listen(window, 'resize', () => board?.resize());
-      bag.listen(window, 'orientationchange', () => board?.resize());
+      bag.listen(window, 'resize', () => {
+        board?.resize();
+        placeBuffBadges();
+      });
+      bag.listen(window, 'orientationchange', () => {
+        board?.resize();
+        placeBuffBadges();
+      });
 
       // HUD clock: a paced timer, not a per-frame loop (clockRedrawMs). A frame loop here redrew the
       // ring on every display refresh (60–120 Hz) for the whole match: a big, avoidable heat cost.

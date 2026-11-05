@@ -85,11 +85,18 @@ export const TRAPS_PER_MICHELLE = 3;
  * in counts down at once (see `Piece.stun`), so it sits out exactly its owner's next turn.
  */
 export const TRAP_STUN = 2;
+/**
+ * Volkonov's skill "선율" (melody): every OTHER piece of his side on the board gets `Piece.buff` =
+ * BUFF_TURNS[level] + 1 on cast. Like `awaken` it counts down at the end of each of its owner's
+ * turns, the casting turn included, so the allies keep the buff for exactly BUFF_TURNS[level] of
+ * their owner's turns (3 / 3 / 4 by grade).
+ */
+export const BUFF_TURNS = [0, 3, 3, 4] as const;
 
 export type PlayerId = 0 | 1;
-/** What an active skill does: lay wasteland (Brutile) or transform (Rakaeli). */
-export type SkillKind = 'waste' | 'transform';
-export type CharacterId = 'sad' | 'marki' | 'walk' | 'insaner' | 'brutile' | 'michelle' | 'picker' | 'rakaeli';
+/** What an active skill does: lay wasteland (Brutile), transform (Rakaeli) or buff allies (Volkonov). */
+export type SkillKind = 'waste' | 'transform' | 'buff';
+export type CharacterId = 'sad' | 'marki' | 'walk' | 'insaner' | 'brutile' | 'michelle' | 'picker' | 'rakaeli' | 'rampid' | 'larhen' | 'volkonov';
 export type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
 export type Level = 1 | 2 | 3;
 
@@ -139,6 +146,13 @@ export interface Piece {
   awaken?: number;
   /** This piece has used its active skill this match (once per skill character). */
   skillUsed?: true;
+  /**
+   * Volkonov's "선율" buff on this piece: while > 0 it moves 1 square further in each of the four
+   * orthogonal directions (a direction it cannot move in at all gives 1 square), as a slide. Set to
+   * BUFF_TURNS[caster level] + 1 on cast and counted down at the end of each of its OWNER's turns
+   * (the casting turn included), so it reads the buffed turns left. Deleted at 0. Never absorbed.
+   */
+  buff?: number;
 }
 
 /** A doll trap Michelle left on square `sq` (r * BOARD_SIZE + c). It never disappears during a match. */
@@ -188,7 +202,8 @@ export interface Move {
 
 /**
  * An active skill. Brutile: lay a k x k wasteland whose lowest-row, lowest-column square is
- * `anchor`. Rakaeli: transform; `anchor` is his own square (the only legal anchor).
+ * `anchor`. Rakaeli (transform) and Volkonov (ally buff): `anchor` is his own square (the only
+ * legal anchor).
  */
 export interface SkillAction {
   kind: 'skill';
@@ -227,9 +242,10 @@ export type HistoryEntry =
   | { kind: 'storm'; storm: number; killed: string[] }
   /**
    * `pieceId` (Brutile) laid wasteland on `squares` (square indices r * BOARD_SIZE + c), or
-   * (`transform: true`, squares empty) `pieceId` (Rakaeli) transformed.
+   * (`transform: true`, squares empty) `pieceId` (Rakaeli) transformed, or (`buffed`: the ally ids,
+   * squares empty) `pieceId` (Volkonov) played his melody.
    */
-  | { kind: 'skill'; player: PlayerId; pieceId: string; squares: number[]; transform?: true };
+  | { kind: 'skill'; player: PlayerId; pieceId: string; squares: number[]; transform?: true; buffed?: string[] };
 
 export interface GameState {
   pieces: Piece[]; // only pieces still on the board
@@ -284,8 +300,8 @@ export interface CharacterDef {
   /** Passive ability copy (UI only), if the character has one. */
   passiveKo?: string;
   /**
-   * Active skill, if the character has one: `kind` says what it does (Brutile's wasteland or
-   * Rakaeli's transform); `nameKo` / `descKo` (per level) are UI copy.
+   * Active skill, if the character has one: `kind` says what it does (Brutile's wasteland,
+   * Rakaeli's transform or Volkonov's ally buff); `nameKo` / `descKo` (per level) are UI copy.
    */
   skill?: { kind: SkillKind; nameKo: string; descKo: [string, string, string] };
   /** Transformed-form movement copy per level (Rakaeli's "타천"), index 0 = level 1. */

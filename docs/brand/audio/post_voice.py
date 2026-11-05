@@ -295,6 +295,34 @@ def fx_rakaeli(x):
     return hall(y, 0.85, 0.13, predelay=0.03, lp=5000, hp=300)
 
 
+def fx_rampid(x):
+    """Cocky teenage ice skater: his own bright young voice (never pitch-shifted), a little chest so
+    it is not thin, firm compression for punchy barks and a short, cool, airy room (an ice rink)."""
+    y = biquad(x, "hp", 90)
+    y = biquad(y, "lowshelf", 200, 0.8)
+    y = compress(y, -20, 2.5, attack=0.005, release=0.09)
+    return hall(y, 0.6, 0.09, predelay=0.012, lp=6000, hp=400)
+
+
+def fx_larhen(x):
+    """Assassin: close, dry and quiet. A touch of low-end proximity, firm compression so the murmur
+    stays present, and only a very small dark room (he speaks from the shadows, not a hall)."""
+    y = biquad(x, "hp", 70)
+    y = biquad(y, "lowshelf", 160, 1.2)
+    y = biquad(y, "highshelf", 6000, -1.0)
+    y = compress(y, -24, 3.0, attack=0.006, release=0.12)
+    return hall(y, 0.4, 0.06, predelay=0.006, lp=3000, hp=200)
+
+
+def fx_volkonov(x):
+    """Bard: his own warm voice (never pitch-shifted), a little warmth, gentle compression and a
+    warm stage hall a touch wetter than the others (a performer in a tavern hall)."""
+    y = biquad(x, "hp", 75)
+    y = biquad(y, "lowshelf", 220, 1.2)
+    y = compress(y, -21, 2.0, attack=0.008, release=0.14)
+    return hall(y, 1.1, 0.14, predelay=0.022, lp=4800, hp=250)
+
+
 RAKAELI_AWAKE_PITCH = 2 ** (-2.0 / 12)  # -2 semitones on the main voice
 RAKAELI_AWAKE_FORMANT = 0.94            # vocal tract ~6 % longer: deeper, not a different person
 
@@ -327,15 +355,18 @@ def fx_rakaeli_awake(x):
 
 
 FX = {"sad": fx_sad, "marki": fx_marki, "walk": fx_walk, "insaner": fx_insaner, "brutile": fx_brutile,
-      "michelle": fx_michelle, "picker": fx_picker, "rakaeli": fx_rakaeli, "rakaeli-awake": fx_rakaeli_awake}
+      "michelle": fx_michelle, "picker": fx_picker, "rakaeli": fx_rakaeli, "rakaeli-awake": fx_rakaeli_awake,
+      "rampid": fx_rampid, "larhen": fx_larhen, "volkonov": fx_volkonov}
 # Brightness target (voice_qa harsh_db) for the adaptive presence cut; ElevenLabs takes measure
 # about -6..-1 dB raw. Humans sit warmer, the witch keeps a little more rasp.
 HARSH_TARGET = {"sad": -9.0, "marki": -11.0, "walk": -10.0, "insaner": -8.0, "brutile": -7.0,
-                "michelle": -9.0, "picker": -10.0, "rakaeli": -9.5, "rakaeli-awake": -11.0}
+                "michelle": -9.0, "picker": -10.0, "rakaeli": -9.5, "rakaeli-awake": -11.0,
+                "rampid": -9.0, "larhen": -11.0, "volkonov": -10.0}
 # De-esser threshold (share of the full-band envelope the >4.5 kHz band may carry before it is turned
 # down). walk's hard affricates ([ch] in 끝이다, [ss] in 쓰러뜨렸다) need a firmer hand.
 DEESS_THR = {"sad": 0.35, "marki": 0.35, "walk": 0.2, "insaner": 0.35, "brutile": 0.3,
-             "michelle": 0.3, "picker": 0.3, "rakaeli": 0.3, "rakaeli-awake": 0.28}
+             "michelle": 0.3, "picker": 0.3, "rakaeli": 0.3, "rakaeli-awake": 0.28,
+             "rampid": 0.3, "larhen": 0.3, "volkonov": 0.3}
 
 
 # ------------------------------------------------------------------------------------------------

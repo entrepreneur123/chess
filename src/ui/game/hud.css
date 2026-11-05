@@ -490,7 +490,8 @@
 .info-host:has(> .action-bar--skill:not([hidden])) .sel-chip__hint,
 .info-host:has(> .action-bar--chain:not([hidden])) .sel-chip,
 .info-host:has(> .action-bar--aim:not([hidden])) .sel-chip,
-.info-host:has(> .action-bar--transform:not([hidden])) .sel-chip {
+.info-host:has(> .action-bar--transform:not([hidden])) .sel-chip,
+.info-host:has(> .action-bar--melody:not([hidden])) .sel-chip {
   display: none;
 }
 
@@ -1566,6 +1567,42 @@
 .hand-card__stun[hidden] {
   display: none;
 }
+/* Volkonov's melody on this piece ("선율 · N턴"): a rose band, the card rim glows rose too. */
+.hand-card__buff {
+  position: absolute;
+  top: 58%;
+  left: 50%;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px 3px 6px;
+  border-radius: var(--r-full);
+  background: linear-gradient(180deg, #c2307f, #6a1748);
+  box-shadow:
+    inset 0 0 0 1.5px #ffb3df,
+    0 3px 0 rgba(0, 0, 0, 0.5),
+    0 0 14px -2px rgba(255, 111, 194, 0.75);
+  color: #fff;
+  font-size: 12px;
+  font-weight: var(--fw-bold);
+  line-height: 1.2;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45);
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+}
+.hand-card__buff .icon {
+  color: #ffe08a;
+}
+.hand-card__buff[hidden] {
+  display: none;
+}
+.hand-card.is-buffed {
+  --hc-rim: rgba(255, 111, 194, 0.85);
+  box-shadow:
+    0 3px 0 var(--panel-lip),
+    0 0 16px -3px rgba(255, 111, 194, 0.7);
+}
 .hand-card.is-stunned {
   --hc-rim: rgba(185, 166, 255, 0.75);
   cursor: not-allowed;
@@ -1723,8 +1760,239 @@
   color: #d8d2e6;
   text-shadow: 0 2px 0 #241a33, 0 0 12px rgba(160, 140, 200, 0.7);
 }
+.float-text--melody {
+  color: #ffd6ee;
+  text-shadow: 0 2px 0 #5f0f3d, 0 0 16px rgba(255, 111, 194, 0.9);
+}
 @media (prefers-reduced-motion: reduce) {
   .hand-card.is-awake {
     transition: none;
   }
+}
+
+/* ---- Volkonov's melody (ui/game/melodyFx.ts): buff badges and the cast effect ----------- */
+.buff-layer,
+.melody-fx {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+.buff-layer {
+  z-index: 30;
+}
+.melody-fx {
+  z-index: 55;
+  overflow: hidden;
+}
+/* "♪ N": buffed turns left, on the top-right corner of the piece's square. */
+.buff-badge {
+  --bb: 18px;
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-width: var(--bb);
+  height: var(--bb);
+  padding: 0 calc(var(--bb) * 0.2);
+  border-radius: var(--r-full);
+  background: linear-gradient(180deg, #e0479b, #7d1a57);
+  box-shadow:
+    inset 0 0 0 1.5px #ffc2e6,
+    0 2px 0 rgba(0, 0, 0, 0.55),
+    0 0 10px rgba(255, 111, 194, 0.75);
+  color: #fff;
+  font-family: var(--font-num);
+  font-size: calc(var(--bb) * 0.62);
+  line-height: 1;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+  will-change: transform;
+  animation: buff-badge-in 320ms var(--ease-out) both;
+}
+.buff-badge__note {
+  font-style: normal;
+  color: #ffe08a;
+  font-size: calc(var(--bb) * 0.6);
+}
+@keyframes buff-badge-in {
+  from {
+    opacity: 0;
+  }
+}
+/* Cast: a rose pulse under Volkonov, notes rising, one note flying to each ally, rings answering. */
+.melody-fx__pulse,
+.melody-fx__note,
+.melody-fx__fly,
+.melody-fx__ring {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+.melody-fx__pulse {
+  width: calc(var(--u) * 2.4);
+  height: calc(var(--u) * 2.4);
+  margin: calc(var(--u) * -1.2) 0 0 calc(var(--u) * -1.2);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 111, 194, 0.55), rgba(255, 111, 194, 0.18) 45%, transparent 70%);
+  opacity: 0;
+  animation: melody-pulse 900ms var(--ease-out) forwards;
+}
+@keyframes melody-pulse {
+  0% {
+    opacity: 0;
+    scale: 0.4;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    scale: 1.4;
+  }
+}
+.melody-fx__note,
+.melody-fx__fly {
+  color: #ff8fd2;
+  font-size: calc(var(--u) * 0.72);
+  font-weight: 700;
+  line-height: 1;
+  text-shadow:
+    0 0 6px rgba(255, 111, 194, 0.9),
+    0 1px 0 rgba(0, 0, 0, 0.6);
+  opacity: 0;
+}
+.melody-fx__note.is-gold {
+  color: #ffe08a;
+  text-shadow:
+    0 0 6px rgba(242, 193, 78, 0.9),
+    0 1px 0 rgba(0, 0, 0, 0.6);
+}
+.melody-fx__note {
+  animation: melody-note 820ms var(--d) var(--ease-out) forwards;
+}
+@keyframes melody-note {
+  0% {
+    opacity: 0;
+    transform: translate(var(--x), var(--y)) translate(-50%, -50%) scale(0.4);
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(var(--x) + var(--dx)), calc(var(--y) + var(--dy))) translate(-50%, -50%) scale(1.15) rotate(-12deg);
+  }
+}
+.melody-fx__fly {
+  font-size: calc(var(--u) * 0.8);
+  animation: melody-fly 520ms var(--d) cubic-bezier(0.3, 0.6, 0.3, 1) forwards;
+}
+@keyframes melody-fly {
+  0% {
+    opacity: 0;
+    transform: translate(var(--x), var(--y)) translate(-50%, -50%) scale(0.6);
+  }
+  20% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(var(--x) + var(--dx)), calc(var(--y) + var(--dy))) translate(-50%, -50%) scale(1.1);
+  }
+}
+.melody-fx__ring {
+  width: calc(var(--u) * 1.15);
+  height: calc(var(--u) * 1.15);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 2px rgba(255, 143, 210, 0.95),
+    0 0 14px 2px rgba(255, 111, 194, 0.7),
+    inset 0 0 12px rgba(255, 111, 194, 0.55);
+  opacity: 0;
+  transform: translate(var(--x), var(--y)) translate(-50%, -50%) scale(0.5);
+  animation: melody-ring 560ms var(--d) var(--ease-out) forwards;
+}
+@keyframes melody-ring {
+  0% {
+    opacity: 0;
+    transform: translate(var(--x), var(--y)) translate(-50%, -50%) scale(0.5);
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--x), var(--y)) translate(-50%, -50%) scale(1.25);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .buff-badge {
+    animation: none;
+  }
+}
+
+/* ---- Volkonov's melody ("선율"): rose and gold ------------------------------------------- */
+.skill-btn.skill-btn--melody:not(.is-blocked) {
+  background:
+    radial-gradient(80% 140% at 0% 50%, rgba(255, 111, 194, 0.24), transparent 60%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0 46%, transparent 46%),
+    linear-gradient(180deg, #2c2140, #1a1426);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 190, 225, 0.35),
+    inset 0 0 0 1.5px rgba(255, 111, 194, 0.75),
+    0 4px 0 var(--panel-lip),
+    0 0 22px -6px rgba(255, 111, 194, 0.6),
+    var(--drop);
+}
+.skill-btn--melody:not(.is-blocked) .skill-btn__icon {
+  background: radial-gradient(circle at 50% 35%, #3c1430, var(--night-0));
+  box-shadow:
+    inset 0 0 0 1.5px rgba(255, 111, 194, 0.8),
+    0 0 12px -2px rgba(255, 111, 194, 0.65);
+  color: #ff8fd2;
+}
+.skill-btn--melody:not(.is-blocked) .skill-btn__sub {
+  color: #ffc2e6;
+}
+.action-bar--melody {
+  --ab-rim: rgba(255, 111, 194, 0.6);
+  --ab-glow: rgba(255, 111, 194, 0.35);
+}
+.action-bar--melody .action-bar__text .icon {
+  color: #ff8fd2;
+  filter: drop-shadow(0 0 4px rgba(255, 111, 194, 0.75));
+}
+.action-bar--melody .btn--text {
+  color: var(--text-2);
+  font-size: var(--fs-body);
+}
+.action-bar__go--melody.btn--success {
+  background: linear-gradient(180deg, #ff7cc8, #b8237a);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 3px 0 #5f0f3d,
+    0 0 16px -4px rgba(255, 111, 194, 0.8);
+  color: #fff;
+}
+/* Enemy roster chip of a buffed piece: a small rose note on its corner. */
+.roster-chip.is-buffed::after {
+  content: '♪';
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  display: grid;
+  place-items: center;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #c2307f;
+  box-shadow: 0 0 0 1px #ffc2e6;
+  color: #ffe08a;
+  font-size: 9px;
+  line-height: 1;
 }

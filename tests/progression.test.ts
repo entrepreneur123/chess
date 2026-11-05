@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { chooseAction, isSkillAction } from '../src/ai/bot';
-import { CHARACTERS, applyMove, applySkill, createGame, getLegalMoves, isLegalMove, isLegalSkill, randomFormation, type CharacterId } from '../src/engine';
+import { CHARACTERS, CHARACTER_IDS, applyMove, applySkill, createGame, getLegalMoves, isLegalMove, isLegalSkill, randomFormation, type CharacterId } from '../src/engine';
 import {
   PROFILE_VERSION,
   buyCharacter,
@@ -59,8 +59,9 @@ describe('migration v3 -> v4 (-> v5)', () => {
     const storage: KeyValueStorage = { getItem: () => saved, setItem: (_k, v) => void (saved = v) };
     const p = loadProfile(storage);
     expect(p.version).toBe(PROFILE_VERSION);
-    expect(p.owned).toEqual({ sad: 1, marki: 1, walk: 1, insaner: 0, brutile: 0, michelle: 0, picker: 0, rakaeli: 0 });
-    expect(Object.values(p.grades)).toEqual([1, 1, 1, 1, 1, 1, 1, 1]);
+    expect(p.owned).toEqual({ sad: 1, marki: 1, walk: 1, insaner: 0, brutile: 0, michelle: 0, picker: 0, rakaeli: 0, rampid: 0, larhen: 0, volkonov: 0 });
+    expect(Object.values(p.grades).every((g) => g === 1)).toBe(true);
+    expect(Object.keys(p.grades)).toHaveLength(CHARACTER_IDS.length);
     expect([p.tokens, p.essence, p.rating, p.bestRating]).toEqual([0, 0, 0, 0]);
     expect(p.dungeon.lastClaimDay).toBeNull();
     expect(p.dungeonLevel).toBe('easy');
@@ -111,8 +112,8 @@ describe('v4 sanitizing', () => {
       dungeon: { lastClaimDay: 'yesterday' },
       dungeonLevel: 'nightmare',
     });
-    expect(p.owned).toEqual({ sad: 1, marki: 1, walk: 2, insaner: 3, brutile: 0, michelle: 0, picker: 0, rakaeli: 0 });
-    expect(p.grades).toEqual({ sad: 1, marki: 1, walk: 2, insaner: 2, brutile: 1, michelle: 1, picker: 1, rakaeli: 1 });
+    expect(p.owned).toEqual({ sad: 1, marki: 1, walk: 2, insaner: 3, brutile: 0, michelle: 0, picker: 0, rakaeli: 0, rampid: 0, larhen: 0, volkonov: 0 });
+    expect(p.grades).toEqual({ sad: 1, marki: 1, walk: 2, insaner: 2, brutile: 1, michelle: 1, picker: 1, rakaeli: 1, rampid: 1, larhen: 1, volkonov: 1 });
     expect([p.tokens, p.essence, p.rating, p.bestRating]).toEqual([0, 12, 0, 0]);
     expect(p.dungeon.lastClaimDay).toBeNull();
     expect(p.dungeonLevel).toBe('easy');
@@ -126,16 +127,12 @@ describe('v4 sanitizing', () => {
 });
 
 describe('essence shop', () => {
-  it('pool per arena is cumulative: starters, + Brutile (2), + Insaner (3), + Michelle (4), + Picker (5), + Rakaeli (6)', () => {
+  it('pool per arena is cumulative: starters, + Brutile / Volkonov (2), + Insaner / Larhen (3), + Michelle / Rampid (4), + Picker (5), + Rakaeli (6)', () => {
     const starters = ['sad', 'marki', 'walk'];
-    expect(ARENA_DEFS.map((a) => shopPool(a))).toEqual([
-      starters,
-      [...starters, 'brutile'],
-      [...starters, 'brutile', 'insaner'],
-      [...starters, 'brutile', 'insaner', 'michelle'],
-      [...starters, 'brutile', 'insaner', 'michelle', 'picker'],
-      [...starters, 'brutile', 'insaner', 'michelle', 'picker', 'rakaeli'],
-    ]);
+    const a2 = [...starters, 'brutile', 'volkonov'];
+    const a3 = [...a2, 'insaner', 'larhen'];
+    const a4 = [...a3, 'michelle', 'rampid'];
+    expect(ARENA_DEFS.map((a) => shopPool(a))).toEqual([starters, a2, a3, a4, [...a4, 'picker'], [...a4, 'picker', 'rakaeli']]);
   });
 
   it('Michelle opens in arena 4 for 30 essence and Picker in arena 5 for 50; upgrades follow rarity', () => {
@@ -179,11 +176,12 @@ describe('essence shop', () => {
   });
 
   it('after a demotion, owned characters stay owned and higher-arena ones are locked again', () => {
-    const owned = { ...createDefaultProfile().owned, brutile: 1 as const };
+    const owned = { ...createDefaultProfile().owned, brutile: 1 as const, volkonov: 1 as const };
     const p = withP({ rating: 590, owned, essence: 500 });
     expect(buyableIds(p)).toEqual([]);
     expect(buyCharacter(p, 'insaner')).toMatchObject({ ok: false, reason: 'arena' });
-    expect(buyableIds(withP({ rating: 601 }))).toEqual(['brutile', 'insaner']);
+    expect(buyCharacter(p, 'larhen')).toMatchObject({ ok: false, reason: 'arena' });
+    expect(buyableIds(withP({ rating: 601 }))).toEqual(['brutile', 'volkonov', 'insaner', 'larhen']);
   });
 });
 
@@ -272,10 +270,10 @@ describe('settleMatch', () => {
     const up = settleMatch(withP({ rating: 290 }), { mode: 'ranked', result: 'win', rng, now: DAY1 });
     expect(up.summary.promoted).toBe(true);
     expect(up.summary.arenaAfter).toBe('emberforge');
-    expect(up.summary.newShopCharacters).toEqual(['brutile']);
+    expect(up.summary.newShopCharacters).toEqual(['brutile', 'volkonov']);
     expect(up.profile.bestRating).toBe(up.profile.rating);
     // Already owned: no call-out.
-    const owned = { ...createDefaultProfile().owned, brutile: 1 as const };
+    const owned = { ...createDefaultProfile().owned, brutile: 1 as const, volkonov: 1 as const };
     expect(settleMatch(withP({ rating: 290, owned }), { mode: 'ranked', result: 'win', rng, now: DAY1 }).summary.newShopCharacters).toEqual([]);
   });
 

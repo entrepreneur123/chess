@@ -3,12 +3,17 @@ import type { PlayerId, Pos } from './types';
 import {
   CH_BRUTILE,
   CH_INSANER,
+  CH_LARHEN,
   CH_MARKI,
   CH_MICHELLE,
   CH_PICKER,
   CH_RAKAELI,
+  CH_RAMPID,
   CH_SAD,
+  CH_VOLKONOV,
   INSANER_RANGE,
+  LARHEN_BACK_LEVEL,
+  LARHEN_SIDE,
   MARKI_RANGE,
   MARKI_SIDE_LEVEL,
   MICHELLE_FORWARD_RANGE,
@@ -20,8 +25,11 @@ import {
   RAKAELI_BACK_LEVEL,
   RAKAELI_DEPTH,
   RAKAELI_HALF,
+  RAMPID_RANGE,
   SAD_RANGE,
+  VOLKONOV_RANGE,
   WALK_HALF,
+  absorbedLevel,
 } from './characters';
 
 export const N_SQUARES = BOARD_SIZE * BOARD_SIZE;
@@ -78,6 +86,8 @@ export function inStorm(r: number, c: number, storm: number): boolean {
 const ORTHO_DIRS = [1, 0, -1, 0, 0, 1, 0, -1];
 const DIAG_DIRS = [1, 1, 1, -1, -1, 1, -1, -1];
 const KING_DIRS = [...ORTHO_DIRS, ...DIAG_DIRS];
+/** Each orthogonal direction on its own, in ORTHO_DIRS order (no per-call allocation). */
+const ORTHO_ONE = [ORTHO_DIRS.slice(0, 2), ORTHO_DIRS.slice(2, 4), ORTHO_DIRS.slice(4, 6), ORTHO_DIRS.slice(6, 8)];
 /** Marki 3-star's sideways step: left and right. */
 const SIDE_DIRS = [0, 1, 0, -1];
 /** Brutile 1-star: the two forward diagonals; 2-star adds one step straight back (by direction). */
@@ -92,6 +102,11 @@ const MICHELLE_DIRS: Record<number, number[]> = {
   [-1]: [0, 1, 0, -1, 1, 0],
 };
 const MICHELLE_FWD: Record<number, number[]> = { 1: [1, 0], [-1]: [-1, 0] };
+/** Rampid's claw: straight forward and the two forward diagonals (by direction). */
+const RAMPID_DIRS: Record<number, number[]> = {
+  1: [1, -1, 1, 0, 1, 1],
+  [-1]: [-1, -1, -1, 0, -1, 1],
+};
 
 /** Trap flag bit of `owner`'s doll traps in a per-square trap mask (bit 0 = player 0, bit 1 = player 1). */
 export function trapBit(owner: number): number {
@@ -236,6 +251,45 @@ function jumpBlock(
 }
 
 /**
+ * Larhen: jump onto any of (0, ±1 .. ±side), the two forward diagonals and, with `back`, the two
+ * backward diagonals. Nothing in between blocks him; off-board and storm squares are skipped; he
+ * may land on an enemy (capture), never on his own piece. Wasteland and doll traps act on the
+ * landing square (handled by the caller, like Walk and Rakaeli).
+ */
+function jumpLarhen(
+  occ: ArrayLike<number>,
+  owners: ArrayLike<number>,
+  owner: number,
+  r: number,
+  c: number,
+  dir: number,
+  side: number,
+  back: boolean,
+  out: { [i: number]: number },
+  n: number,
+  includeAllies: boolean,
+  storm: number,
+): number {
+  const land = (nr: number, nc: number): void => {
+    if (nr < 0 || nr >= BOARD_SIZE || nc < 0 || nc >= BOARD_SIZE || inStorm(nr, nc, storm)) return;
+    const s = nr * BOARD_SIZE + nc;
+    const o = occ[s];
+    if (o < 0 || includeAllies || owners[o] !== owner) out[n++] = s;
+  };
+  for (let k = 1; k <= side; k++) {
+    land(r, c - k);
+    land(r, c + k);
+  }
+  land(r + dir, c - 1);
+  land(r + dir, c + 1);
+  if (back) {
+    land(r - dir, c - 1);
+    land(r - dir, c + 1);
+  }
+  return n;
+}
+
+/**
  * True when a piece of character code `ch` hops through (Picker's trait "콩콩"). Only a real Picker
  * does: an Insaner that absorbed Picker's pattern gets its diagonal RANGE as a plain slide.
  */
@@ -276,6 +330,9 @@ function genPattern(
     return n;
   }
   if (ch === CH_PICKER) return hop(occ, owners, owner, r, c, PICKER_RANGE[level], out, n, includeAllies, storm, waste, traps);
+  if (ch === CH_VOLKONOV) return slide(occ, owners, owner, r, c, ORTHO_DIRS, VOLKONOV_RANGE[level], out, n, includeAllies, storm, waste);
+  if (ch === CH_RAMPID) return slide(occ, owners, owner, r, c, RAMPID_DIRS[dir], RAMPID_RANGE[level], out, n, includeAllies, storm, waste);
+  if (ch === CH_LARHEN) return jumpLarhen(occ, owners, owner, r, c, dir, LARHEN_SIDE[level], level >= LARHEN_BACK_LEVEL, out, n, includeAllies, storm);
   if (ch === CH_RAKAELI) {
     const depth = awake ? RAKAELI_AWAKE_DEPTH[level] : RAKAELI_DEPTH[level];
     const half = awake ? RAKAELI_AWAKE_HALF[level] : RAKAELI_HALF[level];
@@ -322,6 +379,56 @@ function genPattern(
 const seenStamp = new Int32Array(N_SQUARES);
 let stamp = 0;
 
+/** Drop from out[from..n) every square already stamped in this call (and stamp the rest); new n. */
+function compactNew(out: { [i: number]: number }, from: number, n: number): number {
+  let w = from;
+  for (let k = from; k < n; k++) {
+    const s = out[k];
+    if (seenStamp[s] === stamp) continue;
+    seenStamp[s] = stamp;
+    out[w++] = s;
+  }
+  return w;
+}
+
+/** Empty board (no pieces) for measuring a pattern's reach. */
+const EMPTY_OCC = new Int8Array(N_SQUARES).fill(-1);
+const reachScratch = new Int16Array(256);
+const reachCache = new Map<number, Int8Array>();
+
+/**
+ * How far piece pattern (ch, level, dir, awake, absorbed patterns) reaches along each orthogonal
+ * direction on an EMPTY board without storm: the farthest square straight up / down / right / left
+ * among its targets (0 when it has none that way), in ORTHO_DIRS order (+row, -row, +col, -col).
+ * Measured from a square at the opposite edge so the board never cuts it short. Cached.
+ */
+export function orthoReach(ch: number, level: number, dir: number, awake: boolean, absorb: number): Int8Array {
+  const key = (((absorb * 16 + ch) * 4 + level) * 2 + (dir > 0 ? 1 : 0)) * 2 + (awake ? 1 : 0);
+  let reach = reachCache.get(key);
+  if (reach) return reach;
+  reach = new Int8Array(4);
+  const mid = BOARD_SIZE >> 1;
+  for (let d = 0; d < 4; d++) {
+    const dr = ORTHO_DIRS[d * 2];
+    const dc = ORTHO_DIRS[d * 2 + 1];
+    // Origin at the far side of this direction: the whole board lies ahead of it.
+    const r = dr > 0 ? 0 : dr < 0 ? BOARD_SIZE - 1 : mid;
+    const c = dc > 0 ? 0 : dc < 0 ? BOARD_SIZE - 1 : mid;
+    const n = genTargets(EMPTY_OCC, [], 0, ch, level, r * BOARD_SIZE + c, reachScratch, 0, false, dir, 0, absorb, null, null, awake);
+    let best = 0;
+    for (let k = 0; k < n; k++) {
+      const s = reachScratch[k];
+      const tr = (s / BOARD_SIZE) | 0;
+      const tc = s - tr * BOARD_SIZE;
+      const dist = dr !== 0 ? (tc === c ? (tr - r) * dr : 0) : tr === r ? (tc - c) * dc : 0;
+      if (dist > best) best = dist;
+    }
+    reach[d] = best;
+  }
+  reachCache.set(key, reach);
+  return reach;
+}
+
 /**
  * Core move generator shared by the public engine API and the AI.
  *
@@ -336,6 +443,8 @@ let stamp = 0;
  * @param traps   optional length-N_SQUARES doll-trap masks (see `trapBit`): a real Picker's hop stops on an enemy trap
  * @param awake   the piece is transformed (Rakaeli's "타천", `Piece.awaken` > 0): its OWN pattern is
  *                the transformed one. Absorbed patterns are always base patterns.
+ * @param buff    Volkonov's "선율" is on the piece (`Piece.buff` > 0): see `orthoReach`; the extra
+ *                squares come last in `out`.
  * @returns new write offset into `out`
  */
 export function genTargets(
@@ -354,20 +463,23 @@ export function genTargets(
   waste: ArrayLike<number> | null = null,
   traps: ArrayLike<number> | null = null,
   awake = false,
+  buff = false,
 ): number {
   const r = (sq / BOARD_SIZE) | 0;
   const c = sq - r * BOARD_SIZE;
   // The piece can never be in the storm itself (it would have been removed), but when the
   // caller passes a storm the origin must still be a legal square: nothing to do here.
   const start = n;
+  // Measured first: orthoReach runs the generator itself (it must not run between the dedupe
+  // stamp below and its last use).
+  const reach = buff ? orthoReach(ch, level, dir, awake, absorb) : null;
   n = genPattern(occ, owners, owner, ch, level, r, c, out, n, includeAllies, dir, storm, waste, traps, awake);
-  if (absorb === 0) return n;
+  if (absorb === 0 && reach === null) return n;
   stamp++;
   for (let k = start; k < n; k++) seenStamp[out[k]] = stamp;
-  for (let bit = 0; bit < N_CHARS * 3; bit++) {
-    if (!(absorb & (1 << bit))) continue;
-    const ach = (bit / 3) | 0;
-    const alvl = (bit % 3) + 1;
+  for (let ach = 0; absorb !== 0 && ach < N_CHARS; ach++) {
+    const alvl = absorbedLevel(absorb, ach);
+    if (alvl === 0) continue;
     if (ach === ch && alvl === level) continue;
     const from = n;
     // Only the movement RANGE is absorbed, never a trait: Picker's pattern becomes a plain diagonal
@@ -376,15 +488,19 @@ export function genTargets(
       ach === CH_PICKER
         ? slide(occ, owners, owner, r, c, DIAG_DIRS, PICKER_RANGE[alvl], out, n, includeAllies, storm, waste)
         : genPattern(occ, owners, owner, ach, alvl, r, c, out, n, includeAllies, dir, storm, waste, traps, false);
-    // Compact: drop squares already emitted.
-    let w = from;
-    for (let k = from; k < n; k++) {
-      const s = out[k];
-      if (seenStamp[s] === stamp) continue;
-      seenStamp[s] = stamp;
-      out[w++] = s;
+    n = compactNew(out, from, n);
+  }
+  if (reach !== null) {
+    // Volkonov's "선율": one square further than the pattern reaches along each orthogonal
+    // direction (1 where it reaches nowhere that way), as a plain slide from the piece: blocked by
+    // pieces, capturing on the blocking enemy, ending on wasteland, stopped by edges and storm.
+    // Appended last, so a buffed list is the unbuffed list plus the extra squares (the bot relies
+    // on this, see melodyScore).
+    for (let d = 0; d < 4; d++) {
+      const from = n;
+      n = slide(occ, owners, owner, r, c, ORTHO_ONE[d], reach[d] + 1, out, n, includeAllies, storm, waste);
+      n = compactNew(out, from, n);
     }
-    n = w;
   }
   return n;
 }

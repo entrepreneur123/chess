@@ -7,7 +7,7 @@
  * The drawer does NOT pause the turn clock (no free thinking time); it re-renders on every
  * controller change while open, but only when something it shows actually changed.
  */
-import { BOARD_SIZE, CHARACTERS, ZONE_DEPTH, SKILL_UNLOCK_PLY, WASTE_SIZE, getTargetsForPiece, inStorm, isAwake, isDirectional, isStunned, pieceDir, screenArrow, skillUnlockIn, trapsLeft, type FormationSlot, type GameState, type Piece, type PlayerId } from '../../engine';
+import { BOARD_SIZE, BUFF_TURNS, CHARACTERS, ZONE_DEPTH, SKILL_UNLOCK_PLY, WASTE_SIZE, getTargetsForPiece, inStorm, isAwake, isDirectional, isStunned, pieceDir, screenArrow, skillUnlockIn, trapsLeft, type FormationSlot, type GameState, type Piece, type PlayerId } from '../../engine';
 import { movementDiagram, rarityChip, starsOf, unitArt } from '../components/piece';
 import { overlayRoot, pushOverlay, registerForceClose } from '../components/overlay';
 import { h, replaceChildren } from '../dom';
@@ -81,7 +81,12 @@ function skillStatus(piece: Piece | undefined, s: GameState): string {
   if (piece.skillUsed) return '사용함';
   if (s.storm > 0) return '자기장으로 사용 불가';
   if (s.ply < SKILL_UNLOCK_PLY) return `${skillUnlockIn(s)}턴 후 사용 가능`;
-  return CHARACTERS[piece.character].skill?.kind === 'transform' ? '사용 가능 · 2번 이동 동안 범위 확장' : '사용 가능 · 닿으면 소멸';
+  const kind = CHARACTERS[piece.character].skill?.kind;
+  if (kind === 'buff') {
+    if (!s.pieces.some((q) => q.owner === piece.owner && q.id !== piece.id)) return '함께할 아군이 없어요';
+    return `사용 가능 · 아군 전원 ${BUFF_TURNS[piece.level]}턴 동안 상하좌우 +1칸`;
+  }
+  return kind === 'transform' ? '사용 가능 · 2번 이동 동안 범위 확장' : '사용 가능 · 닿으면 소멸';
 }
 
 /** The forward-direction chip of a direction-dependent piece on the board (null otherwise). */
@@ -104,7 +109,7 @@ function infoCard(slot: FormationSlot, owner: PlayerId, s: GameState, focus: str
   else {
     const reach = getTargetsForPiece(s, piece);
     const caps = reach.filter((m) => m.captureId).length;
-    status = `${squareLabel(piece.pos.r, piece.pos.c)} · 이동 ${reach.length}칸${caps ? owner === 1 ? ` · 내 말 ${caps}개 위협` : ` · 잡기 ${caps}` : ''}`;
+    status = `${squareLabel(piece.pos.r, piece.pos.c)} · 이동 ${reach.length}칸${caps ? owner === 1 ? ` · 내 말 ${caps}개 위협` : ` · 잡기 ${caps}` : ''}${piece.buff ? ` · 선율 ${piece.buff}턴` : ''}`;
   }
   const skillName = def.skill ? (def.skill.kind === 'waste' ? `${def.skill.nameKo} ${WASTE_SIZE[level]}×${WASTE_SIZE[level]}` : def.skill.nameKo) : '';
   return h(

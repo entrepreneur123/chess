@@ -452,3 +452,277 @@ The other candidates used variations of the same text:
   - The lv3 stole patterns are abstract filigree and sigils, with no letters.
 - **Rights:** the images were generated through the project's Magic Patterns account. Usage rights
   follow Magic Patterns' terms for generated images.
+
+## 램피드 Rampid (`rampid`), 라르헨 Larhen (`larhen`) and 볼코노프 Volkonov (`volkonov`): 2026-11-05
+
+### Generation
+- **Tool, OS and date:**
+  - The same pipeline as Michelle and Picker: the Magic Patterns `generate_image` MCP tool, in
+    the "GRID CLASH illustrations" OS (`mES6an8gxzuquCRoUq5cVM`).
+  - Aspect ratio `3:4`, which returned 896x1200. 2026-11-05. No paid third-party tool was used.
+- **References:**
+  - Each grade-1 image was generated from a text prompt that describes the house style above.
+    The one exception is `rampid-lv1-d2`, an edit of `d` (rejected).
+  - Grades 2 and 3 were each generated with the chosen grade-1 image as the reference image, so
+    one face crop box serves all three grades.
+- **Candidates:** 32 requests and 32 images, with no provider blocks. All raw images are kept as
+  448x600 JPEGs in `generated/` (quality 78, progressive, matching the earlier raws).
+
+| Character | lv1 | lv2 | lv3 | Total images |
+| --- | --- | --- | --- | --- |
+| rampid | 6 (`a`–`e` from text, plus `d2`, an edit of `d`) | 3 | 3 | 12 |
+| larhen | 5 (`a`–`e`) | 3 | 3 | 11 |
+| volkonov | 4 (`a`–`d`) | 3 | 2 | 9 |
+
+- **Post-processing:**
+  - The picks are re-encoded at the original 896x1200 and PIL quality 88 as
+    `illust-{id}-lv{n}.jpg` (baseline, 4:2:0, the same as the earlier masters). There is no
+    retouching.
+  - `process-illust.py` gained one `FACE` entry per character. It was then run, and all 54
+    existing outputs under `public/chars/` came out byte-identical (MD5 compared before and
+    after).
+- **Review:** each candidate was checked in contact sheets next to the existing characters at
+  the same sizes:
+  - card art at 180x240;
+  - a hand-card crop at 100x180 (`object-fit: cover`, `50% 18%`);
+  - face crops at 160px, cut with the same code as `process-illust.py`;
+  - circular tokens at 40px and 80px, with both blue (`#3b8bff`) and red (`#ff4655`) rims.
+  Hands were checked at full resolution for every pick.
+
+### Picks and reasons
+| File | Candidate | Why |
+| --- | --- | --- |
+| `illust-rampid-lv1.jpg` | `rampid-lv1-e` | The largest, best-lit face of the set, with a wide grin and bright cyan eyes. The sky-blue hair is unique in the roster and reads at 40px. The dark navy scarf separates the head from the white jacket. Each gauntlet ends in exactly three curved ice talons, which matches his three-pronged forward move. He crouches on a frozen ramp, carved by his skate blades. |
+| `illust-rampid-lv2.jpg` | `rampid-lv2-a` | Keeps the white jacket, black trousers and navy scarf from lv1 and adds faceted ice-crystal pauldrons, a chest guard, knee guards and armoured boots. The gauntlets are heavier, with longer talons. The crystal pauldron also shows in the face crop. |
+| `illust-rampid-lv3.jpg` | `rampid-lv3-c` | Cyan frost flames around the whole body and hair, a storm of ice shards, and glowing eyes. The lv2 crystal armour now has silver filigree trim. The navy backdrop stays dark, so the glow is the strongest on the sheet, and the 40px token is clearly brighter than lv1 and lv2. |
+| `illust-larhen-lv1.jpg` | `larhen-lv1-e` | The only lv1 that reads at token size: he leaps in front of a large pale full moon, so his long black hair and dark coat form a sharp silhouette on a bright disc. The other four are dark figures on a dark backdrop. Cold, composed face, clean grip on a silver dagger in each hand, and indigo smoke below. |
+| `illust-larhen-lv2.jpg` | `larhen-lv2-a` | The clearest upgrade: articulated dark-steel pauldrons, crossed buckled straps, an indigo half-cape, engraved bracers and finer engraved daggers. Same face, pose and moon. |
+| `illust-larhen-lv3.jpg` | `larhen-lv3-c` | Silver and indigo aura smoke wraps his head and shoulders. His eyes glow silver, and silver arcs trail from both daggers. He wears silver filigree trim and silver shoulder armour. The full moon becomes a thin crescent, so at token size lv3 reads differently from lv1 and lv2: a smoky silver aura instead of a plain moon disc. |
+| `illust-volkonov-lv1.jpg` | `volkonov-lv1-b` | The clearest 실눈캐 face: closed, upturned smiling crescents and a calm smile. His wine-red hair in a low ponytail is unique in the roster at 40px. He wears a burgundy coat with a cream cravat. A ring of rose-magenta notes on staff lines circles him, giving the signature colour at lv1. |
+| `illust-volkonov-lv2.jpg` | `volkonov-lv2-a` | "Richer coat, ornate instrument": gold note-and-stave embroidery on the lapels, cuffs and hem, a ruffled cravat with a small gold note brooch, a rose sash, and a lute with a gold rosette and a rose ribbon. The ruffle shows in the token. The lute stays wooden, so lv3's gilded lute is still a step up. |
+| `illust-volkonov-lv3.jpg` | `volkonov-lv3-b` | The strongest aura of the set: a large glowing circle of rose-magenta staff lines and notes behind him, a warm gold light, drifting petals and sparkles, gold epaulettes and filigree, and a gilded lute. At 40px the token turns rose-gold, which no other character has. |
+
+### Rejected candidates
+- **rampid-lv1:**
+  - `a`: good, with literal three-talon gauntlets. But the white scarf, pale jacket and pale
+    hair merge into one pale blob at 40px.
+  - `b`: shorts over leggings, and a smaller head.
+  - `c`: four-fingered ice gloves rather than three talons, and an open-mouthed shout.
+  - `d`: a strong composition, but each hand has four or five claws.
+  - `d2`: `d` edited to three talons, but four claws per hand came back.
+- **rampid-lv2:**
+  - `b`: good, but the change at card size is smaller than in `a`.
+  - `c`: a full ice suit that drops the white jacket and black trousers, so it reads as a
+    different costume.
+- **rampid-lv3:**
+  - `a`: the glow is too subtle for a 3성.
+  - `b`: the strongest light, but the whole backdrop turns pale ice, the hair blends into it at
+    40px, and the lv2 crystal armour is replaced by a different jacket.
+- **larhen-lv1:**
+  - `a`, `d`: western-comic faces, and dark on dark at token size.
+  - `b`: the runner-up (a moon glow behind him), but the glow is small and his face is
+    plainer.
+  - `c`: a strong crossed-dagger silhouette, but a grey, gaunt face, and too dark at 40px.
+- **larhen-lv2:**
+  - `b`: the curved daggers and the gorget read less "assassin" than the straight blades.
+  - `c`: good, but the change at token size is smaller than in `a`.
+- **larhen-lv3:**
+  - `a`: the afterimages read as two other men standing in the background.
+  - `b`: clean, but at token size it is almost identical to lv2.
+- **volkonov-lv1:**
+  - `a`: soft and pleasant, but light brown hair and a cream coat give a weak token.
+  - `c`: a big, readable head, but the eyes read as sleeping (downward curves) rather than an
+    eye-smile.
+  - `d`: a joyful open laugh, but the dark brown hair at 40px is close to walk.
+- **volkonov-lv2:**
+  - `b`: a gilded lute already, which leaves lv3 less to escalate.
+  - `c`: inlaid lute and a gold chain, but the coat change is the subtlest of the three.
+- **volkonov-lv3:**
+  - `a`: the glow wraps only the lute area, which is weaker than `b`.
+
+### Face crop boxes
+These are fractions of (w, h). One box serves all three grades.
+
+- `rampid: (0.24, 0.06, 0.68, 0.39)`: the whole spiky sky-blue hair, the grin and the navy
+  scarf. At lv2 and lv3 the crystal pauldron edge shows; at lv3 so do the frost flames.
+- `larhen: (0.28, 0.06, 0.70, 0.375)`: the face, the long hair streaming right and the collar,
+  against the moon at lv1 and lv2 and against the crescent and aura at lv3.
+- `volkonov: (0.30, 0.05, 0.72, 0.36)`: the wine-red hair, the closed-eye smile, the ponytail and
+  the cravat.
+
+At 40px:
+- rampid reads as sky-blue hair over a navy scarf;
+- larhen reads as a dark-haired head on a pale moon disc, or on silver smoke at lv3;
+- volkonov reads as wine-red hair over cream and burgundy, or rose-gold at lv3.
+
+None of these collide with an existing token. The closest is larhen and walk (both
+black-haired), but walk has a blue scarf and no moon.
+
+### Prompts (winners)
+**rampid-lv1-e** (text only, aspect 3:4):
+> Vertical character splash illustration for a dark fantasy mobile game. Angular shounen anime
+> cel-shaded style: thick clean black ink outlines, flat hard-edged cel shading, crisp angular
+> cloth folds. Background: deep navy blue-black with a soft vignette, sharp diagonal speed-slash
+> streaks in electric cyan and crimson from the upper corners, floating ice shards and sparks. One
+> dynamic figure fills the frame, head large in the upper third near the centre, face fully lit.
+> Subject: original character Rampid, a speedy cocky teenage ice boy, about fifteen, alone. Messy
+> spiky sky-blue hair, bright ice-cyan eyes, a wide confident grin. Outfit: plain light winter
+> gear, a short frost-white windbreaker jacket with ice-blue panels, a dark navy scarf whipping
+> behind him, dark trousers, boots with long gleaming ice-blade runners. Each hand wears a chunky
+> translucent blue ice gauntlet with exactly three long curved ice talons, a three-pronged ice
+> claw. Pose: racing forward toward the viewer on a frozen ice track that he freezes in mid-air
+> beneath his blades, curving up like a ramp, low crouch, one three-talon claw thrust forward, the
+> other swept back, frost spray and a long ice trail behind him. Glacial ice-cyan and frost-white
+> palette. No metal blades. No text, no letters, no logo, no watermark.
+
+**rampid-lv2-a** (reference: rampid-lv1-e):
+> Same character, same pose, same composition and same art style as the reference image (angular
+> anime cel shading, bold black outlines, dark navy backdrop with cyan and red diagonal slash
+> streaks and floating ice shards). This is his upgraded 2-star form. Keep his face and grin, his
+> messy sky-blue hair, the dark navy scarf, the frozen ice ramp under his blades. Upgrades: light
+> frost armour over his white jacket, a faceted ice-crystal shoulder pauldron, an ice-blue chest
+> guard with silver edges, crystal knee guards, armoured skate boots with longer ice blades, and
+> bigger heavier ice gauntlets with exactly three much longer, sharper curved ice talons on each
+> hand. No metal blades. No text, no letters, no logo, no watermark.
+
+**rampid-lv3-c** (reference: rampid-lv1-e):
+> Redraw the ice boy from the reference image as his legendary 3-star version. Keep the same boy,
+> the same face and grin, the same messy sky-blue hair, the same dark navy scarf, the same dashing
+> pose and framing, and the same angular shounen anime cel-shaded style with thick black outlines
+> on the dark navy background with diagonal cyan and crimson slash streaks. Legendary upgrades: a
+> strong glacial aura, bright ice-cyan frost light flaring around his whole body and his hair like
+> cold flames, a dense storm of sharp glowing snow shards and ice crystals whirling around him,
+> frost mist; his eyes glow ice-cyan; faceted ice-crystal armour on his shoulders, chest and knees
+> with ornate silver legendary trim over his white jacket; large glowing crystal ice gauntlets each
+> with exactly three long curved ice talons blazing with cold light; the ice ramp under his blades
+> is a glowing glacier. The navy background stays dark so he glows against it. No metal blades. No
+> text, no letters, no logo, no watermark.
+
+**larhen-lv1-e** (text only, aspect 3:4):
+> Vertical character splash illustration for a dark fantasy mobile game. Angular shounen anime
+> cel-shaded style: thick clean black ink outlines, flat hard-edged cel shading, crisp angular
+> cloth folds. Background: deep navy blue-black with a soft vignette, a large pale silver full moon
+> glowing behind his head and shoulders, sharp diagonal speed-slash streaks in electric cyan and
+> crimson from the upper corners, floating shards and sparks, curling deep indigo smoke below. One
+> dynamic figure fills the frame, head in the upper third near the centre, face fully lit by cold
+> moonlight. Subject: original character Larhen, a professional assassin, a man in his thirties,
+> alone. Long dark hair flowing behind him in the wind, a lean handsome mature face, light stubble,
+> cold composed silver-grey eyes, a calm unreadable expression. Outfit: plain dark leather assassin
+> gear with steel-grey accents, a fitted charcoal leather coat with a high collar and silver-grey
+> edge trim, a deep indigo sash, leather bracers, dark gloves, soft boots. A straight polished
+> silver dagger in each hand, blades catching bright moonlight. Pose: mid-air at the top of a very
+> high leap in front of the moon, knees tucked, coat tails flaring, one dagger raised and one held
+> low. Moonlit silver steel and deep indigo palette. No hood, no mask. No blood. No text, no
+> letters, no logo, no watermark.
+
+**larhen-lv2-a** (reference: larhen-lv1-e):
+> Same character, same pose, same composition and same art style as the reference image (angular
+> anime cel shading, bold black outlines, dark navy backdrop with the large pale moon behind him,
+> cyan and red diagonal slash streaks, indigo smoke). This is his upgraded 2-star form. Keep his
+> face, cold silver-grey eyes, stubble and long dark flowing hair. Upgrades: a finer black leather
+> assassin coat with articulated dark steel shoulder plates, silver buckled straps across the
+> chest, a deep indigo sash and a short indigo half-cape on one shoulder, engraved steel bracers;
+> his two daggers are finer: longer polished silver blades with engraved fullers and
+> indigo-wrapped hilts with silver crossguards, one in each hand. No hood, no mask. No blood. No
+> text, no letters, no logo, no watermark.
+
+**larhen-lv3-c** (reference: larhen-lv1-e):
+> Redraw the assassin from the reference image as his legendary 3-star version. Keep the same man,
+> the same face with stubble, the same long dark flowing hair, the same leaping pose and framing,
+> and the same angular shounen anime cel-shaded style with thick black outlines on the dark navy
+> background with diagonal cyan and crimson slash streaks. The moon behind him becomes a thin
+> glowing silver crescent and the night sky darker, so his own aura stands out. Legendary upgrades:
+> a strong aura of deep indigo smoke and bright silver light swirling tightly around his head,
+> shoulders and body, silver light edging his hair; his eyes glow cold silver; a motion trail of
+> indigo and silver afterimage streaks follows his leap, blurred copies of his silhouette fading
+> behind him; his black leather coat has ornate silver filigree legendary trim, silver shoulder
+> armour and a deep indigo half-cape; his twin silver daggers glow bright moonlit silver, leaving
+> glowing silver arcs. No hood, no mask. No blood. No text, no letters, no logo, no watermark.
+
+**volkonov-lv1-b** (text only, aspect 3:4):
+> Vertical 3:4 character art for a dark fantasy anime mobile game, angular shounen anime
+> cel-shaded style with bold black ink outlines and hard flat shadows. Dark navy night backdrop
+> with a vignette, sharp diagonal cyan and red speed-line slashes from the top corners, floating
+> shards and sparks. Three-quarter-length composition filling the frame, head in the upper third
+> near the centre. Subject: original character Volkonov, a charming bard, a man about twenty-five,
+> alone. Neat medium-length dark wine-red hair tied in a low ponytail with a loose fringe, eyes
+> permanently closed as two thin smiling curves, the classic squinting eye-smile character, a calm
+> knowing smile, face clearly lit. Outfit: a plain long traveller's coat in deep burgundy with
+> cream lapels, a cream cravat, a satchel strap across the chest, simple gold buttons, dark
+> trousers and boots. He holds a lute-like string instrument with a round wooden body and strums
+> it. Glowing rose-magenta musical notes and soft rings of sound waves flow out of the instrument
+> and float around him. Pose: standing in a relaxed dynamic lean, one foot forward, coat tail
+> fluttering. Rose-magenta and warm gold palette. No hat. No text, no letters, no logo, no
+> watermark.
+
+**volkonov-lv2-a** (reference: volkonov-lv1-b):
+> Same character, same pose, same composition and same art style as the reference image (angular
+> anime cel shading, bold black outlines, dark navy backdrop with cyan and red diagonal slash
+> streaks, floating shards). This is his upgraded 2-star form. Keep his face with eyes always
+> closed in thin smiling curves, his calm smile and his wine-red hair in a low ponytail. Upgrades:
+> a richer long burgundy coat with gold embroidery of musical notes and flowing stave lines along
+> the hem, cuffs and lapels, gold buttons, a cream ruffled cravat with a small gold brooch shaped
+> like a musical note, a rose-coloured sash; his lute is now ornate, with a polished dark wood
+> body, gold inlay rosette, gold tuning pegs and a rose silk ribbon tied to the neck. More
+> rose-magenta glowing musical notes on a ring of staff lines around him. No hat. No text, no
+> letters, no logo, no watermark.
+
+**volkonov-lv3-b** (reference: volkonov-lv1-b):
+> Same character, same pose, same composition and same art style as the reference image, as his
+> legendary 3-star form. Keep his face with closed smiling crescent eyes, his smile and his
+> wine-red ponytail. Legendary: a dazzling rose-magenta aura, a large glowing circle of
+> rose-magenta staff lines and floating notes encircling him like a ring, a soft warm gold light
+> behind him, rose petals of light and gold sparkles drifting in the air; his coat is an opulent
+> burgundy and cream performer's coat with gold filigree trim, gold epaulettes and gold-embroidered
+> note motifs; his lute is gilded, glowing warm gold, with music pouring out of it as luminous rose
+> ribbons. No hat. No text, no letters, no logo, no watermark.
+
+The other candidates used variations of the same text:
+- lv1: other outfits and poses (a hoodie or bomber jacket and a ramp jump for Rampid; crossed
+  daggers, a dive or a half ponytail for Larhen; other hair colours and coats for Volkonov);
+- lv2 and lv3: other upgrade lists on the same references.
+
+### Source URLs (Magic Patterns CDN)
+- rampid-lv1-e: <https://cdn.magicpatterns.com/patterns/generated-images/24ddd66e-b43d-4574-baa1-4c8962f1107a.jpg>
+- rampid-lv2-a: <https://cdn.magicpatterns.com/patterns/generated-images/2d371074-564f-430c-95d0-b35b4c522788.jpg>
+- rampid-lv3-c: <https://cdn.magicpatterns.com/patterns/generated-images/89f2aad6-5442-4c21-a1de-43261f4385c0.jpg>
+- larhen-lv1-e: <https://cdn.magicpatterns.com/patterns/generated-images/d3349f57-cfbe-478d-8744-0425946e7e39.jpg>
+- larhen-lv2-a: <https://cdn.magicpatterns.com/patterns/generated-images/f61ffd30-e11c-45c8-8332-f9611f8efd3c.jpg>
+- larhen-lv3-c: <https://cdn.magicpatterns.com/patterns/generated-images/bd7e1352-82fe-464d-9e29-fe68153058a3.jpg>
+- volkonov-lv1-b: <https://cdn.magicpatterns.com/patterns/generated-images/e3cc14b1-9217-49f9-b004-74b8c2f7dbab.jpg>
+- volkonov-lv2-a: <https://cdn.magicpatterns.com/patterns/generated-images/d146ca18-752d-40bb-8d2f-1fa94c67a742.jpg>
+- volkonov-lv3-b: <https://cdn.magicpatterns.com/patterns/generated-images/937f84a5-0a76-4925-bdb0-365cc017d93d.jpg>
+
+### Notes for review
+- **Small-size escalation:**
+  - Larhen's lv1 and lv2 tokens are nearly identical at 40px, because the moon disc dominates.
+    The change shows at hand-card size (pauldrons and the indigo cape).
+  - Larhen's lv3 trades the full moon for a crescent and an aura. That makes its token darker
+    than lv1 and lv2, but clearly different from them. If a brighter lv3 token is preferred,
+    `larhen-lv3-b` keeps the full moon.
+  - Rampid and Volkonov escalate clearly at every size.
+- **Music notation:** Volkonov's embroidery and aura contain notes, treble-clef shapes and staff
+  lines. These are notation symbols, not letters, and no readable text appears in the picks.
+- **IP check (a visual judgement by the art director, not a legal clearance):**
+  - **Rampid:**
+    - Three claws per hand is a trope strongly associated with Wolverine. Rampid's talons are
+      translucent ice grown from a gauntlet, not metal blades from the knuckles, on a cheerful
+      teenager with ice skates.
+    - Jack Frost (*Rise of the Guardians*) has white hair, a hoodie and a staff. Rampid has
+      sky-blue hair, a windbreaker and armour, and no staff.
+    - Ice skating on self-made ice trails is a common power trope.
+  - **Larhen:**
+    - A long-haired assassin with twin daggers in front of a full moon is a common genre image.
+    - There is no hood, so he avoids the *Assassin's Creed* silhouette.
+    - I found no single known character with this combination.
+  - **Volkonov:**
+    - Closed-eye "실눈캐" bards are a common anime archetype.
+    - He differs from Venti (*Genshin Impact*: dark braids with teal tips, green cape, lyre),
+      Jaskier/Dandelion (*The Witcher*: feathered cap, doublet) and Gin Ichimaru (silver hair,
+      no instrument).
+    - Wine-red hair, a burgundy coat and a rose staff ring are not tied to any one character I
+      know of.
+- **Religious iconography:** none in the picks. The lv3 aura circles are staff-line rings and
+  frost or moon light, with no crosses or sigils.
+- **Rights:** the images were generated through the project's Magic Patterns account. Usage rights
+  follow Magic Patterns' terms for generated images.

@@ -170,8 +170,8 @@ describe('migration v4 -> v5 (12 x 12 board with a 3 x 12 zone -> 10 x 10 with 2
     expect(p.formationSaved).toBe(false);
     // Every other v4 field survives untouched.
     // (Rakaeli is newer than the save: locked, grade 1.)
-    expect(p.owned).toEqual({ sad: 3, marki: 2, walk: 1, insaner: 3, brutile: 1, michelle: 0, picker: 2, rakaeli: 0 });
-    expect(p.grades).toEqual({ sad: 3, marki: 2, walk: 1, insaner: 2, brutile: 1, michelle: 1, picker: 2, rakaeli: 1 });
+    expect(p.owned).toEqual({ sad: 3, marki: 2, walk: 1, insaner: 3, brutile: 1, michelle: 0, picker: 2, rakaeli: 0, rampid: 0, larhen: 0, volkonov: 0 });
+    expect(p.grades).toEqual({ sad: 3, marki: 2, walk: 1, insaner: 2, brutile: 1, michelle: 1, picker: 2, rakaeli: 1, rampid: 1, larhen: 1, volkonov: 1 });
     expect([p.tokens, p.essence, p.rating, p.bestRating]).toEqual([321, 77, 1234, 1500]);
     expect(p.dungeon.lastClaimDay).toBe('2026-11-01');
     expect(p.dungeonLevel).toBe('hard');

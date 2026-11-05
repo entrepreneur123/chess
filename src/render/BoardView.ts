@@ -1629,9 +1629,9 @@ export class BoardView implements IBoardView {
     // Stepping onto wasteland: the mover reaches the square, then dissolves (no strike, no impact).
     const wasted = !!move.wasted && !capture;
 
-    // Rakaeli leaps like Walk (pieces in between never block him).
+    // Rakaeli and Larhen leap like Walk (pieces in between never block them).
     const rk = rakaeliStyle(mover.piece);
-    const jump = ch === 'walk' || rk !== null;
+    const jump = ch === 'walk' || ch === 'larhen' || rk !== null;
     const moveDur = jump ? ANIM.jump : slideDuration(move);
     const from = mover.root.position.clone();
     from.y = 0;
@@ -3577,6 +3577,36 @@ export class BoardView implements IBoardView {
         this.sparks.burst(at.x, 0.7, at.z, 18, 3.4, fx.primary, seed);
         this.dust.ring(at.x, TILE_TOP + 0.05, at.z, 12, 1.8, 0.6, 0.8, DUST, 0.25);
         shake = this.reducedMotion ? 0.5 : 1.4;
+        break;
+      case 'rampid':
+        // Ice claw: a frost ring cracking out, ice shards flung low, a cold white flash.
+        this.strike.ground(0, GROUND_MODE.ring, at.x, gy, at.z, 1.15, fx.primary, fx.core, 520, now);
+        this.strike.ground(1, GROUND_MODE.crack, at.x, gy, at.z, 1.3, fx.primary, fx.secondary, 640, now);
+        for (let i = 0; i < 9; i++) {
+          const ang = i * 0.7 + seed;
+          this.sparks.streak(at.x, 0.25, at.z, Math.cos(ang) * 2.0, 1.4 + (i % 3) * 0.5, Math.sin(ang) * 2.0, 0.45, fx.secondary, 0.5);
+        }
+        this.sparks.burst(at.x, 0.7, at.z, 16 + mp.level * 3, 3.4, fx.primary, seed);
+        if (a.captured) (a.captured.tokenMat.uniforms.uEdge.value as THREE.Color).set(fx.primary);
+        shake = this.reducedMotion ? 0.5 : 1.3;
+        flash = 0.45;
+        break;
+      case 'larhen':
+        // Twin daggers: a silver slash (one shared slash mesh), an indigo ring and steel glints.
+        this.strike.slash(at.x - a.dirX * 0.1, 0.85, at.z - a.dirZ * 0.1, 2.0, fx.primary, fx.core, a.dirX < 0, now);
+        this.strike.ground(0, GROUND_MODE.ring, at.x, gy, at.z, 1.0, fx.secondary, fx.primary, 480, now);
+        this.sparks.burst(at.x, 0.8, at.z, 14 + mp.level * 3, 3.6, fx.primary, seed);
+        this.dust.ring(at.x, TILE_TOP + 0.06, at.z, 8, 1.1, 0.5, 0.8, SMOKE_CURSE, 0.5);
+        flash = 0.3;
+        break;
+      case 'volkonov':
+        // A chord: a rose sigil ringing out with rose and gold sparks.
+        this.strike.ground(0, GROUND_MODE.sigil, at.x, gy, at.z, 1.05, fx.primary, fx.secondary, 640, now);
+        this.strike.ground(1, GROUND_MODE.ring, at.x, gy, at.z, 1.25, fx.secondary, fx.core, 520, now);
+        this.sparks.burst(at.x, 0.75, at.z, 14, 3.0, fx.primary, seed);
+        this.sparks.burst(at.x, 0.6, at.z, 10, 2.4, fx.secondary, (seed + 31) % 97);
+        if (a.captured) (a.captured.tokenMat.uniforms.uEdge.value as THREE.Color).set(fx.primary);
+        flash = 0.4;
         break;
     }
     this.startCaptureFx(at, col, flash, now, shake, shakeMs);

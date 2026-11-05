@@ -68,3 +68,18 @@ export function chainPlies(history: readonly HistoryEntry[]): number {
   }
   return n;
 }
+
+/**
+ * Comparable signature of what a piece has absorbed, shared by the engine / FastBoard parity tests.
+ * A FastBoard absorb mask keeps the HIGHEST level per character (every pattern contains the lower
+ * levels of the same character), and nothing at or below the holder's own pattern; the engine keeps
+ * every absorbed entry. Both reduce to the same set of reachable squares, so both are normalised
+ * here: highest level per character, without the holder's own character at or below its level.
+ */
+export function absorbSig(levels: Iterable<[CharacterId, number]>, holder: CharacterId, holderLevel: number): string {
+  const best = new Map<CharacterId, number>();
+  for (const [ch, lvl] of levels) if (lvl > (best.get(ch) ?? 0)) best.set(ch, lvl);
+  const out: string[] = [];
+  for (const [ch, lvl] of best) if (!(ch === holder && lvl <= holderLevel)) out.push(ch + lvl);
+  return out.sort().join();
+}

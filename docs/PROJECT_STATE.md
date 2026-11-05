@@ -119,6 +119,9 @@ quoting a number.
 | 미셸 michelle | common | left/right/back 1 / ≤2 / ≤2; forward 0 / 1 / ≤2 (slides) | trait 인형 함정 |
 | 피커 picker | rare | diagonal 1 / 2 / 3 | trait 콩콩 |
 | 라카엘리 rakaeli | epic | jumps: front 1×3; 2×3; 2×3 + back 1 | skill 타천 |
+| 램피드 rampid | common | claw slide (forward + both forward diagonals) 1 / 2 / 3 | turns at the edge |
+| 라르헨 larhen | common | jumps: left/right 1 + forward diagonals 1; 2성 + back diagonals (H); 3성 left/right up to 5 + 4 diagonals | |
+| 볼코노프 volkonov | common | orthogonal slide 1 / 2 / 2 | skill 선율; never turns |
 
 - **인세이너:**
   - Capturing absorbs the victim's MOVEMENT PATTERN only, never traits or skills. An absorbed
@@ -136,6 +139,22 @@ quoting a number.
   - Casting takes the turn. He then makes 2 moves transformed (`Piece.awaken` 3 → 2 → 1).
   - Transformed reach: front 1×5; 2×5; 3×5 + back 1.
   - Insaner absorbs only his base pattern.
+- **볼코노프 선율 (2026-11-05):**
+  - Casting takes the turn; anchor = his own square; needs at least one other piece of his side
+    (`SkillBlock` 'alone').
+  - Every OTHER piece of his side gets `Piece.buff` = BUFF_TURNS[level] + 1 (3 / 3 / 4 turns),
+    counted down at the end of each of its owner's turns like `awaken`; a stun does not pause it.
+  - A buffed piece moves 1 square further in each orthogonal direction than its pattern reaches
+    there (`orthoReach`, measured on an empty board), or 1 where it reaches nowhere, as a plain
+    slide (blocked, captures the blocking enemy, ends on wasteland). Never absorbed by Insaner.
+  - UI: a rose "♪ N" badge on the board (DOM layer, `ui/game/melodyFx.ts`), a "선율 · N턴" band and
+    the extra squares in the hand card's diagram, `is-buffed` on enemy roster chips.
+- **Owner-brief interpretations (lead defaults, confirm with the owner):** Larhen's back diagonals
+  arrive at 2성 (the brief said "일성에서"); his 3성 keeps the four diagonals (an H); the melody
+  buffs the other pieces only, not Volkonov himself; all three are common (일반).
+- **Absorb masks:** 2 bits per character code holding the highest absorbed level (`absorbMerge`);
+  exact because every pattern contains its lower grades (checked in `tests/commons3.test.ts`).
+  Room for 15 character codes.
 - **Values (bot material):**
 
   | Character | Values (1성 / 2성 / 3성) |
@@ -148,8 +167,11 @@ quoting a number.
   | michelle | 3/4/5 |
   | picker | 3/5/7 |
   | rakaeli | 4/6/7 |
+  | rampid | 3/4/5 |
+  | larhen | 3/4/6 |
+  | volkonov | 3/4/5 |
 
-- **Direction arrows:** shown when the reach depends on direction (`isDirectional`). Sad, Picker,
+- **Direction arrows:** shown when the reach depends on direction (`isDirectional`). Sad, Picker, Volkonov, 2성+ Larhen,
   3성 Brutile and an Insaner without directional absorbs show none.
 
 ## 4. Progression (all localStorage; editable by the player, no server)
@@ -172,9 +194,9 @@ quoting a number.
 | # | Arena | Rating | Win + | Loss − | Unlocks |
 | --- | --- | --- | --- | --- | --- |
 | 1 | moonrune 달빛 룬 투기장 | 0–300 | 29–31 | 5–7 | sad, marki, walk (starters) |
-| 2 | emberforge | 301–600 | 25–29 | 10–14 | brutile |
-| 3 | blightmire | 601–1000 | 20–22 | 15–17 | insaner |
-| 4 | frostkeep | 1001–1500 | 18–22 | 17–20 | michelle |
+| 2 | emberforge | 301–600 | 25–29 | 10–14 | brutile, volkonov |
+| 3 | blightmire | 601–1000 | 20–22 | 15–17 | insaner, larhen |
+| 4 | frostkeep | 1001–1500 | 18–22 | 17–20 | michelle, rampid |
 | 5 | madcrown | 1501–2000 | 15–17 | 19–21 | picker |
 | 6 | apex | 2001+ | 14–16 | 20–22 | rakaeli |
 
@@ -210,7 +232,7 @@ legendary.
   game information).
 
 ## 5. Deploy and verify (the routine)
-1. **Gates:** `npx tsc --noEmit -p .`, `npx vitest run` (368 tests at last count) and
+1. **Gates:** `npx tsc --noEmit -p .`, `npx vitest run` (392 tests at last count) and
    `npm run build`.
    - Never leave temporary `tests/*.tmp.test.ts` or `zz-*` files; `node:` imports break tsc.
    - Vitest hides `console.log` from passing tests, so simulations write results to files.

@@ -74,7 +74,9 @@ export interface ArenaDef {
  * The six arenas. Ranges and rating steps are the owner's numbers. "2000이상 전설" overlaps the
  * fifth range at exactly 2000, so 2000 stays in arena 5 and the legend arena starts at 2001.
  * Brutile unlocks in arena 2, Insaner in arena 3, Michelle in arena 4, Picker in arena 5 and
- * Rakaeli in arena 6.
+ * Rakaeli in arena 6. The three later commons arrive early, each in a fitting arena: Volkonov the
+ * bard in arena 2, Larhen the assassin in arena 3 (the poison swamp) and Rampid the ice boy in
+ * arena 4 (the frost keep).
  */
 export const ARENA_DEFS: readonly ArenaDef[] = [
   {
@@ -84,17 +86,17 @@ export const ARENA_DEFS: readonly ArenaDef[] = [
   },
   {
     id: 'emberforge', index: 2, name: '잿불 대장간', tagline: '용암이 흐르는 쇠의 전장',
-    min: 301, max: 600, win: [25, 29], loss: [10, 14], unlocks: ['brutile'],
+    min: 301, max: 600, win: [25, 29], loss: [10, 14], unlocks: ['brutile', 'volkonov'],
     accent: '#ff9a4d', card: './arenas/emberforge/card.webp', backdrop: './arenas/emberforge/bg.webp', bgm: 'emberforge',
   },
   {
     id: 'blightmire', index: 3, name: '독초 늪 신전', tagline: '저주받은 안개의 성소',
-    min: 601, max: 1000, win: [20, 22], loss: [15, 17], unlocks: ['insaner'],
+    min: 601, max: 1000, win: [20, 22], loss: [15, 17], unlocks: ['insaner', 'larhen'],
     accent: '#7cff5a', card: './arenas/blightmire/card.webp', backdrop: './arenas/blightmire/bg.webp', bgm: 'blightmire',
   },
   {
     id: 'frostkeep', index: 4, name: '서리 성채', tagline: '오로라 아래 얼어붙은 요새',
-    min: 1001, max: 1500, win: [18, 22], loss: [17, 20], unlocks: ['michelle'],
+    min: 1001, max: 1500, win: [18, 22], loss: [17, 20], unlocks: ['michelle', 'rampid'],
     accent: '#9fe8ff', card: './arenas/frostkeep/card.webp', backdrop: './arenas/frostkeep/bg.webp', bgm: 'frostkeep',
   },
   {

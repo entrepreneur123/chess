@@ -1,4 +1,4 @@
-import { AWAKEN_TURNS, SKILL_UNLOCK_PLY, STORM_INTERVAL_PLIES, SUDDEN_DEATH_PLY, TRAPS_PER_MICHELLE, TRAP_STUN, TURN_TIME_1_MS, TURN_TIME_2_MS, TURN_TIME_MS } from './types';
+import { AWAKEN_TURNS, BUFF_TURNS, SKILL_UNLOCK_PLY, STORM_INTERVAL_PLIES, SUDDEN_DEATH_PLY, TRAPS_PER_MICHELLE, TRAP_STUN, TURN_TIME_1_MS, TURN_TIME_2_MS, TURN_TIME_MS } from './types';
 import type { AbsorbedAbility, CharacterId, EndReason, Formation, GameState, HistoryEntry, Move, Piece, PlayerId, Pos, SkillAction, Trap } from './types';
 import { BOARD_SIZE } from './types';
 import { CHARACTERS, CHAR_CODE, WASTE_SIZE, absorbMaskOf, effectiveValue, keepsDirection, skillKindOf } from './characters';
@@ -100,6 +100,11 @@ export function isAwake(piece: Pick<Piece, 'awaken'>): boolean {
   return (piece.awaken ?? 0) > 0;
 }
 
+/** True while Volkonov's "선율" buffs the piece (1 more square every orthogonal way). */
+export function isBuffed(piece: Pick<Piece, 'buff'>): boolean {
+  return (piece.buff ?? 0) > 0;
+}
+
 /** Is there a doll trap of `owner` on `pos`? */
 export function trapAt(state: Pick<GameState, 'traps'>, pos: Pos, owner: PlayerId): boolean {
   const sq = sqOf(pos);
@@ -164,9 +169,13 @@ function patternIsDirectional(character: CharacterId, level: number): boolean {
     case 'walk':
     case 'michelle':
     case 'rakaeli':
+    case 'rampid':
       return true;
     case 'brutile':
       return level < 3;
+    // 1성 jumps to the forward diagonals only; from 2성 all four diagonals (symmetric).
+    case 'larhen':
+      return level < 2;
     default:
       return false;
   }
@@ -218,7 +227,7 @@ export function screenArrow(piece: Pick<Piece, 'owner' | 'dir'>): 'up' | 'down' 
 }
 
 function countTargets(occ: Int8Array, owners: Uint8Array, piece: Piece, storm: number, waste: Uint8Array | null, traps: Uint8Array | null): number {
-  return genTargets(occ, owners, piece.owner, CHAR_CODE[piece.character], piece.level, sqOf(piece.pos), tmpTargets, 0, false, pieceDir(piece), storm, absorbMaskOf(piece.absorbed), waste, traps, isAwake(piece));
+  return genTargets(occ, owners, piece.owner, CHAR_CODE[piece.character], piece.level, sqOf(piece.pos), tmpTargets, 0, false, pieceDir(piece), storm, absorbMaskOf(piece.absorbed), waste, traps, isAwake(piece), isBuffed(piece));
 }
 
 function targetsWith(pieces: Piece[], occ: Int8Array, owners: Uint8Array, piece: Piece, storm: number, waste: Uint8Array | null, traps: Uint8Array | null): Move[] {
@@ -389,14 +398,19 @@ function switchTurn(state: GameState, entry: HistoryEntry, pliesSinceCapture: nu
 }
 
 /**
- * The turn of `player` ends: each of its stunned pieces has one owner turn less to sit out, and a
- * transformed Rakaeli one transformed turn less (a stun does not pause the transform).
+ * The turn of `player` ends: each of its stunned pieces has one owner turn less to sit out, a
+ * transformed Rakaeli one transformed turn less and a buffed piece one buffed turn less (a stun
+ * pauses neither).
  */
 function countDownTurnEnd(pieces: Piece[], player: PlayerId): Piece[] {
-  if (!pieces.some((p) => p.owner === player && (p.stun || p.awaken))) return pieces;
+  if (!pieces.some((p) => p.owner === player && (p.stun || p.awaken || p.buff))) return pieces;
   return pieces.map((p) => {
-    if (p.owner !== player || !(p.stun || p.awaken)) return p;
+    if (p.owner !== player || !(p.stun || p.awaken || p.buff)) return p;
     const q: Piece = { ...p };
+    if (p.buff) {
+      if (p.buff > 1) q.buff = p.buff - 1;
+      else delete q.buff;
+    }
     if (p.stun) {
       if (p.stun > 1) q.stun = p.stun - 1;
       else delete q.stun;
@@ -554,8 +568,11 @@ export function wasteArea(level: number, anchor: Pos): number[] {
   return out;
 }
 
-/** Why a skill cannot be cast now; 'active' = Rakaeli is transformed already. */
-export type SkillBlock = 'noSkill' | 'notYourTurn' | 'chain' | 'notYet' | 'used' | 'active' | 'storm' | 'stunned' | 'ended';
+/**
+ * Why a skill cannot be cast now; 'active' = Rakaeli is transformed already; 'alone' = Volkonov has
+ * no other piece left to play his melody for.
+ */
+export type SkillBlock = 'noSkill' | 'notYourTurn' | 'chain' | 'notYet' | 'used' | 'active' | 'storm' | 'alone' | 'stunned' | 'ended';
 
 /**
  * Why `pieceId` cannot use its skill right now, or null when it can. Every skill (Brutile's
@@ -574,6 +591,7 @@ export function skillBlock(state: GameState, pieceId: string): SkillBlock | null
   if (state.storm > 0) return 'storm';
   if (p.skillUsed) return 'used';
   if (state.ply < SKILL_UNLOCK_PLY) return 'notYet';
+  if (skillKindOf(p.character) === 'buff' && !state.pieces.some((q) => q.owner === p.owner && q.id !== p.id)) return 'alone';
   // Checked last: 'stunned' means the skill would be usable once the doll trap lets go.
   if (isStunned(p)) return 'stunned';
   return null;
@@ -596,20 +614,21 @@ function sideCanCast(state: GameState, player: PlayerId, ignoreStun = false): bo
     asPlayer ??= { ...state, turn: player };
     const block = skillBlock(asPlayer, p.id);
     if (block !== null && !(ignoreStun && block === 'stunned')) continue;
-    // A transform is always castable when unblocked (its anchor is his own square).
-    if (skillKindOf(p.character) === 'transform' || freeAnchors(state, p.level).length > 0) return true;
+    // A transform or a melody is always castable when unblocked (its anchor is his own square).
+    if (skillKindOf(p.character) !== 'waste' || freeAnchors(state, p.level).length > 0) return true;
   }
   return false;
 }
 
 /**
  * Valid anchors for `pieceId`'s skill: for Brutile's wasteland every corner whose whole area is on
- * the board, free of pieces and out of the storm; for Rakaeli's transform his own square only.
+ * the board, free of pieces and out of the storm; for Rakaeli's transform and Volkonov's melody his
+ * own square only.
  */
 export function skillAnchors(state: GameState, pieceId: string): Pos[] {
   if (skillBlock(state, pieceId) !== null) return [];
   const p = state.pieces.find((x) => x.id === pieceId)!;
-  if (skillKindOf(p.character) === 'transform') return [{ r: p.pos.r, c: p.pos.c }];
+  if (skillKindOf(p.character) !== 'waste') return [{ r: p.pos.r, c: p.pos.c }];
   return freeAnchors(state, p.level);
 }
 
@@ -637,23 +656,36 @@ export function isLegalSkill(state: GameState, action: SkillAction): boolean {
 
 /**
  * Pure: the skill is the player's action for the turn. Brutile lays its wasteland; Rakaeli
- * transforms (`awaken` = AWAKEN_TURNS, which the turn change at once counts down to 2). Either way
- * the caster's `skillUsed` is set. Throws if illegal.
+ * transforms (`awaken` = AWAKEN_TURNS, which the turn change at once counts down to 2); Volkonov
+ * buffs every other piece of his side (`buff` = BUFF_TURNS[level] + 1, counted down the same way).
+ * Either way the caster's `skillUsed` is set. Throws if illegal.
  */
 export function applySkill(state: GameState, action: SkillAction): GameState {
   if (!isLegalSkill(state, action)) throw new Error(`Illegal skill: ${JSON.stringify(action)}`);
   const p = state.pieces.find((x) => x.id === action.pieceId)!;
-  const transform = skillKindOf(p.character) === 'transform';
-  const squares = transform ? [] : wasteArea(p.level, action.anchor);
-  const waste = transform ? state.waste : [...new Set([...state.waste, ...squares])].sort((a, b) => a - b);
-  const pieces = state.pieces.map((x) => (x.id !== p.id ? x : transform ? { ...x, skillUsed: true as const, awaken: AWAKEN_TURNS } : { ...x, skillUsed: true as const }));
+  const kind = skillKindOf(p.character);
+  const transform = kind === 'transform';
+  const buffs = kind === 'buff';
+  const squares = kind === 'waste' ? wasteArea(p.level, action.anchor) : [];
+  const waste = kind === 'waste' ? [...new Set([...state.waste, ...squares])].sort((a, b) => a - b) : state.waste;
+  const buffed: string[] = [];
+  const pieces = state.pieces.map((x) => {
+    if (x.id === p.id) return transform ? { ...x, skillUsed: true as const, awaken: AWAKEN_TURNS } : { ...x, skillUsed: true as const };
+    if (buffs && x.owner === p.owner) {
+      buffed.push(x.id);
+      return { ...x, buff: BUFF_TURNS[p.level] + 1 };
+    }
+    return x;
+  });
   const used: [number, number] = [state.skillsUsed[0], state.skillsUsed[1]];
   used[p.owner] += 1;
   const ct: [number, number] = [state.consecutiveTimeouts[0], state.consecutiveTimeouts[1]];
   ct[p.owner] = 0;
   const entry: HistoryEntry = transform
     ? { kind: 'skill', player: p.owner, pieceId: p.id, squares: [], transform: true }
-    : { kind: 'skill', player: p.owner, pieceId: p.id, squares };
+    : buffs
+      ? { kind: 'skill', player: p.owner, pieceId: p.id, squares: [], buffed }
+      : { kind: 'skill', player: p.owner, pieceId: p.id, squares };
   return settle(switchTurn({ ...state, pieces, waste, skillsUsed: used, consecutiveTimeouts: ct }, entry, state.pliesSinceCapture + 1));
 }
 

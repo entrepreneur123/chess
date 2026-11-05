@@ -30,7 +30,8 @@ import {
   type Trap,
 } from '../src/engine';
 import { fastHopGain } from '../src/engine/fast';
-import { chainPlies, makeState, keys, rngFrom, targetKeys } from './helpers';
+import { absorbSig, chainPlies, makeState, keys, rngFrom, targetKeys } from './helpers';
+import { CHAR_BY_CODE, absorbedLevel } from '../src/engine/characters';
 
 const mv = (state: GameState, pieceId: string, r: number, c: number): Move => {
   const m = getLegalMoves(state, pieceId).find((x) => x.to.r === r && x.to.c === c);
@@ -430,7 +431,7 @@ const sig = (s: GameState) =>
   JSON.stringify({
     pieces: [...s.pieces]
       .sort((a, b) => a.id.localeCompare(b.id))
-      .map((p) => [p.id, p.pos.r, p.pos.c, p.dir ?? 0, p.stun ?? 0, (p.absorbed ?? []).map((a) => a.character + a.level).sort().join()]),
+      .map((p) => [p.id, p.pos.r, p.pos.c, p.dir ?? 0, p.stun ?? 0, absorbSig((p.absorbed ?? []).map((a) => [a.character, a.level]), p.character, p.level)]),
     turn: s.turn,
     traps: (s.traps ?? []).map((t) => t.sq * 2 + t.owner).sort((a, b) => a - b),
     laid: s.trapsLaid ?? [0, 0],
@@ -439,9 +440,8 @@ function fastSig(b: ReturnType<typeof fastFromState>): string {
   const pieces: (string | number)[][] = [];
   for (let i = 0; i < b.n; i++) {
     if (b.sq[i] < 0) continue;
-    const abs: string[] = [];
-    for (let bit = 0; bit < 21; bit++) if (b.absorb[i] & (1 << bit)) abs.push(['sad', 'marki', 'walk', 'insaner', 'brutile', 'michelle', 'picker'][(bit / 3) | 0] + ((bit % 3) + 1));
-    pieces.push([b.ids[i], (b.sq[i] / BOARD_SIZE) | 0, b.sq[i] % BOARD_SIZE, b.ch[i] === 0 || b.ch[i] >= 5 ? 0 : b.dir[i], b.stun[i], abs.sort().join()]);
+    const abs: [CharacterId, number][] = CHAR_BY_CODE.map((id, ch) => [id, absorbedLevel(b.absorb[i], ch)]);
+    pieces.push([b.ids[i], (b.sq[i] / BOARD_SIZE) | 0, b.sq[i] % BOARD_SIZE, b.ch[i] === 0 || b.ch[i] >= 5 ? 0 : b.dir[i], b.stun[i], absorbSig(abs, CHAR_BY_CODE[b.ch[i]], b.lvl[i])]);
   }
   pieces.sort((a, c) => String(a[0]).localeCompare(String(c[0])));
   const tr: number[] = [];

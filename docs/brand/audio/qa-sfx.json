@@ -99,6 +99,36 @@
   "trail_ms": 44,
   "bytes": 9313
  },
+ "larhen-capture": {
+  "file": "sfx/larhen-capture.m4a",
+  "dur": 0.661,
+  "lufs": -17.02,
+  "peak_db": -2.76,
+  "centroid": 4354,
+  "lead_ms": 5,
+  "trail_ms": 23,
+  "bytes": 6506
+ },
+ "larhen-move": {
+  "file": "sfx/larhen-move.m4a",
+  "dur": 0.683,
+  "lufs": -17.12,
+  "peak_db": -1.94,
+  "centroid": 4115,
+  "lead_ms": 4,
+  "trail_ms": 32,
+  "bytes": 6639
+ },
+ "larhen-select": {
+  "file": "sfx/larhen-select.m4a",
+  "dur": 0.704,
+  "lufs": -16.16,
+  "peak_db": -3.88,
+  "centroid": 3936,
+  "lead_ms": 2,
+  "trail_ms": 39,
+  "bytes": 6714
+ },
  "marki-capture": {
   "file": "sfx/marki-capture.m4a",
   "dur": 1.088,
@@ -299,6 +329,36 @@
   "trail_ms": 36,
   "bytes": 10687
  },
+ "rampid-capture": {
+  "file": "sfx/rampid-capture.m4a",
+  "dur": 0.853,
+  "lufs": -16.98,
+  "peak_db": -2.17,
+  "centroid": 4894,
+  "lead_ms": 4,
+  "trail_ms": 25,
+  "bytes": 8144
+ },
+ "rampid-move": {
+  "file": "sfx/rampid-move.m4a",
+  "dur": 0.555,
+  "lufs": -17.24,
+  "peak_db": -3.29,
+  "centroid": 4533,
+  "lead_ms": 1,
+  "trail_ms": 29,
+  "bytes": 5688
+ },
+ "rampid-select": {
+  "file": "sfx/rampid-select.m4a",
+  "dur": 0.576,
+  "lufs": -17.17,
+  "peak_db": -2.3,
+  "centroid": 5460,
+  "lead_ms": 2,
+  "trail_ms": 42,
+  "bytes": 5714
+ },
  "sad-capture": {
   "file": "sfx/sad-capture.m4a",
   "dur": 1.259,
@@ -338,6 +398,46 @@
   "lead_ms": 8,
   "trail_ms": 21,
   "bytes": 15722
+ },
+ "volkonov-capture": {
+  "file": "sfx/volkonov-capture.m4a",
+  "dur": 0.917,
+  "lufs": -17.16,
+  "peak_db": -2.01,
+  "centroid": 3297,
+  "lead_ms": 0,
+  "trail_ms": 46,
+  "bytes": 8405
+ },
+ "volkonov-move": {
+  "file": "sfx/volkonov-move.m4a",
+  "dur": 0.661,
+  "lufs": -17.06,
+  "peak_db": -3.16,
+  "centroid": 2172,
+  "lead_ms": 0,
+  "trail_ms": 42,
+  "bytes": 6400
+ },
+ "volkonov-select": {
+  "file": "sfx/volkonov-select.m4a",
+  "dur": 0.875,
+  "lufs": -17.08,
+  "peak_db": -1.17,
+  "centroid": 2224,
+  "lead_ms": 0,
+  "trail_ms": 39,
+  "bytes": 8294
+ },
+ "volkonov-skill": {
+  "file": "sfx/volkonov-skill.m4a",
+  "dur": 1.515,
+  "lufs": -17.05,
+  "peak_db": -3.63,
+  "centroid": 2506,
+  "lead_ms": 0,
+  "trail_ms": 26,
+  "bytes": 13522
  },
  "walk-capture": {
   "file": "sfx/walk-capture.m4a",

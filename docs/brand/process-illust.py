@@ -28,6 +28,10 @@ FACE = {
     # Two forms with separate masters (illust-rakaeli-lv{n}, illust-rakaeli-awake-lv{n}).
     'rakaeli': (0.273, 0.017, 0.72, 0.36),
     'rakaeli-awake': (0.26, 0.017, 0.707, 0.36),
+    # Grades 2-3 generated from the grade-1 master as a reference (2026-11-05).
+    'rampid': (0.24, 0.06, 0.68, 0.39),
+    'larhen': (0.28, 0.06, 0.70, 0.375),
+    'volkonov': (0.30, 0.05, 0.72, 0.36),
 }
 for f in sorted(SRC.glob('illust-*.jpg')):
     name = f.stem.replace('illust-', '')  # sad-lv1

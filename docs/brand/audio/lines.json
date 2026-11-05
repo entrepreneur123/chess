@@ -679,6 +679,213 @@
           "style": "Weary and soft, as the transformation fades."
         }
       ]
+    },
+    "rampid": {
+      "concept": "An energetic teenage ice boy (~15) with sky-blue hair who rides the ice and dashes straight forward at speed: a bright, quick, cocky young male voice; not a child, not deep.",
+      "gender": "male",
+      "voice": "A cocky, energetic boy of about fifteen. Bright, quick, light young male voice in a medium-high register, grinning and playful, fast delivery. Never childish, never deep.",
+      "lines": [
+        {
+          "id": "select-1",
+          "event": "select",
+          "text": "불렀어? 바로 갈게!",
+          "style": "Eager and cocky.",
+          "say": "불렀어? 바로 갈게."
+        },
+        {
+          "id": "select-2",
+          "event": "select",
+          "text": "빙판 위라면 내가 최고지.",
+          "style": "Cocky grin, playful."
+        },
+        {
+          "id": "move-1",
+          "event": "move",
+          "text": "간다, 슝!",
+          "style": "Quick and bright.",
+          "say": "간다, 슝."
+        },
+        {
+          "id": "move-2",
+          "event": "move",
+          "text": "못 따라오지?",
+          "style": "Teasing, fast."
+        },
+        {
+          "id": "capture-1",
+          "event": "capture",
+          "text": "너무 느려!",
+          "style": "Cocky taunt.",
+          "say": "너무 느려."
+        },
+        {
+          "id": "capture-2",
+          "event": "capture",
+          "text": "꽁꽁 얼려 주지!",
+          "style": "Bright battle cry.",
+          "say": "꽁꽁 얼려 주지."
+        },
+        {
+          "id": "capture-3",
+          "event": "capture",
+          "text": "빙판 조심하라고!",
+          "style": "Playful warning.",
+          "say": "빙판 조심하라고."
+        },
+        {
+          "id": "death-1",
+          "event": "death",
+          "text": "으앗… 미끄러졌다…",
+          "style": "Startled, then fading."
+        },
+        {
+          "id": "victory-1",
+          "event": "victory",
+          "text": "역시 내가 제일 빠르다니까!",
+          "style": "Triumphant, cocky.",
+          "say": "역시 내가 제일 빠르다니까."
+        }
+      ]
+    },
+    "larhen": {
+      "concept": "A professional assassin in his thirties with long hair and twin daggers who leaps high: a low, calm, cold, quiet male voice; terse, never shouting.",
+      "gender": "male",
+      "voice": "A professional assassin in his thirties. Low, calm, cold and quiet male voice, terse and controlled, almost a murmur. Never shouting, never emotional.",
+      "lines": [
+        {
+          "id": "select-1",
+          "event": "select",
+          "text": "표적을 말해.",
+          "style": "Cold, flat, quiet."
+        },
+        {
+          "id": "select-2",
+          "event": "select",
+          "text": "그림자 속에서.",
+          "style": "Low murmur."
+        },
+        {
+          "id": "move-1",
+          "event": "move",
+          "text": "조용히.",
+          "style": "Quiet, controlled."
+        },
+        {
+          "id": "move-2",
+          "event": "move",
+          "text": "위에서 간다.",
+          "style": "Terse, calm."
+        },
+        {
+          "id": "capture-1",
+          "event": "capture",
+          "text": "끝이다.",
+          "style": "Cold finality."
+        },
+        {
+          "id": "capture-2",
+          "event": "capture",
+          "text": "느렸군.",
+          "style": "Cold, unimpressed."
+        },
+        {
+          "id": "capture-3",
+          "event": "capture",
+          "text": "소리 없이.",
+          "style": "Whispered."
+        },
+        {
+          "id": "death-1",
+          "event": "death",
+          "text": "…실수였나.",
+          "style": "Weak, quiet, fading."
+        },
+        {
+          "id": "victory-1",
+          "event": "victory",
+          "text": "임무 완료.",
+          "style": "Calm, flat satisfaction."
+        }
+      ]
+    },
+    "volkonov": {
+      "concept": "A male bard whose eyes are always closed in a smile and who buffs allies with music: a smooth, warm, theatrical, slightly teasing mid-range male voice with a sing-song delivery.",
+      "gender": "male",
+      "voice": "A charming travelling bard, a man with an ever-present closed-eye smile. Smooth, warm, theatrical mid-range male voice, playful and slightly teasing, with a lilting sing-song delivery.",
+      "lines": [
+        {
+          "id": "select-1",
+          "event": "select",
+          "text": "오늘은 어떤 노래를 들려줄까?",
+          "style": "Warm, playful."
+        },
+        {
+          "id": "select-2",
+          "event": "select",
+          "text": "후후, 박자에 맞춰 볼까?",
+          "style": "Teasing chuckle."
+        },
+        {
+          "id": "move-1",
+          "event": "move",
+          "text": "발걸음도 리듬에 맞춰~",
+          "style": "Sing-song.",
+          "say": "발걸음도 리듬에 맞춰."
+        },
+        {
+          "id": "move-2",
+          "event": "move",
+          "text": "라라~ 이쪽이야.",
+          "style": "Humming, light.",
+          "say": "라라, 이쪽이야."
+        },
+        {
+          "id": "capture-1",
+          "event": "capture",
+          "text": "앙코르는 없어.",
+          "style": "Smiling, cool."
+        },
+        {
+          "id": "capture-2",
+          "event": "capture",
+          "text": "피날레다!",
+          "style": "Theatrical flourish.",
+          "say": "피날레다."
+        },
+        {
+          "id": "capture-3",
+          "event": "capture",
+          "text": "박자를 놓쳤군.",
+          "style": "Teasing."
+        },
+        {
+          "id": "skill-1",
+          "event": "skill",
+          "text": "모두, 내 선율을 들어라!",
+          "style": "Rousing call to allies.",
+          "say": "모두, 내 선율을 들어라."
+        },
+        {
+          "id": "skill-2",
+          "event": "skill",
+          "text": "발걸음에 날개를 달아 주지!",
+          "style": "Rousing, uplifting.",
+          "say": "발걸음에 날개를 달아 주지."
+        },
+        {
+          "id": "death-1",
+          "event": "death",
+          "text": "아… 마지막 소절이…",
+          "style": "Wistful, fading."
+        },
+        {
+          "id": "victory-1",
+          "event": "victory",
+          "text": "브라보! 완벽한 무대였어.",
+          "style": "Delighted, theatrical.",
+          "say": "브라보. 완벽한 무대였어."
+        }
+      ]
     }
   }
 }

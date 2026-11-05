@@ -1,7 +1,7 @@
 import type { AbsorbedAbility, CharacterDef, CharacterId, Level, SkillKind } from './types';
 
 /** Every character, in roster order. */
-export const CHARACTER_IDS: CharacterId[] = ['sad', 'marki', 'walk', 'insaner', 'brutile', 'michelle', 'picker', 'rakaeli'];
+export const CHARACTER_IDS: CharacterId[] = ['sad', 'marki', 'walk', 'insaner', 'brutile', 'michelle', 'picker', 'rakaeli', 'rampid', 'larhen', 'volkonov'];
 /** The default squad of a new profile (every character is available to everyone). */
 export const STARTER_IDS: CharacterId[] = ['sad', 'marki', 'walk'];
 
@@ -112,6 +112,47 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
       ],
     },
   },
+  rampid: {
+    id: 'rampid',
+    nameKo: '램피드',
+    nameEn: 'Rampid',
+    rarity: 'common',
+    descKo: [
+      '앞 · 앞쪽 좌우 대각선 1칸 (발톱) · 끝줄에서 방향 전환',
+      '앞 · 앞쪽 좌우 대각선 최대 2칸 직진 · 끝줄에서 방향 전환',
+      '앞 · 앞쪽 좌우 대각선 최대 3칸 직진 · 끝줄에서 방향 전환',
+    ],
+    value: [3, 4, 5],
+  },
+  larhen: {
+    id: 'larhen',
+    nameKo: '라르헨',
+    nameEn: 'Larhen',
+    rarity: 'common',
+    descKo: [
+      '좌우 1칸 + 앞쪽 좌우 대각선 1칸 점프 (뛰어넘기 가능)',
+      '좌우 1칸 + 대각선 4방향 1칸 점프 (H자 · 뛰어넘기 가능)',
+      '좌우 최대 5칸 + 대각선 4방향 1칸 점프 (H자 · 뛰어넘기 가능)',
+    ],
+    value: [3, 4, 6],
+  },
+  volkonov: {
+    id: 'volkonov',
+    nameKo: '볼코노프',
+    nameEn: 'Volkonov',
+    rarity: 'common',
+    descKo: ['상하좌우 1칸 이동', '상하좌우 최대 2칸 직진', '상하좌우 최대 2칸 직진'],
+    value: [3, 4, 5],
+    skill: {
+      kind: 'buff',
+      nameKo: '선율',
+      descKo: [
+        '다른 아군 전원이 3턴 동안 상하좌우로 1칸 더 이동 (그 방향 이동이 없던 말도 1칸)',
+        '다른 아군 전원이 3턴 동안 상하좌우로 1칸 더 이동 (그 방향 이동이 없던 말도 1칸)',
+        '다른 아군 전원이 4턴 동안 상하좌우로 1칸 더 이동 (그 방향 이동이 없던 말도 1칸)',
+      ],
+    },
+  },
 };
 
 /** Numeric character codes used by the fast move generator. */
@@ -123,6 +164,9 @@ export const CH_BRUTILE = 4;
 export const CH_MICHELLE = 5;
 export const CH_PICKER = 6;
 export const CH_RAKAELI = 7;
+export const CH_RAMPID = 8;
+export const CH_LARHEN = 9;
+export const CH_VOLKONOV = 10;
 export const CHAR_CODE: Record<CharacterId, number> = {
   sad: CH_SAD,
   marki: CH_MARKI,
@@ -132,24 +176,42 @@ export const CHAR_CODE: Record<CharacterId, number> = {
   michelle: CH_MICHELLE,
   picker: CH_PICKER,
   rakaeli: CH_RAKAELI,
+  rampid: CH_RAMPID,
+  larhen: CH_LARHEN,
+  volkonov: CH_VOLKONOV,
 };
-export const CHAR_BY_CODE: CharacterId[] = ['sad', 'marki', 'walk', 'insaner', 'brutile', 'michelle', 'picker', 'rakaeli'];
+export const CHAR_BY_CODE: CharacterId[] = ['sad', 'marki', 'walk', 'insaner', 'brutile', 'michelle', 'picker', 'rakaeli', 'rampid', 'larhen', 'volkonov'];
 /**
- * Number of character codes. Absorb masks hold 3 level bits per code, so they need N_CHARS * 3
- * bits: 24 today. They are stored in Uint32Array / int32 slots, which leaves room for 10 codes.
+ * Number of character codes. An absorb mask holds, per code, the highest absorbed level of that
+ * character's pattern in ABSORB_FIELD_BITS bits (see `absorbMerge`), so it needs N_CHARS * 2 bits:
+ * 22 today. Masks live in Int32Array / Uint32Array slots, which leaves room for 15 codes.
  */
 export const N_CHARS = CHAR_BY_CODE.length;
-if (N_CHARS * 3 > 30) throw new Error('absorb masks no longer fit in 31 bits: widen the storage');
+/** Bits per character code in an absorb mask: the absorbed level 0..3. */
+export const ABSORB_FIELD_BITS = 2;
+if (N_CHARS * ABSORB_FIELD_BITS > 30) throw new Error('absorb masks no longer fit in 31 bits: widen the storage');
 
 /**
  * Game rule: a piece that reaches the far edge in its forward direction (the enemy's back rank)
- * turns around: its forward and backward swap. Only the fully symmetric movers (Sad, Picker) skip
- * the flip, because it would not change a single square they can reach. Michelle turns too: after
- * the flip her "back" (where she lays doll traps) points toward the enemy side.
+ * turns around: its forward and backward swap. Only the fully symmetric movers (Sad, Picker,
+ * Volkonov) skip the flip, because it would not change a single square they can reach. Michelle
+ * turns too: after the flip her "back" (where she lays doll traps) points toward the enemy side.
  */
 export function keepsDirection(ch: number): boolean {
-  return ch === CH_SAD || ch === CH_PICKER;
+  return ch === CH_SAD || ch === CH_PICKER || ch === CH_VOLKONOV;
 }
+
+/** Rampid's three-pronged "claw" (forward, forward-left, forward-right) slide range by level. */
+export const RAMPID_RANGE = [0, 1, 2, 3];
+/**
+ * Larhen jumps (nothing in between blocks him) by level: left / right up to LARHEN_SIDE squares
+ * (every square on the way is a landing square), the two forward diagonals 1, and from
+ * LARHEN_BACK_LEVEL the two backward diagonals 1 too (an "H" around him).
+ */
+export const LARHEN_SIDE = [0, 1, 1, 5];
+export const LARHEN_BACK_LEVEL = 2;
+/** Volkonov's orthogonal slide range by level (index = level). */
+export const VOLKONOV_RANGE = [0, 1, 2, 2];
 
 /** Michelle's sideways / backward slide range by level (index = level). */
 export const MICHELLE_RANGE = [0, 1, 2, 2];
@@ -194,16 +256,45 @@ export function pieceValue(character: CharacterId, level: Level): number {
   return CHARACTERS[character].value[level - 1];
 }
 
-/** Bit for one (character, level) movement pattern in an absorb mask. */
+/**
+ * Absorb mask holding one (character, level) movement pattern. A mask stores, per character code,
+ * the HIGHEST absorbed level only: every character's pattern at a level contains its pattern at
+ * every lower level (tests/characters-new.test.ts checks this nesting), so the union of several
+ * levels of one character is simply the highest one. Combine masks with `absorbMerge`, never `|`.
+ */
 export function abilityBit(ch: number, level: number): number {
-  return 1 << (ch * 3 + (level - 1));
+  return level << (ch * ABSORB_FIELD_BITS);
 }
 
-/** Bitmask of absorbed movement patterns (0 when nothing was absorbed). */
+/** Level of character code `ch` in absorb mask `mask` (0 = not absorbed). */
+export function absorbedLevel(mask: number, ch: number): number {
+  return (mask >>> (ch * ABSORB_FIELD_BITS)) & 3;
+}
+
+/** Union of two absorb masks: the higher level per character. */
+export function absorbMerge(a: number, b: number): number {
+  if (a === 0) return b;
+  if (b === 0) return a;
+  let m = 0;
+  for (let ch = 0; ch < N_CHARS; ch++) {
+    const la = absorbedLevel(a, ch);
+    const lb = absorbedLevel(b, ch);
+    const l = la > lb ? la : lb;
+    if (l) m |= l << (ch * ABSORB_FIELD_BITS);
+  }
+  return m;
+}
+
+/** `mask` without the holder's own pattern (`ch` at exactly `level`): it adds nothing. */
+export function absorbWithout(mask: number, ch: number, level: number): number {
+  return absorbedLevel(mask, ch) === level ? mask & ~(3 << (ch * ABSORB_FIELD_BITS)) : mask;
+}
+
+/** Absorb mask of a list of absorbed movement patterns (0 when nothing was absorbed). */
 export function absorbMaskOf(abs: AbsorbedAbility[] | undefined): number {
   if (!abs) return 0;
   let m = 0;
-  for (const a of abs) m |= abilityBit(CHAR_CODE[a.character], a.level);
+  for (const a of abs) m = absorbMerge(m, abilityBit(CHAR_CODE[a.character], a.level));
   return m;
 }
 

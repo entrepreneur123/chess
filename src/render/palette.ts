@@ -96,6 +96,11 @@ const CORE_FX: Record<CoreCharacterId, { primary: string; secondary: string; cor
   // Michelle: pale doll lavender over a dusk plum. Picker: desert sun amber and rope tan.
   michelle: { primary: '#B9A6FF', secondary: '#4B3B6E', core: '#F3EEFF' },
   picker: { primary: '#FFB547', secondary: '#C9894A', core: '#FFF1D6' },
+  // Rampid: glacial ice cyan and frost white. Larhen: moonlit steel silver over deep indigo smoke.
+  // Volkonov: rose-magenta notes with warm gold.
+  rampid: { primary: '#7FE6FF', secondary: '#D8F7FF', core: '#FFFFFF' },
+  larhen: { primary: '#C9D6F0', secondary: '#3B3F8C', core: '#F4F8FF' },
+  volkonov: { primary: '#FF6FC2', secondary: '#F2C14E', core: '#FFE9F6' },
 };
 
 /**
@@ -163,6 +168,9 @@ export const CHARACTER_RARITY = {
   brutile: 'legendary',
   michelle: 'common',
   picker: 'rare',
+  rampid: 'common',
+  larhen: 'common',
+  volkonov: 'common',
 } satisfies Record<CoreCharacterId, Rarity> & { rakaeli: Rarity } as Record<CharacterId, Rarity>;
 
 /**

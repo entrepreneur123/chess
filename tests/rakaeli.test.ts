@@ -34,13 +34,13 @@ import {
   type SkillAction,
 } from '../src/engine';
 import { SKILL_FLAG, fastCanSkill } from '../src/engine/fast';
-import { CHAR_BY_CODE, keepsDirection } from '../src/engine/characters';
+import { CHAR_BY_CODE, absorbedLevel, keepsDirection } from '../src/engine/characters';
 import { forwardDir } from '../src/engine/board';
 import { PROFILE_VERSION, sanitizeProfile } from '../src/meta/profile';
 import { GameController, type ControllerEvent, type ControllerPorts } from '../src/ui/game/GameController';
 import { handModel, skillReadiness } from '../src/ui/game/hand';
 import { movementSpan } from '../src/ui/components/piece';
-import { chainPlies, keys, makeState, rngFrom, targetKeys } from './helpers';
+import { absorbSig, chainPlies, keys, makeState, rngFrom, targetKeys } from './helpers';
 import { MAX_MATCH_PLIES, STORM_ROWS_FROM } from '../src/engine';
 
 const R = 'p0-rakaeli';
@@ -305,7 +305,7 @@ const sig = (s: GameState) =>
         p.stun ?? 0,
         p.awaken ?? 0,
         p.skillUsed ? 1 : 0,
-        (p.absorbed ?? []).map((a) => a.character + a.level).sort().join(),
+        absorbSig((p.absorbed ?? []).map((a) => [a.character, a.level]), p.character, p.level),
       ]),
     turn: s.turn,
     waste: s.waste,
@@ -315,9 +315,8 @@ function fastSig(b: ReturnType<typeof fastFromState>): string {
   const pieces: (string | number)[][] = [];
   for (let i = 0; i < b.n; i++) {
     if (b.sq[i] < 0) continue;
-    const abs: string[] = [];
-    for (let bit = 0; bit < CHAR_BY_CODE.length * 3; bit++) if (b.absorb[i] & (1 << bit)) abs.push(CHAR_BY_CODE[(bit / 3) | 0] + ((bit % 3) + 1));
-    pieces.push([b.ids[i], (b.sq[i] / BOARD_SIZE) | 0, b.sq[i] % BOARD_SIZE, keepsDirection(b.ch[i]) ? 0 : b.dir[i], b.stun[i], b.awaken[i], b.used[i], abs.sort().join()]);
+    const abs: [CharacterId, number][] = CHAR_BY_CODE.map((id, ch) => [id, absorbedLevel(b.absorb[i], ch)]);
+    pieces.push([b.ids[i], (b.sq[i] / BOARD_SIZE) | 0, b.sq[i] % BOARD_SIZE, keepsDirection(b.ch[i]) ? 0 : b.dir[i], b.stun[i], b.awaken[i], b.used[i], absorbSig(abs, CHAR_BY_CODE[b.ch[i]], b.lvl[i])]);
   }
   pieces.sort((a, c) => String(a[0]).localeCompare(String(c[0])));
   const waste: number[] = [];
@@ -537,8 +536,9 @@ describe('profile', () => {
     };
     const p = sanitizeProfile(v5);
     expect(p.version).toBe(PROFILE_VERSION);
-    expect(p.owned).toEqual({ ...v5.owned, rakaeli: 0 });
-    expect(p.grades).toEqual({ ...v5.grades, rakaeli: 1 });
+    // Characters newer than the save (Rakaeli and the later ones) arrive locked at 1성.
+    expect(p.owned).toEqual({ ...v5.owned, rakaeli: 0, rampid: 0, larhen: 0, volkonov: 0 });
+    expect(p.grades).toEqual({ ...v5.grades, rakaeli: 1, rampid: 1, larhen: 1, volkonov: 1 });
     expect(p.formation).toEqual(v5.formation);
     expect(p.formationSaved).toBe(true);
     expect([p.tokens, p.essence, p.rating, p.bestRating]).toEqual([77, 140, 2105, 2150]);

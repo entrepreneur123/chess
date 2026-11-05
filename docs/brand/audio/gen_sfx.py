@@ -860,6 +860,217 @@ def rakaeli_awake_end() -> np.ndarray:
     return finish(room(y, 0.6, 0.16, 0.015, 4000, 0.15))
 
 
+# --- rampid (teenage ice skater; fast forward dasher) ---------------------------------------------
+
+def skate_scrape(dur: float = 0.22, lo: float = 2600, hi: float = 7500, grit: float = 1.0) -> np.ndarray:
+    """A skate blade carving ice: a bright, narrow swept band (the blade edge) with a grainy ice-chip
+    texture and a faint high whistle of the blade itself. Brighter and thinner than a whoosh."""
+    n = int(dur * SR)
+    t = t_axis(dur)
+    edge = swept_band(noise(dur), lo, hi, 3.2)
+    carve = swept_band(noise(dur), lo * 0.33, hi * 0.3, 1.4)  # the body of the stroke, so it is not all hiss
+    chips = highpass(crackle(dur, 1600, 0.0009), 3500)
+    whistle = np.sin(2 * np.pi * np.cumsum(np.geomspace(hi * 0.9, hi * 1.15, n)) / SR) * np.exp(-t / (dur * 0.6))
+    y = (edge / (np.max(np.abs(edge)) + 1e-9) + 0.9 * carve / (np.max(np.abs(carve)) + 1e-9)
+         + 0.3 * grit * chips + 0.05 * whistle) * bell_env(n, 0.35, 1.3)
+    return lowpass(y, 10000) / (np.max(np.abs(y)) + 1e-9)
+
+
+def ice_tinkle(dur: float = 0.4, n: int = 6, base: float = 3000) -> np.ndarray:
+    """Frost: tiny glassy ice-crystal pings (inharmonic, very short) scattered over a crisp crackle."""
+    y = silence(dur)
+    for _ in range(n):
+        f = base * rng.uniform(0.85, 1.9)
+        place(y, metal(0.12, f, (1.0, 2.31, 3.87), decay=0.035, bright=0.45), rng.uniform(0, dur - 0.12),
+              rng.uniform(0.25, 0.6))
+    fizz = bandpass(crackle(dur, 900, 0.0008), 3500, 9000) * bell_env(int(dur * SR), 0.2, 1.2)
+    y = y / (np.max(np.abs(y)) + 1e-9) + 0.25 * fizz
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def ice_stop(dur: float = 0.3) -> np.ndarray:
+    """A hockey-style stop: a broadband spray of shaved ice that bursts and decays fast."""
+    n = int(dur * SR)
+    spray = bandpass(noise(dur), 900, 8000) * env_ad(n, 0.012, dur * 0.28)
+    grain = 0.6 + 0.4 * lowpass(np.abs(crackle(dur, 1200, 0.002)), 90)
+    y = spray * grain
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def rampid_select() -> np.ndarray:
+    # A quick skate stop (spray of shaved ice) and a sparkle of frost: "ready!"
+    y = mix(0.6, (skate_scrape(0.12, 3000, 6000), 0, 0.45), (ice_stop(0.28), 0.06, 0.8),
+            (ice_tinkle(0.4, 6, 3200), 0.12, 0.3))
+    return finish(room(y, 0.45, 0.14, 0.008, 8000, 0.15))
+
+
+def rampid_move() -> np.ndarray:
+    # Two fast skating strides (bright blade carves, the second higher and longer) and a short glide hiss.
+    glide = highpass(noise(0.25), 5000) * np.exp(-t_axis(0.25) / 0.08)
+    y = mix(0.55, (skate_scrape(0.16, 2400, 5600), 0, 0.85), (skate_scrape(0.22, 2800, 7800), 0.13, 0.95),
+            (whoosh(0.3, 900, 3600, 1.4, 0.45), 0.05, 0.25), (glide, 0.3, 0.12))
+    return finish(room(y, 0.35, 0.1, 0.006, 8000, 0.12))
+
+
+def rampid_capture() -> np.ndarray:
+    # Speed dash into an icy hit: a fast rising rush, a glassy ice-shatter strike with a small low
+    # body, shards scattering, and frost crackling over the tail.
+    rush = whoosh(0.22, 1200, 7000, 2.0, 0.85)
+    t = t_axis(0.5)
+    shatter = sum(g * np.sin(2 * np.pi * 2350 * r * t + rng.uniform(0, 6.28)) * np.exp(-t / d)
+                  for r, g, d in ((1.0, 1.0, 0.12), (1.47, 0.7, 0.08), (2.63, 0.45, 0.05), (3.91, 0.3, 0.03)))
+    shatter = shatter * env_ad(len(t), 0.0004, 0.3)
+    burst = bandpass(crackle(0.35, 2500, 0.0015), 1500, 8000) * env_ad(int(0.35 * SR), 0.001, 0.07)
+    y = mix(0.95, (rush, 0, 0.5), (skate_scrape(0.1, 3200, 8000), 0.12, 0.35),
+            (shatter / (np.max(np.abs(shatter)) + 1e-9), 0.2, 0.45), (burst, 0.2, 0.6),
+            (thud(0.25, 170, 75, 0.05), 0.2, 0.55), (ice_tinkle(0.5, 9, 2900), 0.26, 0.35))
+    return finish(room(y, 0.6, 0.16, 0.01, 8000, 0.2))
+
+
+# --- larhen (professional assassin; twin daggers, high leaps) -------------------------------------
+
+def blade_whoosh(dur: float = 0.12, f0: float = 1500, f1: float = 6500) -> np.ndarray:
+    """A thin dagger cutting air: a fast, narrow (high-Q) swept band, much shorter than a sword swing."""
+    x = swept_band(noise(dur), f0, f1, 4.0)
+    x *= bell_env(len(x), 0.7, 2.0)
+    return x / (np.max(np.abs(x)) + 1e-9)
+
+
+def steel_shing(f: float = 2650, dur: float = 0.55, scrape: float = 0.18) -> np.ndarray:
+    """A dagger drawn from its sheath: a short rising steel scrape, then a thin, clean, long ring
+    (two close partials beating slowly for the 'shing')."""
+    n = int(scrape * SR)
+    scr = swept_band(noise(scrape), 3000, 8500, 3.5) * bell_env(n, 0.85, 1.1)
+    t = t_axis(dur)
+    ring = (np.sin(2 * np.pi * f * t) + 0.6 * np.sin(2 * np.pi * f * 1.004 * t + 0.7)
+            + 0.3 * np.sin(2 * np.pi * f * 2.71 * t) * np.exp(-t / 0.06)
+            + 0.15 * np.sin(2 * np.pi * f * 4.95 * t) * np.exp(-t / 0.03))
+    ring = ring * env_ad(len(t), 0.0005, dur * 0.4)
+    y = mix(scrape + dur, (scr / (np.max(np.abs(scr)) + 1e-9), 0, 0.5), (ring / (np.max(np.abs(ring)) + 1e-9), scrape * 0.85, 0.6))
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def larhen_select() -> np.ndarray:
+    # Twin daggers drawn, one after the other (the second a touch higher), in a quiet, dry space.
+    y = mix(0.85, (steel_shing(2650, 0.5, 0.14), 0, 0.7), (steel_shing(2980, 0.45, 0.12), 0.11, 0.6),
+            (cloak_swish(0.18), 0.0, 0.12))
+    return finish(room(y, 0.4, 0.1, 0.008, 6000, 0.15))
+
+
+def larhen_move() -> np.ndarray:
+    # A high leap: a coat flick, the air rushing up past him, and a near-silent light landing.
+    rise = whoosh(0.3, 500, 3000, 1.5, 0.6)
+    fall = whoosh(0.18, 2600, 900, 1.6, 0.4)
+    land = lowpass(soft_step(1.1), 1500)
+    y = mix(0.75, (cloak_swish(0.2), 0, 0.5), (rise, 0.03, 0.6), (fall, 0.33, 0.3), (land, 0.5, 0.45))
+    return finish(room(y, 0.35, 0.08, 0.008, 5000, 0.12))
+
+
+def larhen_capture() -> np.ndarray:
+    # Two lightning-fast cross slashes, a crisp steel 'tsing' on the cut, a muted body, then silence.
+    t = t_axis(0.4)
+    tsing = (np.sin(2 * np.pi * 3150 * t) + 0.5 * np.sin(2 * np.pi * 3150 * 2.76 * t) * np.exp(-t / 0.03)) * env_ad(len(t), 0.001, 0.12)
+    # The cut is a soft-edged (1 ms attack, band-limited) snap: a sharper click made the AAC encoder
+    # overshoot and turned the whole clip 2 dB down.
+    cut = bandpass(noise(0.03), 2500, 9000) * env_ad(int(0.03 * SR), 0.001, 0.006)
+    y = mix(0.75, (blade_whoosh(0.11, 1400, 6800), 0, 0.75), (blade_whoosh(0.1, 1700, 7600), 0.075, 0.8),
+            (cut / (np.max(np.abs(cut)) + 1e-9), 0.15, 0.6), (tsing / (np.max(np.abs(tsing)) + 1e-9), 0.15, 0.35),
+            (lowpass(thud(0.22, 130, 60, 0.05), 900), 0.155, 0.55), (steel_shing(2800, 0.3, 0.06), 0.32, 0.12))
+    return finish(saturate(room(y, 0.45, 0.1, 0.008, 6000, 0.15), 1.5))
+
+
+# --- volkonov (bard with closed, smiling eyes; buffs allies with music) ---------------------------
+
+def lute_pluck(f: float, dur: float = 0.8, bright: float = 0.5, damp: float = 0.996) -> np.ndarray:
+    """A plucked gut string (Karplus-Strong, computed one delay period at a time) through a small
+    wooden body (two resonances), with a soft pick click. bright 0..1 shapes the pluck noise."""
+    n = int(dur * SR)
+    N = max(2, int(round(SR / f)))
+    y = np.zeros(n + N + 1)
+    exc = rng.uniform(-1, 1, N + 1)
+    exc = lowpass(exc, 1200 + 7000 * bright, 1)
+    y[: N + 1] = exc
+    i = N + 1
+    while i < len(y):
+        L = min(N, len(y) - i)
+        y[i:i + L] = damp * 0.5 * (y[i - N:i - N + L] + y[i - N - 1:i - N - 1 + L])
+        i += L
+    y = y[:n]
+    body = bandpass(y, 180, 420, 1) * 0.5 + bandpass(y, 1400, 3200, 1) * 0.3
+    y = y + body
+    # A 3 ms attack: a pluck that starts at full level in one sample made the AAC encoder overshoot
+    # by ~5 dB (and the encode loop then turned the whole clip down).
+    y *= env_ad(n, 0.003, dur * 0.45)
+    pick = bandpass(noise(0.01), 2000, 6000) * env_ad(int(0.01 * SR), 0.001, 0.002)
+    place(y, pick / (np.max(np.abs(pick)) + 1e-9), 0, 0.08)
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+# D major / D Mixolydian palette for the bard: warm and bright, never minor.
+NOTE = {"D3": 146.83, "A3": 220.0, "D4": 293.66, "E4": 329.63, "F#4": 369.99, "G4": 392.0, "A4": 440.0,
+        "B4": 493.88, "C5": 523.25, "D5": 587.33, "E5": 659.26, "F#5": 739.99, "A5": 880.0, "D6": 1174.66}
+
+
+def strum(notes, at_gap: float = 0.028, dur: float = 0.9, bright: float = 0.5) -> np.ndarray:
+    y = silence(dur + at_gap * len(notes))
+    for k, nm in enumerate(notes):
+        place(y, lute_pluck(NOTE[nm], dur, bright), k * at_gap, 0.75 + 0.05 * k)
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def volkonov_select() -> np.ndarray:
+    # A quick, friendly rolled D-major strum and a playful little high answer.
+    y = mix(1.0, (strum(("D4", "A4", "D5", "F#5"), 0.03, 0.75, 0.5), 0, 0.8),
+            (lute_pluck(NOTE["A5"], 0.45, 0.6), 0.3, 0.3), (lute_pluck(NOTE["D6"], 0.4, 0.6), 0.4, 0.22))
+    return finish(room(y, 0.7, 0.16, 0.012, 6000, 0.2))
+
+
+def volkonov_move() -> np.ndarray:
+    # Walking to the beat: two light plucks stepping up a fourth, a soft cloak swish under them.
+    y = mix(0.75, (lute_pluck(NOTE["A4"], 0.45, 0.45), 0, 0.7), (lute_pluck(NOTE["D5"], 0.5, 0.5), 0.17, 0.75),
+            (cloak_swish(0.26), 0.02, 0.15))
+    return finish(room(y, 0.55, 0.14, 0.01, 6000, 0.18))
+
+
+def volkonov_capture() -> np.ndarray:
+    # A flourish that ends the song: a fast run down the scale, a snapped low string (a percussive
+    # damped 'thwack' on the body) and a sly resolving high note.
+    y = silence(1.0)
+    for k, nm in enumerate(("D6", "A5", "F#5", "E5", "D5")):
+        place(y, lute_pluck(NOTE[nm], 0.25, 0.6, 0.993), k * 0.045, 0.5)
+    snap = lute_pluck(NOTE["D3"], 0.25, 0.9, 0.985) * np.exp(-t_axis(0.25) / 0.05)
+    place(y, snap, 0.25, 0.95)
+    place(y, thud(0.2, 160, 80, 0.04), 0.25, 0.4)
+    place(y, whoosh(0.16, 900, 3800, 1.6, 0.8), 0.12, 0.2)
+    place(y, lute_pluck(NOTE["A5"], 0.55, 0.45), 0.42, 0.45)
+    return finish(room(y, 0.7, 0.16, 0.012, 6000, 0.2))
+
+
+def volkonov_skill() -> np.ndarray:
+    # 선율 (the buff): an accelerating rising D-major arpeggio of lute plucks over a warm, chorused
+    # pad that swells in, crowned with a bright two-note chime and a sparkle.
+    dur = 1.25
+    t = t_axis(dur)
+    pad = np.zeros_like(t)
+    for nm, g in (("D4", 1.0), ("F#4", 0.7), ("A4", 0.75), ("D5", 0.5)):
+        for d in (-0.004, 0.0, 0.0045):
+            pad += g * signal.sawtooth(2 * np.pi * NOTE[nm] * (1 + d) * t + rng.uniform(0, 6.28), 0.5)
+    pad = lowpass(pad, 2200) * (1 + 0.15 * np.sin(2 * np.pi * 5.5 * t))
+    pad *= np.clip(t / 0.85, 0, 1) ** 1.5 * np.exp(-np.clip(t - 0.95, 0, None) / 0.12)
+    y = silence(dur + 0.2)
+    place(y, pad / (np.max(np.abs(pad)) + 1e-9), 0, 0.32)
+    at, gap = 0.0, 0.11
+    for nm in ("D4", "F#4", "A4", "D5", "F#5", "A5", "D6"):
+        place(y, lute_pluck(NOTE[nm], 0.6, 0.55), at, 0.55)
+        at += gap
+        gap *= 0.84
+    place(y, chime(NOTE["D6"] * 2, 0.6, 0.3), at + 0.02, 0.18)
+    place(y, chime(NOTE["A5"] * 2, 0.6, 0.3), at + 0.06, 0.14)
+    place(y, sparkle(0.45, 2800, 6), at, 0.18)
+    place(y, whoosh(0.7, 500, 4500, 1.5, 0.85), 0.1, 0.1)
+    return finish(room(y, 1.0, 0.2, 0.015, 6500, 0.25))
+
+
 SFX = {
     "sad-select": sad_select,
     "sad-move": sad_move,
@@ -905,6 +1116,18 @@ SFX = {
     "rakaeli-awake-move": rakaeli_awake_move,
     "rakaeli-awake-capture": rakaeli_awake_capture,
     "rakaeli-awake-end": rakaeli_awake_end,
+    # 2026-11-05, appended after rakaeli for the same reason. Rampid and Larhen have no active
+    # skill (no skill effect); Volkonov's skill is 선율 (the ally move buff).
+    "rampid-select": rampid_select,
+    "rampid-move": rampid_move,
+    "rampid-capture": rampid_capture,
+    "larhen-select": larhen_select,
+    "larhen-move": larhen_move,
+    "larhen-capture": larhen_capture,
+    "volkonov-select": volkonov_select,
+    "volkonov-move": volkonov_move,
+    "volkonov-capture": volkonov_capture,
+    "volkonov-skill": volkonov_skill,
 }
 
 

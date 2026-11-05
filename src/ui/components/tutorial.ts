@@ -27,6 +27,9 @@ const SHORT_MOVE: Record<CharacterId, string> = {
   michelle: '좌·우·뒤 이동 · 물러나며 인형 함정',
   picker: '대각선 콩콩 점프 · 지나는 적 모두 잡기',
   rakaeli: '앞쪽 블록 점프 · 타천하면 범위 확장',
+  rampid: '앞쪽 세 갈래 발톱 직진 · 끝줄에서 뒤돌아요',
+  larhen: '좌우·대각선 점프 · 3성은 가로 한 줄',
+  volkonov: '상하좌우 이동 · 선율로 아군 이동 +1',
 };
 
 function goalArt(): Child {

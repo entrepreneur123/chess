@@ -65,7 +65,7 @@ export interface CharacterLook {
   levels: Record<Level, LevelLook>;
 }
 
-const BASE_LOOKS: Record<Exclude<CharacterId, 'michelle' | 'picker' | 'rakaeli'>, CharacterLook> = {
+const BASE_LOOKS: Record<Exclude<CharacterId, 'michelle' | 'picker' | 'rakaeli' | 'rampid' | 'larhen' | 'volkonov'>, CharacterLook> = {
   // Holy paladin: Lv1 squire (dented steel over gambeson) -> Lv2 silver-blue knight with gold trim ->
   // Lv3 white-gold holy champion with a radiant greatsword.
   sad: {
@@ -265,10 +265,19 @@ const BASE_LOOKS: Record<Exclude<CharacterId, 'michelle' | 'picker' | 'rakaeli'>
 };
 
 /**
- * Every character's look. Michelle, Picker and Rakaeli have no glTF looks of their own yet (the 3D arena is
- * shelved; the top-down board only draws illustrated tokens), so they borrow the closest builds.
+ * Every character's look. Michelle, Picker, Rakaeli and the three later commons have no glTF looks of
+ * their own yet (the 3D arena is shelved; the top-down board only draws illustrated tokens), so they
+ * borrow the closest builds.
  */
-export const LOOKS = { ...BASE_LOOKS, michelle: BASE_LOOKS.brutile, picker: BASE_LOOKS.sad, rakaeli: BASE_LOOKS.sad } as Record<CharacterId, CharacterLook>;
+export const LOOKS = {
+  ...BASE_LOOKS,
+  michelle: BASE_LOOKS.brutile,
+  picker: BASE_LOOKS.sad,
+  rakaeli: BASE_LOOKS.sad,
+  rampid: BASE_LOOKS.sad,
+  larhen: BASE_LOOKS.sad,
+  volkonov: BASE_LOOKS.sad,
+} as Record<CharacterId, CharacterLook>;
 
 /** Clip used for each logical action (walk, picker and rakaeli jump, the others run). */
 export const MOVE_CLIP = {
@@ -280,6 +289,9 @@ export const MOVE_CLIP = {
   michelle: 'run',
   picker: 'jump',
   rakaeli: 'jump',
+  rampid: 'run',
+  larhen: 'jump',
+  volkonov: 'run',
 } satisfies Record<Exclude<CharacterId, 'rakaeli'>, ClipName> & { rakaeli: ClipName } as Record<CharacterId, ClipName>;
 
 /**

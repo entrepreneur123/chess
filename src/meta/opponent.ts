@@ -152,6 +152,12 @@ const PREFERRED_ROWS: Record<CharacterId, number[]> = {
   picker: [0, 1],
   // Rakaeli jumps forward (a 2-3 row block once transformed): either row.
   rakaeli: [0, 1],
+  // Rampid's claw reaches forward only: up front.
+  rampid: [1],
+  // Larhen jumps sideways and diagonally: either row.
+  larhen: [0, 1],
+  // Volkonov is support (his melody needs no position): behind.
+  volkonov: [0],
 };
 /**
  * Columns the bot prefers: away from the two outer columns per side, which the storm swallows

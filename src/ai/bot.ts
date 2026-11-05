@@ -17,7 +17,7 @@ import {
 } from '../engine';
 import type { FastBoard } from '../engine';
 import { SKILL_FLAG, fastCanSkill, fastHopGain, fastSkillFits, fastSkillSize } from '../engine/fast';
-import { CHARACTERS, CHAR_BY_CODE, CH_BRUTILE, CH_INSANER, CH_MARKI, CH_MICHELLE, CH_PICKER, CH_RAKAELI, CH_SAD, CH_WALK, MARKI_RANGE, MARKI_SIDE_LEVEL, N_CHARS } from '../engine/characters';
+import { CHARACTERS, CHAR_BY_CODE, CH_BRUTILE, CH_INSANER, CH_LARHEN, CH_MARKI, CH_MICHELLE, CH_PICKER, CH_RAKAELI, CH_RAMPID, CH_SAD, CH_VOLKONOV, CH_WALK, MARKI_RANGE, MARKI_SIDE_LEVEL, N_CHARS, absorbedLevel } from '../engine/characters';
 import { trapBit } from '../engine/board';
 import { BOARD_SIZE, STORM_ROWS_FROM, TRAPS_PER_MICHELLE, stormRows } from '../engine/types';
 
@@ -26,7 +26,7 @@ export type Difficulty = 'easy' | 'normal' | 'hard' | 'extreme';
 
 export const DIFFICULTIES: readonly Difficulty[] = ['easy', 'normal', 'hard', 'extreme'];
 
-/** What the bot plays: a move, or a skill (Brutile's wasteland, Rakaeli's transform). */
+/** What the bot plays: a move, or a skill (Brutile's wasteland, Rakaeli's transform, Volkonov's melody). */
 export type BotAction = Move | SkillAction;
 
 export function isSkillAction(a: BotAction | null | undefined): a is SkillAction {
@@ -76,7 +76,8 @@ const WIN = 1_000_000;
 const ADJ_WIN = 500_000; // won by adjudication (stalemate by material, a storm wipe by piece count)
 const INF = 10_000_000;
 const MAX_PLY = 64;
-const MAX_MOVES = 128;
+/** Move buffer size: three pieces, an Insaner with several absorbed patterns and buffs stay far below. */
+const MAX_MOVES = 256;
 const UNIT = 100; // material unit
 /** Eval bonus for holding an unused wasteland, by Brutile's level (index = level). */
 const SKILL_POTENTIAL = [0, 15, 25, 35];
@@ -92,6 +93,16 @@ const TRANSFORM_POTENTIAL = [0, 20, 30, 40];
 const AWAKE_BONUS = [0, 8, 12, 16];
 /** Transform candidates need at least this score (see `transformScore`) to be searched at the root. */
 const TRANSFORM_MIN_SCORE = 1;
+/**
+ * Volkonov's melody. An unused one is worth MELODY_POTENTIAL (by level) while it can be cast (he
+ * has an ally and the storm has not closed in); a buffed ally is worth BUFF_BONUS per buffed turn
+ * left on top of the reach the attack maps already credit. Like the transform, the potential sits
+ * above an immediate cast's bonus so the search casts when the extra reach wins or threatens
+ * something. Melody candidates need MELODY_MIN_SCORE (see `melodyScore`).
+ */
+const MELODY_POTENTIAL = [0, 25, 30, 40];
+const BUFF_BONUS = [0, 3, 3, 3];
+const MELODY_MIN_SCORE = 2;
 /** Eval bonus per doll trap Michelle can still lay (they are laid by backing off, so modest). */
 const TRAP_POTENTIAL = 8;
 /** Eval bonus per own doll trap on the board within two squares of an enemy piece (area denial). */
@@ -100,12 +111,16 @@ const TRAP_NEAR_ENEMY = 6;
 const STUN_PENALTY = 0.12;
 /** Move-ordering penalty for ending on an enemy doll trap (the mover loses its next turn). */
 const TRAP_LANDING_ORDER = -400;
-/** Material worth (in UNIT) of each absorbable pattern bit: half of the pattern owner's value. */
-const BIT_VALUE: number[] = [];
-for (let bit = 0; bit < N_CHARS * 3; bit++) BIT_VALUE.push((CHARACTERS[CHAR_BY_CODE[(bit / 3) | 0]].value[bit % 3] * UNIT) / 2);
+/**
+ * Material worth (in UNIT) of an absorb mask: half the value of each absorbed pattern. A mask keeps
+ * the highest absorbed level per character (lower ones are contained in it).
+ */
 function absorbWorth(mask: number): number {
   let w = 0;
-  for (let bit = 0; mask; bit++, mask >>= 1) if (mask & 1) w += BIT_VALUE[bit];
+  for (let ch = 0; mask && ch < N_CHARS; ch++) {
+    const lvl = absorbedLevel(mask, ch);
+    if (lvl) w += (CHARACTERS[CHAR_BY_CODE[ch]].value[lvl - 1] * UNIT) / 2;
+  }
   return w;
 }
 
@@ -141,7 +156,7 @@ function buildAttackMaps(b: FastBoard): number[] {
     // A stunned piece neither threatens nor defends anything on its owner's next turn.
     if (s < 0 || b.stun[i] > 0) continue;
     const side = b.owner[i];
-    const n = genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, attackBuf, 0, true, b.dir[i], b.storm, b.absorb[i], b.waste, b.trap, b.awaken[i] > 0);
+    const n = genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, attackBuf, 0, true, b.dir[i], b.storm, b.absorb[i], b.waste, b.trap, b.awaken[i] > 0, b.buff[i] > 0);
     const v = b.value[i];
     for (let k = 0; k < n; k++) {
       const t = attackBuf[k];
@@ -225,7 +240,20 @@ export function evaluate(b: FastBoard, side: number): number {
       sc += centerC * 4 + Math.min(room, 6) * 2;
       if (b.awaken[i] > 0) sc += AWAKE_BONUS[b.lvl[i]] * b.awaken[i];
       else if (b.storm === 0 && b.used[i] === 0) sc += TRANSFORM_POTENTIAL[b.lvl[i]];
+    } else if (ch === CH_RAMPID) {
+      // Forward claw slider: facing the enemy with open files ahead.
+      if (!facingEnemy) sc -= v * 0.2;
+      sc += centerC * 3 + Math.min(room, 6) * 2;
+    } else if (ch === CH_LARHEN) {
+      // Sideways jumper (3-star: whole rows): central files and rows keep both wings open.
+      if (!facingEnemy && b.lvl[i] === 1) sc -= v * 0.1;
+      sc += centerC * 3 + centerR * 3;
+    } else if (ch === CH_VOLKONOV) {
+      // Support: central, and an unused melody is worth keeping until it pays (needs an ally).
+      sc += centerC * 3 + centerR * 2;
+      if (b.storm === 0 && b.used[i] === 0 && b.alive[p] > 1) sc += MELODY_POTENTIAL[b.lvl[i]];
     }
+    if (b.buff[i] > 0) sc += BUFF_BONUS[b.lvl[i]] * b.buff[i];
     if (b.stun[i] > 0) sc -= v * STUN_PENALTY;
     // storm: standing next to (or on) the columns / rows that vanish next is a liability. Column c
     // closes at step min(c, LAST - c) + 1, row r at step min(r, LAST - r) + STORM_ROWS_FROM.
@@ -499,7 +527,7 @@ function searchRoot(
   return result;
 }
 
-// ---------------------------------------------------------------- skills (Brutile, Rakaeli)
+// ---------------------------------------------------------------- skills (Brutile, Rakaeli, Volkonov)
 
 const transformBuf = new Int32Array(MAX_MOVES);
 const transformBuf2 = new Int32Array(MAX_MOVES);
@@ -512,7 +540,7 @@ const transformBuf2 = new Int32Array(MAX_MOVES);
 function transformScore(b: FastBoard, i: number): number {
   const side = b.owner[i];
   const s = b.sq[i];
-  const n = genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, transformBuf, 0, false, b.dir[i], b.storm, b.absorb[i], b.waste, b.trap, true);
+  const n = genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, transformBuf, 0, false, b.dir[i], b.storm, b.absorb[i], b.waste, b.trap, true, b.buff[i] > 0);
   let score = 0;
   for (let k = 0; k < n; k++) {
     const t = transformBuf[k];
@@ -523,7 +551,7 @@ function transformScore(b: FastBoard, i: number): number {
     }
     // A second transformed jump from t (the piece is lifted off s for it).
     b.occ[s] = -1;
-    const m = genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], t, transformBuf2, 0, false, b.dir[i], b.storm, b.absorb[i], b.waste, b.trap, true);
+    const m = genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], t, transformBuf2, 0, false, b.dir[i], b.storm, b.absorb[i], b.waste, b.trap, true, b.buff[i] > 0);
     b.occ[s] = i;
     for (let q = 0; q < m; q++) if (b.occ[transformBuf2[q]] >= 0 && !b.waste[transformBuf2[q]]) score += 1;
   }
@@ -531,9 +559,35 @@ function transformScore(b: FastBoard, i: number): number {
 }
 
 /**
+ * How promising Volkonov's melody is right now: for each ally it would buff, the enemies the extra
+ * orthogonal reach could capture at once (3 each) and the empty squares it adds (1 per 4). 0 =
+ * nothing to gain.
+ */
+function melodyScore(b: FastBoard, caster: number): number {
+  const side = b.owner[caster];
+  let score = 0;
+  let extra = 0;
+  for (let i = 0; i < b.n; i++) {
+    const s = b.sq[i];
+    if (i === caster || s < 0 || b.owner[i] !== side) continue;
+    const awake = b.awaken[i] > 0;
+    const n0 = genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, transformBuf, 0, false, b.dir[i], b.storm, b.absorb[i], b.waste, b.trap, awake, false);
+    const n1 = genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, transformBuf2, 0, false, b.dir[i], b.storm, b.absorb[i], b.waste, b.trap, awake, true);
+    // The buffed list starts with the unbuffed one (same generator, extension appended).
+    for (let k = n0; k < n1; k++) {
+      const t = transformBuf2[k];
+      if (b.waste[t]) continue;
+      if (b.occ[t] >= 0) score += 3;
+      else extra++;
+    }
+  }
+  return score + (extra >> 2);
+}
+
+/**
  * Up to `max` promising skill casts for the side to move, encoded as root moves: Brutile's
- * wasteland anchors and, when it can create captures or threats, Rakaeli's transform (anchor = his
- * own square; it does not count toward `max`). Wasteland areas are scored by how much enemy reach
+ * wasteland anchors and, when it can create captures or threats, Rakaeli's transform or Volkonov's
+ * melody (anchor = his own square; they do not count toward `max`). Wasteland areas are scored by how much enemy reach
  * they cover and how close they sit to enemy pieces (where they trap or block), minus the player's
  * own reach they would spoil. The best candidate comes first.
  */
@@ -544,6 +598,9 @@ function skillCandidates(b: FastBoard, max: number): number[] {
     if (b.ch[i] === CH_RAKAELI) {
       const score = transformScore(b, i);
       if (score >= TRANSFORM_MIN_SCORE) out.push({ mv: SKILL_FLAG | (i << 8) | b.sq[i], score });
+    } else if (b.ch[i] === CH_VOLKONOV) {
+      const score = melodyScore(b, i);
+      if (score >= MELODY_MIN_SCORE) out.push({ mv: SKILL_FLAG | (i << 8) | b.sq[i], score });
     } else for (const c of wasteCandidates(b, i, max)) out.push(c);
   }
   out.sort((x, y) => y.score - x.score);

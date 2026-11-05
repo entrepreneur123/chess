@@ -864,6 +864,13 @@
 .move-diagram.is-hop.owner-1 .md-cell.is-target {
   background: radial-gradient(circle, #fff 0 22%, var(--team-red-light) 26% 100%);
 }
+/* Squares Volkonov's melody adds to a buffed piece (rose, over any team / hop style). */
+.move-diagram .md-cell.is-target.is-buff {
+  border-radius: 2px;
+  transform: none;
+  background: #ff6fc2;
+  box-shadow: 0 0 5px rgba(255, 111, 194, 0.85);
+}
 /* Michelle: the squares behind her are where her backward moves leave doll traps. */
 .move-diagram.is-traps .md-cell.is-back {
   background: #b9a6ff;

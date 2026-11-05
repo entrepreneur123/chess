@@ -119,12 +119,15 @@ export function createRoster(slots: readonly FormationSlot[], owner: PlayerId): 
         const piece = state.pieces.find((p) => p.id === `p${owner}-${c.slot.character}`);
         const awake = !!piece?.awaken;
         const arrow = piece && isDirectional(piece) ? screenArrow(piece) : null;
-        const key = `${!!piece}|${awake}|${arrow}`;
+        const buffed = !!piece?.buff;
+        const key = `${!!piece}|${awake}|${arrow}|${piece?.buff ?? 0}`;
         if (key === c.key) continue;
         const first = !c.key;
         const prevAwake = c.key.split('|')[1] === 'true';
         c.key = key;
         c.el.classList.toggle('is-captured', !piece);
+        c.el.classList.toggle('is-buffed', buffed);
+        c.el.title = `${CHARACTERS[c.slot.character].nameKo}${buffed ? ` · 선율 ${piece!.buff}턴` : ''}`;
         // A transformed Rakaeli shows his transformed face.
         if (awake !== prevAwake) c.el.replaceChild(pieceToken(c.slot.character, c.slot.level, owner, 'xs', awake), c.el.firstChild!);
         setArrow(c.dir, arrow, !first);

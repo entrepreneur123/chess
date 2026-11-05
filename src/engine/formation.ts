@@ -70,8 +70,8 @@ function lv(levels: Partial<Record<CharacterId, Level>> | undefined, id: Charact
 }
 
 /**
- * Preset square per character (local coordinates, 2 x 10 zone): Marki, Sad, Michelle and Rakaeli
- * on the front row, Walk / Insaner / Picker / Brutile on the back rank. Every square is distinct, so any
+ * Preset square per character (local coordinates, 2 x 10 zone): Marki, Sad, Michelle, Rakaeli,
+ * Rampid and Larhen on the front row, Walk / Insaner / Picker / Brutile / Volkonov on the back rank. Every square is distinct, so any
  * squad of three gets a valid preset, and all of them stay off the two outer columns per side
  * that the storm swallows first.
  */
@@ -86,6 +86,11 @@ const DEFAULT_SLOT: Record<CharacterId, { row: number; col: number }> = {
   picker: { row: 0, col: 6 },
   // Rakaeli jumps forward like Walk: the front row's free middle square.
   rakaeli: { row: 1, col: 5 },
+  // Rampid's claw only reaches forward: up front. Larhen jumps sideways along his row.
+  rampid: { row: 1, col: 2 },
+  larhen: { row: 1, col: 7 },
+  // Volkonov supports from behind (his melody reaches every ally wherever they stand).
+  volkonov: { row: 0, col: 2 },
 };
 
 /** Normalise a squad: distinct known characters, exactly PIECES_PER_SIDE of them (starters fill in). */

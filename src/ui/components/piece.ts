@@ -14,7 +14,7 @@ import { h } from '../dom';
 export const RARITY_LABEL: Record<Rarity, string> = { common: '일반', rare: '희귀', epic: '영웅', legendary: '전설' };
 
 /** Character concept titles shown with the illustrations (UI copy only). */
-export const CONCEPT: Record<CharacterId, string> = { sad: '성기사', marki: '황소 전사', walk: '방패병', insaner: '꼬마 악마', brutile: '초록 마녀', michelle: '인형 소녀', picker: '사막의 카우보이', rakaeli: '타락 천사' };
+export const CONCEPT: Record<CharacterId, string> = { sad: '성기사', marki: '황소 전사', walk: '방패병', insaner: '꼬마 악마', brutile: '초록 마녀', michelle: '인형 소녀', picker: '사막의 카우보이', rakaeli: '타락 천사', rampid: '얼음 소년', larhen: '쌍단검 암살자', volkonov: '음유시인' };
 
 /**
  * Neutral head-and-shoulders silhouette shown in place of an illustration that failed to load
@@ -161,38 +161,54 @@ interface Pattern {
   targets: Set<string>;
   /** Targets straight behind the piece (Michelle lays her doll traps by moving there). */
   back: Set<string>;
+  /** Targets only Volkonov's melody adds (a buffed diagram; empty otherwise). */
+  extra: Set<string>;
 }
 
 const patternCache = new Map<string, Pattern | null>();
 
-function computePattern(character: CharacterId, level: Level, awake = false): Pattern | null {
-  const key = `${character}:${level}:${awake ? 1 : 0}`;
+/** Relative offsets (dr forward, dc) a lone piece reaches from `origin` on an empty board. */
+function offsetsFrom(character: CharacterId, level: Level, origin: { r: number; c: number }, awake: boolean, buff: boolean): { dr: number; dc: number }[] {
+  const piece: Piece = { id: `p0-${character}`, owner: 0, character, level, pos: origin, ...(awake ? { awaken: AWAKEN_TURNS } : {}), ...(buff ? { buff: 2 } : {}) };
+  const state: GameState = {
+    pieces: [piece],
+    turn: 0,
+    ply: 0,
+    pliesSinceCapture: 0,
+    consecutiveTimeouts: [0, 0],
+    status: 'playing',
+    winner: null,
+    endReason: null,
+    history: [],
+    bonusPieceId: null,
+    storm: 0,
+    stormIn: null,
+    waste: [],
+    skillsUsed: [0, 0],
+  };
+  // Player 0 moves toward +r; the diagram draws forward as "up".
+  return getTargetsForPiece(state, piece).map((m) => ({ dr: m.to.r - origin.r, dc: m.to.c - origin.c }));
+}
+
+function computePattern(character: CharacterId, level: Level, awake = false, buff = false): Pattern | null {
+  const key = `${character}:${level}:${awake ? 1 : 0}:${buff ? 1 : 0}`;
   if (patternCache.has(key)) return patternCache.get(key)!;
   let result: Pattern | null = null;
   try {
     // Room for the longest reach of every pattern on 10 x 10: 6 rows ahead (Marki 3성 needs 5),
-    // 3 behind (Sad / Insaner), 4 to each side (Walk 3성's 9-wide landing row).
-    const origin = { r: 3, c: 4 };
-    const piece: Piece = { id: `p0-${character}`, owner: 0, character, level, pos: origin, ...(awake ? { awaken: AWAKEN_TURNS } : {}) };
-    const state: GameState = {
-      pieces: [piece],
-      turn: 0,
-      ply: 0,
-      pliesSinceCapture: 0,
-      consecutiveTimeouts: [0, 0],
-      status: 'playing',
-      winner: null,
-      endReason: null,
-      history: [],
-      bonusPieceId: null,
-      storm: 0,
-      stormIn: null,
-      waste: [],
-      skillsUsed: [0, 0],
-    };
-    const moves = getTargetsForPiece(state, piece);
-    // Player 0 moves toward +r; draw forward as "up".
-    const rel = moves.map((m) => ({ dr: m.to.r - origin.r, dc: m.to.c - origin.c }));
+    // 3 behind (Sad / Insaner). Every pattern is left-right symmetric but 10 columns have no middle
+    // square, so the reach is measured from both middle columns and merged: Larhen 3성 jumps 5 to
+    // each side (column 4 leaves only 4 to the left, column 5 only 4 to the right).
+    const seen = new Map<string, { dr: number; dc: number }>();
+    const baseKeys = new Set<string>();
+    for (const c of [4, 5]) {
+      for (const x of offsetsFrom(character, level, { r: 3, c }, awake, false)) {
+        seen.set(`${x.dr},${x.dc}`, x);
+        baseKeys.add(`${x.dr},${x.dc}`);
+      }
+      if (buff) for (const x of offsetsFrom(character, level, { r: 3, c }, awake, true)) seen.set(`${x.dr},${x.dc}`, x);
+    }
+    const rel = [...seen.values()];
     const maxFwd = Math.max(0, ...rel.map((x) => x.dr));
     const maxBack = Math.max(0, ...rel.map((x) => -x.dr));
     const halfW = Math.max(1, ...rel.map((x) => Math.abs(x.dc)));
@@ -201,12 +217,14 @@ function computePattern(character: CharacterId, level: Level, awake = false): Pa
     const rows = fwd + back + 1;
     const cols = halfW * 2 + 1;
     const o = { r: fwd, c: halfW };
+    const cellOf = (x: { dr: number; dc: number }) => `${o.r - x.dr},${o.c + x.dc}`;
     result = {
       rows,
       cols,
       origin: o,
-      targets: new Set(rel.map((x) => `${o.r - x.dr},${o.c + x.dc}`)),
-      back: new Set(rel.filter((x) => x.dr < 0 && x.dc === 0).map((x) => `${o.r - x.dr},${o.c + x.dc}`)),
+      targets: new Set(rel.map(cellOf)),
+      back: new Set(rel.filter((x) => x.dr < 0 && x.dc === 0).map(cellOf)),
+      extra: new Set(rel.filter((x) => !baseKeys.has(`${x.dr},${x.dc}`)).map(cellOf)),
     };
   } catch (e) {
     console.warn('movement pattern unavailable', e);
@@ -221,19 +239,21 @@ export function movementReach(character: CharacterId, level: Level, awake = fals
 }
 
 /** Rows x columns of a character's movement diagram (to size it into a fixed box). */
-export function movementSpan(character: CharacterId, level: Level, awake = false): { rows: number; cols: number } {
-  const p = computePattern(character, level, awake);
+export function movementSpan(character: CharacterId, level: Level, awake = false, buff = false): { rows: number; cols: number } {
+  const p = computePattern(character, level, awake, buff);
   return p ? { rows: p.rows, cols: p.cols } : { rows: 1, cols: 1 };
 }
 
 /**
  * Tiny CSS grid showing where a character can go from the center square. Forward is up. `awake`
- * draws Rakaeli's transformed ("타천") pattern instead (crimson, `is-awake`).
+ * draws Rakaeli's transformed ("타천") pattern instead (crimson, `is-awake`); `buff` adds the
+ * squares Volkonov's melody gives (rose, `is-buff`).
  */
-export function movementDiagram(character: CharacterId, level: Level, opts: { cell?: number; owner?: PlayerId; awake?: boolean } = {}): HTMLElement {
+export function movementDiagram(character: CharacterId, level: Level, opts: { cell?: number; owner?: PlayerId; awake?: boolean; buff?: boolean } = {}): HTMLElement {
   const def = CHARACTERS[character];
   const awake = !!opts.awake && !!def.awakeDescKo;
-  const p = computePattern(character, level, awake);
+  const buff = !!opts.buff;
+  const p = computePattern(character, level, awake, buff);
   const cell = opts.cell ?? 9;
   // Picker's diagonals are hops (round landing pads in a chain), not slides.
   const hop = character === 'picker';
@@ -242,7 +262,7 @@ export function movementDiagram(character: CharacterId, level: Level, opts: { ce
   const wrap = h('div', {
     class: `move-diagram owner-${opts.owner ?? 0}${hop ? ' is-hop' : ''}${traps ? ' is-traps' : ''}${awake ? ' is-awake' : ''}`,
     role: 'img',
-    'aria-label': `${def.nameKo} ${level}성 이동 범위: ${desc}`,
+    'aria-label': `${def.nameKo} ${level}성 이동 범위: ${desc}${buff ? ' · 선율로 상하좌우 +1칸' : ''}`,
   });
   if (!p) return wrap;
   wrap.style.gridTemplateColumns = `repeat(${p.cols}, ${cell}px)`;
@@ -252,7 +272,8 @@ export function movementDiagram(character: CharacterId, level: Level, opts: { ce
       const isOrigin = r === p.origin.r && c === p.origin.c;
       const isTarget = p.targets.has(`${r},${c}`);
       const isBack = traps && p.back.has(`${r},${c}`);
-      wrap.appendChild(h('span', { class: `md-cell${isOrigin ? ' is-origin' : ''}${isTarget ? ' is-target' : ''}${isBack ? ' is-back' : ''}` }));
+      const isBuff = p.extra.has(`${r},${c}`);
+      wrap.appendChild(h('span', { class: `md-cell${isOrigin ? ' is-origin' : ''}${isTarget ? ' is-target' : ''}${isBack ? ' is-back' : ''}${isBuff ? ' is-buff' : ''}` }));
     }
   }
   return wrap;

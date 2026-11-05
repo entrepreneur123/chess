@@ -5,16 +5,18 @@
  * Everything else a move changes (turn, chain move, absorbed abilities, storm clock and storm
  * kills) is pushed on an internal LIFO history so make/unmake stay exact.
  * Skill actions are encoded as SKILL_FLAG | (pieceIndex << 8) | anchorSquare: Brutile's wasteland
- * (anchor = the area's lowest corner) or Rakaeli's transform (anchor = his own square; it sets
- * `awaken`, which counts down at the end of each of its owner's turns like `stun`).
+ * (anchor = the area's lowest corner), Rakaeli's transform (anchor = his own square; it sets
+ * `awaken`, which counts down at the end of each of its owner's turns like `stun`) or Volkonov's
+ * melody (anchor = his own square; it sets `buff` on every other piece of his side, counted down
+ * the same way).
  * A move whose target is wasteland destroys the mover (WASTE_BIT in the undo token).
  * Picker's hop-through captures the enemies on its path too (a real Picker only: an Insaner's
  * absorbed Picker pattern is a plain slide), Michelle's backward moves lay doll
  * traps and a mover ending on an enemy trap is stunned: all of it is undone from the LIFO history.
  */
-import { AWAKEN_TURNS, BOARD_SIZE, SKILL_UNLOCK_PLY, STORM_INTERVAL_PLIES, SUDDEN_DEATH_PLY, TRAPS_PER_MICHELLE, TRAP_STUN } from './types';
+import { AWAKEN_TURNS, BOARD_SIZE, BUFF_TURNS, SKILL_UNLOCK_PLY, STORM_INTERVAL_PLIES, SUDDEN_DEATH_PLY, TRAPS_PER_MICHELLE, TRAP_STUN } from './types';
 import type { CharacterId, GameState, Move, PlayerId, SkillAction } from './types';
-import { CHARACTERS, CHAR_BY_CODE, CHAR_CODE, CH_BRUTILE, CH_INSANER, CH_MICHELLE, CH_RAKAELI, WASTE_SIZE, abilityBit, absorbMaskOf, keepsDirection } from './characters';
+import { CHARACTERS, CHAR_BY_CODE, CHAR_CODE, CH_BRUTILE, CH_INSANER, CH_MICHELLE, CH_RAKAELI, CH_VOLKONOV, WASTE_SIZE, abilityBit, absorbMaskOf, absorbMerge, absorbWithout, keepsDirection } from './characters';
 import { N_SQUARES, atTurnRow, canHop, genTargets, inStorm, posOf, sqOf, trapBit } from './board';
 import { pieceDir } from './rules';
 
@@ -26,9 +28,10 @@ export interface FastBoard {
   ch: Uint8Array;
   lvl: Uint8Array;
   dir: Int8Array; // current forward direction per piece (+1 / -1)
-  absorb: Uint32Array; // absorbed pattern bitmask per piece (see abilityBit; N_CHARS * 3 bits)
+  absorb: Uint32Array; // absorbed patterns per piece (see abilityBit / absorbMerge; N_CHARS * 2 bits)
   stun: Int8Array; // doll-trap stun per piece (owner turns left to sit out, see Piece.stun)
   awaken: Int8Array; // Rakaeli's transform per piece (owner turns left, see Piece.awaken)
+  buff: Int8Array; // Volkonov's melody on this piece (owner turns left, see Piece.buff)
   used: Uint8Array; // 1 once the piece has used its skill this match (Piece.skillUsed)
   value: Int16Array; // base material value of each piece
   occ: Int8Array; // piece index or -1
@@ -75,6 +78,7 @@ export function fastFromState(state: GameState): FastBoard {
     absorb: new Uint32Array(n),
     stun: new Int8Array(n),
     awaken: new Int8Array(n),
+    buff: new Int8Array(n),
     used: new Uint8Array(n),
     value: new Int16Array(n),
     occ: new Int8Array(N_SQUARES).fill(-1),
@@ -103,6 +107,7 @@ export function fastFromState(state: GameState): FastBoard {
     b.absorb[i] = absorbMaskOf(p.absorbed);
     b.stun[i] = p.stun ?? 0;
     b.awaken[i] = p.awaken ?? 0;
+    b.buff[i] = p.buff ?? 0;
     b.used[i] = p.skillUsed ? 1 : 0;
     b.value[i] = CHARACTERS[p.character].value[p.level - 1];
     b.occ[s] = i;
@@ -118,14 +123,20 @@ export function fastFromState(state: GameState): FastBoard {
 /** Encoded skill action flag (see the file header). */
 export const SKILL_FLAG = 1 << 20;
 
+/** Does piece `i` have another piece of its side on the board (someone for Volkonov to buff)? */
+function hasAlly(b: FastBoard, i: number): boolean {
+  return b.alive[b.owner[i]] > 1;
+}
+
 /**
- * Can piece `i` cast its skill now (Brutile's wasteland or Rakaeli's transform: side to move,
- * unlocked, not used by this piece, not transformed already, not stunned, storm not closing)?
+ * Can piece `i` cast its skill now (Brutile's wasteland, Rakaeli's transform or Volkonov's melody:
+ * side to move, unlocked, not used by this piece, not transformed already, not stunned, storm not
+ * closing; Volkonov needs an ally on the board)?
  */
 export function fastCanSkill(b: FastBoard, i: number): boolean {
   const ch = b.ch[i];
   return (
-    (ch === CH_BRUTILE || ch === CH_RAKAELI) &&
+    (ch === CH_BRUTILE || ch === CH_RAKAELI || (ch === CH_VOLKONOV && hasAlly(b, i))) &&
     b.sq[i] >= 0 &&
     b.stun[i] === 0 &&
     b.awaken[i] === 0 &&
@@ -164,7 +175,7 @@ export function fastGenMoves(b: FastBoard, side: number, out: Int32Array, n = 0)
     if (s < 0 || b.owner[i] !== side || b.stun[i] > 0) continue;
     if (b.bonus >= 0 && i !== b.bonus) continue;
     const start = n;
-    n = genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, out, n, false, b.dir[i], b.storm, b.absorb[i], b.waste, b.trap, b.awaken[i] > 0);
+    n = genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, out, n, false, b.dir[i], b.storm, b.absorb[i], b.waste, b.trap, b.awaken[i] > 0, b.buff[i] > 0);
     const hi = i << 8;
     for (let k = start; k < n; k++) out[k] |= hi;
   }
@@ -180,7 +191,7 @@ export function fastHasMoves(b: FastBoard, side: number, ignoreStun = false): bo
     if (s < 0 || b.owner[i] !== side) continue;
     if (!ignoreStun && b.stun[i] > 0) continue;
     if (b.bonus >= 0 && i !== b.bonus) continue;
-    if (genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, scratch, 0, false, b.dir[i], b.storm, b.absorb[i], b.waste, b.trap, b.awaken[i] > 0) > 0) return true;
+    if (genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, scratch, 0, false, b.dir[i], b.storm, b.absorb[i], b.waste, b.trap, b.awaken[i] > 0, b.buff[i] > 0) > 0) return true;
   }
   return false;
 }
@@ -196,7 +207,7 @@ export function fastImmobile(b: FastBoard): boolean {
   if (b.storm === 0 && b.ply >= SKILL_UNLOCK_PLY) {
     for (let i = 0; i < b.n; i++) {
       if (b.sq[i] < 0 || b.owner[i] !== b.turn || b.used[i] !== 0 || b.awaken[i] !== 0) continue;
-      if (b.ch[i] === CH_RAKAELI) return false;
+      if (b.ch[i] === CH_RAKAELI || (b.ch[i] === CH_VOLKONOV && hasAlly(b, i))) return false;
       if (b.ch[i] === CH_BRUTILE) {
         const k = WASTE_SIZE[b.lvl[i]];
         for (let a = 0; a < BOARD_SIZE * BOARD_SIZE; a++) if (fastSkillFits(b, k, a)) return false;
@@ -251,10 +262,11 @@ function switchSide(b: FastBoard): void {
   const oldBonus = b.bonus;
   const oldStorm = b.storm;
   const oldStormIn = b.stormIn;
-  // The side whose turn ends: each of its stunned pieces has one owner turn less to sit out, and a
-  // transformed Rakaeli one transformed turn less.
+  // The side whose turn ends: each of its stunned pieces has one owner turn less to sit out, a
+  // transformed Rakaeli one transformed turn less and a buffed piece one buffed turn less.
   let stunMask = 0;
   let awakenMask = 0;
+  let buffMask = 0;
   for (let i = 0; i < b.n; i++) {
     if (b.owner[i] !== b.turn) continue;
     if (b.stun[i] > 0) {
@@ -264,6 +276,10 @@ function switchSide(b: FastBoard): void {
     if (b.awaken[i] > 0) {
       b.awaken[i]--;
       awakenMask |= 1 << i;
+    }
+    if (b.buff[i] > 0) {
+      b.buff[i]--;
+      buffMask |= 1 << i;
     }
   }
   b.bonus = -1;
@@ -297,10 +313,12 @@ function switchSide(b: FastBoard): void {
   h[b.histTop++] = oldBonus;
   h[b.histTop++] = stunMask;
   h[b.histTop++] = awakenMask;
+  h[b.histTop++] = buffMask;
 }
 
 function undoSwitch(b: FastBoard): void {
   const h = b.hist;
+  let buffMask = h[--b.histTop];
   let awakenMask = h[--b.histTop];
   let stunMask = h[--b.histTop];
   b.bonus = h[--b.histTop];
@@ -320,6 +338,7 @@ function undoSwitch(b: FastBoard): void {
   b.turn = (1 - b.turn) as PlayerId;
   for (let i = 0; stunMask !== 0; i++, stunMask >>>= 1) if (stunMask & 1) b.stun[i]++;
   for (let i = 0; awakenMask !== 0; i++, awakenMask >>>= 1) if (awakenMask & 1) b.awaken[i]++;
+  for (let i = 0; buffMask !== 0; i++, buffMask >>>= 1) if (buffMask & 1) b.buff[i]++;
 }
 
 /**
@@ -348,7 +367,7 @@ export function fastMake(b: FastBoard, mv: number): number {
       for (let k = 1, s = from + step; k < len; k++, s += step) {
         const o = b.occ[s];
         if (o < 0 || b.owner[o] === own) continue;
-        gain |= abilityBit(b.ch[o], b.lvl[o]) | b.absorb[o];
+        gain = absorbMerge(gain, absorbMerge(abilityBit(b.ch[o], b.lvl[o]), b.absorb[o]));
         kill(b, o);
         hopN++;
       }
@@ -375,7 +394,7 @@ export function fastMake(b: FastBoard, mv: number): number {
   }
   const cap = b.occ[to];
   if (cap >= 0) {
-    gain |= abilityBit(b.ch[cap], b.lvl[cap]) | b.absorb[cap];
+    gain = absorbMerge(gain, absorbMerge(abilityBit(b.ch[cap], b.lvl[cap]), b.absorb[cap]));
     b.sq[cap] = -1;
     b.alive[b.owner[cap]]--;
     b.material[b.owner[cap]] -= b.value[cap];
@@ -407,8 +426,7 @@ export function fastMake(b: FastBoard, mv: number): number {
   b.ply++;
   let chained = 0;
   if ((cap >= 0 || hopN > 0) && b.ch[pi] === CH_INSANER) {
-    b.absorb[pi] |= gain;
-    b.absorb[pi] &= ~abilityBit(b.ch[pi], b.lvl[pi]);
+    b.absorb[pi] = absorbWithout(absorbMerge(b.absorb[pi], gain), b.ch[pi], b.lvl[pi]);
     if (b.lvl[pi] === 3 && b.bonus < 0 && b.alive[1 - b.turn] > 0 && !caught) {
       b.bonus = pi;
       chained = 1;
@@ -488,7 +506,7 @@ export function fastUnmake(b: FastBoard, mv: number, undo: number): void {
 
 /**
  * Cast piece `pi`'s skill (the turn passes): Brutile lays its wasteland at the encoded anchor,
- * Rakaeli transforms. Caller checked legality.
+ * Rakaeli transforms, Volkonov buffs every other piece of his side. Caller checked legality.
  */
 function makeSkill(b: FastBoard, mv: number): number {
   const pi = (mv >> 8) & 255;
@@ -496,6 +514,16 @@ function makeSkill(b: FastBoard, mv: number): number {
   const h = b.hist;
   if (b.ch[pi] === CH_RAKAELI) {
     b.awaken[pi] = AWAKEN_TURNS;
+    h[b.histTop++] = 0; // no wasteland squares
+  } else if (b.ch[pi] === CH_VOLKONOV) {
+    // His allies' buff was 0 before: each side has one Volkonov, and he casts once per match.
+    let mask = 0;
+    for (let i = 0; i < b.n; i++) {
+      if (i === pi || b.sq[i] < 0 || b.owner[i] !== b.owner[pi]) continue;
+      b.buff[i] = BUFF_TURNS[b.lvl[pi]] + 1;
+      mask |= 1 << i;
+    }
+    h[b.histTop++] = mask;
     h[b.histTop++] = 0; // no wasteland squares
   } else layWaste(b, WASTE_SIZE[b.lvl[pi]], anchor);
   b.used[pi] = 1;
@@ -535,6 +563,9 @@ function unmakeSkill(b: FastBoard): void {
   if (b.ch[pi] === CH_RAKAELI) b.awaken[pi] = 0;
   const added = h[--b.histTop];
   for (let k = 0; k < added; k++) b.waste[h[--b.histTop]] = 0;
+  if (b.ch[pi] === CH_VOLKONOV) {
+    for (let i = 0, mask = h[--b.histTop]; mask !== 0; i++, mask >>>= 1) if (mask & 1) b.buff[i] = 0;
+  }
 }
 
 /** The side to move passes (no legal move / chain move declined). Reverse with `fastUnpass`. */
