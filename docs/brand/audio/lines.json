@@ -683,7 +683,14 @@
     "rampid": {
       "concept": "An energetic teenage ice boy (~15) with sky-blue hair who rides the ice and dashes straight forward at speed: a bright, quick, cocky young male voice; not a child, not deep.",
       "gender": "male",
-      "voice": "A cocky, energetic boy of about fifteen. Bright, quick, light young male voice in a medium-high register, grinning and playful, fast delivery. Never childish, never deep.",
+      "voice": "A cocky, energetic teenage boy of about fifteen. A light, bright young tenor in a medium-high pitch, quick, cocky and grinning, playful. A teenage boy's voice: not a small child, not deep, not shouting.",
+      "clone": {
+        "ref": "refs/rampid-ref.flac",
+        "text": "얼음 위라면 누구보다 빨라. 따라올 수 있겠어?",
+        "style": "Cocky and playful, quick, smiling, moderate volume.",
+        "_from": "VoiceDesign take (seed 11, take 3) of 16 over two prompts, pauses tightened to 0.35 s. The first prompt ('light, bright young tenor in a medium-high pitch') gave 6/8 takes the QA classifier heard as female (P 0.90-0.99, 285-473 Hz); the second ('voice has already broken ... medium pitch') gave male takes at 196-370 Hz but noisier (warble 0.045-0.078, HNR 9-11 dB). Kept: F0 249 Hz (168-328), CER 0, warble 0.027, HNR 15.9 dB, harshness -16.1 dB, P(female) 0.019."
+      },
+      "f0_target": 235,
       "lines": [
         {
           "id": "select-1",
@@ -750,7 +757,13 @@
     "larhen": {
       "concept": "A professional assassin in his thirties with long hair and twin daggers who leaps high: a low, calm, cold, quiet male voice; terse, never shouting.",
       "gender": "male",
-      "voice": "A professional assassin in his thirties. Low, calm, cold and quiet male voice, terse and controlled, almost a murmur. Never shouting, never emotional.",
+      "voice": "A calm, cold professional assassin, a man in his thirties. A low but clear and smooth baritone in a medium-low pitch, quiet, controlled and terse. A clean voice with no rasp and no vocal fry, never shouting.",
+      "clone": {
+        "ref": "refs/larhen-ref.flac",
+        "text": "표적은 정해졌다. 소리 없이 끊는다.",
+        "style": "Cold, calm and quiet, steady.",
+        "_from": "VoiceDesign take (seed 11, take 2) of 16 over two prompts, pauses tightened to 0.35 s. The script said 끝낸다 but the take says 끊는다 (Whisper hears it in both the raw and the trimmed clip), so 'text' follows the audio. Both prompts gave 69-113 Hz takes, most of them creaky (HNR -3.6..3.6 dB, warble up to 0.15); kept the cleanest: F0 92 Hz (72-115), HNR 6.5 dB, warble 0.066, harshness -14.6 dB, P(female) 0.001."
+      },
       "lines": [
         {
           "id": "select-1",
@@ -811,7 +824,14 @@
     "volkonov": {
       "concept": "A male bard whose eyes are always closed in a smile and who buffs allies with music: a smooth, warm, theatrical, slightly teasing mid-range male voice with a sing-song delivery.",
       "gender": "male",
-      "voice": "A charming travelling bard, a man with an ever-present closed-eye smile. Smooth, warm, theatrical mid-range male voice, playful and slightly teasing, with a lilting sing-song delivery.",
+      "voice": "A charming travelling bard, a man in his late twenties who always smiles with his eyes closed. Smooth, warm, theatrical mid-range male voice, playful and slightly teasing, with a lilting, sing-song melodic delivery.",
+      "clone": {
+        "ref": "refs/volkonov-ref.flac",
+        "text": "자, 오늘도 한 곡 들려줄까? 모두 내 선율에 맞춰 봐.",
+        "style": "Warm, theatrical and teasing, melodic, moderate volume.",
+        "_from": "VoiceDesign take (seed 11, take 7) of 8, pauses tightened to 0.35 s. Takes ranged 140-295 Hz (all male, CER 0); the 205-295 Hz ones read as an excited young man, not a smooth mid-range bard. Kept the warmest: F0 140 Hz with a wide melodic range (95-193 Hz), harshness -16.3 dB, warble 0.077, HNR 8.2 dB, P(female) 0.001."
+      },
+      "f0_target": 145,
       "lines": [
         {
           "id": "select-1",

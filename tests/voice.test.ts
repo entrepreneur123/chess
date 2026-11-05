@@ -54,17 +54,23 @@ const FORM_SFX_EVENTS: Partial<Record<CharacterId, CharAudioEvent[]>> = {
   rakaeli: ['awake-move', 'awake-capture', 'awake-end'],
 };
 const usesTraitsInsteadOfSkill = (c: CharacterId): boolean => !CHARACTERS[c].skill && !!CHARACTERS[c].trait;
+/**
+ * Who has a 'skill' audio event: the original five (their signature move, skill or not) and every
+ * character with an active skill. A later character with neither a skill nor a trait (Rampid,
+ * Larhen) has none.
+ */
+const hasSkillAudio = (c: CharacterId): boolean => ORIGINAL.includes(c) || !!CHARACTERS[c].skill;
 const BASE_VOICE_EVENTS: CharAudioEvent[] = ['select', 'move', 'capture', 'death', 'victory'];
 const BASE_SFX_EVENTS: CharAudioEvent[] = ['select', 'move', 'capture'];
 const voiceEvents = (c: CharacterId): CharAudioEvent[] => [
   ...BASE_VOICE_EVENTS,
-  ...(usesTraitsInsteadOfSkill(c) ? [] : (['skill'] as CharAudioEvent[])),
+  ...(hasSkillAudio(c) ? (['skill'] as CharAudioEvent[]) : []),
   ...(TRAIT_EVENTS[c] ?? []),
   ...(FORM_VOICE_EVENTS[c] ?? []),
 ];
 const sfxEvents = (c: CharacterId): CharAudioEvent[] => [
   ...BASE_SFX_EVENTS,
-  ...(usesTraitsInsteadOfSkill(c) ? [] : (['skill'] as CharAudioEvent[])),
+  ...(hasSkillAudio(c) ? (['skill'] as CharAudioEvent[]) : []),
   ...(TRAIT_EVENTS[c] ?? []),
   ...(FORM_SFX_EVENTS[c] ?? []),
 ];
@@ -76,8 +82,11 @@ const sfxEvents = (c: CharacterId): CharAudioEvent[] => [
  * (twice a normal set; encoded at 48 kbps instead of 64 to keep them compact) and 7 effects, together
  * 292,879 bytes (vo 236,571 + sfx 56,308), about 1.4x a one-form character. Measured: 1,717,578 bytes
  * (vo 1,390,181 + sfx 327,397), 0.21 MiB per character; headroom 117,430 bytes.
+ * Raised to 2.25 MiB on 2026-11-05 for the three later commons (Rampid, Larhen, Volkonov): 29 voice
+ * lines (386,729 bytes) and 10 effects (76,026 bytes), about 0.15 MiB per character, below the
+ * average. Measured: 2,180,333 bytes for 11 characters; headroom 178,963 bytes.
  */
-const AUDIO_BUDGET_BYTES = 1.75 * 1024 * 1024;
+const AUDIO_BUDGET_BYTES = 2.25 * 1024 * 1024;
 
 function allFiles(): string[] {
   const out = new Set<string>();
@@ -107,7 +116,7 @@ describe('character audio manifest', () => {
     for (const c of CHARS) if (c !== 'insaner') expect(VOICE_CLIPS[c].chain, `${c}.chain`).toBeUndefined();
     // A character without a skill has no skill line, and trait events belong to their owner only.
     for (const c of CHARS) {
-      if (usesTraitsInsteadOfSkill(c)) expect(VOICE_CLIPS[c].skill, `${c}.skill`).toBeUndefined();
+      if (!hasSkillAudio(c)) expect(VOICE_CLIPS[c].skill, `${c}.skill`).toBeUndefined();
       for (const [owner, evs] of Object.entries({ ...TRAIT_EVENTS, ...FORM_VOICE_EVENTS }))
         if (owner !== c) for (const e of evs ?? []) expect(VOICE_CLIPS[c][e], `${c}.${e}`).toBeUndefined();
     }
@@ -122,7 +131,7 @@ describe('character audio manifest', () => {
 
   it('has character sound effects for select/move/capture/skill (or traits), a chain chime and a shared death', () => {
     for (const c of CHARS) for (const e of sfxEvents(c)) expect(CHAR_SFX[c][e], `${c}.${e}`).toBeTruthy();
-    for (const c of CHARS) if (usesTraitsInsteadOfSkill(c)) expect(CHAR_SFX[c].skill, `${c}.skill sfx`).toBeUndefined();
+    for (const c of CHARS) if (!hasSkillAudio(c)) expect(CHAR_SFX[c].skill, `${c}.skill sfx`).toBeUndefined();
     for (const c of CHARS)
       for (const [owner, evs] of Object.entries(FORM_SFX_EVENTS))
         if (owner !== c) for (const e of evs ?? []) expect(CHAR_SFX[c][e], `${c}.${e} sfx`).toBeUndefined();
@@ -143,7 +152,7 @@ describe('character audio manifest', () => {
     }
   });
 
-  it('keeps the whole audio payload under the budget (1.75 MiB for 8 characters)', async () => {
+  it('keeps the whole audio payload under the budget (2.25 MiB for 11 characters)', async () => {
     const { readdirSync, statSync } = await fsP;
     let total = 0;
     for (const sub of ['vo', 'sfx']) {

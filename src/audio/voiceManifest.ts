@@ -77,6 +77,28 @@ export const VOICE_CLIPS: Record<CharacterId, Partial<Record<CharAudioEvent, rea
     'awake-death': ['vo/rakaeli-awake-death-1.m4a'],
     'awake-end': ['vo/rakaeli-awake-end-1.m4a'],
   },
+  rampid: {
+    select: ['vo/rampid-select-1.m4a', 'vo/rampid-select-2.m4a'],
+    move: ['vo/rampid-move-1.m4a', 'vo/rampid-move-2.m4a'],
+    capture: ['vo/rampid-capture-1.m4a', 'vo/rampid-capture-2.m4a', 'vo/rampid-capture-3.m4a'],
+    death: ['vo/rampid-death-1.m4a'],
+    victory: ['vo/rampid-victory-1.m4a'],
+  },
+  larhen: {
+    select: ['vo/larhen-select-1.m4a', 'vo/larhen-select-2.m4a'],
+    move: ['vo/larhen-move-1.m4a', 'vo/larhen-move-2.m4a'],
+    capture: ['vo/larhen-capture-1.m4a', 'vo/larhen-capture-2.m4a', 'vo/larhen-capture-3.m4a'],
+    death: ['vo/larhen-death-1.m4a'],
+    victory: ['vo/larhen-victory-1.m4a'],
+  },
+  volkonov: {
+    select: ['vo/volkonov-select-1.m4a', 'vo/volkonov-select-2.m4a'],
+    move: ['vo/volkonov-move-1.m4a', 'vo/volkonov-move-2.m4a'],
+    capture: ['vo/volkonov-capture-1.m4a', 'vo/volkonov-capture-2.m4a', 'vo/volkonov-capture-3.m4a'],
+    skill: ['vo/volkonov-skill-1.m4a', 'vo/volkonov-skill-2.m4a'],
+    death: ['vo/volkonov-death-1.m4a'],
+    victory: ['vo/volkonov-victory-1.m4a'],
+  },
 };
 
 /** Spoken text of each clip (Korean), for captions/debugging. */
@@ -172,6 +194,35 @@ export const VOICE_TEXT: Readonly<Record<string, string>> = {
   'vo/rakaeli-awake-capture-2.m4a': "구원은 없다.",
   'vo/rakaeli-awake-death-1.m4a': "또… 떨어지는군.",
   'vo/rakaeli-awake-end-1.m4a': "불이… 꺼져 가요.",
+  'vo/rampid-select-1.m4a': "불렀어? 바로 갈게!",
+  'vo/rampid-select-2.m4a': "빙판 위라면 내가 최고지.",
+  'vo/rampid-move-1.m4a': "간다, 슝!",
+  'vo/rampid-move-2.m4a': "못 따라오지?",
+  'vo/rampid-capture-1.m4a': "너무 느려!",
+  'vo/rampid-capture-2.m4a': "꽁꽁 얼려 주지!",
+  'vo/rampid-capture-3.m4a': "빙판 조심하라고!",
+  'vo/rampid-death-1.m4a': "으앗… 미끄러졌다…",
+  'vo/rampid-victory-1.m4a': "역시 내가 제일 빠르다니까!",
+  'vo/larhen-select-1.m4a': "표적을 말해.",
+  'vo/larhen-select-2.m4a': "그림자 속에서.",
+  'vo/larhen-move-1.m4a': "조용히.",
+  'vo/larhen-move-2.m4a': "위에서 간다.",
+  'vo/larhen-capture-1.m4a': "끝이다.",
+  'vo/larhen-capture-2.m4a': "느렸군.",
+  'vo/larhen-capture-3.m4a': "소리 없이.",
+  'vo/larhen-death-1.m4a': "…실수였나.",
+  'vo/larhen-victory-1.m4a': "임무 완료.",
+  'vo/volkonov-select-1.m4a': "오늘은 어떤 노래를 들려줄까?",
+  'vo/volkonov-select-2.m4a': "후후, 박자에 맞춰 볼까?",
+  'vo/volkonov-move-1.m4a': "발걸음도 리듬에 맞춰~",
+  'vo/volkonov-move-2.m4a': "라라~ 이쪽이야.",
+  'vo/volkonov-capture-1.m4a': "앙코르는 없어.",
+  'vo/volkonov-capture-2.m4a': "피날레다!",
+  'vo/volkonov-capture-3.m4a': "박자를 놓쳤군.",
+  'vo/volkonov-skill-1.m4a': "모두, 내 선율을 들어라!",
+  'vo/volkonov-skill-2.m4a': "발걸음에 날개를 달아 주지!",
+  'vo/volkonov-death-1.m4a': "아… 마지막 소절이…",
+  'vo/volkonov-victory-1.m4a': "브라보! 완벽한 무대였어.",
 };
 
 /** Character-specific sound effects per event. */
@@ -184,6 +235,9 @@ export const CHAR_SFX: Record<CharacterId, Partial<Record<CharAudioEvent, string
   michelle: { select: 'sfx/michelle-select.m4a', move: 'sfx/michelle-move.m4a', capture: 'sfx/michelle-capture.m4a', 'trap-set': 'sfx/michelle-trap-set.m4a', 'trap-sprung': 'sfx/michelle-trap-sprung.m4a' },
   picker: { select: 'sfx/picker-select.m4a', move: 'sfx/picker-move.m4a', capture: 'sfx/picker-capture.m4a', 'hop-multi': 'sfx/picker-hop-multi.m4a' },
   rakaeli: { select: 'sfx/rakaeli-select.m4a', move: 'sfx/rakaeli-move.m4a', capture: 'sfx/rakaeli-capture.m4a', skill: 'sfx/rakaeli-skill.m4a', 'awake-move': 'sfx/rakaeli-awake-move.m4a', 'awake-capture': 'sfx/rakaeli-awake-capture.m4a', 'awake-end': 'sfx/rakaeli-awake-end.m4a' },
+  rampid: { select: 'sfx/rampid-select.m4a', move: 'sfx/rampid-move.m4a', capture: 'sfx/rampid-capture.m4a' },
+  larhen: { select: 'sfx/larhen-select.m4a', move: 'sfx/larhen-move.m4a', capture: 'sfx/larhen-capture.m4a' },
+  volkonov: { select: 'sfx/volkonov-select.m4a', move: 'sfx/volkonov-move.m4a', capture: 'sfx/volkonov-capture.m4a', skill: 'sfx/volkonov-skill.m4a' },
 };
 
 /** Shared effects used when a character has no specific one. */

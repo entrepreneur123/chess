@@ -267,3 +267,88 @@ measure mostly sees broadband noise and low impacts, so heavy impacts score alik
 test budget was raised from 1.5 MiB to 1.75 MiB (1,835,008 B, 0.21 MiB per character for 8
 characters); headroom 117,430 B. Nobody has listened to these files; every statement above is a
 measurement.
+
+## Rampid, Larhen and Volkonov (2026-11-05)
+
+Characters 9-11. Lines: the standard set (select x2, move x2, capture x3, death, victory); volkonov
+also has `skill` x2 for 선율 (his music gives every ally +1 orthogonal move range). Rampid and
+Larhen have no active skill, so no skill line or effect.
+
+**ElevenLabs was tried first and dropped.** The owner asked for ElevenLabs library voices this time
+(the brief assumed the Qwen models could not be downloaded; they were already in the scratch
+directory from earlier runs). Chosen by preview measurements (F0, centroid, HNR): "taemin"
+`Ir7oQcBXWiq4oFGROCfj` (rampid), "Min-jun - Calm and composed" `7ZVPKvVmVZZERLd1Q6BS` (larhen),
+"Deok - Energetic Korean Narrator" `wisKdlUQEBMjkKqNAa3c` (volkonov), model `eleven_v4`. Of 14
+generation calls, 9 were refused before starting ("free generations are busy", nothing charged), 5
+started 7 generations (5 rampid lines), and then ElevenLabs disabled free-tier access for the
+workspace ("unusual activity", the same block as on 2026-11-03). Nothing from it ships: the takes
+are free-tier output (non-commercial) in real voice actors' voices, and one character must not
+mix two engines. See `public/audio/LICENSES.md`.
+
+**References** (Qwen3-TTS VoiceDesign, measured with `voice_qa.py` + Whisper + both gender models):
+- rampid: 16 takes over two prompts. The "light, bright young tenor in a medium-high pitch" prompt
+  gave 6/8 takes classified female (285-473 Hz); the "voice has already broken ... medium pitch"
+  prompt gave male takes but noisier ones. Kept seed 11 take 3 of the first prompt: 249 Hz,
+  CER 0, warble 0.027, HNR 15.9 dB, P(female) 0.019 (w2v) / 0.29 (ECAPA). `f0_target` 235.
+- larhen: 16 takes over two prompts, all 69-113 Hz and mostly creaky (HNR -3.6..3.6 dB) even when
+  the prompt asked for "no rasp, no vocal fry". Kept the cleanest: 92 Hz, HNR 6.5 dB, warble 0.066.
+  The take says 끊는다 where the script said 끝낸다; the clone `text` follows the audio.
+- volkonov: 8 takes, 140-295 Hz, all male. Kept the warmest, 140 Hz with a wide melodic range
+  (95-193 Hz), harshness -16.3 dB. `f0_target` 145.
+
+**Takes.** 6 cloned takes per line, all 6 fully processed and judged (`--shortlist 6`). Character
+chains (`post_voice.py`): rampid HP 90 Hz, +0.8 dB at 200 Hz, 2.5:1, a cool 0.6 s rink room (LP 6 kHz,
+HP 400 Hz) at 9 %; larhen HP 70 Hz, +1.2 dB at 160 Hz, -1 dB above 6 kHz, 3:1, a dry dark 0.4 s room
+at 6 % (close and quiet); volkonov HP 75 Hz, +1.2 dB at 220 Hz, 2:1, a warm 1.1 s stage hall at 14 %.
+Results on the decoded .m4a (`qa-voice.json`):
+
+| Character | clips | dur s | F0 Hz | harsh dB | sib dB | warble st | HNR dB | CER | P(female) w2v / ECAPA |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| rampid (median) | 9 | 1.79 (1.15-2.26) | 237 (208-302) | -12.6 | -15.1 | 0.047 (max 0.091) | 11.4 | 0 (death-1: 0.14, 으앗 heard as 으아) | see below |
+| larhen (median) | 9 | 1.02 (0.81-1.15) | 88 (82-93) | -12.2 | -12.5 | 0.078 (max 0.127) | 6.4 | 0 (all) | 0.001 / 0.002-0.004 |
+| volkonov (median) | 11 | 1.83 (1.02-2.35) | 136 (112-175) | -16.5 | -18.6 | 0.084 (max 0.131) | 5.6 | 0 (all) | 0.001 / 0.002-0.015 |
+
+All 29 clips: -15.86..-16.18 LUFS, true peak <= -1.34 dBTP, tail <= -52.2 dB, 7.1-20.2 KB
+(386,729 B in all).
+
+- **Rampid reads androgynous to the classifiers** (a 15-year-old at 210-300 Hz). wav2vec2 says
+  female on select-1 (0.85), move-1 (0.99) and move-2 (0.97); ECAPA says male on all nine (max 0.51
+  on capture-2, 0.36-0.38 on the two moves). No clip is female on both. Every take of move-1 and
+  move-2 measured the same on wav2vec2, so a lower take was not available. Listen to these three.
+- Larhen sits at 88 Hz, in marki's (90) and walk's (96) register; the difference is texture (quiet,
+  close, dry room, no growl layer or grit). His raw takes are breathy/creaky (HNR 6.4 dB median),
+  which suits a murmur but is a measurement, not a listening verdict.
+- `larhen:capture-2` was re-run alone (`--only-line`) because the first pass ended at -17.4 LUFS
+  (the encoder loop ran out of rounds on a peaky 0.8 s clip); the re-run picked another take
+  (-16.18 LUFS, warble 0.127, HNR -1.9 dB: the creakiest shipped clip).
+
+**SFX.** Appended after rakaeli in `gen_sfx.py` (all 39 earlier effects regenerated and checked
+sample-identical, max difference 0.0; the shipped .m4a of all 39 are byte-identical). New building
+blocks: `skate_scrape` (a narrow, bright swept band for the blade edge plus a lower carve band and
+ice-chip grain), `ice_tinkle`, `ice_stop`, `blade_whoosh` (a short high-Q swept band), `steel_shing`
+(scrape + two beating steel partials), `lute_pluck` (Karplus-Strong, computed one delay period at a
+time, with a small wooden body and a 3 ms attack) and `strum`.
+
+| File | Concept | dur s | LUFS | peak dBFS | bytes |
+| --- | --- | --- | --- | --- | --- |
+| rampid-select | a short skate carve into a shaved-ice stop, a sparkle of frost | 0.576 | -17.17 | -2.30 | 5714 |
+| rampid-move | two fast skating strides (the second higher), a short glide hiss | 0.555 | -17.24 | -3.29 | 5688 |
+| rampid-capture | a speed rush, a glassy ice-shatter strike with a small body, shards and frost | 0.853 | -16.98 | -2.17 | 8144 |
+| larhen-select | twin daggers drawn one after the other (scrape + thin ring) | 0.704 | -16.16 | -3.88 | 6714 |
+| larhen-move | a coat flick, air rushing up (the leap), a near-silent landing | 0.683 | -17.12 | -1.94 | 6639 |
+| larhen-capture | two lightning cross slashes, a crisp steel tsing on the cut, a muted body | 0.661 | -17.02 | -2.76 | 6506 |
+| volkonov-select | a rolled D-major lute strum and a playful high answer | 0.875 | -17.08 | -1.17 | 8294 |
+| volkonov-move | two light plucks stepping up a fourth over a cloak swish | 0.661 | -17.06 | -3.16 | 6400 |
+| volkonov-capture | a fast run down the scale, a snapped low string, a sly resolving note | 0.917 | -17.16 | -2.01 | 8405 |
+| volkonov-skill | 선율: an accelerating rising D-major arpeggio over a warm swelling pad, a bright chime and sparkle | 1.515 | -17.05 | -3.63 | 13522 |
+
+Two fixes found by measurement: a click with a 0.2 ms attack in larhen-capture and the instant
+onset of the first Karplus-Strong plucks made the AAC encoder overshoot (by ~5 dB on volkonov-move),
+so `encode_checked` turned the whole clip 1.4-2.5 dB under target; both now have 1-3 ms attacks.
+Rampid's effects are the brightest of the roster by centroid (4.5-5.5 kHz vs <= 4.4 kHz for the
+rest) after a lower carve band was added (they were 5.8-6.9 kHz).
+
+**Budget.** vo + sfx = 2,180,333 B (vo + 386,729 for 29 lines, sfx + 76,026 for 10 effects), over the
+test's 1.75 MiB budget (1,835,008 B). The three new characters take 0.15 MiB each, under the
+roster's 0.21 MiB per character; 2.25 MiB (2,359,296 B) for 11 characters would leave 178,963 B.
+Nobody has listened to these files; every statement above is a measurement.
