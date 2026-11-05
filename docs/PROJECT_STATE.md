@@ -149,9 +149,10 @@ quoting a number.
     slide (blocked, captures the blocking enemy, ends on wasteland). Never absorbed by Insaner.
   - UI: a rose "♪ N" badge on the board (DOM layer, `ui/game/melodyFx.ts`), a "선율 · N턴" band and
     the extra squares in the hand card's diagram, `is-buffed` on enemy roster chips.
-- **Owner-brief interpretations (lead defaults, confirm with the owner):** Larhen's back diagonals
-  arrive at 2성 (the brief said "일성에서"); his 3성 keeps the four diagonals (an H); the melody
-  buffs the other pieces only, not Volkonov himself; all three are common (일반).
+- **Owner-brief interpretations (decided by the lead on 2026-11-05; the owner asked for no more
+  questions on these):** Larhen's back diagonals arrive at 2성 (the brief said "일성에서", which would
+  make 1성 and 2성 identical); his 3성 keeps the four diagonals (an H); the melody buffs the other
+  pieces only, not Volkonov himself; all three are common (일반); unlocks in arenas 2 / 3 / 4.
 - **Absorb masks:** 2 bits per character code holding the highest absorbed level (`absorbMerge`);
   exact because every pattern contains its lower grades (checked in `tests/commons3.test.ts`).
   Room for 15 character codes.
