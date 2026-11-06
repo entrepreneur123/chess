@@ -1333,3 +1333,16 @@ img.is-art-missing {
 img.is-awake-fallback {
   filter: sepia(0.35) saturate(1.6) hue-rotate(-28deg) brightness(0.92) contrast(1.08);
 }
+
+/* Venoa: arrow range (a lime crosshair: an enemy there is shot, she stays). Glacia: glide lanes
+   (fading frost: she slides until something stops her). */
+.move-diagram .md-cell.is-target.is-shot {
+  border-radius: 50%;
+  background: radial-gradient(circle, #f4ffd0 0 18%, transparent 22% 48%, #c6f23a 52% 66%, transparent 70%);
+  box-shadow: none;
+}
+.move-diagram .md-cell.is-target.is-glide {
+  border-radius: 2px;
+  background: linear-gradient(135deg, rgba(232, 244, 255, 0.95), rgba(156, 200, 255, 0.55));
+  box-shadow: 0 0 5px rgba(156, 200, 255, 0.7);
+}

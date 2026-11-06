@@ -51,7 +51,9 @@ import { duck, playArenaMusic } from '../musicBridge';
 import { isPowerSave, watchPowerSave } from '../powerSave';
 import { resultPanel } from '../game/resultPanel';
 import { createBuffBadges, playMelodyFx } from '../game/melodyFx';
+import { GLACIA_FREEZE } from '../../engine/characters';
 import { playBlinkFx } from '../game/blinkFx';
+import { playFreezeFx, playKnockFx, playShotFx } from '../game/trioFx';
 import { coinFlipFirst, randInt, defaultRng } from '../../meta/rng';
 import { installBoardDrag, type BoardDrag } from '../components/boardDrag';
 import { confetti } from '../components/celebrate';
@@ -308,9 +310,10 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   let trapKey = '';
   /**
    * Skill targeting: Brutile choosing where to lay his wasteland ('waste': `preview` is the area's
-   * corner) or Midos choosing where to teleport ('blink': `preview` is the landing square).
+   * corner), Midos choosing where to teleport ('blink': `preview` is the landing square) or Glacia
+   * choosing whom to freeze ('freeze': `preview` is the enemy's square).
    */
-  let targeting: { kind: 'waste' | 'blink'; pieceId: string; level: 1 | 2 | 3; anchors: Set<number>; preview: Pos | null } | null = null;
+  let targeting: { kind: 'waste' | 'blink' | 'freeze'; pieceId: string; level: 1 | 2 | 3; anchors: Set<number>; preview: Pos | null } | null = null;
   /** Rakaeli's transform waiting for the player's confirm (no target to pick: his own square). */
   let transformAsk: string | null = null;
   /** The first transform of the match gets the coach toast. */
@@ -390,8 +393,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       return;
     }
     const dist = Math.max(Math.abs(move.to.r - move.from.r), Math.abs(move.to.c - move.from.c));
-    // Signature moves: Marki's long charge, Walk's wide leap.
-    const signature = (mover.character === 'marki' && dist >= 3) || (mover.character === 'walk' && Math.abs(move.to.c - move.from.c) >= 2);
+    // Signature moves: Marki's long charge, Walk's wide leap, Hammont's knock-back hit.
+    const signature = (mover.character === 'marki' && dist >= 3) || (mover.character === 'walk' && Math.abs(move.to.c - move.from.c) >= 2) || !!move.push;
     // Picker's multi-capture hop and Verish's multi-capture pierce have their own sound
     // ('hop-multi'); everyone else plays move/skill.
     const multiHop = (mover.character === 'picker' || mover.character === 'verish') && capturedIds(move).length >= 2;
@@ -458,6 +461,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     active: '타천 중',
     storm: '자기장 이후 사용 불가',
     alone: '함께할 아군이 없어요',
+    noTarget: '사거리 안에 적이 없어요',
     stunned: '속박 · 다음 턴에 사용 가능',
     ended: '',
   };
@@ -476,7 +480,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       // A stunned card cannot be selected (the piece sits out its owner's next turn).
       sfx('tap');
       haptic('light');
-      toast(`${josa(CHARACTERS[p.character].nameKo, '은/는')} 인형 함정에 속박돼 이번 턴에 움직일 수 없어요`, { tone: 'warn', duration: 2200 });
+      toast(`${josa(CHARACTERS[p.character].nameKo, '은/는')} 속박돼 이번 턴에 움직일 수 없어요`, { tone: 'warn', duration: 2200 });
       return;
     }
     if (!selectFromHand(c, pieceId)) {
@@ -514,7 +518,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     const p = getPieceById(c.state, pieceId);
     if (!p || skillBlock(c.state, pieceId) !== null) return;
     const anchorList = skillAnchors(c.state, pieceId).map(sqOf);
-    const kind = skillKindOf(p.character) === 'blink' ? 'blink' : 'waste';
+    const sk = skillKindOf(p.character);
+    const kind = sk === 'blink' || sk === 'freeze' ? sk : 'waste';
     targeting = { kind, pieceId, level: p.level, anchors: new Set(anchorList), preview: null };
     // Only the area under consideration is drawn (valid corners would tint nearly the whole board);
     // a teleport shows its landing squares as move dots instead (see renderSnapshot).
@@ -535,7 +540,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     if (!t || !t.preview || !t.anchors.has(sqOf(t.preview))) return;
     const action: SkillAction = { kind: 'skill', pieceId: t.pieceId, anchor: t.preview };
     stopTargeting();
-    if (!ctrl?.trySkill(action)) toast(t.kind === 'blink' ? '지금은 순간이동할 수 없어요' : '지금은 불모지를 쓸 수 없어요', { tone: 'warn' });
+    if (!ctrl?.trySkill(action)) toast(t.kind === 'blink' ? '지금은 순간이동할 수 없어요' : t.kind === 'freeze' ? '지금은 빙결을 쓸 수 없어요' : '지금은 불모지를 쓸 수 없어요', { tone: 'warn' });
   };
 
   /**
@@ -561,9 +566,9 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   const onTargetTap = (pos: Pos) => {
     const t = targeting;
     if (!t) return;
-    if (t.kind === 'blink') {
+    if (t.kind === 'blink' || t.kind === 'freeze') {
       const valid = t.anchors.has(sqOf(pos));
-      // Tapping the previewed landing square again confirms it.
+      // Tapping the previewed square (landing square / frozen enemy) again confirms it.
       if (valid && t.preview && t.preview.r === pos.r && t.preview.c === pos.c) {
         confirmSkill();
         return;
@@ -679,6 +684,22 @@ export function gameScreen(router: Router, params: GameParams): Screen {
           def.skill!.nameKo,
         ),
       ];
+    } else if (targeting && targeting.kind === 'freeze') {
+      const t = targeting;
+      const valid = !!t.preview && t.anchors.has(sqOf(t.preview));
+      const caster = getPieceById(s, t.pieceId);
+      const range = caster ? GLACIA_FREEZE[caster.level] : 0;
+      key = `freeze|${t.preview?.r},${t.preview?.c}|${valid}`;
+      content = [
+        h(
+          'span',
+          { class: 'action-bar__text' },
+          icon('target', 16),
+          !t.preview ? `얼릴 적을 탭하세요 (주변 ${range}칸)` : !valid ? `주변 ${range}칸 안의 적만 얼릴 수 있어요` : '한 번 더 탭하거나 빙결을 누르세요',
+        ),
+        h('button', { class: 'btn btn--text btn--sm', type: 'button', 'data-action': 'skill-cancel', onclick: () => { stopTargeting(); if (ctrl) renderSnapshot(ctrl.snapshot()); } }, '취소'),
+        h('button', { class: 'btn btn--success btn--sm action-bar__go action-bar__go--freeze', type: 'button', 'data-action': 'skill-confirm', disabled: !valid, onclick: () => confirmSkill() }, '빙결'),
+      ];
     } else if (targeting && targeting.kind === 'blink') {
       const t = targeting;
       const valid = !!t.preview && t.anchors.has(sqOf(t.preview));
@@ -721,7 +742,9 @@ export function gameScreen(router: Router, params: GameParams): Screen {
           ? melodyCopy(sel.level)
           : kind === 'blink'
             ? '빈 칸 어디로든 순간이동'
-            : `빈 칸 ${k}×${k} · 닿으면 소멸`;
+            : kind === 'freeze'
+              ? `주변 ${GLACIA_FREEZE[sel.level]}칸 적 1명 · 1턴 정지`
+              : `빈 칸 ${k}×${k} · 닿으면 소멸`;
       const reason =
         block === 'notYet' ? `${skillUnlockIn(s)}턴 후 사용 가능` : block === 'active' ? `타천 중 · ${sel.awaken ?? 0}번 더 이동` : block ? BLOCK_TEXT[block] : ready;
       key = `skill|${sel.id}|${block}|${reason}`;
@@ -729,11 +752,11 @@ export function gameScreen(router: Router, params: GameParams): Screen {
         h(
           'button',
           {
-            class: `skill-btn${block ? ' is-blocked' : ''}${transform ? ' skill-btn--awake' : ''}${kind === 'buff' ? ' skill-btn--melody' : ''}${kind === 'blink' ? ' skill-btn--blink' : ''}${block === 'active' ? ' is-active' : ''}`,
+            class: `skill-btn${block ? ' is-blocked' : ''}${transform ? ' skill-btn--awake' : ''}${kind === 'buff' ? ' skill-btn--melody' : ''}${kind === 'blink' ? ' skill-btn--blink' : ''}${kind === 'freeze' ? ' skill-btn--freeze' : ''}${block === 'active' ? ' is-active' : ''}`,
             type: 'button',
             'data-action': 'skill',
             disabled: !!block,
-            onclick: () => (kind === 'waste' || kind === 'blink' ? startTargeting(sel.id) : askTransform(sel.id)),
+            onclick: () => (kind === 'waste' || kind === 'blink' || kind === 'freeze' ? startTargeting(sel.id) : askTransform(sel.id)),
           },
           h('span', { class: 'skill-btn__icon', 'aria-hidden': 'true' }, icon('magic', 20)),
           h('span', { class: 'skill-btn__main' }, h('span', { class: 'skill-btn__name' }, `스킬 · ${CHARACTERS[sel.character].skill!.nameKo}`), h('span', { class: 'skill-btn__sub' }, reason)),
@@ -782,7 +805,12 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       }
       const sel = snap.selection;
       const selPiece = sel ? getPieceById(s, sel.pieceId) : undefined;
-      if (targeting && targeting.kind === 'blink' && snap.phase !== 'animating') {
+      if (targeting && targeting.kind === 'freeze' && snap.phase !== 'animating') {
+        // Freeze targeting: every enemy in range ringed; a valid pick gets the selection ring.
+        const caster = getPieceById(s, targeting.pieceId);
+        const pick = targeting.preview && targeting.anchors.has(sqOf(targeting.preview)) ? targeting.preview : null;
+        board.setHighlights({ selected: pick ?? caster?.pos ?? null, moves: [], captures: [...targeting.anchors].map(posOf), lastMove: null, tone: 'own' });
+      } else if (targeting && targeting.kind === 'blink' && snap.phase !== 'animating') {
         // Teleport targeting: every landing square as a move dot; a valid pick gets the selection
         // ring, a path from his square and, from there, the enemies he would threaten.
         const caster = getPieceById(s, targeting.pieceId);
@@ -811,8 +839,9 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       } else {
         board.setHighlights({
           selected: selPiece?.pos ?? null,
-          moves: sel ? sel.moves.filter((m) => !m.captureId).map((m) => m.to) : [],
-          captures: sel ? sel.moves.filter((m) => m.captureId).map((m) => m.to) : [],
+          // Hammont's hits only knock the enemy back, but they are aimed at it: drawn as captures.
+          moves: sel ? sel.moves.filter((m) => !m.captureId && !m.push).map((m) => m.to) : [],
+          captures: sel ? sel.moves.filter((m) => m.captureId || m.push).map((m) => m.to) : [],
           lastMove: snap.lastMove,
           // A tapped enemy shows its reach in red; own pieces keep the white markers.
           tone: selPiece && selPiece.owner === BOT ? 'enemy' : 'own',
@@ -1086,7 +1115,24 @@ export function gameScreen(router: Router, params: GameParams): Screen {
           const b = board;
           if (b) {
             b.setInteractive(false);
-            await b.animateMove(m, after.pieces);
+            if (m.shot) {
+              // Venoa's arrow flies, then the board plays the hit with her standing still.
+              await playShotFx(b, m.from, m.to);
+              if (board === b) await b.animateMove({ ...m, to: { ...m.from } }, after.pieces);
+            } else if (m.push) {
+              // Hammont runs into the enemy, the blow lands, the enemy is knocked one square on.
+              const push = m.push;
+              const mid = after.pieces.map((p) => (p.id === push.id ? { ...p, pos: { ...m.to } } : p));
+              await b.animateMove({ pieceId: m.pieceId, from: m.from, to: m.to }, mid);
+              if (board === b) {
+                sfx('capture');
+                haptic('capture');
+                void playKnockFx(b, m.to, { dr: Math.sign(m.to.r - m.from.r), dc: Math.sign(m.to.c - m.from.c) }, !!push.stunned);
+                const mine = m.pieceId.startsWith(`p${HUMAN}-`);
+                spawnFx(h('div', { class: 'float-text float-text--knock' }, push.stunned ? (mine ? '강타! 기절' : '상대 강타! 기절') : mine ? '밀쳐내기!' : '상대 밀쳐내기!'), 1100);
+                await b.animateMove({ pieceId: push.id, from: m.to, to: push.to }, after.pieces);
+              }
+            } else await b.animateMove(m, after.pieces);
             // (Unless the board was replaced meanwhile: the new one syncs on the next render.)
             if (board === b) syncedPieces = after.pieces;
           }
@@ -1109,6 +1155,19 @@ export function gameScreen(router: Router, params: GameParams): Screen {
             if (b) {
               b.setInteractive(false);
               await playAwaken(b, action.pieceId, 'on');
+            }
+            return;
+          }
+          if (kind === 'freeze') {
+            // Glacia's freeze: a frost beam and an ice crystal over the target; it shows stunned
+            // (dimmed, with its badge) once the pieces sync with `after`.
+            if (b && caster) {
+              b.setInteractive(false);
+              await playFreezeFx(b, caster.pos, action.anchor);
+              if (board === b) {
+                b.setPieces(after.pieces);
+                syncedPieces = after.pieces;
+              }
             }
             return;
           }
@@ -1261,6 +1320,11 @@ export function gameScreen(router: Router, params: GameParams): Screen {
                 tone: mine ? 'success' : 'warn',
                 duration: 2800,
               });
+            } else if (caster && skillKindOf(caster.character) === 'freeze') {
+              const frozen = getPieceById(c.state, (c.state.history.at(-1) as { frozen?: string } | undefined)?.frozen ?? '');
+              const name = frozen ? CHARACTERS[frozen.character].nameKo : '';
+              spawnFx(h('div', { class: 'float-text float-text--freeze' }, mine ? '빙결!' : '상대 빙결!'), 1300);
+              toast(mine ? `${josa(name, '이/가')} 얼어붙었어요! 다음 1턴 동안 못 움직여요` : `상대 빙결! 내 ${josa(name, '이/가')} 다음 1턴 동안 못 움직여요`, { tone: mine ? 'success' : 'warn', duration: 2600 });
             } else if (caster && skillKindOf(caster.character) === 'blink') {
               // Midos's teleport: a float text; the opponent's gets a warning about where he went.
               spawnFx(h('div', { class: 'float-text float-text--blink' }, mine ? '그림자 도약!' : '상대 그림자 도약!'), 1300);

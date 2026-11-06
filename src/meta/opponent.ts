@@ -162,6 +162,10 @@ const PREFERRED_ROWS: Record<CharacterId, number[]> = {
   verish: [0, 1],
   // Midos slides forward and sideways and can teleport anywhere: either row.
   midos: [0, 1],
+  // Hammont brawls up front; Venoa shoots from the back row; Glacia glides out from either.
+  hammont: [1],
+  venoa: [0],
+  glacia: [0, 1],
 };
 /**
  * Columns the bot prefers: away from the two outer columns per side, which the storm swallows

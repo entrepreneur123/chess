@@ -537,8 +537,8 @@ describe('profile', () => {
     const p = sanitizeProfile(v5);
     expect(p.version).toBe(PROFILE_VERSION);
     // Characters newer than the save (Rakaeli and the later ones) arrive locked at 1성.
-    expect(p.owned).toEqual({ ...v5.owned, rakaeli: 0, rampid: 0, larhen: 0, volkonov: 0, verish: 0, midos: 0 });
-    expect(p.grades).toEqual({ ...v5.grades, rakaeli: 1, rampid: 1, larhen: 1, volkonov: 1, verish: 1, midos: 1 });
+    expect(p.owned).toEqual({ ...v5.owned, rakaeli: 0, rampid: 0, larhen: 0, volkonov: 0, verish: 0, midos: 0, hammont: 0, venoa: 0, glacia: 0 });
+    expect(p.grades).toEqual({ ...v5.grades, rakaeli: 1, rampid: 1, larhen: 1, volkonov: 1, verish: 1, midos: 1, hammont: 1, venoa: 1, glacia: 1 });
     expect(p.formation).toEqual(v5.formation);
     expect(p.formationSaved).toBe(true);
     expect([p.tokens, p.essence, p.rating, p.bestRating]).toEqual([77, 140, 2105, 2150]);

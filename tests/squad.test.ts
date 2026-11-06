@@ -18,7 +18,7 @@ describe('squads', () => {
 });
 
 const LEGENDS = ['insaner', 'brutile'];
-const ALL = ['sad', 'marki', 'walk', 'insaner', 'brutile', 'michelle', 'picker', 'rakaeli', 'rampid', 'larhen', 'volkonov', 'verish', 'midos'];
+const ALL = ['sad', 'marki', 'walk', 'insaner', 'brutile', 'michelle', 'picker', 'rakaeli', 'rampid', 'larhen', 'volkonov', 'verish', 'midos', 'hammont', 'venoa', 'glacia'];
 
 describe('dungeon opponents (fixed tiers)', () => {
   const N = 400;

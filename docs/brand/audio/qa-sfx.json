@@ -49,6 +49,86 @@
   "trail_ms": 34,
   "bytes": 9854
  },
+ "glacia-capture": {
+  "file": "sfx/glacia-capture.m4a",
+  "dur": 1.003,
+  "lufs": -17.21,
+  "peak_db": -1.03,
+  "centroid": 5756,
+  "lead_ms": 3,
+  "trail_ms": 41,
+  "bytes": 9554
+ },
+ "glacia-move": {
+  "file": "sfx/glacia-move.m4a",
+  "dur": 0.789,
+  "lufs": -17.14,
+  "peak_db": -2.5,
+  "centroid": 5195,
+  "lead_ms": 4,
+  "trail_ms": 45,
+  "bytes": 7575
+ },
+ "glacia-select": {
+  "file": "sfx/glacia-select.m4a",
+  "dur": 0.875,
+  "lufs": -17.17,
+  "peak_db": -4.75,
+  "centroid": 3542,
+  "lead_ms": 8,
+  "trail_ms": 39,
+  "bytes": 8230
+ },
+ "glacia-skill": {
+  "file": "sfx/glacia-skill.m4a",
+  "dur": 1.387,
+  "lufs": -17.09,
+  "peak_db": -2.73,
+  "centroid": 5433,
+  "lead_ms": 7,
+  "trail_ms": 56,
+  "bytes": 12378
+ },
+ "hammont-capture": {
+  "file": "sfx/hammont-capture.m4a",
+  "dur": 0.875,
+  "lufs": -17.05,
+  "peak_db": -1.38,
+  "centroid": 3574,
+  "lead_ms": 4,
+  "trail_ms": 49,
+  "bytes": 8242
+ },
+ "hammont-move": {
+  "file": "sfx/hammont-move.m4a",
+  "dur": 0.64,
+  "lufs": -16.74,
+  "peak_db": -1.94,
+  "centroid": 976,
+  "lead_ms": 0,
+  "trail_ms": 41,
+  "bytes": 6158
+ },
+ "hammont-select": {
+  "file": "sfx/hammont-select.m4a",
+  "dur": 0.939,
+  "lufs": -17.11,
+  "peak_db": -2.78,
+  "centroid": 2634,
+  "lead_ms": 1,
+  "trail_ms": 34,
+  "bytes": 8792
+ },
+ "hammont-skill": {
+  "file": "sfx/hammont-skill.m4a",
+  "dur": 0.811,
+  "lufs": -17.07,
+  "peak_db": -1.79,
+  "centroid": 3251,
+  "lead_ms": 7,
+  "trail_ms": 37,
+  "bytes": 7812
+ },
  "insaner-capture": {
   "file": "sfx/insaner-capture.m4a",
   "dur": 0.896,
@@ -438,6 +518,36 @@
   "lead_ms": 8,
   "trail_ms": 21,
   "bytes": 15722
+ },
+ "venoa-capture": {
+  "file": "sfx/venoa-capture.m4a",
+  "dur": 1.003,
+  "lufs": -17.24,
+  "peak_db": -2.18,
+  "centroid": 3914,
+  "lead_ms": 1,
+  "trail_ms": 29,
+  "bytes": 9370
+ },
+ "venoa-move": {
+  "file": "sfx/venoa-move.m4a",
+  "dur": 0.427,
+  "lufs": -17.23,
+  "peak_db": -2.01,
+  "centroid": 2579,
+  "lead_ms": 1,
+  "trail_ms": 19,
+  "bytes": 4581
+ },
+ "venoa-select": {
+  "file": "sfx/venoa-select.m4a",
+  "dur": 0.725,
+  "lufs": -17.11,
+  "peak_db": -2.64,
+  "centroid": 3577,
+  "lead_ms": 2,
+  "trail_ms": 43,
+  "bytes": 6912
  },
  "verish-capture": {
   "file": "sfx/verish-capture.m4a",

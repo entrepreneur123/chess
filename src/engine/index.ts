@@ -27,6 +27,8 @@ export {
   skillBlock,
   skillAnchors,
   blinkAnchors,
+  freezeAnchors,
+  isShot,
   skillUnlockIn,
   applySkill,
   isLegalSkill,

@@ -72,8 +72,8 @@ function lv(levels: Partial<Record<CharacterId, Level>> | undefined, id: Charact
 /**
  * Preset square per character (local coordinates, 2 x 10 zone): Marki, Sad, Michelle, Rakaeli,
  * Rampid and Larhen on the front row, Walk / Insaner / Picker / Brutile / Volkonov on the back rank. Every square is distinct, so any
- * squad of three gets a valid preset; all but Midos (column 1) stay off the two outer columns per
- * side that the storm swallows first.
+ * squad of three gets a valid preset; the twelve inner squares went first, so Midos, Hammont, Venoa
+ * and Glacia sit in columns 1 and 8 (clear of the storm's first step).
  */
 const DEFAULT_SLOT: Record<CharacterId, { row: number; col: number }> = {
   sad: { row: 1, col: 6 },
@@ -96,6 +96,11 @@ const DEFAULT_SLOT: Record<CharacterId, { row: number; col: number }> = {
   // Midos: the inner columns are all taken, so the ghost waits on the front row's column 1 (still
   // clear of the first storm step); he slides sideways and can teleport out of any corner.
   midos: { row: 1, col: 1 },
+  // The last free squares, beside the storm's first columns: Hammont up front (he hits what he
+  // meets), Venoa behind (she shoots over her own lines), Glacia behind (she glides out).
+  hammont: { row: 1, col: 8 },
+  venoa: { row: 0, col: 1 },
+  glacia: { row: 0, col: 8 },
 };
 
 /** Normalise a squad: distinct known characters, exactly PIECES_PER_SIDE of them (starters fill in). */

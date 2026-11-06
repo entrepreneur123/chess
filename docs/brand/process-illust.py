@@ -35,6 +35,10 @@ FACE = {
     'verish': (0.23, 0.08, 0.61, 0.38),
     # Grades 2-3 generated from the grade-1 master as a reference (2026-11-06): horns, mask, eyes.
     'midos': (0.25, 0.05, 0.65, 0.35),
+    # 2026-11-06 trio, grades 2-3 generated from the grade-1 master as a reference.
+    'hammont': (0.29, 0.12, 0.67, 0.40),
+    'venoa': (0.31, 0.13, 0.69, 0.42),
+    'glacia': (0.30, 0.05, 0.70, 0.36),
 }
 for f in sorted(SRC.glob('illust-*.jpg')):
     name = f.stem.replace('illust-', '')  # sad-lv1

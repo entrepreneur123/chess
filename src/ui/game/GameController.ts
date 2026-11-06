@@ -511,7 +511,7 @@ export class GameController {
       } else if (e.kind === 'pass' && e.reason === 'stunned') {
         this.emit({
           type: 'toast',
-          message: e.player === HUMAN ? '내 말이 인형 함정에 속박돼 이번 턴을 넘깁니다' : '상대 말이 속박돼 턴이 넘어옵니다',
+          message: e.player === HUMAN ? '내 말이 속박돼 이번 턴을 넘깁니다' : '상대 말이 속박돼 턴이 넘어옵니다',
           kind: 'pass',
           player: e.player,
         });

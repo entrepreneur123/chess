@@ -4,6 +4,8 @@ import {
   CH_BRUTILE,
   CH_INSANER,
   CH_LARHEN,
+  CH_GLACIA,
+  CH_HAMMONT,
   CH_MARKI,
   CH_MICHELLE,
   CH_MIDOS,
@@ -11,8 +13,11 @@ import {
   CH_RAKAELI,
   CH_RAMPID,
   CH_SAD,
+  CH_VENOA,
   CH_VERISH,
   CH_VOLKONOV,
+  GLACIA_DIAG,
+  HAMMONT_RANGE,
   INSANER_RANGE,
   MARKI_RANGE,
   MARKI_SIDE_LEVEL,
@@ -28,6 +33,9 @@ import {
   RAKAELI_HALF,
   RAMPID_RANGE,
   SAD_RANGE,
+  VENOA_DIAG_LEVEL,
+  VENOA_SHOT_MAX,
+  VENOA_SHOT_MIN,
   VERISH_BACK,
   VERISH_FORWARD,
   VERISH_SIDE,
@@ -116,6 +124,12 @@ const RAMPID_DIRS: Record<number, number[]> = {
 const MIDOS_DIRS: Record<number, number[]> = {
   1: [1, 0, 0, -1, 0, 1],
   [-1]: [-1, 0, 0, -1, 0, 1],
+};
+
+/** Venoa's shot lanes: straight forward, then (from VENOA_DIAG_LEVEL) the two forward diagonals. */
+const VENOA_LANES: Record<number, number[]> = {
+  1: [1, 0, 1, -1, 1, 1],
+  [-1]: [-1, 0, -1, -1, -1, 1],
 };
 
 /** Trap flag bit of `owner`'s doll traps in a per-square trap mask (bit 0 = player 0, bit 1 = player 1). */
@@ -386,6 +400,87 @@ const VERISH_LANE: number[][][] = [
 ];
 
 /**
+ * Venoa's "독화살": along each shot lane the FIRST piece is the target if it is an enemy between
+ * VENOA_SHOT_MIN and `max` squares away (with `includeAllies`, an ally there too: she covers it).
+ * Pieces block the arrow, edges and the storm end the lane; wasteland and doll traps do not stop
+ * it. Empty lane squares are not targets (she does not walk there).
+ */
+function shoot(
+  occ: ArrayLike<number>,
+  owners: ArrayLike<number>,
+  owner: number,
+  r: number,
+  c: number,
+  dir: number,
+  level: number,
+  out: { [i: number]: number },
+  n: number,
+  includeAllies: boolean,
+  storm: number,
+): number {
+  const lanes = VENOA_LANES[dir];
+  const nl = level >= VENOA_DIAG_LEVEL ? lanes.length : 2;
+  const max = VENOA_SHOT_MAX[level];
+  for (let d = 0; d < nl; d += 2) {
+    const dr = lanes[d];
+    const dc = lanes[d + 1];
+    let nr = r;
+    let nc = c;
+    for (let k = 1; k <= max; k++) {
+      nr += dr;
+      nc += dc;
+      if (nr < 0 || nr >= BOARD_SIZE || nc < 0 || nc >= BOARD_SIZE || inStorm(nr, nc, storm)) break;
+      const s = nr * BOARD_SIZE + nc;
+      const o = occ[s];
+      if (o < 0) continue;
+      if (k >= VENOA_SHOT_MIN && (includeAllies || owners[o] !== owner)) out[n++] = s;
+      break;
+    }
+  }
+  return n;
+}
+
+/** Set while `orthoReach` measures a pattern: Glacia's glide is not a reach (see there). */
+let measuringReach = false;
+
+/**
+ * Glacia's "빙판 활주": along each orthogonal direction she glides until the next square is the
+ * edge, the storm or any piece, and must stop only there (one landing square per direction, at
+ * least one square away); she never captures by gliding. Wasteland ends the glide ON it (she dies
+ * there, like any slide).
+ */
+function glide(
+  occ: ArrayLike<number>,
+  r: number,
+  c: number,
+  out: { [i: number]: number },
+  n: number,
+  storm: number,
+  waste: ArrayLike<number> | null,
+): number {
+  for (let d = 0; d < 8; d += 2) {
+    const dr = ORTHO_DIRS[d];
+    const dc = ORTHO_DIRS[d + 1];
+    let nr = r;
+    let nc = c;
+    let last = -1;
+    for (;;) {
+      const tr = nr + dr;
+      const tc = nc + dc;
+      if (tr < 0 || tr >= BOARD_SIZE || tc < 0 || tc >= BOARD_SIZE || inStorm(tr, tc, storm)) break;
+      const s = tr * BOARD_SIZE + tc;
+      if (occ[s] >= 0) break;
+      nr = tr;
+      nc = tc;
+      last = s;
+      if (waste !== null && waste[s]) break;
+    }
+    if (last >= 0) out[n++] = last;
+  }
+  return n;
+}
+
+/**
  * True when a piece of character code `ch` captures every enemy on the straight path of a move:
  * Picker's hop-through ("콩콩", diagonals) and Verish's pierce ("관통", her lanes). Only the real
  * characters do: an Insaner that absorbed their pattern gets the RANGE as a plain slide.
@@ -429,6 +524,15 @@ function genPattern(
   if (ch === CH_PICKER) return hop(occ, owners, owner, r, c, PICKER_RANGE[level], out, n, includeAllies, storm, waste, traps);
   if (ch === CH_VOLKONOV) return slide(occ, owners, owner, r, c, ORTHO_DIRS, VOLKONOV_RANGE[level], out, n, includeAllies, storm, waste);
   if (ch === CH_RAMPID) return slide(occ, owners, owner, r, c, RAMPID_DIRS[dir], RAMPID_RANGE[level], out, n, includeAllies, storm, waste);
+  if (ch === CH_HAMMONT) return slide(occ, owners, owner, r, c, ORTHO_DIRS, HAMMONT_RANGE[level], out, n, includeAllies, storm, waste);
+  if (ch === CH_VENOA) {
+    n = slide(occ, owners, owner, r, c, ORTHO_DIRS, 1, out, n, includeAllies, storm, waste);
+    return shoot(occ, owners, owner, r, c, dir, level, out, n, includeAllies, storm);
+  }
+  if (ch === CH_GLACIA) {
+    if (!measuringReach) n = glide(occ, r, c, out, n, storm, waste);
+    return slide(occ, owners, owner, r, c, DIAG_DIRS, GLACIA_DIAG[level], out, n, includeAllies, storm, waste);
+  }
   if (ch === CH_MIDOS) return slide(occ, owners, owner, r, c, MIDOS_DIRS[dir], MIDOS_RANGE[level], out, n, includeAllies, storm, waste);
   if (ch === CH_LARHEN) return jumpLarhen(occ, owners, owner, r, c, dir, level, out, n, includeAllies, storm);
   if (ch === CH_VERISH) return genVerish(occ, owners, owner, r, c, dir, level, out, n, includeAllies, storm, waste, true);
@@ -507,22 +611,29 @@ export function orthoReach(ch: number, level: number, dir: number, awake: boolea
   if (reach) return reach;
   reach = new Int8Array(4);
   const mid = BOARD_SIZE >> 1;
-  for (let d = 0; d < 4; d++) {
-    const dr = ORTHO_DIRS[d * 2];
-    const dc = ORTHO_DIRS[d * 2 + 1];
-    // Origin at the far side of this direction: the whole board lies ahead of it.
-    const r = dr > 0 ? 0 : dr < 0 ? BOARD_SIZE - 1 : mid;
-    const c = dc > 0 ? 0 : dc < 0 ? BOARD_SIZE - 1 : mid;
-    const n = genTargets(EMPTY_OCC, [], 0, ch, level, r * BOARD_SIZE + c, reachScratch, 0, false, dir, 0, absorb, null, null, awake);
-    let best = 0;
-    for (let k = 0; k < n; k++) {
-      const s = reachScratch[k];
-      const tr = (s / BOARD_SIZE) | 0;
-      const tc = s - tr * BOARD_SIZE;
-      const dist = dr !== 0 ? (tc === c ? (tr - r) * dr : 0) : tr === r ? (tc - c) * dc : 0;
-      if (dist > best) best = dist;
+  // Glacia's glide crosses the whole board but is not a step she can shorten: it does not count as
+  // reach, so the melody gives her (or an Insaner who absorbed her) a plain 1-square slide there.
+  measuringReach = true;
+  try {
+    for (let d = 0; d < 4; d++) {
+      const dr = ORTHO_DIRS[d * 2];
+      const dc = ORTHO_DIRS[d * 2 + 1];
+      // Origin at the far side of this direction: the whole board lies ahead of it.
+      const r = dr > 0 ? 0 : dr < 0 ? BOARD_SIZE - 1 : mid;
+      const c = dc > 0 ? 0 : dc < 0 ? BOARD_SIZE - 1 : mid;
+      const n = genTargets(EMPTY_OCC, [], 0, ch, level, r * BOARD_SIZE + c, reachScratch, 0, false, dir, 0, absorb, null, null, awake);
+      let best = 0;
+      for (let k = 0; k < n; k++) {
+        const s = reachScratch[k];
+        const tr = (s / BOARD_SIZE) | 0;
+        const tc = s - tr * BOARD_SIZE;
+        const dist = dr !== 0 ? (tc === c ? (tr - r) * dr : 0) : tr === r ? (tc - c) * dc : 0;
+        if (dist > best) best = dist;
+      }
+      reach[d] = best;
     }
-    reach[d] = best;
+  } finally {
+    measuringReach = false;
   }
   reachCache.set(key, reach);
   return reach;
@@ -588,6 +699,8 @@ export function genTargets(
         ? slide(occ, owners, owner, r, c, DIAG_DIRS, PICKER_RANGE[alvl], out, n, includeAllies, storm, waste)
         : ach === CH_VERISH
           ? genVerish(occ, owners, owner, r, c, dir, alvl, out, n, includeAllies, storm, waste, false)
+          : ach === CH_VENOA
+            ? slide(occ, owners, owner, r, c, ORTHO_DIRS, 1, out, n, includeAllies, storm, waste)
           : genPattern(occ, owners, owner, ach, alvl, r, c, out, n, includeAllies, dir, storm, waste, traps, false);
     n = compactNew(out, from, n);
   }

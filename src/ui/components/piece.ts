@@ -9,12 +9,13 @@ import {
   type PlayerId,
   type Rarity,
 } from '../../engine';
+import { VENOA_DIAG_LEVEL, VENOA_SHOT_MAX, VENOA_SHOT_MIN } from '../../engine/characters';
 import { h } from '../dom';
 
 export const RARITY_LABEL: Record<Rarity, string> = { common: '일반', rare: '희귀', epic: '영웅', legendary: '전설' };
 
 /** Character concept titles shown with the illustrations (UI copy only). */
-export const CONCEPT: Record<CharacterId, string> = { sad: '성기사', marki: '황소 전사', walk: '방패병', insaner: '꼬마 악마', brutile: '초록 마녀', michelle: '인형 소녀', picker: '사막의 카우보이', rakaeli: '타락 천사', rampid: '얼음 소년', larhen: '쌍단검 암살자', volkonov: '음유시인', verish: '관통 질주자', midos: '그림자 망령' };
+export const CONCEPT: Record<CharacterId, string> = { sad: '성기사', marki: '황소 전사', walk: '방패병', insaner: '꼬마 악마', brutile: '초록 마녀', michelle: '인형 소녀', picker: '사막의 카우보이', rakaeli: '타락 천사', rampid: '얼음 소년', larhen: '쌍단검 암살자', volkonov: '음유시인', verish: '관통 질주자', midos: '그림자 망령', hammont: '용광로 대장장이', venoa: '독늪 사냥꾼', glacia: '서리 마녀' };
 
 /**
  * Neutral head-and-shoulders silhouette shown in place of an illustration that failed to load
@@ -163,6 +164,24 @@ interface Pattern {
   back: Set<string>;
   /** Targets only Volkonov's melody adds (a buffed diagram; empty otherwise). */
   extra: Set<string>;
+  /** Venoa: squares her arrows reach (an enemy there is shot; she does not move). */
+  shot: Set<string>;
+  /** Glacia: her glide lanes (she slides until something stops her: drawn as a fading lane). */
+  glide: Set<string>;
+}
+
+/** Diagram lanes for patterns an empty board cannot show (Venoa's shots, Glacia's glide). */
+function specialOffsets(character: CharacterId, level: Level): { shot: { dr: number; dc: number }[]; glide: { dr: number; dc: number }[] } {
+  const shot: { dr: number; dc: number }[] = [];
+  const glide: { dr: number; dc: number }[] = [];
+  if (character === 'venoa') {
+    const lanes = level >= VENOA_DIAG_LEVEL ? [[1, 0], [1, -1], [1, 1]] : [[1, 0]];
+    for (const [dr, dc] of lanes) for (let k = VENOA_SHOT_MIN; k <= VENOA_SHOT_MAX[level]; k++) shot.push({ dr: dr * k, dc: dc * k });
+  }
+  if (character === 'glacia') {
+    for (const [dr, dc] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) for (let k = 1; k <= 3; k++) glide.push({ dr: dr * k, dc: dc * k });
+  }
+  return { shot, glide };
 }
 
 const patternCache = new Map<string, Pattern | null>();
@@ -208,6 +227,11 @@ function computePattern(character: CharacterId, level: Level, awake = false, buf
       }
       if (buff) for (const x of offsetsFrom(character, level, { r: 3, c }, awake, true)) seen.set(`${x.dr},${x.dc}`, x);
     }
+    // Glacia's glide ends wherever she is stopped: an empty board only shows its far ends, so the
+    // diagram draws each glide lane instead; Venoa's arrows need a target, so they are added too.
+    if (character === 'glacia') for (const [k, x] of seen) if (x.dr === 0 || x.dc === 0) seen.delete(k);
+    const special = specialOffsets(character, level);
+    for (const x of [...special.shot, ...special.glide]) seen.set(`${x.dr},${x.dc}`, x);
     const rel = [...seen.values()];
     const maxFwd = Math.max(0, ...rel.map((x) => x.dr));
     const maxBack = Math.max(0, ...rel.map((x) => -x.dr));
@@ -224,7 +248,9 @@ function computePattern(character: CharacterId, level: Level, awake = false, buf
       origin: o,
       targets: new Set(rel.map(cellOf)),
       back: new Set(rel.filter((x) => x.dr < 0 && x.dc === 0).map(cellOf)),
-      extra: new Set(rel.filter((x) => !baseKeys.has(`${x.dr},${x.dc}`)).map(cellOf)),
+      extra: new Set(rel.filter((x) => !baseKeys.has(`${x.dr},${x.dc}`) && !special.shot.concat(special.glide).some((y) => y.dr === x.dr && y.dc === x.dc)).map(cellOf)),
+      shot: new Set(special.shot.map(cellOf)),
+      glide: new Set(special.glide.map(cellOf)),
     };
   } catch (e) {
     console.warn('movement pattern unavailable', e);
@@ -273,7 +299,11 @@ export function movementDiagram(character: CharacterId, level: Level, opts: { ce
       const isTarget = p.targets.has(`${r},${c}`);
       const isBack = traps && p.back.has(`${r},${c}`);
       const isBuff = p.extra.has(`${r},${c}`);
-      wrap.appendChild(h('span', { class: `md-cell${isOrigin ? ' is-origin' : ''}${isTarget ? ' is-target' : ''}${isBack ? ' is-back' : ''}${isBuff ? ' is-buff' : ''}` }));
+      const isShot = p.shot.has(`${r},${c}`);
+      const isGlide = p.glide.has(`${r},${c}`);
+      wrap.appendChild(
+        h('span', { class: `md-cell${isOrigin ? ' is-origin' : ''}${isTarget ? ' is-target' : ''}${isBack ? ' is-back' : ''}${isBuff ? ' is-buff' : ''}${isShot ? ' is-shot' : ''}${isGlide ? ' is-glide' : ''}` }),
+      );
     }
   }
   return wrap;

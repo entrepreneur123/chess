@@ -124,6 +124,9 @@ quoting a number.
 | 볼코노프 volkonov | common | orthogonal slide 1 / 2 / 2 | skill 선율; never turns |
 | 베리쉬 verish | rare | slides: left/right 1 + forward 2; left/right 2 + forward 2; left/right 2 + forward 3 + back 1 | trait 관통 |
 | 미도스 midos | epic | slides left / right / forward 1 / 2 / 3 (never back or diagonal) | skill 그림자 도약; turns at the edge |
+| 해먼트 hammont | rare | orthogonal slide 1 / 2 / 2 | trait 해머 강타 (knock-back); never turns |
+| 베노아 venoa | rare | steps 1 orthogonally; shoots 2–3 / 2–3 / 2–4 ahead (forward diagonals from 2성) | trait 독화살; turns at the edge |
+| 글라시아 glacia | epic | orthogonal glide until stopped (no capture) + diagonal 1 / 1 / 2 | skill 빙결; never turns |
 
 - **인세이너:**
   - Capturing absorbs the victim's MOVEMENT PATTERN only, never traits or skills. An absorbed
@@ -176,6 +179,30 @@ quoting a number.
     "도약"). The cast FX is a DOM layer (`ui/game/blinkFx.ts`, transform / opacity only): implosion
     at the origin, the token moves at 330 ms drawn faded (`setDragging`), the void burst and three
     claw slashes land at 950 ms once the cut-in clears.
+- **The 2026-11-06 trio (owner: "3 characters with new mechanics, my naming style, balanced, Insaner
+  must stay the strongest"; every rule below is the lead's design):**
+  - **해먼트 해머 강타:** an enemy his slide runs into is not captured: he takes its square and it is
+    knocked one square on in the same direction (`Move.push`). If that square is the edge, the storm,
+    any piece or wasteland it is crushed instead (a normal capture, `Move.crush`). 3성 (and a landing
+    on a trap of his side at any grade) stuns it for its owner's next turn (`OFF_TURN_STUN` = 1).
+  - **베노아 독화살:** along each shot lane the FIRST piece is shot if it is an enemy 2..max squares
+    away; she stays put (`Move.shot`). Pieces block the arrow; wasteland and traps do not. Any Venoa
+    target at Chebyshev distance >= 2 is a shot (a buffed 2-square capture is a shot too).
+  - **글라시아 빙판 활주:** she must glide until the next square is the edge, the storm or a piece
+    (one landing per direction; wasteland ends it ON the square). She never captures by gliding;
+    the melody treats the glide as no reach (a buffed Glacia gets a plain 1-square slide).
+  - **글라시아 빙결 (`SkillKind` 'freeze'):** one enemy within 2 / 3 / 4 squares (Chebyshev), not
+    stunned, sits out its owner's next turn. `SkillBlock` 'noTarget' when nobody is in range.
+  - Insaner absorbs their MOVEMENT only: Hammont's slide (captures, never pushes), Venoa's 1-step
+    (no arrows), Glacia's glide + diagonals.
+  - Rarity / arena / values: Hammont rare, arena 2, 3/4/6; Venoa rare, arena 3, 4/5/6; Glacia epic,
+    arena 4, 4/5/6.
+  - Absorb masks now use all 32 bits (16 codes; code 15 uses bit 31: masks are uint32 bit patterns,
+    read through `>>>` only). A 17th character needs wider storage.
+  - UI: pushes are drawn as capture targets; the board plays Hammont's arrival, a DOM blow
+    (`ui/game/trioFx.ts`) and the enemy sliding away; a shot is a DOM arrow then the board's own hit
+    with Venoa standing still (`animateMove` with `to = from`); the freeze is a DOM beam and crystal.
+    Diagrams show Venoa's arrow range (`is-shot`) and Glacia's glide lanes (`is-glide`).
 - **Owner-brief interpretations (decided by the lead on 2026-11-05; the owner asked for no more
   questions on these):** Larhen's back diagonals arrive at 2성 (the brief said "일성에서", which would
   make 1성 and 2성 identical); his 3성 keeps the four diagonals (an H); the melody buffs the other
@@ -183,7 +210,7 @@ quoting a number.
   Larhen 3성 was later changed by the owner to the taller H (the 5-wide row is gone).
 - **Absorb masks:** 2 bits per character code holding the highest absorbed level (`absorbMerge`);
   exact because every pattern contains its lower grades (checked in `tests/commons3.test.ts`).
-  Room for 15 character codes (13 used).
+  16 character codes fill all 32 bits (see the trio notes above).
 - **Values (bot material):**
 
   | Character | Values (1성 / 2성 / 3성) |
@@ -201,6 +228,9 @@ quoting a number.
   | volkonov | 3/4/5 |
   | verish | 3/5/7 |
   | midos | 4/5/6 |
+  | hammont | 3/4/6 |
+  | venoa | 4/5/6 |
+  | glacia | 4/5/6 |
 
 - **Direction arrows:** shown when the reach depends on direction (`isDirectional`). Sad, Picker, Volkonov, 2성+ Larhen,
   3성 Brutile and an Insaner without directional absorbs show none.
@@ -225,9 +255,9 @@ quoting a number.
 | # | Arena | Rating | Win + | Loss − | Unlocks |
 | --- | --- | --- | --- | --- | --- |
 | 1 | moonrune 달빛 룬 투기장 | 0–300 | 29–31 | 5–7 | sad, marki, walk (starters) |
-| 2 | emberforge | 301–600 | 25–29 | 10–14 | brutile, volkonov |
-| 3 | blightmire | 601–1000 | 20–22 | 15–17 | insaner, larhen |
-| 4 | frostkeep | 1001–1500 | 18–22 | 17–20 | michelle, rampid |
+| 2 | emberforge | 301–600 | 25–29 | 10–14 | brutile, volkonov, hammont |
+| 3 | blightmire | 601–1000 | 20–22 | 15–17 | insaner, larhen, venoa |
+| 4 | frostkeep | 1001–1500 | 18–22 | 17–20 | michelle, rampid, glacia |
 | 5 | madcrown | 1501–2000 | 15–17 | 19–21 | picker, verish |
 | 6 | apex | 2001+ | 14–16 | 20–22 | rakaeli, midos |
 

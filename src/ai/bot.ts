@@ -16,8 +16,8 @@ import {
   skillAnchors,
 } from '../engine';
 import type { FastBoard } from '../engine';
-import { SKILL_FLAG, fastBlinkFits, fastCanSkill, fastHopGain, fastSkillFits, fastSkillSize } from '../engine/fast';
-import { CHARACTERS, CHAR_BY_CODE, CH_BRUTILE, CH_INSANER, CH_LARHEN, CH_MARKI, CH_MICHELLE, CH_MIDOS, CH_PICKER, CH_RAKAELI, CH_RAMPID, CH_SAD, CH_VERISH, CH_VOLKONOV, CH_WALK, MARKI_RANGE, MARKI_SIDE_LEVEL, N_CHARS, absorbedLevel } from '../engine/characters';
+import { SKILL_FLAG, fastBlinkFits, fastCanSkill, fastCaptureGain, fastFreezeFits, fastIsShot, fastPushDest, fastSkillFits, fastSkillSize } from '../engine/fast';
+import { CHARACTERS, CHAR_BY_CODE, CH_BRUTILE, CH_INSANER, CH_LARHEN, CH_GLACIA, CH_HAMMONT, CH_MARKI, CH_MICHELLE, CH_MIDOS, CH_PICKER, CH_RAKAELI, CH_RAMPID, CH_SAD, CH_VENOA, CH_VERISH, CH_VOLKONOV, CH_WALK, MARKI_RANGE, MARKI_SIDE_LEVEL, N_CHARS, absorbedLevel } from '../engine/characters';
 import { trapBit } from '../engine/board';
 import { BOARD_SIZE, STORM_ROWS_FROM, TRAPS_PER_MICHELLE, stormRows } from '../engine/types';
 
@@ -111,6 +111,14 @@ const MELODY_MIN_SCORE = 2;
 const BLINK_POTENTIAL = [0, 20, 22, 25];
 const BLINK_MIN_SCORE = 3;
 const BLINK_MAX_CANDS = 5;
+/**
+ * Glacia's freeze ("빙결"). An unused one is worth FREEZE_POTENTIAL (by level) before the storm;
+ * root candidates (see `freezeCandidates`) need FREEZE_MIN_SCORE and at most FREEZE_MAX_CANDS are
+ * searched.
+ */
+const FREEZE_POTENTIAL = [0, 18, 22, 26];
+const FREEZE_MIN_SCORE = 6;
+const FREEZE_MAX_CANDS = 3;
 /** Eval bonus per doll trap Michelle can still lay (they are laid by backing off, so modest). */
 const TRAP_POTENTIAL = 8;
 /** Eval bonus per own doll trap on the board within two squares of an enemy piece (area denial). */
@@ -166,11 +174,14 @@ function buildAttackMaps(b: FastBoard): number[] {
     const side = b.owner[i];
     const n = genTargets(b.occ, b.owner, side, b.ch[i], b.lvl[i], s, attackBuf, 0, true, b.dir[i], b.storm, b.absorb[i], b.waste, b.trap, b.awaken[i] > 0, b.buff[i] > 0);
     const v = b.value[i];
+    const hammont = b.ch[i] === CH_HAMMONT;
     for (let k = 0; k < n; k++) {
       const t = attackBuf[k];
       if (b.waste[t]) continue; // suicide squares are neither mobility nor control
       const o = b.occ[t];
       if (o < 0 || b.owner[o] !== side) mob[side]++;
+      // A Hammont hit that only knocks the enemy back does not threaten it (a crush does).
+      if (hammont && o >= 0 && b.owner[o] !== side && fastPushDest(b, i, t) >= 0) continue;
       const idx = side * N_SQUARES + t;
       if (attackCount[idx] === 0) {
         touched.push(idx);
@@ -256,6 +267,17 @@ export function evaluate(b: FastBoard, side: number): number {
       // Forward piercer: facing the enemy with open lanes ahead and to the sides.
       if (!facingEnemy) sc -= v * 0.15;
       sc += centerC * 4 + Math.min(room, 6) * 2;
+    } else if (ch === CH_HAMMONT) {
+      // Brawler: central, close to the enemy pieces he can knock about.
+      sc += centerC * 3 + centerR * 3;
+    } else if (ch === CH_VENOA) {
+      // Archer: facing the enemy with open lanes ahead, a little behind the front.
+      if (!facingEnemy) sc -= v * 0.15;
+      sc += centerC * 4 + Math.min(room, 6) * 2;
+    } else if (ch === CH_GLACIA) {
+      // Glider: open lines matter more than the square; an unused freeze is kept until it pays.
+      sc += centerC * 2 + centerR * 2;
+      if (b.storm === 0 && b.used[i] === 0) sc += FREEZE_POTENTIAL[b.lvl[i]];
     } else if (ch === CH_MIDOS) {
       // Forward / sideways slider: facing the enemy with room ahead; an unused teleport is kept
       // until it pays (it is his escape and his ambush).
@@ -357,8 +379,7 @@ function orderMoves(ctx: SearchCtx, moves: Int32Array, scores: Int32Array, n: nu
     const mv = moves[k];
     const to = mv & 255;
     const pi = mv >> 8;
-    const cap = b.occ[to];
-    const gain = (cap >= 0 ? b.value[cap] : 0) + fastHopGain(b, pi, to);
+    const gain = fastCaptureGain(b, mv);
     if (b.waste[to]) scores[k] = gain > 0 ? gain * 100 - 10000 : -10000; // suicide: search last
     else if (gain > 0) scores[k] = 10000 + gain * 100 - b.value[pi];
     else scores[k] = mv === killer ? 5000 : 0;
@@ -399,7 +420,7 @@ function qsearch(ctx: SearchCtx, alpha: number, beta: number, ply: number, qd: n
   let n = 0;
   for (let k = 0; k < all; k++) {
     const mv = moves[k];
-    if (b.occ[mv & 255] >= 0 || fastHopGain(b, mv >> 8, mv & 255) > 0) moves[n++] = mv;
+    if (fastCaptureGain(b, mv) > 0) moves[n++] = mv;
   }
   if (n === 0) return alpha;
   orderMoves(ctx, moves, scores, n, ply);
@@ -445,7 +466,7 @@ function negamax(ctx: SearchCtx, depth: number, alpha: number, beta: number, ply
   let best = -INF;
   for (let k = 0; k < n; k++) {
     const mv = moves[k];
-    const isCap = b.occ[mv & 255] >= 0 || fastHopGain(b, mv >> 8, mv & 255) > 0;
+    const isCap = fastCaptureGain(b, mv) > 0;
     const undo = fastMake(b, mv);
     let v: number;
     try {
@@ -494,8 +515,7 @@ function searchRoot(
   }
   const capScore = (mv: number) => {
     if (mv & SKILL_FLAG) return 0;
-    const cap = b.occ[mv & 255];
-    const gain = (cap >= 0 ? b.value[cap] : 0) + fastHopGain(b, mv >> 8, mv & 255);
+    const gain = fastCaptureGain(b, mv);
     return gain > 0 ? 1000 + gain * 10 - b.value[mv >> 8] : 0;
   };
   moves.sort((a, c) => capScore(c) - capScore(a));
@@ -621,6 +641,8 @@ function skillCandidates(b: FastBoard, max: number): number[] {
       if (score >= MELODY_MIN_SCORE) out.push({ mv: SKILL_FLAG | (i << 8) | b.sq[i], score });
     } else if (b.ch[i] === CH_MIDOS) {
       for (const c of blinkCandidates(b, i, Math.min(max, BLINK_MAX_CANDS))) out.push(c);
+    } else if (b.ch[i] === CH_GLACIA) {
+      for (const c of freezeCandidates(b, i, Math.min(max, FREEZE_MAX_CANDS))) out.push(c);
     } else for (const c of wasteCandidates(b, i, max)) out.push(c);
   }
   out.sort((x, y) => y.score - x.score);
@@ -672,6 +694,36 @@ function blinkCandidates(b: FastBoard, caster: number, max: number): { mv: numbe
     }
   } finally {
     b.occ[s] = caster;
+  }
+  cands.sort((x, y) => y.score - x.score);
+  return cands.slice(0, max);
+}
+
+/**
+ * Up to `max` scored freeze targets for Glacia `caster`: the enemy's value (2 per point), +5 when it
+ * threatens one of our pieces now (the freeze takes the threat away for a turn), +4 when we attack it
+ * (it cannot run). Only targets scoring FREEZE_MIN_SCORE or more; the search decides between them.
+ */
+function freezeCandidates(b: FastBoard, caster: number, max: number): { mv: number; score: number }[] {
+  if (max <= 0) return [];
+  const side = b.owner[caster];
+  const enemy = 1 - side;
+  buildAttackMaps(b);
+  const cands: { mv: number; score: number }[] = [];
+  for (let e = 0; e < b.n; e++) {
+    const s = b.sq[e];
+    if (s < 0 || !fastFreezeFits(b, caster, s)) continue;
+    let score = b.value[e] * 2;
+    if (attackCount[side * N_SQUARES + s] > 0) score += 4;
+    const n = genTargets(b.occ, b.owner, enemy, b.ch[e], b.lvl[e], s, transformBuf, 0, false, b.dir[e], b.storm, b.absorb[e], b.waste, b.trap, b.awaken[e] > 0, b.buff[e] > 0);
+    for (let k = 0; k < n; k++) {
+      const o = b.occ[transformBuf[k]];
+      if (o >= 0 && b.owner[o] === side) {
+        score += 5;
+        break;
+      }
+    }
+    if (score >= FREEZE_MIN_SCORE) cands.push({ mv: SKILL_FLAG | (caster << 8) | s, score });
   }
   cands.sort((x, y) => y.score - x.score);
   return cands.slice(0, max);
@@ -733,15 +785,14 @@ function chooseEasy(b: FastBoard, rng: () => number, allowSkill = true): number 
   const moves = safeMoves.length ? safeMoves : all;
   const pick = (arr: number[]) => arr[Math.min(arr.length - 1, Math.floor(rng() * arr.length))];
   const safeAfter = (mv: number) => {
+    // A Venoa shot leaves her where she stands.
+    const at = fastIsShot(b, mv) ? b.sq[(mv >> 8) & 255] : mv & 255;
     const undo = fastMake(b, mv);
-    const safe = !isAttackedBy(b, mv & 255, 1 - side);
+    const safe = !isAttackedBy(b, at, 1 - side);
     fastUnmake(b, mv, undo);
     return safe;
   };
-  const gainOf = (mv: number) => {
-    const cap = b.occ[mv & 255];
-    return (cap >= 0 ? b.value[cap] : 0) + fastHopGain(b, mv >> 8, mv & 255);
-  };
+  const gainOf = (mv: number) => fastCaptureGain(b, mv);
   const captures = moves.filter((mv) => gainOf(mv) > 0);
   if (captures.length) {
     const free = captures.filter((mv) => gainOf(mv) >= b.value[mv >> 8] || safeAfter(mv));

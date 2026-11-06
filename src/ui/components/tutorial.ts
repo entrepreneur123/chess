@@ -32,6 +32,9 @@ const SHORT_MOVE: Record<CharacterId, string> = {
   volkonov: '상하좌우 이동 · 선율로 아군 이동 +1',
   verish: '앞·좌우 관통 슬라이드 · 지나는 적 모두 잡기',
   midos: '좌·우·앞 직진 · 빈 칸 어디로든 순간이동',
+  hammont: '상하좌우 직진 · 부딪힌 적을 밀쳐내기',
+  venoa: '한 칸씩 이동 · 떨어진 적을 독화살로 저격',
+  glacia: '막힐 때까지 빙판 활주 · 빙결로 적 얼리기',
 };
 
 function goalArt(): Child {

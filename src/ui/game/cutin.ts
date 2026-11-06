@@ -74,7 +74,7 @@ export function cutInEl(spec: CutInSpec): HTMLElement {
       ? '격파'
       : spec.kind === 'chain'
         ? '연쇄'
-        : (awake && def.skill?.kind === 'transform') || (spec.kind === 'skill' && (def.skill?.kind === 'buff' || def.skill?.kind === 'blink'))
+        : (awake && def.skill?.kind === 'transform') || (spec.kind === 'skill' && (def.skill?.kind === 'buff' || def.skill?.kind === 'blink' || def.skill?.kind === 'freeze'))
           ? def.skill!.nameKo
           : '스킬';
   return h(

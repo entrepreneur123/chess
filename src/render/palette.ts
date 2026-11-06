@@ -105,6 +105,11 @@ const CORE_FX: Record<CoreCharacterId, { primary: string; secondary: string; cor
   verish: { primary: '#2EF2D0', secondary: '#FF5FA8', core: '#E8FFFA' },
   // Midos: spectral violet ghostfire over a void-black shroud, a pale moon-white core (claws).
   midos: { primary: '#8C6BFF', secondary: '#140C2E', core: '#E4ECFF' },
+  // Hammont: forge-hot gold over scorched iron. Venoa: swamp-poison lime over bog green.
+  // Glacia: crystal periwinkle ice with a frost-white sheen.
+  hammont: { primary: '#FFB13B', secondary: '#7A2E12', core: '#FFF1C9' },
+  venoa: { primary: '#C6F23A', secondary: '#2E4A2A', core: '#F4FFD0' },
+  glacia: { primary: '#9CC8FF', secondary: '#E8F4FF', core: '#FFFFFF' },
 };
 
 /**
@@ -177,6 +182,9 @@ export const CHARACTER_RARITY = {
   volkonov: 'common',
   verish: 'rare',
   midos: 'epic',
+  hammont: 'rare',
+  venoa: 'rare',
+  glacia: 'epic',
 } satisfies Record<CoreCharacterId, Rarity> & { rakaeli: Rarity } as Record<CharacterId, Rarity>;
 
 /**

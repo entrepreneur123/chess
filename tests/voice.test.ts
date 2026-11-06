@@ -22,7 +22,7 @@ const fsP: Promise<Fs> = import(/* @vite-ignore */ nodeFs);
 const audioDir = decodeURIComponent(new URL('../public/audio/', import.meta.url).pathname);
 const join = (...parts: string[]) => parts.join('/').replace(/\/+/g, '/');
 // Typed as a full record so adding a CharacterId without listing it here fails to compile.
-const CHAR_SET: Record<CharacterId, true> = { sad: true, marki: true, walk: true, insaner: true, brutile: true, michelle: true, picker: true, rakaeli: true, rampid: true, larhen: true, volkonov: true, verish: true, midos: true };
+const CHAR_SET: Record<CharacterId, true> = { sad: true, marki: true, walk: true, insaner: true, brutile: true, michelle: true, picker: true, rakaeli: true, rampid: true, larhen: true, volkonov: true, verish: true, midos: true, hammont: true, venoa: true, glacia: true };
 const ROSTER = Object.keys(CHAR_SET) as CharacterId[];
 /**
  * Characters the generated manifest already voices. A character ships before its recordings (the
@@ -61,7 +61,9 @@ const usesTraitsInsteadOfSkill = (c: CharacterId): boolean => !CHARACTERS[c].ski
  * character with an active skill. A later character with neither a skill nor a trait (Rampid,
  * Larhen) has none.
  */
-const hasSkillAudio = (c: CharacterId): boolean => ORIGINAL.includes(c) || !!CHARACTERS[c].skill;
+// Hammont has no active skill, but his knock-back hit is his signature: it plays 'skill' (like the
+// originals' signature moves). Venoa's shots are captures ('capture').
+const hasSkillAudio = (c: CharacterId): boolean => ORIGINAL.includes(c) || !!CHARACTERS[c].skill || c === 'hammont';
 const BASE_VOICE_EVENTS: CharAudioEvent[] = ['select', 'move', 'capture', 'death', 'victory'];
 const BASE_SFX_EVENTS: CharAudioEvent[] = ['select', 'move', 'capture'];
 const voiceEvents = (c: CharacterId): CharAudioEvent[] => [

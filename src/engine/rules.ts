@@ -1,7 +1,7 @@
-import { AWAKEN_TURNS, BUFF_TURNS, SKILL_UNLOCK_PLY, STORM_INTERVAL_PLIES, SUDDEN_DEATH_PLY, TRAPS_PER_MICHELLE, TRAP_STUN, TURN_TIME_1_MS, TURN_TIME_2_MS, TURN_TIME_MS } from './types';
+import { AWAKEN_TURNS, BUFF_TURNS, OFF_TURN_STUN, SKILL_UNLOCK_PLY, STORM_INTERVAL_PLIES, SUDDEN_DEATH_PLY, TRAPS_PER_MICHELLE, TRAP_STUN, TURN_TIME_1_MS, TURN_TIME_2_MS, TURN_TIME_MS } from './types';
 import type { AbsorbedAbility, CharacterId, EndReason, Formation, GameState, HistoryEntry, Move, Piece, PlayerId, Pos, SkillAction, Trap } from './types';
 import { BOARD_SIZE } from './types';
-import { CHARACTERS, CHAR_CODE, WASTE_SIZE, absorbMaskOf, effectiveValue, keepsDirection, skillKindOf } from './characters';
+import { CHARACTERS, CHAR_CODE, GLACIA_FREEZE, HAMMONT_STUN_LEVEL, WASTE_SIZE, absorbMaskOf, effectiveValue, keepsDirection, skillKindOf } from './characters';
 import { N_SQUARES, atTurnRow, canHop, formationToAbsolute, forwardDir, genTargets, inStorm, isOnBoard, posOf, sqOf, trapBit } from './board';
 import { validateFormation } from './formation';
 
@@ -175,6 +175,7 @@ function patternIsDirectional(character: CharacterId, level: number): boolean {
     case 'rampid':
     case 'verish':
     case 'midos':
+    case 'venoa':
       return true;
     case 'brutile':
       return level < 3;
@@ -245,6 +246,16 @@ function targetsWith(pieces: Piece[], occ: Int8Array, owners: Uint8Array, piece:
     const m: Move = { pieceId: piece.id, from: { r: piece.pos.r, c: piece.pos.c }, to: posOf(s) };
     const o = occ[s];
     if (o >= 0) m.captureId = pieces[o].id;
+    // Venoa shoots whatever she hits from two squares or more away: she stays put.
+    if (o >= 0 && piece.character === 'venoa' && isShot(m.from, m.to)) m.shot = true;
+    // Hammont knocks the enemy he hits one square on (crushed when it cannot go).
+    if (o >= 0 && piece.character === 'hammont') {
+      const push = pushOutcome(occ, piece, m.from, m.to, storm, waste, traps);
+      if (push) {
+        delete m.captureId;
+        m.push = { id: pieces[o].id, ...push };
+      } else m.crush = true;
+    }
     if (hopper) {
       const on = hopVictims(pieces, occ, piece.owner, m.from, m.to);
       if (on.length) {
@@ -255,6 +266,27 @@ function targetsWith(pieces: Piece[], occ: Int8Array, owners: Uint8Array, piece:
     moves.push(m);
   }
   return moves;
+}
+
+/** A Venoa target at a Chebyshev distance of 2 or more is a shot (adjacent ones she steps onto). */
+export function isShot(from: Pos, to: Pos): boolean {
+  return Math.max(Math.abs(to.r - from.r), Math.abs(to.c - from.c)) >= 2;
+}
+
+/**
+ * Where Hammont's hit knocks the enemy on `to` (one more square in the direction from `from`), or
+ * null when it cannot go there and is crushed: the edge, the storm, any piece, or wasteland. A
+ * 3성 Hammont stuns it; landing on a doll trap of Hammont's side stuns it too.
+ */
+function pushOutcome(occ: Int8Array, mover: Piece, from: Pos, to: Pos, storm: number, waste: Uint8Array | null, traps: Uint8Array | null): { to: Pos; stunned?: true } | null {
+  const r = to.r + Math.sign(to.r - from.r);
+  const c = to.c + Math.sign(to.c - from.c);
+  if (r < 0 || r >= BOARD_SIZE || c < 0 || c >= BOARD_SIZE || inStorm(r, c, storm)) return null;
+  const s = r * BOARD_SIZE + c;
+  if (occ[s] >= 0 || (waste !== null && waste[s])) return null;
+  const out: { to: Pos; stunned?: true } = { to: { r, c } };
+  if (mover.level >= HAMMONT_STUN_LEVEL || (traps !== null && traps[s] & trapBit(mover.owner))) out.stunned = true;
+  return out;
 }
 
 /**
@@ -512,16 +544,29 @@ export function applyMove(state: GameState, move: Move): GameState {
   const victims = victimIds.map((id) => state.pieces.find((p) => p.id === id)!);
   // Touching wasteland destroys the mover (wasteland never holds a piece). A hop still takes the
   // enemies it landed on before reaching the wasteland square.
-  const wasted = isWasteMove(state, legal.to);
+  // A shot leaves the shooter where she stands: no wasteland, trap, turn-around or stun for her.
+  const shot = !!legal.shot;
+  const wasted = !shot && isWasteMove(state, legal.to);
   const d = pieceDir(mover);
   // Michelle's doll trap: her first TRAPS_PER_MICHELLE backward moves leave one on `from`.
-  const laysTrap = mover.character === 'michelle' && !wasted && (legal.to.r - legal.from.r) * d < 0 && trapsLeft(state, player) > 0;
+  const laysTrap = mover.character === 'michelle' && !shot && !wasted && (legal.to.r - legal.from.r) * d < 0 && trapsLeft(state, player) > 0;
   // Ending a move on an ENEMY doll trap stuns the mover (its own side's traps never catch it).
-  const caught = !wasted && trapAt(state, legal.to, other(player));
+  const caught = !shot && !wasted && trapAt(state, legal.to, other(player));
   const pieces: Piece[] = [];
   for (const p of state.pieces) {
     if (victimIds.includes(p.id)) continue;
     if (p.id === legal.pieceId && wasted) continue;
+    if (legal.push && p.id === legal.push.id) {
+      // Knocked back by Hammont (stunned at 3성 or on a trap of his side).
+      const knocked: Piece = { ...p, pos: { r: legal.push.to.r, c: legal.push.to.c } };
+      if (legal.push.stunned) knocked.stun = Math.max(p.stun ?? 0, OFF_TURN_STUN);
+      pieces.push(knocked);
+      continue;
+    }
+    if (p.id === legal.pieceId && shot) {
+      pieces.push(p);
+      continue;
+    }
     if (p.id === legal.pieceId) {
       const moved: Piece = { ...p, pos: { r: legal.to.r, c: legal.to.c } };
       // Forward-only movers turn around when they reach the last row in their direction.
@@ -544,6 +589,9 @@ export function applyMove(state: GameState, move: Move): GameState {
   if (wasted) recorded.wasted = true;
   if (laysTrap) recorded.trap = true;
   if (caught) recorded.stunned = true;
+  if (shot) recorded.shot = true;
+  if (legal.push) recorded.push = { id: legal.push.id, to: { ...legal.push.to }, ...(legal.push.stunned ? { stunned: true as const } : {}) };
+  if (legal.crush) recorded.crush = true;
   const entry: HistoryEntry = { kind: 'move', player, move: recorded };
   const psc = victims.length ? 0 : state.pliesSinceCapture + 1;
   const base: GameState = { ...state, pieces, consecutiveTimeouts: ct };
@@ -577,7 +625,7 @@ export function wasteArea(level: number, anchor: Pos): number[] {
  * Why a skill cannot be cast now; 'active' = Rakaeli is transformed already; 'alone' = Volkonov has
  * no other piece left to play his melody for.
  */
-export type SkillBlock = 'noSkill' | 'notYourTurn' | 'chain' | 'notYet' | 'used' | 'active' | 'storm' | 'alone' | 'stunned' | 'ended';
+export type SkillBlock = 'noSkill' | 'notYourTurn' | 'chain' | 'notYet' | 'used' | 'active' | 'storm' | 'alone' | 'noTarget' | 'stunned' | 'ended';
 
 /**
  * Why `pieceId` cannot use its skill right now, or null when it can. Every skill (Brutile's
@@ -597,6 +645,7 @@ export function skillBlock(state: GameState, pieceId: string): SkillBlock | null
   if (p.skillUsed) return 'used';
   if (state.ply < SKILL_UNLOCK_PLY) return 'notYet';
   if (skillKindOf(p.character) === 'buff' && !state.pieces.some((q) => q.owner === p.owner && q.id !== p.id)) return 'alone';
+  if (skillKindOf(p.character) === 'freeze' && freezeAnchors(state, p).length === 0) return 'noTarget';
   // Checked last: 'stunned' means the skill would be usable once the doll trap lets go.
   if (isStunned(p)) return 'stunned';
   return null;
@@ -622,6 +671,7 @@ function sideCanCast(state: GameState, player: PlayerId, ignoreStun = false): bo
     // A transform or a melody is always castable when unblocked (its anchor is his own square); a
     // wasteland needs a free area and a teleport a free square.
     const kind = skillKindOf(p.character);
+    // (A freeze with nobody in range is blocked as 'noTarget' already.)
     if (kind === 'waste' ? freeAnchors(state, p.level).length > 0 : kind === 'blink' ? blinkAnchors(state, p.owner).length > 0 : true) return true;
   }
   return false;
@@ -638,7 +688,20 @@ export function skillAnchors(state: GameState, pieceId: string): Pos[] {
   const kind = skillKindOf(p.character);
   if (kind === 'waste') return freeAnchors(state, p.level);
   if (kind === 'blink') return blinkAnchors(state, p.owner);
+  if (kind === 'freeze') return freezeAnchors(state, p);
   return [{ r: p.pos.r, c: p.pos.c }];
+}
+
+/**
+ * Enemies Glacia's "빙결" can freeze: within GLACIA_FREEZE[level] squares of her (Chebyshev
+ * distance: rows and columns both), not stunned already. Board order (by square).
+ */
+export function freezeAnchors(state: Pick<GameState, 'pieces'>, caster: Pick<Piece, 'owner' | 'pos' | 'level'>): Pos[] {
+  const R = GLACIA_FREEZE[caster.level];
+  return state.pieces
+    .filter((q) => q.owner !== caster.owner && !isStunned(q) && Math.max(Math.abs(q.pos.r - caster.pos.r), Math.abs(q.pos.c - caster.pos.c)) <= R)
+    .map((q) => ({ r: q.pos.r, c: q.pos.c }))
+    .sort((a, b) => sqOf(a) - sqOf(b));
 }
 
 /**
@@ -696,6 +759,7 @@ export function applySkill(state: GameState, action: SkillAction): GameState {
   const p = state.pieces.find((x) => x.id === action.pieceId)!;
   const kind = skillKindOf(p.character);
   if (kind === 'blink') return applyBlink(state, p, action.anchor);
+  if (kind === 'freeze') return applyFreeze(state, p, action.anchor);
   const transform = kind === 'transform';
   const buffs = kind === 'buff';
   const squares = kind === 'waste' ? wasteArea(p.level, action.anchor) : [];
@@ -738,6 +802,22 @@ function applyBlink(state: GameState, p: Piece, to: Pos): GameState {
   const blink: { from: number; to: number; turned?: true } = { from: sqOf(p.pos), to: sqOf(to) };
   if (turned) blink.turned = true;
   const entry: HistoryEntry = { kind: 'skill', player: p.owner, pieceId: p.id, squares: [], blink };
+  return settle(switchTurn({ ...state, pieces, skillsUsed: used, consecutiveTimeouts: ct }, entry, state.pliesSinceCapture + 1));
+}
+
+/** Glacia's "빙결": the enemy on `at` sits out its owner's next turn (legality checked by the caller). */
+function applyFreeze(state: GameState, p: Piece, at: Pos): GameState {
+  const target = state.pieces.find((q) => q.pos.r === at.r && q.pos.c === at.c)!;
+  const pieces = state.pieces.map((x) => {
+    if (x.id === p.id) return { ...x, skillUsed: true as const };
+    if (x.id === target.id) return { ...x, stun: Math.max(x.stun ?? 0, OFF_TURN_STUN) };
+    return x;
+  });
+  const used: [number, number] = [state.skillsUsed[0], state.skillsUsed[1]];
+  used[p.owner] += 1;
+  const ct: [number, number] = [state.consecutiveTimeouts[0], state.consecutiveTimeouts[1]];
+  ct[p.owner] = 0;
+  const entry: HistoryEntry = { kind: 'skill', player: p.owner, pieceId: p.id, squares: [], frozen: target.id };
   return settle(switchTurn({ ...state, pieces, skillsUsed: used, consecutiveTimeouts: ct }, entry, state.pliesSinceCapture + 1));
 }
 

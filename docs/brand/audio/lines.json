@@ -1071,6 +1071,235 @@
           "style": "Calm, cold triumph."
         }
       ]
+    },
+    "hammont": {
+      "concept": "A huge bearded blacksmith in his thirties with a red bandana and a molten forge hammer who knocks enemies flying: a deep, warm, hearty baritone, boisterous and good-humoured; never shrill.",
+      "gender": "male",
+      "f0_target": 112,
+      "voice": "A big, hearty, cheerful blacksmith in his thirties. A deep, warm, resonant baritone in a medium-low pitch, boisterous and good-humoured, a strong chest voice with clear diction, confident, never shouting.",
+      "clone": {
+        "ref": "refs/hammont-ref.flac",
+        "text": "쇠는 뜨거울 때 두들기는 거다. 각오해라.",
+        "style": "Hearty and confident, a grin in the voice.",
+        "_from": "VoiceDesign take (seed 11, take 5) of 6, lead / tail silence trimmed. The 6 takes ranged 95-261 Hz median; two were shouted (189 / 206 Hz with p90 330-486 Hz) and one rose to 261 Hz. Kept take 5: F0 112 Hz (67-165), warble 0.034 (the steadiest), HNR 6.9 dB, harshness -11.4 dB, P(female) 0.001; Whisper transcript exact."
+      },
+      "lines": [
+        {
+          "event": "select",
+          "id": "select-1",
+          "text": "망치 준비 완료다. 누굴 두들겨 줄까?",
+          "say": "망치 준비 완료다. 누굴 두들겨 줄까?",
+          "style": "Hearty and cheerful, ready for work."
+        },
+        {
+          "event": "select",
+          "id": "select-2",
+          "text": "불은 충분히 달궈졌다.",
+          "style": "Confident, warm, a grin in the voice."
+        },
+        {
+          "event": "move",
+          "id": "move-1",
+          "text": "길 비켜라.",
+          "style": "Boisterous but calm, firm."
+        },
+        {
+          "event": "move",
+          "id": "move-2",
+          "text": "쿵, 쿵, 간다.",
+          "style": "Playful and heavy, steady rhythm."
+        },
+        {
+          "event": "capture",
+          "id": "capture-1",
+          "text": "납작하게 펴 주마.",
+          "style": "Gleeful and strong."
+        },
+        {
+          "event": "capture",
+          "id": "capture-2",
+          "text": "쇳물 맛 좀 봐라.",
+          "style": "Fierce and hearty."
+        },
+        {
+          "event": "capture",
+          "id": "capture-3",
+          "text": "한 방이면 끝이지.",
+          "style": "Confident, a short laugh."
+        },
+        {
+          "event": "skill",
+          "id": "skill-1",
+          "text": "날아가라.",
+          "style": "A powerful heave, strong, not shouting."
+        },
+        {
+          "event": "skill",
+          "id": "skill-2",
+          "text": "저리 꺼져.",
+          "style": "Gruff and good-humoured, firm."
+        },
+        {
+          "event": "death",
+          "id": "death-1",
+          "text": "화로가… 꺼지는구나…",
+          "style": "Weak, fading, a deep sigh."
+        },
+        {
+          "event": "victory",
+          "id": "victory-1",
+          "text": "오늘 일은 이걸로 끝이다.",
+          "style": "Satisfied, warm triumph."
+        }
+      ]
+    },
+    "venoa": {
+      "concept": "A cool, sharp-eyed young huntress from a poison swamp with a bone longbow and venom arrows: a low-medium, calm, quiet and slightly husky female voice, terse; not a child, not shrill.",
+      "gender": "female",
+      "f0_target": 195,
+      "voice": "A cool, composed young woman of about twenty, a huntress from a poison swamp. A low-medium female voice, calm, quiet and sharp, slightly husky, terse and focused; never shrill, not a little girl.",
+      "clone": {
+        "ref": "refs/venoa-ref.flac",
+        "text": "숨어도 소용없어. 내 화살은 놓치지 않아.",
+        "style": "Cool, quiet and focused.",
+        "_from": "VoiceDesign take (seed 11, take 5) of 6, lead / tail silence trimmed. Takes 163-233 Hz median, all female (P 0.995-0.996). Kept take 5: F0 190 Hz (147-230), warble 0.062, HNR 11.9 dB, harshness -20.0 dB, P(female) 0.996; Whisper transcript exact."
+      },
+      "lines": [
+        {
+          "event": "select",
+          "id": "select-1",
+          "text": "사냥감은 정했어.",
+          "style": "Cool and quiet."
+        },
+        {
+          "event": "select",
+          "id": "select-2",
+          "text": "늪은 내 영역이야.",
+          "style": "Calm, a hint of pride."
+        },
+        {
+          "event": "move",
+          "id": "move-1",
+          "text": "조용히.",
+          "style": "A low murmur."
+        },
+        {
+          "event": "move",
+          "id": "move-2",
+          "text": "자리를 옮기지.",
+          "style": "Calm and focused."
+        },
+        {
+          "event": "capture",
+          "id": "capture-1",
+          "text": "명중.",
+          "style": "Cool, satisfied, short."
+        },
+        {
+          "event": "capture",
+          "id": "capture-2",
+          "text": "독이 퍼지는 건 금방이야.",
+          "style": "Cold and quiet."
+        },
+        {
+          "event": "capture",
+          "id": "capture-3",
+          "text": "빗나가는 일은 없어.",
+          "style": "Confident and terse."
+        },
+        {
+          "event": "death",
+          "id": "death-1",
+          "text": "화살이… 다 떨어졌네…",
+          "style": "Weak and fading."
+        },
+        {
+          "event": "victory",
+          "id": "victory-1",
+          "text": "사냥 끝. 돌아가자.",
+          "style": "Calm satisfaction."
+        }
+      ]
+    },
+    "glacia": {
+      "concept": "An elegant young frost witch with long white hair, an icicle-crusted witch hat and ice-skate boots who glides and freezes enemies: a clear, smooth, medium-pitched female voice, aloof and teasing, cold and calm; not a child.",
+      "gender": "female",
+      "f0_target": 205,
+      "voice": "A cool, elegant young witch of about twenty. A clear, smooth, medium-pitched female voice, aloof and teasing, slow and composed, with a cold crystalline calm; never shrill, not a little girl.",
+      "clone": {
+        "ref": "refs/glacia-ref.flac",
+        "text": "움직이지 마. 얼어붙는 건 한순간이니까.",
+        "style": "Cold, elegant and teasing.",
+        "_from": "VoiceDesign take (seed 11, take 2) of 6, lead / tail silence trimmed. Takes 181-259 Hz median, all female (P 0.986-0.996). Kept take 2: F0 204 Hz (156-266), warble 0.044, HNR 14.7 dB, harshness -16.9 dB, P(female) 0.996; Whisper transcript exact."
+      },
+      "lines": [
+        {
+          "event": "select",
+          "id": "select-1",
+          "text": "차갑게 해 줄까?",
+          "style": "Teasing and cool."
+        },
+        {
+          "event": "select",
+          "id": "select-2",
+          "text": "얼음 위는 내 무대야.",
+          "style": "Elegant and confident."
+        },
+        {
+          "event": "move",
+          "id": "move-1",
+          "text": "미끄러지듯이.",
+          "style": "Light, smooth and calm."
+        },
+        {
+          "event": "move",
+          "id": "move-2",
+          "text": "멈추는 건 내가 정해.",
+          "style": "Aloof and playful."
+        },
+        {
+          "event": "capture",
+          "id": "capture-1",
+          "text": "산산조각.",
+          "style": "Cold and crisp."
+        },
+        {
+          "event": "capture",
+          "id": "capture-2",
+          "text": "얼음처럼 부서지렴.",
+          "style": "Cruelly sweet, calm."
+        },
+        {
+          "event": "capture",
+          "id": "capture-3",
+          "text": "추웠지?",
+          "style": "Teasing, quiet."
+        },
+        {
+          "event": "skill",
+          "id": "skill-1",
+          "text": "얼어붙어.",
+          "style": "Cold command, calm and firm."
+        },
+        {
+          "event": "skill",
+          "id": "skill-2",
+          "text": "거기서 가만히 있어.",
+          "style": "Teasing and icy."
+        },
+        {
+          "event": "death",
+          "id": "death-1",
+          "text": "녹아… 버리겠어…",
+          "style": "Weak and fading."
+        },
+        {
+          "event": "victory",
+          "id": "victory-1",
+          "text": "겨울이 이겼네.",
+          "style": "Elegant, quiet triumph."
+        }
+      ]
     }
   }
 }

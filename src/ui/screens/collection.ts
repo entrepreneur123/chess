@@ -40,6 +40,9 @@ export const TIER_TITLE: Record<CharacterId, [string, string, string]> = {
   volkonov: ['떠돌이 음유시인', '궁정 음유시인', '선율의 거장'],
   verish: ['질주하는 소녀', '강철 부츠의 질주자', '음속의 관통자'],
   midos: ['방황하는 망령', '그림자 사냥꾼', '심연의 망령왕'],
+  hammont: ['풋내기 대장장이', '용광로의 장인', '화산 망치의 군주'],
+  venoa: ['늪지 사냥꾼', '독화살 명사수', '독늪의 여왕'],
+  glacia: ['서리 견습생', '빙결의 마녀', '혹한의 여제'],
 };
 
 /** Role and one-line trait per character; `trait3` replaces `trait` on the 3-star card. */
@@ -57,6 +60,9 @@ export const ROLE: Record<CharacterId, { role: string; trait: string; trait3?: s
   volkonov: { role: '지원형 음유시인', trait: '상하좌우 이동 · 스킬 선율로 아군 전원 상하좌우 이동 +1칸' },
   verish: { role: '관통형 질주자', trait: '앞 · 좌우로 슬라이드하며 지나는 적을 모두 잡고 뚫고 감 · 아군 · 불모지 · 벽에는 막힘', trait3: '앞 · 좌우 · 뒤로 관통 슬라이드 · 지나는 적을 모두 잡음 · 아군 · 불모지 · 벽에는 막힘' },
   midos: { role: '암살형 망령', trait: '좌 · 우 · 앞으로 직진 (뒤 · 대각선 불가) · 스킬 그림자 도약으로 보드의 빈 칸 어디로든 순간이동' },
+  hammont: { role: '돌격형 장인', trait: '부딪힌 적을 잡는 대신 1칸 날려 보냄 · 벽 · 말 · 불모지에 막히면 분쇄', trait3: '부딪힌 적을 1칸 날려 보내고 1턴 기절 · 벽 · 말 · 불모지에 막히면 분쇄' },
+  venoa: { role: '저격형 궁수', trait: '제자리에서 2칸 이상 떨어진 적을 독화살로 저격 · 사이의 말에 막힘' },
+  glacia: { role: '제어형 마녀', trait: '막힐 때까지 미끄러지는 빙판 활주 (활주로는 못 잡음) · 스킬 빙결로 적 1명 1턴 정지' },
 };
 
 /**

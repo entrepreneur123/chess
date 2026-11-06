@@ -129,6 +129,8 @@ export function skillReadiness(state: GameState, pieceId: string): HandCardModel
       return { state: 'locked', label: '속박' };
     case 'alone':
       return { state: 'sealed', label: '아군 없음' };
+    case 'noTarget':
+      return { state: 'locked', label: '대상 없음' };
     default:
       return null;
   }

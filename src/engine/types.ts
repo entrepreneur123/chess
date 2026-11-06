@@ -92,14 +92,22 @@ export const TRAP_STUN = 2;
  * their owner's turns (3 / 3 / 4 by grade).
  */
 export const BUFF_TURNS = [0, 3, 3, 4] as const;
+/**
+ * Stun dealt on the OTHER side's turn (Glacia's "빙결", a 3성 Hammont's knock-back, and a piece
+ * knocked onto an enemy doll trap): `Piece.stun` = 1, which the end of its owner's next turn counts
+ * down to 0, so it sits out exactly that one turn (a trap caught on its own turn needs TRAP_STUN = 2
+ * because its own turn end counts down at once).
+ */
+export const OFF_TURN_STUN = 1;
 
 export type PlayerId = 0 | 1;
 /**
  * What an active skill does: lay wasteland (Brutile), transform (Rakaeli), buff allies (Volkonov) or
- * teleport the caster to a free square (Midos's "그림자 도약").
+ * teleport the caster to a free square (Midos's "그림자 도약") or freeze an enemy in range (Glacia's
+ * "빙결": it sits out its owner's next turn).
  */
-export type SkillKind = 'waste' | 'transform' | 'buff' | 'blink';
-export type CharacterId = 'sad' | 'marki' | 'walk' | 'insaner' | 'brutile' | 'michelle' | 'picker' | 'rakaeli' | 'rampid' | 'larhen' | 'volkonov' | 'verish' | 'midos';
+export type SkillKind = 'waste' | 'transform' | 'buff' | 'blink' | 'freeze';
+export type CharacterId = 'sad' | 'marki' | 'walk' | 'insaner' | 'brutile' | 'michelle' | 'picker' | 'rakaeli' | 'rampid' | 'larhen' | 'volkonov' | 'verish' | 'midos' | 'hammont' | 'venoa' | 'glacia';
 export type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
 export type Level = 1 | 2 | 3;
 
@@ -201,12 +209,26 @@ export interface Move {
   trap?: true;
   /** Set on recorded moves: the mover ended on an enemy doll trap and is stunned. */
   stunned?: true;
+  /**
+   * Venoa's "독화살" (a real Venoa only): the move is a shot. `to` is the victim's square, the
+   * mover stays on `from` and `captureId` is the victim.
+   */
+  shot?: true;
+  /**
+   * Hammont's "해머 강타" (a real Hammont only): the enemy on `to` is not captured but knocked one
+   * square further in the move's direction, to `push.to` (`stunned`: it sits out its owner's next
+   * turn). When nothing can take it there (the edge, the storm, any piece, wasteland) it is crushed
+   * instead: no `push`, `captureId` is the victim and `crush` is set.
+   */
+  push?: { id: string; to: Pos; stunned?: true };
+  crush?: true;
 }
 
 /**
  * An active skill. Brutile: lay a k x k wasteland whose lowest-row, lowest-column square is
  * `anchor`. Rakaeli (transform) and Volkonov (ally buff): `anchor` is his own square (the only
- * legal anchor). Midos (teleport): `anchor` is the free square he blinks to.
+ * legal anchor). Midos (teleport): `anchor` is the free square he blinks to. Glacia (freeze): `anchor`
+ * is the enemy piece's square.
  */
 export interface SkillAction {
   kind: 'skill';
@@ -248,9 +270,10 @@ export type HistoryEntry =
    * (`transform: true`, squares empty) `pieceId` (Rakaeli) transformed, or (`buffed`: the ally ids,
    * squares empty) `pieceId` (Volkonov) played his melody, or (`blink`, squares empty) `pieceId`
    * (Midos) teleported from square `blink.from` to `blink.to` (`turned`: he landed on the far edge
-   * and now faces the other way).
+   * and now faces the other way), or (`frozen`: the enemy id, squares empty) `pieceId` (Glacia)
+   * froze it.
    */
-  | { kind: 'skill'; player: PlayerId; pieceId: string; squares: number[]; transform?: true; buffed?: string[]; blink?: { from: number; to: number; turned?: true } };
+  | { kind: 'skill'; player: PlayerId; pieceId: string; squares: number[]; transform?: true; buffed?: string[]; blink?: { from: number; to: number; turned?: true }; frozen?: string };
 
 export interface GameState {
   pieces: Piece[]; // only pieces still on the board

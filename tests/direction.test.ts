@@ -17,7 +17,8 @@ describe('isDirectional', () => {
       for (const lv of LEVELS) {
         // Michelle's traps come from backward moves: her facing matters even where her reach is
         // symmetric (3성: up to 2 squares in all four directions).
-        const differs = reach(ch, lv, 1).join() !== reach(ch, lv, -1).join() || ch === 'michelle';
+        // Venoa's arrows fly forward but need a target, so an empty board shows only her steps.
+        const differs = reach(ch, lv, 1).join() !== reach(ch, lv, -1).join() || ch === 'michelle' || ch === 'venoa';
         expect({ ch, lv, directional: isDirectional({ character: ch, level: lv }) }).toEqual({ ch, lv, directional: differs });
       }
     }

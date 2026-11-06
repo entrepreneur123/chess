@@ -8,15 +8,18 @@
  * (anchor = the area's lowest corner), Rakaeli's transform (anchor = his own square; it sets
  * `awaken`, which counts down at the end of each of its owner's turns like `stun`) or Volkonov's
  * melody (anchor = his own square; it sets `buff` on every other piece of his side, counted down
- * the same way) or Midos's teleport (anchor = the free square he blinks to, see `fastBlinkFits`).
+ * the same way), Midos's teleport (anchor = the free square he blinks to, see `fastBlinkFits`) or
+ * Glacia's freeze (anchor = the enemy's square, see `fastFreezeFits`).
+ * Venoa's shots (a target two or more squares away) leave her in place (SHOT_BIT undo tokens) and
+ * Hammont's hits knock the enemy one square on (PUSH_BIT; crushed hits are plain captures).
  * A move whose target is wasteland destroys the mover (WASTE_BIT in the undo token).
  * Picker's hop-through captures the enemies on its path too (a real Picker only: an Insaner's
  * absorbed Picker pattern is a plain slide), Michelle's backward moves lay doll
  * traps and a mover ending on an enemy trap is stunned: all of it is undone from the LIFO history.
  */
-import { AWAKEN_TURNS, BOARD_SIZE, BUFF_TURNS, SKILL_UNLOCK_PLY, STORM_INTERVAL_PLIES, SUDDEN_DEATH_PLY, TRAPS_PER_MICHELLE, TRAP_STUN } from './types';
+import { AWAKEN_TURNS, BOARD_SIZE, BUFF_TURNS, OFF_TURN_STUN, SKILL_UNLOCK_PLY, STORM_INTERVAL_PLIES, SUDDEN_DEATH_PLY, TRAPS_PER_MICHELLE, TRAP_STUN } from './types';
 import type { CharacterId, GameState, Move, PlayerId, SkillAction } from './types';
-import { CHARACTERS, CHAR_BY_CODE, CHAR_CODE, CH_BRUTILE, CH_INSANER, CH_MICHELLE, CH_MIDOS, CH_RAKAELI, CH_VOLKONOV, WASTE_SIZE, abilityBit, absorbMaskOf, absorbMerge, absorbWithout, keepsDirection } from './characters';
+import { CHARACTERS, CHAR_BY_CODE, CHAR_CODE, CH_BRUTILE, CH_GLACIA, CH_HAMMONT, CH_INSANER, CH_MICHELLE, CH_MIDOS, CH_RAKAELI, CH_VENOA, CH_VOLKONOV, GLACIA_FREEZE, HAMMONT_STUN_LEVEL, WASTE_SIZE, abilityBit, absorbMaskOf, absorbMerge, absorbWithout, keepsDirection } from './characters';
 import { N_SQUARES, atTurnRow, canHop, genTargets, inStorm, posOf, sqOf, trapBit } from './board';
 import { pieceDir } from './rules';
 
@@ -137,7 +140,7 @@ function hasAlly(b: FastBoard, i: number): boolean {
 export function fastCanSkill(b: FastBoard, i: number): boolean {
   const ch = b.ch[i];
   return (
-    (ch === CH_BRUTILE || ch === CH_RAKAELI || ch === CH_MIDOS || (ch === CH_VOLKONOV && hasAlly(b, i))) &&
+    (ch === CH_BRUTILE || ch === CH_RAKAELI || ch === CH_MIDOS || (ch === CH_VOLKONOV && hasAlly(b, i)) || (ch === CH_GLACIA && hasFreezeTarget(b, i))) &&
     b.sq[i] >= 0 &&
     b.stun[i] === 0 &&
     b.awaken[i] === 0 &&
@@ -169,6 +172,73 @@ export function fastBlinkFits(b: FastBoard, own: number, s: number): boolean {
   if (b.occ[s] >= 0 || b.waste[s] || b.trap[s] & trapBit(1 - own)) return false;
   const r = (s / BOARD_SIZE) | 0;
   return !inStorm(r, s - r * BOARD_SIZE, b.storm);
+}
+
+/**
+ * May Glacia `i` freeze the piece on square `s`? An enemy within GLACIA_FREEZE[level] squares
+ * (Chebyshev), not stunned already. Mirrors `freezeAnchors` in rules.ts.
+ */
+export function fastFreezeFits(b: FastBoard, i: number, s: number): boolean {
+  const o = b.occ[s];
+  if (o < 0 || b.owner[o] === b.owner[i] || b.stun[o] > 0) return false;
+  const a = b.sq[i];
+  const ar = (a / BOARD_SIZE) | 0;
+  const sr = (s / BOARD_SIZE) | 0;
+  return Math.max(Math.abs(sr - ar), Math.abs(s - sr * BOARD_SIZE - (a - ar * BOARD_SIZE))) <= GLACIA_FREEZE[b.lvl[i]];
+}
+
+function hasFreezeTarget(b: FastBoard, i: number): boolean {
+  for (let k = 0; k < b.n; k++) if (b.sq[k] >= 0 && fastFreezeFits(b, i, b.sq[k])) return true;
+  return false;
+}
+
+/**
+ * Where a real Hammont `pi` hitting the enemy on `to` knocks it (the next square in the move's
+ * direction), or -1 when it is crushed there (edge, storm, any piece, wasteland). Mirrors
+ * `pushOutcome` in rules.ts. Only meaningful for a legal hit.
+ */
+export function fastPushDest(b: FastBoard, pi: number, to: number): number {
+  const from = b.sq[pi];
+  const fr = (from / BOARD_SIZE) | 0;
+  const tr = (to / BOARD_SIZE) | 0;
+  const tc = to - tr * BOARD_SIZE;
+  const r = tr + Math.sign(tr - fr);
+  const c = tc + Math.sign(tc - (from - fr * BOARD_SIZE));
+  if (r < 0 || r >= BOARD_SIZE || c < 0 || c >= BOARD_SIZE || inStorm(r, c, b.storm)) return -1;
+  const s = r * BOARD_SIZE + c;
+  return b.occ[s] >= 0 || b.waste[s] ? -1 : s;
+}
+
+/** Is the encoded move a Venoa shot (an enemy target two or more squares away; she stays)? */
+export function fastIsShot(b: FastBoard, mv: number): boolean {
+  const pi = (mv >> 8) & 255;
+  if (b.ch[pi] !== CH_VENOA) return false;
+  const to = mv & 255;
+  if (b.occ[to] < 0) return false;
+  const from = b.sq[pi];
+  const fr = (from / BOARD_SIZE) | 0;
+  const tr = (to / BOARD_SIZE) | 0;
+  return Math.max(Math.abs(tr - fr), Math.abs(to - tr * BOARD_SIZE - (from - fr * BOARD_SIZE))) >= 2;
+}
+
+/** Is the encoded move a Hammont hit that knocks the enemy back (not a capture)? */
+export function fastIsPush(b: FastBoard, mv: number): boolean {
+  const pi = (mv >> 8) & 255;
+  const to = mv & 255;
+  return b.ch[pi] === CH_HAMMONT && b.occ[to] >= 0 && fastPushDest(b, pi, to) >= 0;
+}
+
+/**
+ * Base material the encoded (legal, not yet made) move captures: the piece on the target (unless a
+ * Hammont hit only knocks it back) plus every enemy a hop or pierce passes. 0 for skills.
+ */
+export function fastCaptureGain(b: FastBoard, mv: number): number {
+  if (mv & SKILL_FLAG) return 0;
+  const pi = (mv >> 8) & 255;
+  const to = mv & 255;
+  const cap = b.occ[to];
+  const onTo = cap >= 0 && !(b.ch[pi] === CH_HAMMONT && fastPushDest(b, pi, to) >= 0) ? b.value[cap] : 0;
+  return onTo + fastHopGain(b, pi, to);
 }
 
 /** Wasteland side length for piece `i`. */
@@ -222,6 +292,7 @@ export function fastImmobile(b: FastBoard): boolean {
       if (b.ch[i] === CH_MIDOS) {
         for (let a = 0; a < BOARD_SIZE * BOARD_SIZE; a++) if (fastBlinkFits(b, b.turn, a)) return false;
       }
+      if (b.ch[i] === CH_GLACIA && hasFreezeTarget(b, i)) return false;
       if (b.ch[i] === CH_BRUTILE) {
         const k = WASTE_SIZE[b.lvl[i]];
         for (let a = 0; a < BOARD_SIZE * BOARD_SIZE; a++) if (fastSkillFits(b, k, a)) return false;
@@ -276,6 +347,8 @@ export function fastHopGain(b: FastBoard, pi: number, to: number): number {
 
 const FLIP_BIT = 1 << 16;
 const WASTE_BIT = 1 << 17;
+const SHOT_BIT = 1 << 18;
+const PUSH_BIT = 1 << 19;
 
 /** Remove a piece from the board (storm kill). */
 function kill(b: FastBoard, i: number): void {
@@ -382,6 +455,8 @@ function undoSwitch(b: FastBoard): void {
  */
 export function fastMake(b: FastBoard, mv: number): number {
   if (mv & SKILL_FLAG) return makeSkill(b, mv);
+  if (fastIsShot(b, mv)) return makeShot(b, mv);
+  if (fastIsPush(b, mv)) return makePush(b, mv);
   const pi = (mv >> 8) & 255;
   const to = mv & 255;
   const from = b.sq[pi];
@@ -498,6 +573,14 @@ export function fastUnmake(b: FastBoard, mv: number, undo: number): void {
     unmakeSkill(b);
     return;
   }
+  if (undo & SHOT_BIT) {
+    unmakeShot(b, mv, undo);
+    return;
+  }
+  if (undo & PUSH_BIT) {
+    unmakePush(b, mv, undo);
+    return;
+  }
   const h = b.hist;
   const chained = h[--b.histTop];
   const oldBonus = h[--b.histTop];
@@ -534,6 +617,76 @@ export function fastUnmake(b: FastBoard, mv: number, undo: number): void {
   undoMoveExtras(b, pi);
 }
 
+/** Venoa's shot: the victim on the target goes, she stays; the turn passes. */
+function makeShot(b: FastBoard, mv: number): number {
+  const to = mv & 255;
+  const cap = b.occ[to];
+  b.occ[to] = -1;
+  b.sq[cap] = -1;
+  b.alive[b.owner[cap]]--;
+  b.material[b.owner[cap]] -= b.value[cap];
+  b.ply++;
+  switchSide(b);
+  return SHOT_BIT | (cap << 8) | to;
+}
+
+function unmakeShot(b: FastBoard, _mv: number, undo: number): void {
+  undoSwitch(b);
+  b.ply--;
+  const cap = (undo >> 8) & 255;
+  const to = undo & 255;
+  b.occ[to] = cap;
+  b.sq[cap] = to;
+  b.alive[b.owner[cap]]++;
+  b.material[b.owner[cap]] += b.value[cap];
+}
+
+/**
+ * Hammont's knock-back: he takes the square, the enemy goes one square on (stunned at 3성 or on a
+ * trap of his side); he is caught himself if he lands on an enemy trap. The turn passes.
+ */
+function makePush(b: FastBoard, mv: number): number {
+  const pi = (mv >> 8) & 255;
+  const to = mv & 255;
+  const from = b.sq[pi];
+  const e = b.occ[to];
+  const dest = fastPushDest(b, pi, to);
+  const own = b.owner[pi];
+  const h = b.hist;
+  h[b.histTop++] = (e << 16) | (dest << 8) | (b.stun[e] & 255);
+  if (b.lvl[pi] >= HAMMONT_STUN_LEVEL || b.trap[dest] & trapBit(own)) b.stun[e] = Math.max(b.stun[e], OFF_TURN_STUN);
+  b.occ[dest] = e;
+  b.sq[e] = dest;
+  b.occ[from] = -1;
+  b.occ[to] = pi;
+  b.sq[pi] = to;
+  const caught = (b.trap[to] & trapBit(1 - own)) !== 0;
+  h[b.histTop++] = b.stun[pi];
+  if (caught) b.stun[pi] = TRAP_STUN;
+  b.ply++;
+  switchSide(b);
+  return PUSH_BIT | from;
+}
+
+function unmakePush(b: FastBoard, mv: number, undo: number): void {
+  undoSwitch(b);
+  b.ply--;
+  const pi = (mv >> 8) & 255;
+  const to = mv & 255;
+  const from = undo & 255;
+  const h = b.hist;
+  b.stun[pi] = h[--b.histTop];
+  const rec = h[--b.histTop];
+  const e = rec >> 16;
+  const dest = (rec >> 8) & 255;
+  b.stun[e] = rec & 255;
+  b.occ[dest] = -1;
+  b.occ[to] = e;
+  b.sq[e] = to;
+  b.occ[from] = pi;
+  b.sq[pi] = from;
+}
+
 /**
  * Cast piece `pi`'s skill (the turn passes): Brutile lays its wasteland at the encoded anchor,
  * Rakaeli transforms, Volkonov buffs every other piece of his side, Midos teleports to the anchor
@@ -555,6 +708,11 @@ function makeSkill(b: FastBoard, mv: number): number {
       mask |= 1 << i;
     }
     h[b.histTop++] = mask;
+    h[b.histTop++] = 0; // no wasteland squares
+  } else if (b.ch[pi] === CH_GLACIA) {
+    const e = b.occ[anchor];
+    h[b.histTop++] = (e << 8) | (b.stun[e] & 255);
+    b.stun[e] = Math.max(b.stun[e], OFF_TURN_STUN);
     h[b.histTop++] = 0; // no wasteland squares
   } else if (b.ch[pi] === CH_MIDOS) {
     const from = b.sq[pi];
@@ -608,6 +766,9 @@ function unmakeSkill(b: FastBoard): void {
   for (let k = 0; k < added; k++) b.waste[h[--b.histTop]] = 0;
   if (b.ch[pi] === CH_VOLKONOV) {
     for (let i = 0, mask = h[--b.histTop]; mask !== 0; i++, mask >>>= 1) if (mask & 1) b.buff[i] = 0;
+  } else if (b.ch[pi] === CH_GLACIA) {
+    const rec = h[--b.histTop];
+    b.stun[rec >> 8] = rec & 255;
   } else if (b.ch[pi] === CH_MIDOS) {
     const rec = h[--b.histTop];
     const from = rec & 255;
@@ -641,6 +802,15 @@ export function fastMoveToMove(b: FastBoard, mv: number): Move {
   const m: Move = { pieceId: b.ids[pi], from: posOf(b.sq[pi]), to: posOf(to) };
   const cap = b.occ[to];
   if (cap >= 0) m.captureId = b.ids[cap];
+  if (fastIsShot(b, mv)) m.shot = true;
+  if (cap >= 0 && b.ch[pi] === CH_HAMMONT) {
+    const dest = fastPushDest(b, pi, to);
+    if (dest >= 0) {
+      delete m.captureId;
+      m.push = { id: b.ids[cap], to: posOf(dest) };
+      if (b.lvl[pi] >= HAMMONT_STUN_LEVEL || b.trap[dest] & trapBit(b.owner[pi])) m.push.stunned = true;
+    } else m.crush = true;
+  }
   if (fastHopGain(b, pi, to) > 0) {
     const from = b.sq[pi];
     const len = pathOf(from, to);

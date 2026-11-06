@@ -8,6 +8,7 @@
  * controller change while open, but only when something it shows actually changed.
  */
 import { BOARD_SIZE, BUFF_TURNS, CHARACTERS, ZONE_DEPTH, SKILL_UNLOCK_PLY, WASTE_SIZE, getTargetsForPiece, inStorm, isAwake, isDirectional, isStunned, pieceDir, screenArrow, skillUnlockIn, trapsLeft, type FormationSlot, type GameState, type Piece, type PlayerId } from '../../engine';
+import { GLACIA_FREEZE } from '../../engine/characters';
 import { movementDiagram, rarityChip, starsOf, unitArt } from '../components/piece';
 import { overlayRoot, pushOverlay, registerForceClose } from '../components/overlay';
 import { h, replaceChildren } from '../dom';
@@ -87,6 +88,7 @@ function skillStatus(piece: Piece | undefined, s: GameState): string {
     return `사용 가능 · 아군 전원 ${BUFF_TURNS[piece.level]}턴 동안 상하좌우 +1칸`;
   }
   if (kind === 'blink') return '사용 가능 · 빈 칸 어디로든 순간이동';
+  if (kind === 'freeze') return `사용 가능 · 주변 ${GLACIA_FREEZE[piece.level]}칸 적 1명 1턴 정지`;
   return kind === 'transform' ? '사용 가능 · 2번 이동 동안 범위 확장' : '사용 가능 · 닿으면 소멸';
 }
 

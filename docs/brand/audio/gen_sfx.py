@@ -1259,6 +1259,146 @@ def midos_skill() -> np.ndarray:
     return finish(room(y, 0.8, 0.2, 0.012, 5500, 0.3))
 
 
+# --- hammont (bearded forge smith with a molten hammer; knocks enemies back) -----------------------
+
+def anvil_clang(f: float = 820, dur: float = 0.9, bright: float = 0.7) -> np.ndarray:
+    """A hammer on an anvil: a hard (2 ms) strike click into a heavy, slightly detuned metal ring."""
+    ring = metal(dur, f, (1.0, 2.71, 5.12, 7.9), dur * 0.45, bright)
+    click = bandpass(noise(0.02), 1500, 7000) * env_ad(int(0.02 * SR), 0.002, 0.005)
+    y = mix(dur, (ring, 0, 0.8), (click / (np.max(np.abs(click)) + 1e-9), 0, 0.5))
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def forge_roar(dur: float = 0.6) -> np.ndarray:
+    """A bellows puff into the coals: a low band-passed rush with crackling embers."""
+    x = bandpass(noise(dur), 120, 900) * bell_env(int(dur * SR), 0.35, 1.2)
+    e = bandpass(crackle(dur, 160, 0.003), 1800, 7000)
+    y = x / (np.max(np.abs(x)) + 1e-9) + 0.35 * e / (np.max(np.abs(e)) + 1e-9)
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def hammont_select() -> np.ndarray:
+    # Two anvil taps (a smith testing his hammer), the coals breathing behind.
+    y = mix(0.95, (forge_roar(0.6), 0, 0.3), (anvil_clang(820, 0.5, 0.6), 0.08, 0.6), (anvil_clang(900, 0.6, 0.7), 0.3, 0.75))
+    return finish(room(y, 0.45, 0.1, 0.008, 6000, 0.15))
+
+
+def hammont_move() -> np.ndarray:
+    # Heavy boots: two weighty steps and the hammer's iron head swinging on its haft.
+    y = mix(0.8, (lowpass(thud(0.25, 95, 45, 0.06), 1200), 0, 0.8), (lowpass(thud(0.25, 90, 42, 0.06), 1200), 0.3, 0.7),
+            (whoosh(0.3, 300, 1400, 1.4, 0.5), 0.08, 0.3), (metal(0.3, 610, decay=0.08, bright=0.3), 0.36, 0.12))
+    return finish(room(y, 0.35, 0.08, 0.008, 5000, 0.12))
+
+
+def hammont_capture() -> np.ndarray:
+    # A crushing blow: a big swing, the hammer slamming down (low body + anvil ring), sparks and debris.
+    y = mix(1.0, (whoosh(0.22, 250, 1600, 1.4, 0.8), 0, 0.5), (lowpass(thud(0.4, 120, 38, 0.1), 1500), 0.18, 1.0),
+            (anvil_clang(700, 0.6, 0.8), 0.18, 0.45), (crackle(0.35, 300, 0.003), 0.2, 0.2), (forge_roar(0.4), 0.22, 0.2))
+    return finish(saturate(room(y, 0.5, 0.11, 0.008, 6000, 0.2), 1.5))
+
+
+def hammont_skill() -> np.ndarray:
+    # The knock-back: a heave, a booming hit and a whoosh as the enemy flies off, then a skid.
+    y = mix(1.0, (whoosh(0.2, 300, 1300, 1.3, 0.8), 0, 0.4), (lowpass(thud(0.35, 140, 50, 0.08), 1600), 0.16, 0.9),
+            (anvil_clang(980, 0.45, 0.7), 0.16, 0.35), (whoosh(0.4, 1800, 400, 1.5, 0.3), 0.2, 0.55),
+            (swept_band(noise(0.25), 1600, 500, 2.0) * bell_env(int(0.25 * SR), 0.2, 1.2), 0.52, 0.25))
+    return finish(saturate(room(y, 0.45, 0.1, 0.008, 6000, 0.2), 1.4))
+
+
+# --- venoa (swamp huntress with a bone longbow and venom arrows) ----------------------------------
+
+def bow_draw(dur: float = 0.35) -> np.ndarray:
+    """A longbow drawn: a creaking rising friction (wood and bone) with a few small creaks."""
+    x = swept_band(noise(dur), 500, 1600, 3.0) * np.linspace(0.3, 1, int(dur * SR))
+    c = bandpass(crackle(dur, 40, 0.004), 600, 2400)
+    y = x / (np.max(np.abs(x)) + 1e-9) + 0.4 * c / (np.max(np.abs(c)) + 1e-9)
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def bow_twang(f: float = 190) -> np.ndarray:
+    """The string released: a low plucked twang (2 ms attack) with a fast-decaying buzz."""
+    t = t_axis(0.4)
+    y = (np.sin(2 * np.pi * f * t) + 0.5 * np.sin(2 * np.pi * 2.01 * f * t) + 0.25 * signal.sawtooth(2 * np.pi * 3.02 * f * t)) * env_ad(len(t), 0.002, 0.07)
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def arrow_hiss(dur: float = 0.25) -> np.ndarray:
+    """An arrow in flight: a fast, narrow, falling band of air."""
+    x = swept_band(noise(dur), 5200, 2600, 5.0) * bell_env(int(dur * SR), 0.3, 1.4)
+    return x / (np.max(np.abs(x)) + 1e-9)
+
+
+def venom_hiss(dur: float = 0.4) -> np.ndarray:
+    """Poison sizzling on impact: a bubbly, fizzing hiss."""
+    y = hiss(dur, 2800, 0.2) + 0.5 * bubbles(dur, 60, 500, 1600, 0.02)
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def venoa_select() -> np.ndarray:
+    # An arrow drawn from the quiver and nocked, the bow half-drawn: ready.
+    y = mix(0.75, (whoosh(0.12, 1800, 4200, 3.0, 0.6), 0, 0.3), (tick(2600, 0.004), 0.12, 0.35), (bow_draw(0.35), 0.18, 0.55))
+    return finish(room(y, 0.35, 0.08, 0.006, 6000, 0.12))
+
+
+def venoa_move() -> np.ndarray:
+    # Light steps through wet moss and a cloak swish.
+    y = mix(0.6, (lowpass(soft_step(0.8), 1800), 0, 0.6), (bubbles(0.2, 30, 300, 900, 0.03), 0.02, 0.15),
+            (lowpass(soft_step(0.7), 1800), 0.22, 0.5), (cloak_swish(0.25), 0.05, 0.35))
+    return finish(room(y, 0.3, 0.07, 0.006, 5000, 0.1))
+
+
+def venoa_capture() -> np.ndarray:
+    # Draw, twang, the arrow hissing off, a thock on the target and poison fizzing.
+    y = mix(1.0, (bow_draw(0.18), 0, 0.35), (bow_twang(190), 0.16, 0.8), (arrow_hiss(0.22), 0.18, 0.5),
+            (lowpass(thud(0.18, 220, 90, 0.03), 2500), 0.4, 0.6), (venom_hiss(0.45), 0.42, 0.35))
+    return finish(room(y, 0.4, 0.09, 0.008, 6500, 0.15))
+
+
+# --- glacia (frost witch on ice skates; glides and freezes) ---------------------------------------
+
+def ice_glide(dur: float = 0.6) -> np.ndarray:
+    """A long skate glide: a smooth, high, slightly whistling scrape that fades out."""
+    x = swept_band(noise(dur), 4200, 3000, 4.0) * bell_env(int(dur * SR), 0.15, 1.1)
+    t = t_axis(dur)
+    tone = np.sin(2 * np.pi * np.geomspace(2300, 1900, len(t)).cumsum() / SR) * bell_env(len(t), 0.2, 1.5)
+    y = x / (np.max(np.abs(x)) + 1e-9) + 0.12 * tone
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def ice_crack(dur: float = 0.5) -> np.ndarray:
+    """Ice cracking and tinkling: sharp, soft-edged clicks over a glassy shimmer."""
+    c = bandpass(crackle(dur, 90, 0.002), 2500, 9000)
+    shimmer = sum(chime(f, dur, 0.12) for f in (2793.8, 3520.0, 4186.0))
+    y = c / (np.max(np.abs(c)) + 1e-9) + 0.25 * shimmer / (np.max(np.abs(shimmer)) + 1e-9)
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def glacia_select() -> np.ndarray:
+    # A cold breath of wind and a crystalline two-note chime (a falling minor third: aloof).
+    y = mix(0.85, (whoosh(0.5, 900, 2600, 1.4, 0.5), 0, 0.3), (chime(2349.3, 0.5, 0.18), 0.12, 0.35), (chime(1975.5, 0.55, 0.2), 0.24, 0.32))
+    return finish(room(y, 0.7, 0.16, 0.012, 7000, 0.25))
+
+
+def glacia_move() -> np.ndarray:
+    # The push-off and a long skate glide across the ice.
+    y = mix(0.8, (swept_band(noise(0.08), 2000, 5000, 3.0) * bell_env(int(0.08 * SR), 0.7, 1.4), 0, 0.4), (ice_glide(0.65), 0.04, 0.8))
+    return finish(room(y, 0.5, 0.12, 0.01, 7000, 0.2))
+
+
+def glacia_capture() -> np.ndarray:
+    # A frost slash and the victim shattering like ice.
+    y = mix(0.95, (whoosh(0.18, 1200, 5200, 2.0, 0.7), 0, 0.5), (lowpass(thud(0.2, 180, 80, 0.04), 2500), 0.14, 0.5),
+            (ice_crack(0.6), 0.15, 0.8))
+    return finish(room(y, 0.6, 0.14, 0.01, 7500, 0.25))
+
+
+def glacia_skill() -> np.ndarray:
+    # 빙결: a rising frost swirl, a freezing crunch as the ice locks around the target, a cold shimmer.
+    y = mix(1.3, (whoosh(0.45, 600, 3600, 1.5, 0.75), 0, 0.5), (swept_band(noise(0.3), 3000, 7000, 3.0) * bell_env(int(0.3 * SR), 0.8, 1.2), 0.2, 0.35),
+            (ice_crack(0.55), 0.42, 0.85), (chime(3135.9, 0.7, 0.3), 0.46, 0.2), (chime(2637.0, 0.8, 0.35), 0.5, 0.18))
+    return finish(room(y, 0.8, 0.18, 0.012, 7500, 0.3))
+
+
 SFX = {
     "sad-select": sad_select,
     "sad-move": sad_move,
@@ -1327,6 +1467,19 @@ SFX = {
     "midos-move": midos_move,
     "midos-capture": midos_capture,
     "midos-skill": midos_skill,
+    # 2026-11-06, appended after midos for the same reason. Hammont's 'skill' effect is his knock-back
+    # hit (his trait); Venoa has no skill (her shots use 'capture'); Glacia's skill is 빙결.
+    "hammont-select": hammont_select,
+    "hammont-move": hammont_move,
+    "hammont-capture": hammont_capture,
+    "hammont-skill": hammont_skill,
+    "venoa-select": venoa_select,
+    "venoa-move": venoa_move,
+    "venoa-capture": venoa_capture,
+    "glacia-select": glacia_select,
+    "glacia-move": glacia_move,
+    "glacia-capture": glacia_capture,
+    "glacia-skill": glacia_skill,
 }
 
 

@@ -1,7 +1,7 @@
 import type { AbsorbedAbility, CharacterDef, CharacterId, Level, SkillKind } from './types';
 
 /** Every character, in roster order. */
-export const CHARACTER_IDS: CharacterId[] = ['sad', 'marki', 'walk', 'insaner', 'brutile', 'michelle', 'picker', 'rakaeli', 'rampid', 'larhen', 'volkonov', 'verish', 'midos'];
+export const CHARACTER_IDS: CharacterId[] = ['sad', 'marki', 'walk', 'insaner', 'brutile', 'michelle', 'picker', 'rakaeli', 'rampid', 'larhen', 'volkonov', 'verish', 'midos', 'hammont', 'venoa', 'glacia'];
 /** The default squad of a new profile (every character is available to everyone). */
 export const STARTER_IDS: CharacterId[] = ['sad', 'marki', 'walk'];
 
@@ -190,6 +190,59 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
       ],
     },
   },
+  hammont: {
+    id: 'hammont',
+    nameKo: '해먼트',
+    nameEn: 'Hammont',
+    rarity: 'rare',
+    descKo: [
+      '상하좌우 1칸 · 적을 치면 잡지 않고 1칸 밀쳐냄 (막히면 분쇄)',
+      '상하좌우 최대 2칸 직진 · 적을 치면 1칸 밀쳐냄 (막히면 분쇄)',
+      '상하좌우 최대 2칸 직진 · 적을 치면 1칸 밀쳐내고 1턴 기절 (막히면 분쇄)',
+    ],
+    value: [3, 4, 6],
+    trait: {
+      nameKo: '해머 강타',
+      descKo: '적에게 부딪히면 잡는 대신 그 칸을 차지하고 적을 같은 방향으로 1칸 날려 보냅니다. 뒤가 벽 · 자기장 · 다른 말 · 불모지로 막혀 있으면 적은 분쇄됩니다 (3성: 날아간 적은 다음 1턴 기절)',
+    },
+  },
+  venoa: {
+    id: 'venoa',
+    nameKo: '베노아',
+    nameEn: 'Venoa',
+    rarity: 'rare',
+    descKo: [
+      '상하좌우 1칸 · 앞으로 2~3칸 거리의 적을 독화살로 저격',
+      '상하좌우 1칸 · 앞과 앞쪽 대각선 2~3칸 거리의 적을 저격',
+      '상하좌우 1칸 · 앞과 앞쪽 대각선 2~4칸 거리의 적을 저격',
+    ],
+    value: [4, 5, 6],
+    trait: {
+      nameKo: '독화살',
+      descKo: '움직이지 않고 2칸 이상 떨어진 적을 쏘아 잡습니다. 화살은 사이에 있는 말에 막힙니다 (끝줄에서 방향 전환)',
+    },
+  },
+  glacia: {
+    id: 'glacia',
+    nameKo: '글라시아',
+    nameEn: 'Glacia',
+    rarity: 'epic',
+    descKo: [
+      '상하좌우로 막힐 때까지 빙판 활주 (멈출 수 없음 · 활주로는 못 잡음) + 대각선 1칸',
+      '상하좌우로 막힐 때까지 빙판 활주 + 대각선 1칸',
+      '상하좌우로 막힐 때까지 빙판 활주 + 대각선 최대 2칸 직진',
+    ],
+    value: [4, 5, 6],
+    skill: {
+      kind: 'freeze',
+      nameKo: '빙결',
+      descKo: [
+        '주변 2칸 안의 적 1명을 얼려 다음 1턴 동안 이동 · 스킬 불가',
+        '주변 3칸 안의 적 1명을 얼려 다음 1턴 동안 이동 · 스킬 불가',
+        '주변 4칸 안의 적 1명을 얼려 다음 1턴 동안 이동 · 스킬 불가',
+      ],
+    },
+  },
 };
 
 /** Numeric character codes used by the fast move generator. */
@@ -206,6 +259,9 @@ export const CH_LARHEN = 9;
 export const CH_VOLKONOV = 10;
 export const CH_VERISH = 11;
 export const CH_MIDOS = 12;
+export const CH_HAMMONT = 13;
+export const CH_VENOA = 14;
+export const CH_GLACIA = 15;
 export const CHAR_CODE: Record<CharacterId, number> = {
   sad: CH_SAD,
   marki: CH_MARKI,
@@ -220,26 +276,32 @@ export const CHAR_CODE: Record<CharacterId, number> = {
   volkonov: CH_VOLKONOV,
   verish: CH_VERISH,
   midos: CH_MIDOS,
+  hammont: CH_HAMMONT,
+  venoa: CH_VENOA,
+  glacia: CH_GLACIA,
 };
-export const CHAR_BY_CODE: CharacterId[] = ['sad', 'marki', 'walk', 'insaner', 'brutile', 'michelle', 'picker', 'rakaeli', 'rampid', 'larhen', 'volkonov', 'verish', 'midos'];
+export const CHAR_BY_CODE: CharacterId[] = ['sad', 'marki', 'walk', 'insaner', 'brutile', 'michelle', 'picker', 'rakaeli', 'rampid', 'larhen', 'volkonov', 'verish', 'midos', 'hammont', 'venoa', 'glacia'];
 /**
  * Number of character codes. An absorb mask holds, per code, the highest absorbed level of that
  * character's pattern in ABSORB_FIELD_BITS bits (see `absorbMerge`), so it needs N_CHARS * 2 bits:
- * 26 today. Masks live in Int32Array / Uint32Array slots, which leaves room for 15 codes.
+ * 32 today, the whole of a 32-bit word. Masks are uint32 bit patterns: the field of code 15 uses
+ * bit 31, so a mask held in a plain JS number may read negative (int32) while the FastBoard keeps it
+ * in a Uint32Array; every reader goes through `>>>` (`absorbedLevel`), which sees both the same.
+ * A 17th character needs wider storage (two words, or Float64 arithmetic).
  */
 export const N_CHARS = CHAR_BY_CODE.length;
 /** Bits per character code in an absorb mask: the absorbed level 0..3. */
 export const ABSORB_FIELD_BITS = 2;
-if (N_CHARS * ABSORB_FIELD_BITS > 30) throw new Error('absorb masks no longer fit in 31 bits: widen the storage');
+if (N_CHARS * ABSORB_FIELD_BITS > 32) throw new Error('absorb masks no longer fit in 32 bits: widen the storage');
 
 /**
  * Game rule: a piece that reaches the far edge in its forward direction (the enemy's back rank)
  * turns around: its forward and backward swap. Only the fully symmetric movers (Sad, Picker,
- * Volkonov) skip the flip, because it would not change a single square they can reach. Michelle
+ * Volkonov, Hammont, Glacia) skip the flip, because it would not change a single square they can reach. Michelle
  * turns too: after the flip her "back" (where she lays doll traps) points toward the enemy side.
  */
 export function keepsDirection(ch: number): boolean {
-  return ch === CH_SAD || ch === CH_PICKER || ch === CH_VOLKONOV;
+  return ch === CH_SAD || ch === CH_PICKER || ch === CH_VOLKONOV || ch === CH_HAMMONT || ch === CH_GLACIA;
 }
 
 /** Rampid's three-pronged "claw" (forward, forward-left, forward-right) slide range by level. */
@@ -265,6 +327,29 @@ export const VERISH_BACK = [0, 0, 0, 1];
  * diagonally. His skill "그림자 도약" teleports him to any free square instead (see `blinkAnchors`).
  */
 export const MIDOS_RANGE = [0, 1, 2, 3];
+/**
+ * Hammont's orthogonal slide range by level (index = level). Every enemy he runs into is knocked
+ * back one square instead of captured (crushed when it cannot go); from HAMMONT_STUN_LEVEL the
+ * knocked enemy is also stunned for its owner's next turn.
+ */
+export const HAMMONT_RANGE = [0, 1, 2, 2];
+export const HAMMONT_STUN_LEVEL = 3;
+/**
+ * Venoa steps 1 square orthogonally and shoots ("독화살") along her shot lanes: straight forward,
+ * and from VENOA_DIAG_LEVEL the two forward diagonals too, hitting the FIRST piece of the lane if it
+ * is an enemy at a distance of VENOA_SHOT_MIN..VENOA_SHOT_MAX[level] squares. She stays put.
+ */
+export const VENOA_SHOT_MIN = 2;
+export const VENOA_SHOT_MAX = [0, 3, 3, 4];
+export const VENOA_DIAG_LEVEL = 2;
+/**
+ * Glacia glides ("빙판 활주") orthogonally until something stops her (she cannot stop early and
+ * never captures by gliding) and steps diagonally up to GLACIA_DIAG[level] squares (a normal slide
+ * that may capture). Her skill "빙결" freezes one enemy within GLACIA_FREEZE[level] squares
+ * (Chebyshev distance).
+ */
+export const GLACIA_DIAG = [0, 1, 1, 2];
+export const GLACIA_FREEZE = [0, 2, 3, 4];
 /** Volkonov's orthogonal slide range by level (index = level). */
 export const VOLKONOV_RANGE = [0, 1, 2, 2];
 
