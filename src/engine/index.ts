@@ -26,6 +26,7 @@ export {
   wasteArea,
   skillBlock,
   skillAnchors,
+  blinkAnchors,
   skillUnlockIn,
   applySkill,
   isLegalSkill,

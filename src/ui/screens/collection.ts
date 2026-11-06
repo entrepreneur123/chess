@@ -39,6 +39,7 @@ export const TIER_TITLE: Record<CharacterId, [string, string, string]> = {
   larhen: ['그림자 단검', '달밤의 암살자', '은월의 처형자'],
   volkonov: ['떠돌이 음유시인', '궁정 음유시인', '선율의 거장'],
   verish: ['질주하는 소녀', '강철 부츠의 질주자', '음속의 관통자'],
+  midos: ['방황하는 망령', '그림자 사냥꾼', '심연의 망령왕'],
 };
 
 /** Role and one-line trait per character; `trait3` replaces `trait` on the 3-star card. */
@@ -55,6 +56,7 @@ export const ROLE: Record<CharacterId, { role: string; trait: string; trait3?: s
   larhen: { role: '도약형 암살자', trait: '사이의 말을 뛰어넘는 H자 점프 · 좌우와 대각선', trait3: '사이의 말을 뛰어넘는 점프 · 세로로 한 칸 더 긴 H자 (양옆 줄 앞뒤 2칸)' },
   volkonov: { role: '지원형 음유시인', trait: '상하좌우 이동 · 스킬 선율로 아군 전원 상하좌우 이동 +1칸' },
   verish: { role: '관통형 질주자', trait: '앞 · 좌우로 슬라이드하며 지나는 적을 모두 잡고 뚫고 감 · 아군 · 불모지 · 벽에는 막힘', trait3: '앞 · 좌우 · 뒤로 관통 슬라이드 · 지나는 적을 모두 잡음 · 아군 · 불모지 · 벽에는 막힘' },
+  midos: { role: '암살형 망령', trait: '좌 · 우 · 앞으로 직진 (뒤 · 대각선 불가) · 스킬 그림자 도약으로 보드의 빈 칸 어디로든 순간이동' },
 };
 
 /**

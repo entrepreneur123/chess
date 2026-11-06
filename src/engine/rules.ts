@@ -174,6 +174,7 @@ function patternIsDirectional(character: CharacterId, level: number): boolean {
     case 'rakaeli':
     case 'rampid':
     case 'verish':
+    case 'midos':
       return true;
     case 'brutile':
       return level < 3;
@@ -618,22 +619,47 @@ function sideCanCast(state: GameState, player: PlayerId, ignoreStun = false): bo
     asPlayer ??= { ...state, turn: player };
     const block = skillBlock(asPlayer, p.id);
     if (block !== null && !(ignoreStun && block === 'stunned')) continue;
-    // A transform or a melody is always castable when unblocked (its anchor is his own square).
-    if (skillKindOf(p.character) !== 'waste' || freeAnchors(state, p.level).length > 0) return true;
+    // A transform or a melody is always castable when unblocked (its anchor is his own square); a
+    // wasteland needs a free area and a teleport a free square.
+    const kind = skillKindOf(p.character);
+    if (kind === 'waste' ? freeAnchors(state, p.level).length > 0 : kind === 'blink' ? blinkAnchors(state, p.owner).length > 0 : true) return true;
   }
   return false;
 }
 
 /**
  * Valid anchors for `pieceId`'s skill: for Brutile's wasteland every corner whose whole area is on
- * the board, free of pieces and out of the storm; for Rakaeli's transform and Volkonov's melody his
- * own square only.
+ * the board, free of pieces and out of the storm; for Midos's teleport every free square (see
+ * `blinkAnchors`); for Rakaeli's transform and Volkonov's melody his own square only.
  */
 export function skillAnchors(state: GameState, pieceId: string): Pos[] {
   if (skillBlock(state, pieceId) !== null) return [];
   const p = state.pieces.find((x) => x.id === pieceId)!;
-  if (skillKindOf(p.character) !== 'waste') return [{ r: p.pos.r, c: p.pos.c }];
-  return freeAnchors(state, p.level);
+  const kind = skillKindOf(p.character);
+  if (kind === 'waste') return freeAnchors(state, p.level);
+  if (kind === 'blink') return blinkAnchors(state, p.owner);
+  return [{ r: p.pos.r, c: p.pos.c }];
+}
+
+/**
+ * Squares a Midos of `owner` may teleport to ("그림자 도약": "비어있는 칸"): no piece, no wasteland
+ * (he would die there), no doll trap of the OTHER side (traps are visible to both players, so a
+ * teleport onto one would only ever be a misclick) and out of the storm (a safety net: skills are
+ * sealed once it closes in). His own side's traps never catch him, so they are fine. Board order.
+ */
+export function blinkAnchors(state: Pick<GameState, 'pieces' | 'waste' | 'traps' | 'storm'>, owner: PlayerId): Pos[] {
+  const blocked = new Uint8Array(N_SQUARES);
+  for (const q of state.pieces) blocked[sqOf(q.pos)] = 1;
+  for (const s of state.waste) blocked[s] = 1;
+  for (const t of state.traps ?? []) if (t.owner !== owner) blocked[t.sq] = 1;
+  const out: Pos[] = [];
+  for (let s = 0; s < N_SQUARES; s++) {
+    if (blocked[s]) continue;
+    const pos = posOf(s);
+    if (inStorm(pos.r, pos.c, state.storm)) continue;
+    out.push(pos);
+  }
+  return out;
 }
 
 function freeAnchors(state: GameState, level: number): Pos[] {
@@ -661,13 +687,15 @@ export function isLegalSkill(state: GameState, action: SkillAction): boolean {
 /**
  * Pure: the skill is the player's action for the turn. Brutile lays its wasteland; Rakaeli
  * transforms (`awaken` = AWAKEN_TURNS, which the turn change at once counts down to 2); Volkonov
- * buffs every other piece of his side (`buff` = BUFF_TURNS[level] + 1, counted down the same way).
+ * buffs every other piece of his side (`buff` = BUFF_TURNS[level] + 1, counted down the same way);
+ * Midos teleports to the anchor (no capture; landing on the far edge turns him around like a move).
  * Either way the caster's `skillUsed` is set. Throws if illegal.
  */
 export function applySkill(state: GameState, action: SkillAction): GameState {
   if (!isLegalSkill(state, action)) throw new Error(`Illegal skill: ${JSON.stringify(action)}`);
   const p = state.pieces.find((x) => x.id === action.pieceId)!;
   const kind = skillKindOf(p.character);
+  if (kind === 'blink') return applyBlink(state, p, action.anchor);
   const transform = kind === 'transform';
   const buffs = kind === 'buff';
   const squares = kind === 'waste' ? wasteArea(p.level, action.anchor) : [];
@@ -691,6 +719,26 @@ export function applySkill(state: GameState, action: SkillAction): GameState {
       ? { kind: 'skill', player: p.owner, pieceId: p.id, squares: [], buffed }
       : { kind: 'skill', player: p.owner, pieceId: p.id, squares };
   return settle(switchTurn({ ...state, pieces, waste, skillsUsed: used, consecutiveTimeouts: ct }, entry, state.pliesSinceCapture + 1));
+}
+
+/** Midos's "그림자 도약": `p` teleports to the free square `to` (legality checked by the caller). */
+function applyBlink(state: GameState, p: Piece, to: Pos): GameState {
+  const d = pieceDir(p);
+  const turned = !keepsDirection(CHAR_CODE[p.character]) && atTurnRow(to.r, d);
+  const pieces = state.pieces.map((x) => {
+    if (x.id !== p.id) return x;
+    const moved: Piece = { ...x, pos: { r: to.r, c: to.c }, skillUsed: true as const };
+    if (turned) moved.dir = d === 1 ? -1 : 1;
+    return moved;
+  });
+  const used: [number, number] = [state.skillsUsed[0], state.skillsUsed[1]];
+  used[p.owner] += 1;
+  const ct: [number, number] = [state.consecutiveTimeouts[0], state.consecutiveTimeouts[1]];
+  ct[p.owner] = 0;
+  const blink: { from: number; to: number; turned?: true } = { from: sqOf(p.pos), to: sqOf(to) };
+  if (turned) blink.turned = true;
+  const entry: HistoryEntry = { kind: 'skill', player: p.owner, pieceId: p.id, squares: [], blink };
+  return settle(switchTurn({ ...state, pieces, skillsUsed: used, consecutiveTimeouts: ct }, entry, state.pliesSinceCapture + 1));
 }
 
 /** The player declines the pending chain move. No-op when none is pending. */

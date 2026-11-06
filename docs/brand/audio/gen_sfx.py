@@ -1169,6 +1169,96 @@ def verish_hop_multi() -> np.ndarray:
     return finish(saturate(room(y, 0.5, 0.11, 0.008, 7000, 0.2), 1.3))
 
 
+# --- midos (a ghost assassin of living shadow with three steel claws per hand; teleports) ----------
+
+def claw_snikt(f: float = 3300, dur: float = 0.42) -> np.ndarray:
+    """Three steel claws springing out of the knuckles at once: a very short metallic scrape up, a
+    hard (2 ms) lock click and a thin, slightly detuned triple ring (three blades) that dies fast."""
+    n = int(0.07 * SR)
+    scr = swept_band(noise(0.07), 2600, 9000, 3.5) * bell_env(n, 0.9, 1.2)
+    t = t_axis(dur)
+    ring = sum(np.sin(2 * np.pi * f * k * t + ph) for k, ph in ((1.0, 0.0), (1.013, 0.9), (0.988, 2.1)))
+    ring = ring + 0.25 * np.sin(2 * np.pi * f * 2.74 * t) * np.exp(-t / 0.04)
+    ring = ring * env_ad(len(t), 0.002, dur * 0.28)
+    lock = bandpass(noise(0.02), 1500, 6000) * env_ad(int(0.02 * SR), 0.002, 0.004)
+    y = mix(0.07 + dur, (scr / (np.max(np.abs(scr)) + 1e-9), 0, 0.45), (lock / (np.max(np.abs(lock)) + 1e-9), 0.065, 0.55),
+            (ring / (np.max(np.abs(ring)) + 1e-9), 0.066, 0.5))
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def ghost_moan(dur: float, f: float = 98.0, rise: float = 1.12, air: float = 0.6) -> np.ndarray:
+    """A hollow, airy ghost breath: a low, slowly bending tone through a dark vowel formant, wrapped
+    in breathy band noise that swells and fades (no words, no scream)."""
+    t = t_axis(dur)
+    fr = f * np.geomspace(1.0, rise, len(t)) * (1 + 0.012 * np.sin(2 * np.pi * 4.6 * t))
+    ph = 2 * np.pi * np.cumsum(fr) / SR
+    tone = np.sin(ph) + 0.5 * np.sin(2 * ph + 0.3) + 0.25 * np.sin(3 * ph + 1.0)
+    tone = bandpass(tone, 120, 900, 2)
+    breath = bandpass(noise(dur), 300, 2400, 2)
+    y = tone / (np.max(np.abs(tone)) + 1e-9) * (1 - air) + breath / (np.max(np.abs(breath)) + 1e-9) * air
+    y *= bell_env(len(t), 0.4, 1.3)
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def void_suck(dur: float = 0.38) -> np.ndarray:
+    """Air rushing INTO a point (the ghost folding into nothing): a reversed-feeling swell, a band
+    sweeping up and narrowing, cut off clean at the end by a soft 4 ms fade."""
+    n = int(dur * SR)
+    x = swept_band(noise(dur), 300, 4200, 2.5)
+    e = np.linspace(0, 1, n) ** 2.6
+    e[-int(0.004 * SR):] *= np.linspace(1, 0, int(0.004 * SR))
+    y = x / (np.max(np.abs(x)) + 1e-9) * e
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def void_pop(f0: float = 160, f1: float = 45) -> np.ndarray:
+    """The ghost reappearing: a deep, soft implosion thump with a short dark noise puff (2 ms attack)."""
+    body = sweep_tone(0.35, f0, f1, "sine", 0.09, 0.002)
+    puff = lowpass(noise(0.25), 1400) * env_ad(int(0.25 * SR), 0.002, 0.05)
+    y = mix(0.36, (body, 0, 0.9), (puff / (np.max(np.abs(puff)) + 1e-9), 0, 0.4))
+    return y / (np.max(np.abs(y)) + 1e-9)
+
+
+def midos_select() -> np.ndarray:
+    # A cold ghost breath, then the claws spring out (the 'snikt'), in a hollow, dark space.
+    y = mix(1.0, (ghost_moan(0.7, 92, 1.08, 0.7), 0, 0.42), (claw_snikt(3300, 0.45), 0.24, 0.75))
+    return finish(room(y, 0.7, 0.18, 0.012, 5500, 0.25))
+
+
+def midos_move() -> np.ndarray:
+    # A low ghost glide: a soft rising-then-falling whoosh of shadow and a breathy tail, no steps.
+    y = mix(0.8, (whoosh(0.5, 260, 1800, 1.3, 0.5), 0, 0.6), (ghost_moan(0.55, 104, 0.92, 0.85), 0.06, 0.32),
+            (cloak_swish(0.24), 0.1, 0.22))
+    return finish(room(y, 0.6, 0.15, 0.01, 5000, 0.2))
+
+
+def midos_capture() -> np.ndarray:
+    # Three claws raking through the target in quick succession (each a little higher), a steel
+    # 'tsing' on the last cut and a deep void thump as the shadow swallows the victim.
+    y = silence(1.0)
+    for k, (f0, f1, g) in enumerate(((1300, 6200, 0.7), (1500, 6900, 0.75), (1700, 7600, 0.85))):
+        place(y, blade_whoosh(0.1, f0, f1), 0.02 + 0.06 * k, g)
+    t = t_axis(0.35)
+    tsing = (np.sin(2 * np.pi * 3400 * t) + 0.5 * np.sin(2 * np.pi * 3440 * t + 1.0)) * env_ad(len(t), 0.002, 0.1)
+    place(y, tsing / (np.max(np.abs(tsing)) + 1e-9), 0.17, 0.3)
+    place(y, void_pop(150, 42), 0.18, 0.75)
+    place(y, ghost_moan(0.45, 86, 0.85, 0.8), 0.25, 0.22)
+    return finish(saturate(room(y, 0.6, 0.13, 0.01, 6000, 0.25), 1.3))
+
+
+def midos_skill() -> np.ndarray:
+    # "그림자 도약": the ghost folds into nothing (air rushing in), a beat of silence-ish shimmer,
+    # then he bursts out elsewhere (a deep void pop) and the claws spring out.
+    y = silence(1.5)
+    place(y, ghost_moan(0.5, 110, 0.8, 0.75), 0.0, 0.3)
+    place(y, void_suck(0.38), 0.0, 0.8)
+    place(y, lowpass(chime(1244.5, 0.5, 0.2), 6000), 0.36, 0.12)
+    place(y, void_pop(170, 40), 0.62, 1.0)
+    place(y, whoosh(0.3, 2600, 500, 1.6, 0.2), 0.6, 0.35)
+    place(y, claw_snikt(3500, 0.42), 0.8, 0.6)
+    return finish(room(y, 0.8, 0.2, 0.012, 5500, 0.3))
+
+
 SFX = {
     "sad-select": sad_select,
     "sad-move": sad_move,
@@ -1232,6 +1322,11 @@ SFX = {
     "verish-move": verish_move,
     "verish-capture": verish_capture,
     "verish-hop-multi": verish_hop_multi,
+    # 2026-11-06, appended after verish for the same reason. Midos's skill is 그림자 도약 (teleport).
+    "midos-select": midos_select,
+    "midos-move": midos_move,
+    "midos-capture": midos_capture,
+    "midos-skill": midos_skill,
 }
 
 

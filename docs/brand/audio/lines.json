@@ -991,6 +991,86 @@
           "say": "골인. 오늘도 내가 일등이야."
         }
       ]
+    },
+    "midos": {
+      "concept": "A ghost assassin made of living violet-black shadow, not a human: a horned smooth dark mask with glowing slit eyes, a smoke tail instead of legs and three steel claws on each hand; he teleports anywhere. A cool, cold, low and calm male voice, mysterious and quietly menacing, with a ghostly echo; never shouting.",
+      "gender": "male",
+      "f0_target": 95,
+      "voice": "A cool, mysterious phantom hunter, a man of indeterminate age. A smooth low baritone in a medium-low pitch, calm, confident and cold, with a soft airy edge, eerie and controlled, clear diction, no vocal fry, never shouting.",
+      "clone": {
+        "ref": "refs/midos-ref.flac",
+        "text": "그림자 속에서 기다렸다. 이제 네 차례다.",
+        "style": "Calm, cold, confident and slightly sinister.",
+        "_from": "VoiceDesign take (seed 11, take 4) of 12 over two prompts, lead / tail silence trimmed. Prompt A ('deep, hollow ... like a sinister whisper') gave 69-87 Hz takes, all creaky (HNR -6.7..0.5 dB, warble 0.11-0.15); prompt B (this 'voice') gave 75-151 Hz (one take read female, P 0.996). Kept B take 4: F0 95.5 Hz (78-127), warble 0.093 (lowest of the 12), HNR 0.2 dB, harshness -9.2 dB, P(female) 0.001; Whisper transcript exact (네/내 sound alike)."
+      },
+      "lines": [
+        {
+          "event": "select",
+          "id": "select-1",
+          "text": "그림자는 언제나 네 곁에 있다.",
+          "style": "Calm, cold, quietly menacing."
+        },
+        {
+          "event": "select",
+          "id": "select-2",
+          "text": "어둠이 나를 부른다.",
+          "style": "Low, slow and mysterious."
+        },
+        {
+          "event": "move",
+          "id": "move-1",
+          "text": "소리 없이.",
+          "style": "A cold, quiet murmur."
+        },
+        {
+          "event": "move",
+          "id": "move-2",
+          "text": "흔적은 남기지 않는다.",
+          "style": "Calm and confident, low."
+        },
+        {
+          "event": "capture",
+          "id": "capture-1",
+          "text": "도망칠 곳은 없다.",
+          "style": "Cold and cruel, controlled."
+        },
+        {
+          "event": "capture",
+          "id": "capture-2",
+          "text": "그림자에 삼켜져라.",
+          "style": "Menacing, low and firm."
+        },
+        {
+          "event": "capture",
+          "id": "capture-3",
+          "text": "끝이다.",
+          "style": "Short, cold and final."
+        },
+        {
+          "event": "skill",
+          "id": "skill-1",
+          "text": "어디든, 그림자가 있는 곳이라면.",
+          "style": "Cool and confident, a sly menace."
+        },
+        {
+          "event": "skill",
+          "id": "skill-2",
+          "text": "눈을 감는 순간, 나는 거기 있다.",
+          "style": "Quiet, eerie and confident."
+        },
+        {
+          "event": "death",
+          "id": "death-1",
+          "text": "그림자로… 돌아간다…",
+          "style": "Weak, fading, a dying whisper."
+        },
+        {
+          "event": "victory",
+          "id": "victory-1",
+          "text": "이 밤은 우리의 것이다.",
+          "style": "Calm, cold triumph."
+        }
+      ]
     }
   }
 }

@@ -17,6 +17,7 @@ import {
   getTargetsForPiece,
   isLegalMove,
   pieceDir,
+  posOf,
   screenArrow,
   resign,
   skipBonus,
@@ -103,10 +104,12 @@ const samePos = (a: Pos, b: Pos) => a.r === b.r && a.c === b.c;
  */
 export const ANIMATION_WATCHDOG_MS = 6000;
 
+/** The last move's squares (a Midos teleport counts: it moved a piece too). */
 export function lastMoveOf(history: HistoryEntry[]): { from: Pos; to: Pos } | null {
   for (let i = history.length - 1; i >= 0; i--) {
     const e = history[i];
     if (e.kind === 'move') return { from: e.move.from, to: e.move.to };
+    if (e.kind === 'skill' && e.blink) return { from: posOf(e.blink.from), to: posOf(e.blink.to) };
   }
   return null;
 }
@@ -478,6 +481,11 @@ export class GameController {
       if (before && after && pieceDir(before) !== pieceDir(after)) this.emit({ type: 'turnAround', player: action.player, pieceId: m.pieceId, arrow: screenArrow(after) });
       const all = capturedIds(m);
       if (all.length > 1) this.emit({ type: 'multiCapture', player: action.player, pieceId: m.pieceId, captured: [...all] });
+    }
+    // A teleport that landed on the far edge turned the piece around, like a move.
+    if (action?.kind === 'skill' && action.blink?.turned) {
+      const after = getPieceById(next, action.pieceId);
+      if (after) this.emit({ type: 'turnAround', player: action.player, pieceId: after.id, arrow: screenArrow(after) });
     }
     if (action?.kind === 'move' && action.move.captureId) {
       const before = getPieceById(prev, action.move.pieceId);

@@ -1,7 +1,7 @@
 import type { AbsorbedAbility, CharacterDef, CharacterId, Level, SkillKind } from './types';
 
 /** Every character, in roster order. */
-export const CHARACTER_IDS: CharacterId[] = ['sad', 'marki', 'walk', 'insaner', 'brutile', 'michelle', 'picker', 'rakaeli', 'rampid', 'larhen', 'volkonov', 'verish'];
+export const CHARACTER_IDS: CharacterId[] = ['sad', 'marki', 'walk', 'insaner', 'brutile', 'michelle', 'picker', 'rakaeli', 'rampid', 'larhen', 'volkonov', 'verish', 'midos'];
 /** The default squad of a new profile (every character is available to everyone). */
 export const STARTER_IDS: CharacterId[] = ['sad', 'marki', 'walk'];
 
@@ -169,6 +169,27 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
       descKo: '슬라이드하며 지나는 칸의 적을 모두 잡고 뚫고 지나갑니다. 아군 · 불모지 · 벽 · 자기장에는 막혀 그 앞에서 멈춥니다',
     },
   },
+  midos: {
+    id: 'midos',
+    nameKo: '미도스',
+    nameEn: 'Midos',
+    rarity: 'epic',
+    descKo: [
+      '좌 · 우 · 앞으로 1칸 (뒤 · 대각선 불가) · 끝줄에서 방향 전환',
+      '좌 · 우 · 앞으로 최대 2칸 직진 (뒤 · 대각선 불가) · 끝줄에서 방향 전환',
+      '좌 · 우 · 앞으로 최대 3칸 직진 (뒤 · 대각선 불가) · 끝줄에서 방향 전환',
+    ],
+    value: [4, 5, 6],
+    skill: {
+      kind: 'blink',
+      nameKo: '그림자 도약',
+      descKo: [
+        '보드의 빈 칸 어디로든 순간이동 (말 · 불모지 · 상대 함정이 없는 칸)',
+        '보드의 빈 칸 어디로든 순간이동 (말 · 불모지 · 상대 함정이 없는 칸)',
+        '보드의 빈 칸 어디로든 순간이동 (말 · 불모지 · 상대 함정이 없는 칸)',
+      ],
+    },
+  },
 };
 
 /** Numeric character codes used by the fast move generator. */
@@ -184,6 +205,7 @@ export const CH_RAMPID = 8;
 export const CH_LARHEN = 9;
 export const CH_VOLKONOV = 10;
 export const CH_VERISH = 11;
+export const CH_MIDOS = 12;
 export const CHAR_CODE: Record<CharacterId, number> = {
   sad: CH_SAD,
   marki: CH_MARKI,
@@ -197,12 +219,13 @@ export const CHAR_CODE: Record<CharacterId, number> = {
   larhen: CH_LARHEN,
   volkonov: CH_VOLKONOV,
   verish: CH_VERISH,
+  midos: CH_MIDOS,
 };
-export const CHAR_BY_CODE: CharacterId[] = ['sad', 'marki', 'walk', 'insaner', 'brutile', 'michelle', 'picker', 'rakaeli', 'rampid', 'larhen', 'volkonov', 'verish'];
+export const CHAR_BY_CODE: CharacterId[] = ['sad', 'marki', 'walk', 'insaner', 'brutile', 'michelle', 'picker', 'rakaeli', 'rampid', 'larhen', 'volkonov', 'verish', 'midos'];
 /**
  * Number of character codes. An absorb mask holds, per code, the highest absorbed level of that
  * character's pattern in ABSORB_FIELD_BITS bits (see `absorbMerge`), so it needs N_CHARS * 2 bits:
- * 22 today. Masks live in Int32Array / Uint32Array slots, which leaves room for 15 codes.
+ * 26 today. Masks live in Int32Array / Uint32Array slots, which leaves room for 15 codes.
  */
 export const N_CHARS = CHAR_BY_CODE.length;
 /** Bits per character code in an absorb mask: the absorbed level 0..3. */
@@ -237,6 +260,11 @@ export const LARHEN_TALL_LEVEL = 3;
 export const VERISH_SIDE = [0, 1, 2, 2];
 export const VERISH_FORWARD = [0, 2, 2, 3];
 export const VERISH_BACK = [0, 0, 0, 1];
+/**
+ * Midos's slides by level (index = level): left, right and straight forward, never back or
+ * diagonally. His skill "그림자 도약" teleports him to any free square instead (see `blinkAnchors`).
+ */
+export const MIDOS_RANGE = [0, 1, 2, 3];
 /** Volkonov's orthogonal slide range by level (index = level). */
 export const VOLKONOV_RANGE = [0, 1, 2, 2];
 

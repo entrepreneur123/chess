@@ -22,7 +22,7 @@ const fsP: Promise<Fs> = import(/* @vite-ignore */ nodeFs);
 const audioDir = decodeURIComponent(new URL('../public/audio/', import.meta.url).pathname);
 const join = (...parts: string[]) => parts.join('/').replace(/\/+/g, '/');
 // Typed as a full record so adding a CharacterId without listing it here fails to compile.
-const CHAR_SET: Record<CharacterId, true> = { sad: true, marki: true, walk: true, insaner: true, brutile: true, michelle: true, picker: true, rakaeli: true, rampid: true, larhen: true, volkonov: true, verish: true };
+const CHAR_SET: Record<CharacterId, true> = { sad: true, marki: true, walk: true, insaner: true, brutile: true, michelle: true, picker: true, rakaeli: true, rampid: true, larhen: true, volkonov: true, verish: true, midos: true };
 const ROSTER = Object.keys(CHAR_SET) as CharacterId[];
 /**
  * Characters the generated manifest already voices. A character ships before its recordings (the

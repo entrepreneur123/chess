@@ -24,6 +24,8 @@ import {
   josa,
   materialScore,
   skillAnchors,
+  applySkill,
+  posOf,
   skillBlock,
   skillKindOf,
   skillUnlockIn,
@@ -49,6 +51,7 @@ import { duck, playArenaMusic } from '../musicBridge';
 import { isPowerSave, watchPowerSave } from '../powerSave';
 import { resultPanel } from '../game/resultPanel';
 import { createBuffBadges, playMelodyFx } from '../game/melodyFx';
+import { playBlinkFx } from '../game/blinkFx';
 import { coinFlipFirst, randInt, defaultRng } from '../../meta/rng';
 import { installBoardDrag, type BoardDrag } from '../components/boardDrag';
 import { confetti } from '../components/celebrate';
@@ -303,8 +306,11 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   let selChipKey = '';
   let wasteKey = 0;
   let trapKey = '';
-  /** Brutile's wasteland targeting (the player is choosing where to lay it). */
-  let targeting: { pieceId: string; level: 1 | 2 | 3; anchors: Set<number>; preview: Pos | null } | null = null;
+  /**
+   * Skill targeting: Brutile choosing where to lay his wasteland ('waste': `preview` is the area's
+   * corner) or Midos choosing where to teleport ('blink': `preview` is the landing square).
+   */
+  let targeting: { kind: 'waste' | 'blink'; pieceId: string; level: 1 | 2 | 3; anchors: Set<number>; preview: Pos | null } | null = null;
   /** Rakaeli's transform waiting for the player's confirm (no target to pick: his own square). */
   let transformAsk: string | null = null;
   /** The first transform of the match gets the coach toast. */
@@ -508,8 +514,10 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     const p = getPieceById(c.state, pieceId);
     if (!p || skillBlock(c.state, pieceId) !== null) return;
     const anchorList = skillAnchors(c.state, pieceId).map(sqOf);
-    targeting = { pieceId, level: p.level, anchors: new Set(anchorList), preview: null };
-    // Only the area under consideration is drawn (valid corners would tint nearly the whole board).
+    const kind = skillKindOf(p.character) === 'blink' ? 'blink' : 'waste';
+    targeting = { kind, pieceId, level: p.level, anchors: new Set(anchorList), preview: null };
+    // Only the area under consideration is drawn (valid corners would tint nearly the whole board);
+    // a teleport shows its landing squares as move dots instead (see renderSnapshot).
     board?.setSkillPreview?.([], null);
     sfx('select');
     haptic('light');
@@ -527,12 +535,46 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     if (!t || !t.preview || !t.anchors.has(sqOf(t.preview))) return;
     const action: SkillAction = { kind: 'skill', pieceId: t.pieceId, anchor: t.preview };
     stopTargeting();
-    if (!ctrl?.trySkill(action)) toast('지금은 불모지를 쓸 수 없어요', { tone: 'warn' });
+    if (!ctrl?.trySkill(action)) toast(t.kind === 'blink' ? '지금은 순간이동할 수 없어요' : '지금은 불모지를 쓸 수 없어요', { tone: 'warn' });
+  };
+
+  /**
+   * Where Midos would threaten from the previewed landing square: the enemy squares his slides
+   * would capture there (the skill applied on a copy of the state, so his own square is free and a
+   * landing on the far edge faces him the other way). [] when the square is not a valid landing.
+   */
+  const blinkPreview = (s: GameState, t: NonNullable<typeof targeting>): { threats: Pos[]; exposed: boolean } => {
+    const none = { threats: [], exposed: false };
+    if (t.kind !== 'blink' || !t.preview || !t.anchors.has(sqOf(t.preview))) return none;
+    try {
+      const after = applySkill(s, { kind: 'skill', pieceId: t.pieceId, anchor: t.preview });
+      const p = getPieceById(after, t.pieceId);
+      if (!p) return none;
+      // Exposed: the opponent (to move right after the teleport) could take him there.
+      const exposed = getLegalMoves(after).some((m) => capturedIds(m).includes(t.pieceId));
+      return { threats: getTargetsForPiece(after, p).filter((m) => m.captureId).map((m) => m.to), exposed };
+    } catch {
+      return none;
+    }
   };
 
   const onTargetTap = (pos: Pos) => {
     const t = targeting;
     if (!t) return;
+    if (t.kind === 'blink') {
+      const valid = t.anchors.has(sqOf(pos));
+      // Tapping the previewed landing square again confirms it.
+      if (valid && t.preview && t.preview.r === pos.r && t.preview.c === pos.c) {
+        confirmSkill();
+        return;
+      }
+      // The pick is drawn by renderSnapshot (selection ring + a path from his square), not by the
+      // green wasteland preview.
+      t.preview = { r: pos.r, c: pos.c };
+      sfx(valid ? 'select' : 'tap');
+      if (ctrl) renderSnapshot(ctrl.snapshot());
+      return;
+    }
     const k = WASTE_SIZE[t.level];
     const anchor = anchorFor(pos, k);
     const same = t.preview && t.preview.r === anchor.r && t.preview.c === anchor.c;
@@ -637,6 +679,27 @@ export function gameScreen(router: Router, params: GameParams): Screen {
           def.skill!.nameKo,
         ),
       ];
+    } else if (targeting && targeting.kind === 'blink') {
+      const t = targeting;
+      const valid = !!t.preview && t.anchors.has(sqOf(t.preview));
+      const exposed = valid && blinkPreview(s, t).exposed;
+      key = `blink|${t.preview?.r},${t.preview?.c}|${valid}|${exposed}`;
+      content = [
+        h(
+          'span',
+          { class: `action-bar__text${exposed ? ' is-warn' : ''}` },
+          icon('target', 16),
+          !t.preview
+            ? '순간이동할 빈 칸을 탭하세요'
+            : !valid
+              ? '말 · 불모지 · 상대 함정이 없는 빈 칸만 가능해요'
+              : exposed
+                ? '주의! 바로 잡힐 수 있는 칸이에요'
+                : '한 번 더 탭하거나 도약을 누르세요',
+        ),
+        h('button', { class: 'btn btn--text btn--sm', type: 'button', 'data-action': 'skill-cancel', onclick: () => { stopTargeting(); if (ctrl) renderSnapshot(ctrl.snapshot()); } }, '취소'),
+        h('button', { class: 'btn btn--success btn--sm action-bar__go action-bar__go--blink', type: 'button', 'data-action': 'skill-confirm', disabled: !valid, onclick: () => confirmSkill() }, '도약'),
+      ];
     } else if (targeting) {
       const t = targeting;
       const k = WASTE_SIZE[t.level];
@@ -652,7 +715,13 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       const kind = skillKindOf(sel.character);
       const transform = kind === 'transform';
       const k = WASTE_SIZE[sel.level];
-      const ready = transform ? `${AWAKEN_TURNS - 1}번 이동 동안 범위 확장` : kind === 'buff' ? melodyCopy(sel.level) : `빈 칸 ${k}×${k} · 닿으면 소멸`;
+      const ready = transform
+        ? `${AWAKEN_TURNS - 1}번 이동 동안 범위 확장`
+        : kind === 'buff'
+          ? melodyCopy(sel.level)
+          : kind === 'blink'
+            ? '빈 칸 어디로든 순간이동'
+            : `빈 칸 ${k}×${k} · 닿으면 소멸`;
       const reason =
         block === 'notYet' ? `${skillUnlockIn(s)}턴 후 사용 가능` : block === 'active' ? `타천 중 · ${sel.awaken ?? 0}번 더 이동` : block ? BLOCK_TEXT[block] : ready;
       key = `skill|${sel.id}|${block}|${reason}`;
@@ -660,11 +729,11 @@ export function gameScreen(router: Router, params: GameParams): Screen {
         h(
           'button',
           {
-            class: `skill-btn${block ? ' is-blocked' : ''}${transform ? ' skill-btn--awake' : ''}${kind === 'buff' ? ' skill-btn--melody' : ''}${block === 'active' ? ' is-active' : ''}`,
+            class: `skill-btn${block ? ' is-blocked' : ''}${transform ? ' skill-btn--awake' : ''}${kind === 'buff' ? ' skill-btn--melody' : ''}${kind === 'blink' ? ' skill-btn--blink' : ''}${block === 'active' ? ' is-active' : ''}`,
             type: 'button',
             'data-action': 'skill',
             disabled: !!block,
-            onclick: () => (kind === 'waste' ? startTargeting(sel.id) : askTransform(sel.id)),
+            onclick: () => (kind === 'waste' || kind === 'blink' ? startTargeting(sel.id) : askTransform(sel.id)),
           },
           h('span', { class: 'skill-btn__icon', 'aria-hidden': 'true' }, icon('magic', 20)),
           h('span', { class: 'skill-btn__main' }, h('span', { class: 'skill-btn__name' }, `스킬 · ${CHARACTERS[sel.character].skill!.nameKo}`), h('span', { class: 'skill-btn__sub' }, reason)),
@@ -713,7 +782,20 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       }
       const sel = snap.selection;
       const selPiece = sel ? getPieceById(s, sel.pieceId) : undefined;
-      if (snap.phase === 'animating' || targeting) {
+      if (targeting && targeting.kind === 'blink' && snap.phase !== 'animating') {
+        // Teleport targeting: every landing square as a move dot; a valid pick gets the selection
+        // ring, a path from his square and, from there, the enemies he would threaten.
+        const caster = getPieceById(s, targeting.pieceId);
+        const pick = targeting.preview && targeting.anchors.has(sqOf(targeting.preview)) ? targeting.preview : null;
+        const pickSq = pick ? sqOf(pick) : -1;
+        board.setHighlights({
+          selected: pick ?? caster?.pos ?? null,
+          moves: [...targeting.anchors].filter((q) => q !== pickSq).map(posOf),
+          captures: blinkPreview(s, targeting).threats,
+          lastMove: pick && caster ? { from: caster.pos, to: pick } : null,
+          tone: 'own',
+        });
+      } else if (snap.phase === 'animating' || targeting) {
         board.setHighlights({ selected: targeting ? (selPiece?.pos ?? null) : null, moves: [], captures: [], lastMove: targeting ? snap.lastMove : null });
       } else if (transformAsk && getPieceById(s, transformAsk)) {
         // Confirming the transform: preview the transformed reach from where he stands.
@@ -1030,6 +1112,25 @@ export function gameScreen(router: Router, params: GameParams): Screen {
             }
             return;
           }
+          if (kind === 'blink') {
+            // Midos's teleport: the ghost implodes, the token jumps under the burst, claws rake the
+            // landing square (a DOM layer over either board view).
+            if (b && caster) {
+              b.setInteractive(false);
+              await playBlinkFx(
+                b,
+                caster.pos,
+                action.anchor,
+                () => {
+                  if (board !== b) return;
+                  b.setPieces(after.pieces);
+                  syncedPieces = after.pieces;
+                },
+                caster.id,
+              );
+            }
+            return;
+          }
           if (kind === 'buff') {
             // Volkonov's melody: notes fly to every ally (a DOM layer over either board view); the
             // buff badges appear once the snapshot with `after` renders.
@@ -1160,6 +1261,10 @@ export function gameScreen(router: Router, params: GameParams): Screen {
                 tone: mine ? 'success' : 'warn',
                 duration: 2800,
               });
+            } else if (caster && skillKindOf(caster.character) === 'blink') {
+              // Midos's teleport: a float text; the opponent's gets a warning about where he went.
+              spawnFx(h('div', { class: 'float-text float-text--blink' }, mine ? '그림자 도약!' : '상대 그림자 도약!'), 1300);
+              if (!mine) toast(`상대 ${josa(CHARACTERS[caster.character].nameKo, '이/가')} 순간이동했어요! 주변을 조심하세요`, { tone: 'warn', duration: 2600 });
             } else if (!mine) toast('상대 브루타일이 불모지를 깔았어요! 닿으면 소멸해요', { tone: 'warn', duration: 2600 });
           } else if (e.type === 'awaken') {
             const who = getPieceById(c.state, e.pieceId);

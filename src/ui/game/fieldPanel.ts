@@ -86,6 +86,7 @@ function skillStatus(piece: Piece | undefined, s: GameState): string {
     if (!s.pieces.some((q) => q.owner === piece.owner && q.id !== piece.id)) return '함께할 아군이 없어요';
     return `사용 가능 · 아군 전원 ${BUFF_TURNS[piece.level]}턴 동안 상하좌우 +1칸`;
   }
+  if (kind === 'blink') return '사용 가능 · 빈 칸 어디로든 순간이동';
   return kind === 'transform' ? '사용 가능 · 2번 이동 동안 범위 확장' : '사용 가능 · 닿으면 소멸';
 }
 

@@ -123,6 +123,7 @@ quoting a number.
 | 라르헨 larhen | common | jumps: left/right 1 + forward diagonals 1; 2성 + back diagonals (H); 3성 the H one row taller (side columns ±2 rows too) | |
 | 볼코노프 volkonov | common | orthogonal slide 1 / 2 / 2 | skill 선율; never turns |
 | 베리쉬 verish | rare | slides: left/right 1 + forward 2; left/right 2 + forward 2; left/right 2 + forward 3 + back 1 | trait 관통 |
+| 미도스 midos | epic | slides left / right / forward 1 / 2 / 3 (never back or diagonal) | skill 그림자 도약; turns at the edge |
 
 - **인세이너:**
   - Capturing absorbs the victim's MOVEMENT PATTERN only, never traits or skills. An absorbed
@@ -155,6 +156,26 @@ quoting a number.
     slide (blocked, captures the blocking enemy, ends on wasteland). Never absorbed by Insaner.
   - UI: a rose "♪ N" badge on the board (DOM layer, `ui/game/melodyFx.ts`), a "선율 · N턴" band and
     the extra squares in the hand card's diagram, `is-buffed` on enemy roster chips.
+- **미도스 그림자 도약 (2026-11-06, owner: "스킬은 비어있는칸에 순간이동 가능"):**
+  - `SkillKind` 'blink'. Casting takes the turn; the anchor is the landing square
+    (`blinkAnchors`): no piece, no wasteland, no ENEMY doll trap (traps are visible to both, so
+    landing on one could only be a misclick; his own side's traps are fine), out of the storm.
+  - No capture. Landing on the far edge turns him around like a move (history `blink.turned`).
+  - The shared skill rules apply (once per match, ply 6, sealed by the storm, not while stunned or
+    during a chain). A side whose only action is the teleport is not `immobile`.
+  - History: `{ kind: 'skill', squares: [], blink: { from, to, turned? } }`; `lastMoveOf` shows it.
+  - Insaner absorbs his slide pattern only.
+  - Lead calls (owner asked for no questions): epic, arena 6 (with Rakaeli), values 4 / 5 / 6, the
+    same skill at every grade, default slot front row column 1 (the inner columns are all taken).
+  - Bot: `blinkCandidates` scores landing squares (enemy material his slides would hit there, +4
+    for a fork, minus what he would lose standing there, an escape bonus) and searches the best 5
+    at the root; an unused teleport is worth BLINK_POTENTIAL 20 / 22 / 25 in the eval. Random
+    openings often leave a loose enemy to fork, so the bot does use it early when it wins material.
+  - UI: the skill button opens targeting (every landing square as a move dot; a pick shows the
+    selection ring, a path from his square and the enemies he would threaten there; tap again or
+    "도약"). The cast FX is a DOM layer (`ui/game/blinkFx.ts`, transform / opacity only): implosion
+    at the origin, the token moves at 330 ms drawn faded (`setDragging`), the void burst and three
+    claw slashes land at 950 ms once the cut-in clears.
 - **Owner-brief interpretations (decided by the lead on 2026-11-05; the owner asked for no more
   questions on these):** Larhen's back diagonals arrive at 2성 (the brief said "일성에서", which would
   make 1성 and 2성 identical); his 3성 keeps the four diagonals (an H); the melody buffs the other
@@ -162,7 +183,7 @@ quoting a number.
   Larhen 3성 was later changed by the owner to the taller H (the 5-wide row is gone).
 - **Absorb masks:** 2 bits per character code holding the highest absorbed level (`absorbMerge`);
   exact because every pattern contains its lower grades (checked in `tests/commons3.test.ts`).
-  Room for 15 character codes.
+  Room for 15 character codes (13 used).
 - **Values (bot material):**
 
   | Character | Values (1성 / 2성 / 3성) |
@@ -179,6 +200,7 @@ quoting a number.
   | larhen | 3/4/5 |
   | volkonov | 3/4/5 |
   | verish | 3/5/7 |
+  | midos | 4/5/6 |
 
 - **Direction arrows:** shown when the reach depends on direction (`isDirectional`). Sad, Picker, Volkonov, 2성+ Larhen,
   3성 Brutile and an Insaner without directional absorbs show none.
@@ -207,7 +229,7 @@ quoting a number.
 | 3 | blightmire | 601–1000 | 20–22 | 15–17 | insaner, larhen |
 | 4 | frostkeep | 1001–1500 | 18–22 | 17–20 | michelle, rampid |
 | 5 | madcrown | 1501–2000 | 15–17 | 19–21 | picker, verish |
-| 6 | apex | 2001+ | 14–16 | 20–22 | rakaeli |
+| 6 | apex | 2001+ | 14–16 | 20–22 | rakaeli, midos |
 
 **Modes**
 - **전장전 (ranked):** opponent band ±60, clamped to the arena.

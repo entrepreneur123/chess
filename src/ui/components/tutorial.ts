@@ -31,6 +31,7 @@ const SHORT_MOVE: Record<CharacterId, string> = {
   larhen: '좌우·대각선 H자 점프 · 3성은 세로로 긴 H',
   volkonov: '상하좌우 이동 · 선율로 아군 이동 +1',
   verish: '앞·좌우 관통 슬라이드 · 지나는 적 모두 잡기',
+  midos: '좌·우·앞 직진 · 빈 칸 어디로든 순간이동',
 };
 
 function goalArt(): Child {

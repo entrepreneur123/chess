@@ -148,7 +148,7 @@ describe('FastBoard parity with the engine (Verish)', () => {
     const buf = new Int32Array(256);
     let checked = 0;
     let multi = 0;
-    for (let g = 0; g < 60; g++) {
+    for (let g = 0; g < 100; g++) {
       let s = createGame(randomFormation(rng, randLv(rng), SQUADS[g % SQUADS.length]), randomFormation(rng, randLv(rng), SQUADS[(g + 2) % SQUADS.length]), (g % 2) as 0 | 1);
       for (let ply = 0; ply < 120 && s.status === 'playing'; ply++) {
         const legal = getLegalMoves(s);

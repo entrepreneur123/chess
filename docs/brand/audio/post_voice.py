@@ -334,6 +334,29 @@ def fx_verish(x):
     return hall(y, 0.7, 0.1, predelay=0.016, lp=7000, hp=450)
 
 
+def fx_midos(x):
+    """Ghost assassin of living shadow: his own low voice (never pitch-shifted) speaking with an
+    echo of himself. A whispered double of the same words 22 ms behind (WORLD, noise excitation,
+    band-limited, about -13 dB, drifting slowly), a faint cold shadow an octave below (envelope
+    x0.85, low-passed at 900 Hz, about -20 dB), a scooped low-mid (hollow), a darker top and a dark,
+    wide hall with a long predelay (a voice from somewhere else)."""
+    y = biquad(x, "hp", 70)
+    n = len(y)
+    t = np.arange(n) / SR
+    w = whisper_layer(y)
+    w = biquad(biquad(w, "hp", 600), "lp", 6000)
+    w = np.concatenate([np.zeros(int(0.022 * SR)), w])[:n]
+    w *= 0.8 + 0.2 * np.sin(2 * math.pi * 0.35 * t + 0.6)
+    low = world_layer(y, 0.5, 0.85)
+    low = biquad(low, "lp", 900)
+    y = y + 0.22 * w * rms(y) / rms(w) + 0.1 * low * rms(y) / rms(low)
+    y = biquad(y, "lowshelf", 150, 1.2)
+    y = biquad(y, "peak", 450, -1.5, 0.9)
+    y = biquad(y, "highshelf", 6000, -1.5)
+    y = compress(y, -22, 2.5, attack=0.006, release=0.12)
+    return hall(y, 1.3, 0.16, predelay=0.04, lp=3600, hp=220)
+
+
 RAKAELI_AWAKE_PITCH = 2 ** (-2.0 / 12)  # -2 semitones on the main voice
 RAKAELI_AWAKE_FORMANT = 0.94            # vocal tract ~6 % longer: deeper, not a different person
 
@@ -367,17 +390,20 @@ def fx_rakaeli_awake(x):
 
 FX = {"sad": fx_sad, "marki": fx_marki, "walk": fx_walk, "insaner": fx_insaner, "brutile": fx_brutile,
       "michelle": fx_michelle, "picker": fx_picker, "rakaeli": fx_rakaeli, "rakaeli-awake": fx_rakaeli_awake,
-      "rampid": fx_rampid, "larhen": fx_larhen, "volkonov": fx_volkonov, "verish": fx_verish}
+      "rampid": fx_rampid, "larhen": fx_larhen, "volkonov": fx_volkonov, "verish": fx_verish,
+      "midos": fx_midos}
 # Brightness target (voice_qa harsh_db) for the adaptive presence cut; ElevenLabs takes measure
 # about -6..-1 dB raw. Humans sit warmer, the witch keeps a little more rasp.
 HARSH_TARGET = {"sad": -9.0, "marki": -11.0, "walk": -10.0, "insaner": -8.0, "brutile": -7.0,
                 "michelle": -9.0, "picker": -10.0, "rakaeli": -9.5, "rakaeli-awake": -11.0,
-                "rampid": -9.0, "larhen": -11.0, "volkonov": -10.0, "verish": -9.0}
+                "rampid": -9.0, "larhen": -11.0, "volkonov": -10.0, "verish": -9.0,
+                "midos": -11.0}
 # De-esser threshold (share of the full-band envelope the >4.5 kHz band may carry before it is turned
 # down). walk's hard affricates ([ch] in 끝이다, [ss] in 쓰러뜨렸다) need a firmer hand.
 DEESS_THR = {"sad": 0.35, "marki": 0.35, "walk": 0.2, "insaner": 0.35, "brutile": 0.3,
              "michelle": 0.3, "picker": 0.3, "rakaeli": 0.3, "rakaeli-awake": 0.28,
-             "rampid": 0.3, "larhen": 0.3, "volkonov": 0.3, "verish": 0.28}
+             "rampid": 0.3, "larhen": 0.3, "volkonov": 0.3, "verish": 0.28,
+             "midos": 0.3}
 
 
 # ------------------------------------------------------------------------------------------------

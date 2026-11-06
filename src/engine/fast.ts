@@ -8,7 +8,7 @@
  * (anchor = the area's lowest corner), Rakaeli's transform (anchor = his own square; it sets
  * `awaken`, which counts down at the end of each of its owner's turns like `stun`) or Volkonov's
  * melody (anchor = his own square; it sets `buff` on every other piece of his side, counted down
- * the same way).
+ * the same way) or Midos's teleport (anchor = the free square he blinks to, see `fastBlinkFits`).
  * A move whose target is wasteland destroys the mover (WASTE_BIT in the undo token).
  * Picker's hop-through captures the enemies on its path too (a real Picker only: an Insaner's
  * absorbed Picker pattern is a plain slide), Michelle's backward moves lay doll
@@ -16,7 +16,7 @@
  */
 import { AWAKEN_TURNS, BOARD_SIZE, BUFF_TURNS, SKILL_UNLOCK_PLY, STORM_INTERVAL_PLIES, SUDDEN_DEATH_PLY, TRAPS_PER_MICHELLE, TRAP_STUN } from './types';
 import type { CharacterId, GameState, Move, PlayerId, SkillAction } from './types';
-import { CHARACTERS, CHAR_BY_CODE, CHAR_CODE, CH_BRUTILE, CH_INSANER, CH_MICHELLE, CH_RAKAELI, CH_VOLKONOV, WASTE_SIZE, abilityBit, absorbMaskOf, absorbMerge, absorbWithout, keepsDirection } from './characters';
+import { CHARACTERS, CHAR_BY_CODE, CHAR_CODE, CH_BRUTILE, CH_INSANER, CH_MICHELLE, CH_MIDOS, CH_RAKAELI, CH_VOLKONOV, WASTE_SIZE, abilityBit, absorbMaskOf, absorbMerge, absorbWithout, keepsDirection } from './characters';
 import { N_SQUARES, atTurnRow, canHop, genTargets, inStorm, posOf, sqOf, trapBit } from './board';
 import { pieceDir } from './rules';
 
@@ -129,14 +129,15 @@ function hasAlly(b: FastBoard, i: number): boolean {
 }
 
 /**
- * Can piece `i` cast its skill now (Brutile's wasteland, Rakaeli's transform or Volkonov's melody:
- * side to move, unlocked, not used by this piece, not transformed already, not stunned, storm not
- * closing; Volkonov needs an ally on the board)?
+ * Can piece `i` cast its skill now (Brutile's wasteland, Rakaeli's transform, Volkonov's melody or
+ * Midos's teleport: side to move, unlocked, not used by this piece, not transformed already, not
+ * stunned, storm not closing; Volkonov needs an ally on the board)? Brutile and Midos still need a
+ * free anchor (`fastSkillFits` / `fastBlinkFits`).
  */
 export function fastCanSkill(b: FastBoard, i: number): boolean {
   const ch = b.ch[i];
   return (
-    (ch === CH_BRUTILE || ch === CH_RAKAELI || (ch === CH_VOLKONOV && hasAlly(b, i))) &&
+    (ch === CH_BRUTILE || ch === CH_RAKAELI || ch === CH_MIDOS || (ch === CH_VOLKONOV && hasAlly(b, i))) &&
     b.sq[i] >= 0 &&
     b.stun[i] === 0 &&
     b.awaken[i] === 0 &&
@@ -158,6 +159,16 @@ export function fastSkillFits(b: FastBoard, k: number, anchor: number): boolean 
   if (r0 + k > BOARD_SIZE || c0 + k > BOARD_SIZE) return false;
   for (let r = r0; r < r0 + k; r++) for (let c = c0; c < c0 + k; c++) if (b.occ[r * BOARD_SIZE + c] >= 0 || inStorm(r, c, b.storm)) return false;
   return true;
+}
+
+/**
+ * May a Midos of side `own` teleport to square `s`? No piece, no wasteland, no doll trap of the other
+ * side, out of the storm. Mirrors `blinkAnchors` in rules.ts.
+ */
+export function fastBlinkFits(b: FastBoard, own: number, s: number): boolean {
+  if (b.occ[s] >= 0 || b.waste[s] || b.trap[s] & trapBit(1 - own)) return false;
+  const r = (s / BOARD_SIZE) | 0;
+  return !inStorm(r, s - r * BOARD_SIZE, b.storm);
 }
 
 /** Wasteland side length for piece `i`. */
@@ -208,6 +219,9 @@ export function fastImmobile(b: FastBoard): boolean {
     for (let i = 0; i < b.n; i++) {
       if (b.sq[i] < 0 || b.owner[i] !== b.turn || b.used[i] !== 0 || b.awaken[i] !== 0) continue;
       if (b.ch[i] === CH_RAKAELI || (b.ch[i] === CH_VOLKONOV && hasAlly(b, i))) return false;
+      if (b.ch[i] === CH_MIDOS) {
+        for (let a = 0; a < BOARD_SIZE * BOARD_SIZE; a++) if (fastBlinkFits(b, b.turn, a)) return false;
+      }
       if (b.ch[i] === CH_BRUTILE) {
         const k = WASTE_SIZE[b.lvl[i]];
         for (let a = 0; a < BOARD_SIZE * BOARD_SIZE; a++) if (fastSkillFits(b, k, a)) return false;
@@ -522,7 +536,8 @@ export function fastUnmake(b: FastBoard, mv: number, undo: number): void {
 
 /**
  * Cast piece `pi`'s skill (the turn passes): Brutile lays its wasteland at the encoded anchor,
- * Rakaeli transforms, Volkonov buffs every other piece of his side. Caller checked legality.
+ * Rakaeli transforms, Volkonov buffs every other piece of his side, Midos teleports to the anchor
+ * (turning around on the far edge, like a move). Caller checked legality.
  */
 function makeSkill(b: FastBoard, mv: number): number {
   const pi = (mv >> 8) & 255;
@@ -540,6 +555,18 @@ function makeSkill(b: FastBoard, mv: number): number {
       mask |= 1 << i;
     }
     h[b.histTop++] = mask;
+    h[b.histTop++] = 0; // no wasteland squares
+  } else if (b.ch[pi] === CH_MIDOS) {
+    const from = b.sq[pi];
+    let rec = from;
+    b.occ[from] = -1;
+    b.occ[anchor] = pi;
+    b.sq[pi] = anchor;
+    if (!keepsDirection(b.ch[pi]) && atTurnRow((anchor / BOARD_SIZE) | 0, b.dir[pi])) {
+      b.dir[pi] = -b.dir[pi];
+      rec |= FLIP_BIT;
+    }
+    h[b.histTop++] = rec;
     h[b.histTop++] = 0; // no wasteland squares
   } else layWaste(b, WASTE_SIZE[b.lvl[pi]], anchor);
   b.used[pi] = 1;
@@ -581,6 +608,13 @@ function unmakeSkill(b: FastBoard): void {
   for (let k = 0; k < added; k++) b.waste[h[--b.histTop]] = 0;
   if (b.ch[pi] === CH_VOLKONOV) {
     for (let i = 0, mask = h[--b.histTop]; mask !== 0; i++, mask >>>= 1) if (mask & 1) b.buff[i] = 0;
+  } else if (b.ch[pi] === CH_MIDOS) {
+    const rec = h[--b.histTop];
+    const from = rec & 255;
+    if (rec & FLIP_BIT) b.dir[pi] = -b.dir[pi];
+    b.occ[b.sq[pi]] = -1;
+    b.occ[from] = pi;
+    b.sq[pi] = from;
   }
 }
 

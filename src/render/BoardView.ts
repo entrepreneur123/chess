@@ -3621,6 +3621,17 @@ export class BoardView implements IBoardView {
         shake = this.reducedMotion ? 0.5 : 1.2;
         flash = 0.35;
         break;
+      case 'midos':
+        // Ghost claws: a moon-white slash raked through the victim, a violet void ring, shadow smoke.
+        this.strike.slash(at.x - a.dirX * 0.1, 0.8, at.z - a.dirZ * 0.1, 2.2, fx.primary, fx.core, a.dirX < 0, now);
+        this.strike.ground(0, GROUND_MODE.ring, at.x, gy, at.z, 1.1, fx.primary, fx.core, 520, now);
+        this.sparks.burst(at.x, 0.75, at.z, 14 + mp.level * 3, 3.4, fx.primary, seed);
+        this.sparks.burst(at.x, 0.55, at.z, 8, 2.4, fx.core, (seed + 31) % 97);
+        this.dust.ring(at.x, TILE_TOP + 0.08, at.z, 10, 1.3, 0.5, 0.9, SMOKE_CURSE, 0.6);
+        if (a.captured) (a.captured.tokenMat.uniforms.uEdge.value as THREE.Color).set(fx.primary);
+        shake = this.reducedMotion ? 0.5 : 1.3;
+        flash = 0.45;
+        break;
     }
     this.startCaptureFx(at, col, flash, now, shake, shakeMs);
     const act = a.captured?.actor;

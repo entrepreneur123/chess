@@ -76,7 +76,8 @@ export interface ArenaDef {
  * Brutile unlocks in arena 2, Insaner in arena 3, Michelle in arena 4, Picker in arena 5 and
  * Rakaeli in arena 6. The three later commons arrive early, each in a fitting arena: Volkonov the
  * bard in arena 2, Larhen the assassin in arena 3 (the poison swamp) and Rampid the ice boy in
- * arena 4 (the frost keep). Verish, the second rare piercer, joins Picker in arena 5.
+ * arena 4 (the frost keep). Verish, the second rare piercer, joins Picker in arena 5, and Midos,
+ * the teleporting ghost (epic), joins Rakaeli at the apex.
  */
 export const ARENA_DEFS: readonly ArenaDef[] = [
   {
@@ -106,7 +107,7 @@ export const ARENA_DEFS: readonly ArenaDef[] = [
   },
   {
     id: 'apex', index: 6, name: '천공의 정점', tagline: '전설만이 오르는 하늘의 전장',
-    min: 2001, max: null, win: [14, 16], loss: [20, 22], unlocks: ['rakaeli'],
+    min: 2001, max: null, win: [14, 16], loss: [20, 22], unlocks: ['rakaeli', 'midos'],
     accent: '#f2c14e', card: './arenas/apex/card.webp', backdrop: './arenas/apex/bg.webp', bgm: 'apex',
   },
 ];

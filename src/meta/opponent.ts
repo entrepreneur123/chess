@@ -160,6 +160,8 @@ const PREFERRED_ROWS: Record<CharacterId, number[]> = {
   volkonov: [0],
   // Verish pierces forward and sideways: either row.
   verish: [0, 1],
+  // Midos slides forward and sideways and can teleport anywhere: either row.
+  midos: [0, 1],
 };
 /**
  * Columns the bot prefers: away from the two outer columns per side, which the storm swallows

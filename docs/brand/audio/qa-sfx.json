@@ -219,6 +219,46 @@
   "trail_ms": 25,
   "bytes": 6006
  },
+ "midos-capture": {
+  "file": "sfx/midos-capture.m4a",
+  "dur": 0.789,
+  "lufs": -17.06,
+  "peak_db": -1.84,
+  "centroid": 2599,
+  "lead_ms": 3,
+  "trail_ms": 44,
+  "bytes": 7382
+ },
+ "midos-move": {
+  "file": "sfx/midos-move.m4a",
+  "dur": 0.747,
+  "lufs": -17.1,
+  "peak_db": -1.98,
+  "centroid": 3172,
+  "lead_ms": 7,
+  "trail_ms": 41,
+  "bytes": 7223
+ },
+ "midos-select": {
+  "file": "sfx/midos-select.m4a",
+  "dur": 0.939,
+  "lufs": -17.05,
+  "peak_db": -2.5,
+  "centroid": 2428,
+  "lead_ms": 5,
+  "trail_ms": 42,
+  "bytes": 8753
+ },
+ "midos-skill": {
+  "file": "sfx/midos-skill.m4a",
+  "dur": 1.451,
+  "lufs": -17.05,
+  "peak_db": -2.71,
+  "centroid": 3323,
+  "lead_ms": 4,
+  "trail_ms": 32,
+  "bytes": 13048
+ },
  "picker-capture": {
   "file": "sfx/picker-capture.m4a",
   "dur": 0.917,

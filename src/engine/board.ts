@@ -6,6 +6,7 @@ import {
   CH_LARHEN,
   CH_MARKI,
   CH_MICHELLE,
+  CH_MIDOS,
   CH_PICKER,
   CH_RAKAELI,
   CH_RAMPID,
@@ -17,6 +18,7 @@ import {
   MARKI_SIDE_LEVEL,
   MICHELLE_FORWARD_RANGE,
   MICHELLE_RANGE,
+  MIDOS_RANGE,
   N_CHARS,
   PICKER_RANGE,
   RAKAELI_AWAKE_DEPTH,
@@ -108,6 +110,12 @@ const MICHELLE_FWD: Record<number, number[]> = { 1: [1, 0], [-1]: [-1, 0] };
 const RAMPID_DIRS: Record<number, number[]> = {
   1: [1, -1, 1, 0, 1, 1],
   [-1]: [-1, -1, -1, 0, -1, 1],
+};
+
+/** Midos: straight forward, left and right (by direction); never back, never diagonal. */
+const MIDOS_DIRS: Record<number, number[]> = {
+  1: [1, 0, 0, -1, 0, 1],
+  [-1]: [-1, 0, 0, -1, 0, 1],
 };
 
 /** Trap flag bit of `owner`'s doll traps in a per-square trap mask (bit 0 = player 0, bit 1 = player 1). */
@@ -421,6 +429,7 @@ function genPattern(
   if (ch === CH_PICKER) return hop(occ, owners, owner, r, c, PICKER_RANGE[level], out, n, includeAllies, storm, waste, traps);
   if (ch === CH_VOLKONOV) return slide(occ, owners, owner, r, c, ORTHO_DIRS, VOLKONOV_RANGE[level], out, n, includeAllies, storm, waste);
   if (ch === CH_RAMPID) return slide(occ, owners, owner, r, c, RAMPID_DIRS[dir], RAMPID_RANGE[level], out, n, includeAllies, storm, waste);
+  if (ch === CH_MIDOS) return slide(occ, owners, owner, r, c, MIDOS_DIRS[dir], MIDOS_RANGE[level], out, n, includeAllies, storm, waste);
   if (ch === CH_LARHEN) return jumpLarhen(occ, owners, owner, r, c, dir, level, out, n, includeAllies, storm);
   if (ch === CH_VERISH) return genVerish(occ, owners, owner, r, c, dir, level, out, n, includeAllies, storm, waste, true);
   if (ch === CH_RAKAELI) {

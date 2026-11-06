@@ -16,8 +16,8 @@ import {
   skillAnchors,
 } from '../engine';
 import type { FastBoard } from '../engine';
-import { SKILL_FLAG, fastCanSkill, fastHopGain, fastSkillFits, fastSkillSize } from '../engine/fast';
-import { CHARACTERS, CHAR_BY_CODE, CH_BRUTILE, CH_INSANER, CH_LARHEN, CH_MARKI, CH_MICHELLE, CH_PICKER, CH_RAKAELI, CH_RAMPID, CH_SAD, CH_VERISH, CH_VOLKONOV, CH_WALK, MARKI_RANGE, MARKI_SIDE_LEVEL, N_CHARS, absorbedLevel } from '../engine/characters';
+import { SKILL_FLAG, fastBlinkFits, fastCanSkill, fastHopGain, fastSkillFits, fastSkillSize } from '../engine/fast';
+import { CHARACTERS, CHAR_BY_CODE, CH_BRUTILE, CH_INSANER, CH_LARHEN, CH_MARKI, CH_MICHELLE, CH_MIDOS, CH_PICKER, CH_RAKAELI, CH_RAMPID, CH_SAD, CH_VERISH, CH_VOLKONOV, CH_WALK, MARKI_RANGE, MARKI_SIDE_LEVEL, N_CHARS, absorbedLevel } from '../engine/characters';
 import { trapBit } from '../engine/board';
 import { BOARD_SIZE, STORM_ROWS_FROM, TRAPS_PER_MICHELLE, stormRows } from '../engine/types';
 
@@ -103,6 +103,14 @@ const TRANSFORM_MIN_SCORE = 1;
 const MELODY_POTENTIAL = [0, 25, 30, 40];
 const BUFF_BONUS = [0, 3, 3, 3];
 const MELODY_MIN_SCORE = 2;
+/**
+ * Midos's teleport ("그림자 도약"). An unused one is worth BLINK_POTENTIAL (by level) while it can be
+ * cast, so the search only spends it when the landing square wins or threatens enough (or saves him).
+ * Root candidates need BLINK_MIN_SCORE (see `blinkCandidates`); at most BLINK_MAX_CANDS are searched.
+ */
+const BLINK_POTENTIAL = [0, 20, 22, 25];
+const BLINK_MIN_SCORE = 3;
+const BLINK_MAX_CANDS = 5;
 /** Eval bonus per doll trap Michelle can still lay (they are laid by backing off, so modest). */
 const TRAP_POTENTIAL = 8;
 /** Eval bonus per own doll trap on the board within two squares of an enemy piece (area denial). */
@@ -248,6 +256,12 @@ export function evaluate(b: FastBoard, side: number): number {
       // Forward piercer: facing the enemy with open lanes ahead and to the sides.
       if (!facingEnemy) sc -= v * 0.15;
       sc += centerC * 4 + Math.min(room, 6) * 2;
+    } else if (ch === CH_MIDOS) {
+      // Forward / sideways slider: facing the enemy with room ahead; an unused teleport is kept
+      // until it pays (it is his escape and his ambush).
+      if (!facingEnemy) sc -= v * 0.1;
+      sc += centerC * 3 + Math.min(room, 6) * 2;
+      if (b.storm === 0 && b.used[i] === 0) sc += BLINK_POTENTIAL[b.lvl[i]];
     } else if (ch === CH_LARHEN) {
       // Sideways jumper (3-star: whole rows): central files and rows keep both wings open.
       if (!facingEnemy && b.lvl[i] === 1) sc -= v * 0.1;
@@ -605,10 +619,62 @@ function skillCandidates(b: FastBoard, max: number): number[] {
     } else if (b.ch[i] === CH_VOLKONOV) {
       const score = melodyScore(b, i);
       if (score >= MELODY_MIN_SCORE) out.push({ mv: SKILL_FLAG | (i << 8) | b.sq[i], score });
+    } else if (b.ch[i] === CH_MIDOS) {
+      for (const c of blinkCandidates(b, i, Math.min(max, BLINK_MAX_CANDS))) out.push(c);
     } else for (const c of wasteCandidates(b, i, max)) out.push(c);
   }
   out.sort((x, y) => y.score - x.score);
   return out.map((x) => x.mv);
+}
+
+/**
+ * Up to `max` scored teleport squares for Midos `caster`: the enemy material his slides would hit
+ * from there (3 per point, +4 for a fork), minus what he would lose standing there (attacked and
+ * undefended, or attacked by a cheaper piece), plus an escape bonus when his square now is lost.
+ * Only squares scoring BLINK_MIN_SCORE or more; the search decides between them.
+ */
+function blinkCandidates(b: FastBoard, caster: number, max: number): { mv: number; score: number }[] {
+  if (max <= 0) return [];
+  const side = b.owner[caster];
+  const enemy = 1 - side;
+  const s = b.sq[caster];
+  const v = b.value[caster];
+  buildAttackMaps(b);
+  const lossAt = (t: number): number => {
+    if (attackCount[enemy * N_SQUARES + t] === 0) return 0;
+    if (attackCount[side * N_SQUARES + t] === 0) return v;
+    const minA = minAttacker[enemy * N_SQUARES + t];
+    return minA < v ? v - minA : 0;
+  };
+  const escape = lossAt(s) * 2;
+  const cands: { mv: number; score: number }[] = [];
+  b.occ[s] = -1;
+  try {
+    for (let t = 0; t < N_SQUARES; t++) {
+      if (t === s || !fastBlinkFits(b, side, t)) continue;
+      const n = genTargets(b.occ, b.owner, side, b.ch[caster], b.lvl[caster], t, transformBuf, 0, false, b.dir[caster], b.storm, b.absorb[caster], b.waste, b.trap, false, b.buff[caster] > 0);
+      let threat = 0;
+      let hits = 0;
+      for (let k = 0; k < n; k++) {
+        const o = b.occ[transformBuf[k]];
+        if (o >= 0 && b.owner[o] === enemy && !b.waste[transformBuf[k]]) {
+          threat += b.value[o];
+          hits++;
+        }
+      }
+      const loss = lossAt(t);
+      // Ties (e.g. many safe escape squares) go to central squares with more room to slide.
+      const tr = (t / BOARD_SIZE) | 0;
+      const tc = t - tr * BOARD_SIZE;
+      const place = (MID - Math.abs(tc - MID) + MID - Math.abs(tr - MID)) * 0.2 + n * 0.1;
+      const score = threat * 3 + (hits >= 2 ? 4 : 0) - loss * 4 + (loss === 0 ? escape : 0) + place;
+      if (score >= BLINK_MIN_SCORE) cands.push({ mv: SKILL_FLAG | (caster << 8) | t, score });
+    }
+  } finally {
+    b.occ[s] = caster;
+  }
+  cands.sort((x, y) => y.score - x.score);
+  return cands.slice(0, max);
 }
 
 /** Up to `max` scored wasteland anchors for Brutile `caster` (see `skillCandidates`). */

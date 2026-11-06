@@ -103,6 +103,8 @@ const CORE_FX: Record<CoreCharacterId, { primary: string; secondary: string; cor
   volkonov: { primary: '#FF6FC2', secondary: '#F2C14E', core: '#FFE9F6' },
   // Verish: electric teal boot energy over hot-pink hair.
   verish: { primary: '#2EF2D0', secondary: '#FF5FA8', core: '#E8FFFA' },
+  // Midos: spectral violet ghostfire over a void-black shroud, a pale moon-white core (claws).
+  midos: { primary: '#8C6BFF', secondary: '#140C2E', core: '#E4ECFF' },
 };
 
 /**
@@ -174,6 +176,7 @@ export const CHARACTER_RARITY = {
   larhen: 'common',
   volkonov: 'common',
   verish: 'rare',
+  midos: 'epic',
 } satisfies Record<CoreCharacterId, Rarity> & { rakaeli: Rarity } as Record<CharacterId, Rarity>;
 
 /**

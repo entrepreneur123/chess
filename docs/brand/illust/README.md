@@ -887,3 +887,117 @@ The other candidates used variations of the same text:
   crosses or sigils.
 - **Rights:** the images were generated through the project's Magic Patterns account. Usage rights
   follow Magic Patterns' terms for generated images.
+
+## 미도스 Midos (`midos`): 2026-11-06
+
+### Brief (owner)
+An epic ("영웅") ghost, not a human figure: a stylish teleporting character with a League of
+Legends Nocturne-like base (a shadow wraith) and Wolverine-like claws. Both names were taken as a
+mood brief only: the picks copy neither design (see the IP notes).
+
+### Generation
+- **Tool, OS and date:** the same pipeline as Verish: the Magic Patterns `generate_image` MCP tool
+  in the "GRID CLASH illustrations" OS (`mES6an8gxzuquCRoUq5cVM`), aspect ratio `3:4` (896x1200),
+  2026-11-06. No paid third-party tool was used.
+- **References:** lv1 candidates `a`–`e` from text (the house-style prompt); `a2` and `a3` are
+  edits of `a` (asking for three blades on each hand and a clearer head). Grades 2 and 3 were
+  generated with the pick `a3` as the reference image, so one face box serves all three grades.
+- **Candidates:** 12 requests, 12 images, no provider blocks. Raws are kept as 448x600 JPEGs in
+  `generated/` (quality 78, progressive).
+
+| Character | lv1 | lv2 | lv3 | Total images |
+| --- | --- | --- | --- | --- |
+| midos | 7 (`a`–`e` from text, plus `a2` and `a3`, edits of `a`) | 3 | 2 | 12 |
+
+- **Post-processing:** the picks re-encoded at 896x1200, PIL quality 88 (no retouching);
+  `process-illust.py` gained one `FACE` entry; every existing file under `public/chars/` came out
+  byte-identical (MD5 compared before and after).
+- **Review:** face crops at 160px and circular tokens at 40px / 80px with blue and red rims, next
+  to verish, larhen, rakaeli and insaner.
+
+### Picks and reasons
+| File | Candidate | Why |
+| --- | --- | --- |
+| `illust-midos-lv1.jpg` | `midos-lv1-a3` | The clearest "shadow ghost, not a person" read: a smooth black horned mask with two glowing slit eyes, a body of violet-black smoke with no legs, rising out of a shadow vortex, silver claw blades in both fists and a violet afterimage slash. The soft violet glow behind the head makes the black head read at 40px. |
+| `illust-midos-lv2.jpg` | `midos-lv2-b` | A cracked silver mask plate over the face, a second pair of horns, armoured gauntlets with violet seams and violet ghost flames along the claws and the smoke tail. The silver mask changes the 40px token, so lv2 differs from lv1 at board size. |
+| `illust-midos-lv3.jpg` | `midos-lv3-a` | Violet ghostfire around the whole body, gold-edged horns, gold filigree on the pauldrons and gauntlets, glowing claw blades, translucent afterimage clones of him behind (a teleport echo, his skill) and a violet void portal below. |
+
+### Rejected candidates
+- **lv1:** `b` (hooded ghost with crossed claws: strong, but the grin reads as a Halloween mascot);
+  `c` (a bone half-mask and a sleek humanoid body: reads human); `d` (a shadow-flame silhouette:
+  muddy at token size); `e` (a hooded cloak: the face is small); `a` and `a2` (`a3` adds the head
+  glow that carries the token). The model kept two visible blades on the right hand in every `a`
+  variant (the third is hidden behind the hand); accepted.
+- **lv2:** `a` (rune bracers and a collar plate: nothing changes in the face crop); `c` (a muscular
+  armoured torso with abs: too human).
+- **lv3:** `b` (a starry void body with gold trim: beautiful, but `a`'s afterimage clones tell the
+  teleport better).
+
+### Face crop box
+- `midos: (0.25, 0.05, 0.65, 0.35)`: both horns, the mask and the eyes, the collar. lv2 shows the
+  silver mask, lv3 the gold horns and the violet fire.
+
+### Prompts (winners)
+**midos-lv1-a** (text only; `a3` is an edit of it):
+> Vertical character splash illustration for a dark fantasy mobile game. Angular shounen anime
+> cel-shaded style: thick clean black ink outlines, flat hard-edged cel shading, crisp angular
+> shapes. Background: deep navy blue-black with a soft vignette, sharp diagonal speed-slash streaks
+> in electric cyan and crimson from the upper corners, floating glass shards and sparks. One
+> dynamic figure fills the frame, head in the upper third near the centre. Subject: original
+> monster character Midos, a menacing spectral ghost assassin, NOT human: a towering wraith made of
+> living black-violet shadow smoke, no legs, his lower body dissolves into long tattered wisps of
+> smoke that trail to the ground. Broad sharp shoulders of solid shadow, long lean arms. Head: a
+> smooth featureless dark mask-like face with two narrow glowing violet-white slit eyes and a sharp
+> pair of swept-back shadow horn spikes. From the knuckles of each hand extend three long straight
+> silver steel claw blades, gleaming, held ready. Pose: lunging forward out of a swirl of shadow
+> mist as if he just teleported, one clawed hand slashing across the frame leaving a violet
+> afterimage trail, menacing and cool. Palette: void black, deep violet, spectral lavender glow,
+> silver blades. No text, no letters, no logo, no watermark.
+
+**midos-lv1-a3** (reference: midos-lv1-a):
+> Same ghost character, same pose, same composition and same angular anime cel-shaded style as the
+> reference image: a black-violet shadow wraith with a smooth dark mask face, glowing white-violet
+> slit eyes, two swept-back horns, a smoky tail instead of legs, lunging forward out of a shadow
+> vortex. Make the head a little larger and clearer, with a soft violet glow behind the head, and
+> give each hand exactly three long straight silver claw blades extending from the knuckles, all six
+> blades clearly visible and gleaming. Keep the violet afterimage slash trail. Dark navy background
+> with cyan and crimson diagonal slash streaks and floating shards. No text, no letters, no logo,
+> no watermark.
+
+**midos-lv2-b** (reference: midos-lv1-a3):
+> Redraw the shadow ghost from the reference image as his 2-star upgraded form, same pose, same
+> framing and same angular anime cel-shaded style with thick black outlines. Keep his smooth dark
+> mask face, glowing white-violet slit eyes and the violet glow behind his head. Upgrades: his two
+> horns grow longer and sharper with a second smaller pair of horn spikes, a cracked silver mask
+> plate now covers the top of his face, armoured dark steel gauntlets with violet glowing seams hold
+> three long silver claw blades on each hand, faint violet ghost flames flicker along the claws and
+> the smoke tail. Dark navy background with cyan and crimson diagonal slash streaks and floating
+> shards. No text, no letters, no logo, no watermark.
+
+**midos-lv3-a** (reference: midos-lv1-a3):
+> Redraw the shadow ghost from the reference image as his legendary 3-star version. Keep the same
+> creature, the same smooth dark mask face, the same lunging pose and framing and the same angular
+> shounen anime cel-shaded style with thick black outlines on the dark navy background. Legendary
+> upgrades: a huge aura of violet and lavender ghostfire blazing around his whole body and horns,
+> his eyes blaze white-violet, a crown of long curved horns edged with gold, ornate dark armoured
+> gauntlets with gold legendary filigree, the three claw blades on each hand are long and glowing
+> violet-white with energy, several translucent violet afterimage clones of him spread out behind
+> him like a teleport echo, a swirling violet void portal below his smoke tail. No text, no
+> letters, no logo, no watermark.
+
+### Source URLs (Magic Patterns CDN)
+- midos-lv1-a: <https://cdn.magicpatterns.com/patterns/generated-images/bf9d3337-bf95-4520-a735-77ca420ad1ee.jpg>
+- midos-lv1-a3: <https://cdn.magicpatterns.com/patterns/generated-images/5b7fc033-95e9-4ebc-85ea-1671939946ca.jpg>
+- midos-lv2-b: <https://cdn.magicpatterns.com/patterns/generated-images/ea9cb8d6-9e88-409d-b010-0d8f3e7e0bbb.jpg>
+- midos-lv3-a: <https://cdn.magicpatterns.com/patterns/generated-images/e87d1417-8ce2-4db7-ae07-a5f96a21aa42.jpg>
+
+### Notes for review
+- **IP check (a visual judgement, not a legal clearance):** shadow wraiths with horns and glowing
+  eyes, and knuckle claws, are common genre tropes. Nocturne (*League of Legends*) has blades
+  growing from his forearms, a spiked crest, a crescent-moon-like head and a smoky tail; Midos has
+  no forearm blades and holds his claws in his fists, and his face is a smooth mask. Wolverine's
+  claws are three bone or adamantium blades from the knuckles of a human in a yellow and blue
+  suit; Midos is a smoke ghost with no human body or costume. No logo, emblem or costume element of
+  either is used. The owner should still give the final art call.
+- **Hues:** violet (about 265°) sits between Insaner's violet-crimson and Rakaeli-awake's crimson;
+  at 40px the black horned mask with white eyes on a violet glow does not collide with any token.
