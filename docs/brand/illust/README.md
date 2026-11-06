@@ -1001,3 +1001,47 @@ mood brief only: the picks copy neither design (see the IP notes).
   either is used. The owner should still give the final art call.
 - **Hues:** violet (about 265°) sits between Insaner's violet-crimson and Rakaeli-awake's crimson;
   at 40px the black horned mask with white eyes on a violet glow does not collide with any token.
+
+## 해먼트 Hammont, 베노아 Venoa, 글라시아 Glacia (2026-11-06)
+
+### Brief (owner)
+Three new characters fitting the current arenas (designs, names and art left to the lead):
+Hammont the forge smith (ember forge, arena 2), Venoa the swamp archer (poison swamp, arena 3),
+Glacia the frost witch (frost keep, arena 4). The names follow the roster's word-derived style
+(hammer, venom, glacier).
+
+### Generation
+- Same pipeline and OS as Midos (Magic Patterns `generate_image`, `mES6an8gxzuquCRoUq5cVM`, 3:4,
+  896x1200, 2026-11-06). lv1 from text; lv2 / lv3 with the lv1 pick as the reference image, so one
+  face box serves all three grades. 18 requests, 18 images, no provider blocks; raws in
+  `generated/` (448x600, q78).
+- Masters at 896x1200 q88, no retouching; `process-illust.py` gained three `FACE` entries; every
+  existing file under `public/chars/` stayed byte-identical (MD5).
+
+### Picks and reasons
+| File | Candidate | Why |
+| --- | --- | --- |
+| `illust-hammont-lv1.jpg` | `hammont-lv1-b` | A bearded, roaring giant smith in a red bandana with a cracked molten hammer on his shoulder: the most distinct silhouette of the roster (no other beard), readable at 40px. `a` drew two hammer heads; `c` (goggles) had a generic face. |
+| `illust-hammont-lv2.jpg` | `hammont-lv2-b` | Orange-lit goggles on the bandana (visible in the token), chain mail and an anvil breastplate, a studded hammer. `a` (a rune pauldron) changed nothing in the face crop. |
+| `illust-hammont-lv3.jpg` | `hammont-lv3-a` | Glowing eyes, a ring of forge fire, volcanic armour with gold trim, a magma hammer. `b` (gold rune armour) was weaker at token size. |
+| `illust-venoa-lv1.jpg` | `venoa-lv1-a` | A cool hooded huntress with a pale bone longbow and a dripping lime arrow, the face fully lit. `b` (a cropped top, a twisted-wood bow) read less like the swamp hunter. |
+| `illust-venoa-lv2.jpg` | `venoa-lv2-a` | A face mask pulled up and an antler ornament on the hood (both in the token), bone-studded pauldron, a rune bow. |
+| `illust-venoa-lv3.jpg` | `venoa-lv3-a` | Glowing lime eyes, a gold antler clasp and leaf embroidery, a serpent-jaw bow, a venom serpent and glowing swamp mushrooms. `b` had a thorn crown (avoided as religious iconography). |
+| `illust-glacia-lv1.jpg` | `glacia-lv1-b` | A white-haired witch in an icicle-crusted witch hat on ice skates with a crystal staff: the hat makes a unique token. `a` (a fur coat and tiara) and `c` (ice horns, a corset) were less iconic. |
+| `illust-glacia-lv2.jpg` | `glacia-lv2-a` | A crown of tall ice crystals on the hat (visible in the token), crystal gloves, a fur-lined cape. `b` only added a small snowflake pin. |
+| `illust-glacia-lv3.jpg` | `glacia-lv3-a` | A translucent ice witch hat with gold-tipped crystals, an aurora cape, a giant snowflake sigil and an aurora sky. |
+
+### Face crop boxes
+- `hammont: (0.29, 0.12, 0.67, 0.40)`, `venoa: (0.31, 0.13, 0.69, 0.42)`,
+  `glacia: (0.30, 0.05, 0.70, 0.36)`.
+
+### Notes for review
+- **Token collisions:** Venoa (green hair, green hood) and Brutile (green skin, dark witch hat) are
+  both green at 40px; their shapes differ (hood vs pointed hat), but it is the closest pair now.
+  Glacia's white witch hat vs Brutile's dark one: different values and hues.
+- **IP check (a visual judgement, not a legal clearance):** a bearded smith with a hammer, a hooded
+  archer and an ice witch are common genre types. Glacia avoids Elsa's look (*Frozen*: a single
+  side braid and a sparkly gown): she has a blunt fringe, a witch hat and skates.
+- **Prompts and URLs:** the prompts are the house-style texts above with the subject lines from the
+  picks' names; the source URLs are the Magic Patterns CDN files whose ids are listed in the
+  generation log of this session (raw copies are in `generated/`).

@@ -124,7 +124,7 @@ quoting a number.
 | 볼코노프 volkonov | common | orthogonal slide 1 / 2 / 2 | skill 선율; never turns |
 | 베리쉬 verish | rare | slides: left/right 1 + forward 2; left/right 2 + forward 2; left/right 2 + forward 3 + back 1 | trait 관통 |
 | 미도스 midos | epic | slides left / right / forward 1 / 2 / 3 (never back or diagonal) | skill 그림자 도약; turns at the edge |
-| 해먼트 hammont | rare | orthogonal slide 1 / 2 / 2 | trait 해머 강타 (knock-back); never turns |
+| 해먼트 hammont | rare | orthogonal slide 2 / 3 / 3 | trait 해머 강타 (knock-back); never turns |
 | 베노아 venoa | rare | steps 1 orthogonally; shoots 2–3 / 2–3 / 2–4 ahead (forward diagonals from 2성) | trait 독화살; turns at the edge |
 | 글라시아 glacia | epic | orthogonal glide until stopped (no capture) + diagonal 1 / 1 / 2 | skill 빙결; never turns |
 
@@ -373,8 +373,15 @@ legendary.
     0.65, Sad 0.38 / 0.61 / 0.71 (1성 / 2성 / 3성; about ±0.08 noise). He sits with Rakaeli at the
     lower end for an epic. Levers if the owner wants him stronger: a back step at 3성, a second
     teleport, or a capture on landing.
-- **Audio budget:** 17,691 bytes of headroom left under 2.5 MiB after Midos; the next character
-  needs a budget decision (see `tests/voice.test.ts`).
+  - The trio (2026-11-06, same harness, 40 games per cell, X + Rampid + Marki vs Walk + Sad + Marki):
+    1성 / 3성: Hammont 0.41 / 0.63 (2성 0.39; before his reach buff 1성 was 0.10), Venoa 0.66 /
+    0.46, Glacia 0.44 / 0.61, Insaner 0.84 / 0.71 (the top of both), Verish 0.59 / 0.57, Midos
+    0.41 / 0.55, Sad 0.30 / 0.64.
+  - Insaner head-to-head (Insaner + Rampid + Marki vs X + Rampid + Marki, 40 games, Insaner's
+    score): 3성 vs Hammont 0.86, Venoa 0.96, Glacia 0.94, Midos 0.82, Brutile 0.70; 2성 vs Venoa
+    0.86, Glacia 0.91, Midos 0.72, Brutile 0.99. Owner rule: Insaner must stay the strongest.
+- **Audio budget:** raised to 3.25 MiB for the trio; 266,921 bytes of headroom (see
+  `tests/voice.test.ts`).
 - **An `immobile` loss shows no on-board callout:** the result appears after about 0.65 s with "더 이상 움직일 수 없어 패배".
   Consider a toast or FX.
 - **Store assets:** the screenshots and promo video still show the old 12×12 board and must be

@@ -455,3 +455,33 @@ and `void_pop` (a deep soft implosion thump, 2 ms attack).
 added), under the 2.5 MiB budget (2,621,440 B) with 17,691 B headroom: no raise this time, but the
 next character needs one. Nobody has listened to these files; every statement above is a
 measurement.
+
+## 해먼트 Hammont, 베노아 Venoa, 글라시아 Glacia (2026-11-06)
+
+**Voices.** One VoiceDesign reference each (6 takes, `clone._from` in `lines.json`), then 5
+Base-clone takes per line (seed 11). FX: `fx_hammont` (extra chest, firm compression, a short
+wooden workshop room), `fx_venoa` (close and quiet, a damp short space), `fx_glacia` (a little air,
+a bright glassy hall). Nobody pitch-shifted.
+
+| Character | clips | dur s | F0 Hz | harsh dB | sib dB | tail dB | hiss dB | warble st | HNR dB | CER | P(female) w2v |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| hammont (median) | 11 | 1.75 (0.81-2.90) | 114 (95-142) | -14.0 | -15.9 | -59.3 (max -50.2) | -52.4 (max -37.5) | 0.056 (max 0.124) | 5.4 | 0 | 0.001-0.013 |
+| venoa (median) | 9 | 1.45 (0.73-1.96) | 179 (170-196) | -20.1 | -18.4 | -59.6 (max -53.0) | -43.4 (max -39.2) | 0.051 (max 0.086) | 13.0 | 0 | 0.993-0.996 |
+| glacia (median) | 11 | 1.79 (1.32-2.22) | 202 (171-265) | -23.4 | -20.9 | -62.7 (max -58.7) | -49.7 (max -42.0) | 0.068 (max 0.113) | 8.6 | 0 | 0.976-0.996 |
+
+All 31 clips: -15.96..-16.20 LUFS, true peak <= -1.39 dBTP (447,598 B in all).
+
+- Hammont `capture-2` was first '쇳물 맛 좀 봐라'; Whisper heard 샘물 (CER 0.17), so it became
+  '뜨거운 맛 좀 봐라' (CER 0). His 'skill' lines play on his knock-back hit (he has no active skill).
+- Venoa has no 'skill' lines: her shots are captures.
+- Highest warble: hammont `capture-1` (0.124) and glacia `capture-3` / `select-1` (0.113 / 0.102):
+  listen to these first. The highest hiss is a hammont clip at -37.5 dB.
+
+**SFX.** Appended after midos in `gen_sfx.py` (earlier effects unchanged; the shipped .m4a of the
+other characters are byte-identical by md5). New building blocks: `anvil_clang`, `forge_roar`,
+`bow_draw`, `bow_twang`, `arrow_hiss`, `venom_hiss`, `ice_glide`, `ice_crack`. 11 files, 89,604 B,
+-16.74..-17.24 LUFS.
+
+**Budget.** vo + sfx = 3,140,951 B on disk; the budget went from 2.5 to 3.25 MiB (lead decision,
+see `tests/voice.test.ts`); headroom 266,921 B. Nobody has listened to these files; every
+statement above is a measurement.

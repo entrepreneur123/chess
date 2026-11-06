@@ -95,8 +95,11 @@ const sfxEvents = (c: CharacterId): CharAudioEvent[] => [
  * Midos, the 13th character (an epic), fits without a raise (2026-11-06): 11 voice lines (193,599
  * bytes) and 4 effects (36,406 bytes). Measured: 2,603,749 bytes on disk for vo + sfx; headroom
  * 17,691 bytes, so the next character needs a new lead decision on this budget.
+ * Raised to 3.25 MiB on 2026-11-06 for the trio (Hammont, Venoa, Glacia): 31 voice lines (447,598
+ * bytes) and 11 effects (89,604 bytes), 537,202 bytes, about 0.17 MiB per character, below the
+ * average. Measured: 3,140,951 bytes for 16 characters (0.19 MiB each); headroom 266,921 bytes.
  */
-const AUDIO_BUDGET_BYTES = 2.5 * 1024 * 1024;
+const AUDIO_BUDGET_BYTES = 3.25 * 1024 * 1024;
 
 function allFiles(): string[] {
   const out = new Set<string>();

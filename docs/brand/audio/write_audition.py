@@ -19,7 +19,10 @@ NAMES = {"sad": ("사드", "Paladin"), "marki": ("마르키", "Minotaur"), "walk
          "rampid": ("램피드", "Teenage ice skater, forward dasher"), "larhen": ("라르헨", "Assassin with twin daggers"),
          "volkonov": ("볼코노프", "Bard who buffs allies with music"),
          "verish": ("베리쉬", "Speedster on power boots who pierces through her lane"),
-         "midos": ("미도스", "Ghost assassin of living shadow with steel claws; teleports")}
+         "midos": ("미도스", "Ghost assassin of living shadow with steel claws; teleports"),
+         "hammont": ("해먼트", "Bearded forge smith with a molten hammer; knocks enemies back"),
+         "venoa": ("베노아", "Swamp huntress with a bone longbow and venom arrows"),
+         "glacia": ("글라시아", "Frost witch on ice skates; glides and freezes")}
 EVENT_KO = {"select": "선택", "move": "이동", "capture": "잡기", "skill": "스킬", "chain": "연속",
             "trap-set": "함정 설치", "trap-sprung": "함정 발동", "hop-multi": "연속 잡기",
             "death": "사망", "victory": "승리",

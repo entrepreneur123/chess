@@ -115,6 +115,29 @@ export const VOICE_CLIPS: Record<CharacterId, Partial<Record<CharAudioEvent, rea
     death: ['vo/midos-death-1.m4a'],
     victory: ['vo/midos-victory-1.m4a'],
   },
+  hammont: {
+    select: ['vo/hammont-select-1.m4a', 'vo/hammont-select-2.m4a'],
+    move: ['vo/hammont-move-1.m4a', 'vo/hammont-move-2.m4a'],
+    capture: ['vo/hammont-capture-1.m4a', 'vo/hammont-capture-2.m4a', 'vo/hammont-capture-3.m4a'],
+    skill: ['vo/hammont-skill-1.m4a', 'vo/hammont-skill-2.m4a'],
+    death: ['vo/hammont-death-1.m4a'],
+    victory: ['vo/hammont-victory-1.m4a'],
+  },
+  venoa: {
+    select: ['vo/venoa-select-1.m4a', 'vo/venoa-select-2.m4a'],
+    move: ['vo/venoa-move-1.m4a', 'vo/venoa-move-2.m4a'],
+    capture: ['vo/venoa-capture-1.m4a', 'vo/venoa-capture-2.m4a', 'vo/venoa-capture-3.m4a'],
+    death: ['vo/venoa-death-1.m4a'],
+    victory: ['vo/venoa-victory-1.m4a'],
+  },
+  glacia: {
+    select: ['vo/glacia-select-1.m4a', 'vo/glacia-select-2.m4a'],
+    move: ['vo/glacia-move-1.m4a', 'vo/glacia-move-2.m4a'],
+    capture: ['vo/glacia-capture-1.m4a', 'vo/glacia-capture-2.m4a', 'vo/glacia-capture-3.m4a'],
+    skill: ['vo/glacia-skill-1.m4a', 'vo/glacia-skill-2.m4a'],
+    death: ['vo/glacia-death-1.m4a'],
+    victory: ['vo/glacia-victory-1.m4a'],
+  },
 };
 
 /** Spoken text of each clip (Korean), for captions/debugging. */
@@ -260,6 +283,37 @@ export const VOICE_TEXT: Readonly<Record<string, string>> = {
   'vo/midos-skill-2.m4a': "눈을 감는 순간, 나는 거기 있다.",
   'vo/midos-death-1.m4a': "그림자로… 돌아간다…",
   'vo/midos-victory-1.m4a': "이 밤은 우리의 것이다.",
+  'vo/hammont-select-1.m4a': "망치 준비 완료다. 누굴 두들겨 줄까?",
+  'vo/hammont-select-2.m4a': "불은 충분히 달궈졌다.",
+  'vo/hammont-move-1.m4a': "길 비켜라.",
+  'vo/hammont-move-2.m4a': "쿵, 쿵, 간다.",
+  'vo/hammont-capture-1.m4a': "납작하게 펴 주마.",
+  'vo/hammont-capture-2.m4a': "뜨거운 맛 좀 봐라.",
+  'vo/hammont-capture-3.m4a': "한 방이면 끝이지.",
+  'vo/hammont-skill-1.m4a': "날아가라.",
+  'vo/hammont-skill-2.m4a': "저리 꺼져.",
+  'vo/hammont-death-1.m4a': "화로가… 꺼지는구나…",
+  'vo/hammont-victory-1.m4a': "오늘 일은 이걸로 끝이다.",
+  'vo/venoa-select-1.m4a': "사냥감은 정했어.",
+  'vo/venoa-select-2.m4a': "늪은 내 영역이야.",
+  'vo/venoa-move-1.m4a': "조용히.",
+  'vo/venoa-move-2.m4a': "자리를 옮기지.",
+  'vo/venoa-capture-1.m4a': "명중.",
+  'vo/venoa-capture-2.m4a': "독이 퍼지는 건 금방이야.",
+  'vo/venoa-capture-3.m4a': "빗나가는 일은 없어.",
+  'vo/venoa-death-1.m4a': "화살이… 다 떨어졌네…",
+  'vo/venoa-victory-1.m4a': "사냥 끝. 돌아가자.",
+  'vo/glacia-select-1.m4a': "차갑게 해 줄까?",
+  'vo/glacia-select-2.m4a': "얼음 위는 내 무대야.",
+  'vo/glacia-move-1.m4a': "미끄러지듯이.",
+  'vo/glacia-move-2.m4a': "멈추는 건 내가 정해.",
+  'vo/glacia-capture-1.m4a': "산산조각.",
+  'vo/glacia-capture-2.m4a': "얼음처럼 부서지렴.",
+  'vo/glacia-capture-3.m4a': "추웠지?",
+  'vo/glacia-skill-1.m4a': "얼어붙어.",
+  'vo/glacia-skill-2.m4a': "거기서 가만히 있어.",
+  'vo/glacia-death-1.m4a': "녹아… 버리겠어…",
+  'vo/glacia-victory-1.m4a': "겨울이 이겼네.",
 };
 
 /** Character-specific sound effects per event. */
@@ -277,6 +331,9 @@ export const CHAR_SFX: Record<CharacterId, Partial<Record<CharAudioEvent, string
   volkonov: { select: 'sfx/volkonov-select.m4a', move: 'sfx/volkonov-move.m4a', capture: 'sfx/volkonov-capture.m4a', skill: 'sfx/volkonov-skill.m4a' },
   verish: { select: 'sfx/verish-select.m4a', move: 'sfx/verish-move.m4a', capture: 'sfx/verish-capture.m4a', 'hop-multi': 'sfx/verish-hop-multi.m4a' },
   midos: { select: 'sfx/midos-select.m4a', move: 'sfx/midos-move.m4a', capture: 'sfx/midos-capture.m4a', skill: 'sfx/midos-skill.m4a' },
+  hammont: { select: 'sfx/hammont-select.m4a', move: 'sfx/hammont-move.m4a', capture: 'sfx/hammont-capture.m4a', skill: 'sfx/hammont-skill.m4a' },
+  venoa: { select: 'sfx/venoa-select.m4a', move: 'sfx/venoa-move.m4a', capture: 'sfx/venoa-capture.m4a' },
+  glacia: { select: 'sfx/glacia-select.m4a', move: 'sfx/glacia-move.m4a', capture: 'sfx/glacia-capture.m4a', skill: 'sfx/glacia-skill.m4a' },
 };
 
 /** Shared effects used when a character has no specific one. */

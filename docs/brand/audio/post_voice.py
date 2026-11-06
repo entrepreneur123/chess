@@ -357,6 +357,36 @@ def fx_midos(x):
     return hall(y, 1.3, 0.16, predelay=0.04, lp=3600, hp=220)
 
 
+def fx_hammont(x):
+    """Hearty forge smith: his own big voice (never pitch-shifted), a little extra chest, firm
+    compression for a punchy delivery and a warm, wooden workshop room (short and dry)."""
+    y = biquad(x, "hp", 60)
+    y = biquad(y, "lowshelf", 180, 1.5)
+    y = biquad(y, "peak", 400, -1.0, 1.0)
+    y = compress(y, -21, 2.8, attack=0.006, release=0.1)
+    return hall(y, 0.5, 0.08, predelay=0.01, lp=3800, hp=180)
+
+
+def fx_venoa(x):
+    """Swamp huntress: her own voice (never pitch-shifted), close and quiet: a touch of body, firm
+    compression so the murmur stays present, and a damp, misty outdoor space (short and dark)."""
+    y = biquad(x, "hp", 100)
+    y = biquad(y, "lowshelf", 220, 0.8)
+    y = biquad(y, "highshelf", 7000, -1.0)
+    y = compress(y, -22, 2.6, attack=0.006, release=0.11)
+    return hall(y, 0.55, 0.08, predelay=0.012, lp=4200, hp=300)
+
+
+def fx_glacia(x):
+    """Frost witch: her own clear voice (never pitch-shifted), a little air on top, gentle
+    compression and a bright, wide, glassy hall (an ice palace) a touch wetter than most."""
+    y = biquad(x, "hp", 100)
+    y = biquad(y, "lowshelf", 220, 0.5)
+    y = biquad(y, "highshelf", 9000, 1.2)
+    y = compress(y, -21, 2.2, attack=0.008, release=0.13)
+    return hall(y, 1.2, 0.15, predelay=0.03, lp=7500, hp=400)
+
+
 RAKAELI_AWAKE_PITCH = 2 ** (-2.0 / 12)  # -2 semitones on the main voice
 RAKAELI_AWAKE_FORMANT = 0.94            # vocal tract ~6 % longer: deeper, not a different person
 
@@ -391,19 +421,19 @@ def fx_rakaeli_awake(x):
 FX = {"sad": fx_sad, "marki": fx_marki, "walk": fx_walk, "insaner": fx_insaner, "brutile": fx_brutile,
       "michelle": fx_michelle, "picker": fx_picker, "rakaeli": fx_rakaeli, "rakaeli-awake": fx_rakaeli_awake,
       "rampid": fx_rampid, "larhen": fx_larhen, "volkonov": fx_volkonov, "verish": fx_verish,
-      "midos": fx_midos}
+      "midos": fx_midos, "hammont": fx_hammont, "venoa": fx_venoa, "glacia": fx_glacia}
 # Brightness target (voice_qa harsh_db) for the adaptive presence cut; ElevenLabs takes measure
 # about -6..-1 dB raw. Humans sit warmer, the witch keeps a little more rasp.
 HARSH_TARGET = {"sad": -9.0, "marki": -11.0, "walk": -10.0, "insaner": -8.0, "brutile": -7.0,
                 "michelle": -9.0, "picker": -10.0, "rakaeli": -9.5, "rakaeli-awake": -11.0,
                 "rampid": -9.0, "larhen": -11.0, "volkonov": -10.0, "verish": -9.0,
-                "midos": -11.0}
+                "midos": -11.0, "hammont": -11.0, "venoa": -10.0, "glacia": -9.0}
 # De-esser threshold (share of the full-band envelope the >4.5 kHz band may carry before it is turned
 # down). walk's hard affricates ([ch] in 끝이다, [ss] in 쓰러뜨렸다) need a firmer hand.
 DEESS_THR = {"sad": 0.35, "marki": 0.35, "walk": 0.2, "insaner": 0.35, "brutile": 0.3,
              "michelle": 0.3, "picker": 0.3, "rakaeli": 0.3, "rakaeli-awake": 0.28,
              "rampid": 0.3, "larhen": 0.3, "volkonov": 0.3, "verish": 0.28,
-             "midos": 0.3}
+             "midos": 0.3, "hammont": 0.3, "venoa": 0.28, "glacia": 0.28}
 
 
 # ------------------------------------------------------------------------------------------------

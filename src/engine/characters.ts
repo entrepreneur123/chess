@@ -196,9 +196,9 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     nameEn: 'Hammont',
     rarity: 'rare',
     descKo: [
-      '상하좌우 1칸 · 적을 치면 잡지 않고 1칸 밀쳐냄 (막히면 분쇄)',
-      '상하좌우 최대 2칸 직진 · 적을 치면 1칸 밀쳐냄 (막히면 분쇄)',
-      '상하좌우 최대 2칸 직진 · 적을 치면 1칸 밀쳐내고 1턴 기절 (막히면 분쇄)',
+      '상하좌우 최대 2칸 직진 · 적을 치면 잡지 않고 1칸 밀쳐냄 (막히면 분쇄)',
+      '상하좌우 최대 3칸 직진 · 적을 치면 1칸 밀쳐냄 (막히면 분쇄)',
+      '상하좌우 최대 3칸 직진 · 적을 치면 1칸 밀쳐내고 1턴 기절 (막히면 분쇄)',
     ],
     value: [3, 4, 6],
     trait: {
@@ -332,7 +332,9 @@ export const MIDOS_RANGE = [0, 1, 2, 3];
  * back one square instead of captured (crushed when it cannot go); from HAMMONT_STUN_LEVEL the
  * knocked enemy is also stunned for its owner's next turn.
  */
-export const HAMMONT_RANGE = [0, 1, 2, 2];
+// Self-play (2026-11-06): with 1 / 2 / 2 a 1성 Hammont squad scored 0.10 against the reference squad
+// (every other 1성 0.30-0.84), so his reach went up one square at 1성 and 2성.
+export const HAMMONT_RANGE = [0, 2, 3, 3];
 export const HAMMONT_STUN_LEVEL = 3;
 /**
  * Venoa steps 1 square orthogonally and shoots ("독화살") along her shot lanes: straight forward,

@@ -1,6 +1,6 @@
 /**
  * The 2026-11-06 trio, each with a mechanic the roster did not have:
- *  - 해먼트 Hammont (rare): orthogonal slides 1 / 2 / 2; trait "해머 강타": an enemy he runs into is
+ *  - 해먼트 Hammont (rare): orthogonal slides 2 / 3 / 3; trait "해머 강타": an enemy he runs into is
  *    knocked one square on instead of captured (crushed when it cannot go; 3성 stuns it).
  *  - 베노아 Venoa (rare): steps 1 orthogonally; trait "독화살": shoots the first piece of a forward
  *    lane (forward diagonals from 2성) 2..3 / 2..3 / 2..4 squares away without moving.
@@ -67,9 +67,9 @@ describe('absorb masks: 16 character codes fill 32 bits', () => {
 
 describe('해먼트 Hammont: knock-back', () => {
   const H = 'p0-hammont';
-  it('slides orthogonally 1 / 2 / 2 and is symmetric (no turn-around, no arrow)', () => {
-    expect(reach(makeState([[0, 'hammont', 1, 4, 4], ...far]), H)).toEqual(keys([[3, 4], [5, 4], [4, 3], [4, 5]]));
-    expect(reach(makeState([[0, 'hammont', 2, 4, 4], ...far]), H)).toEqual(keys([[3, 4], [2, 4], [5, 4], [6, 4], [4, 3], [4, 2], [4, 5], [4, 6]]));
+  it('slides orthogonally 2 / 3 / 3 and is symmetric (no turn-around, no arrow)', () => {
+    expect(reach(makeState([[0, 'hammont', 1, 4, 4], ...far]), H)).toEqual(keys([[3, 4], [2, 4], [5, 4], [6, 4], [4, 3], [4, 2], [4, 5], [4, 6]]));
+    expect(reach(makeState([[0, 'hammont', 2, 4, 4], ...far]), H)).toEqual(keys([[3, 4], [2, 4], [1, 4], [5, 4], [6, 4], [7, 4], [4, 3], [4, 2], [4, 1], [4, 5], [4, 6], [4, 7]]));
     expect(isDirectional({ character: 'hammont', level: 1 })).toBe(false);
     expect(keepsDirection(CHAR_CODE.hammont)).toBe(true);
   });

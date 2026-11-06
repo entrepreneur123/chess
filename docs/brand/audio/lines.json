@@ -1118,8 +1118,9 @@
         {
           "event": "capture",
           "id": "capture-2",
-          "text": "쇳물 맛 좀 봐라.",
-          "style": "Fierce and hearty."
+          "text": "뜨거운 맛 좀 봐라.",
+          "style": "Fierce and hearty.",
+          "_note": "First written '쇳물 맛 좀 봐라': Whisper heard 샘물 for 쇳물 (CER 0.17), so the line was replaced."
         },
         {
           "event": "capture",
