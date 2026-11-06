@@ -107,6 +107,14 @@ export const VOICE_CLIPS: Record<CharacterId, Partial<Record<CharAudioEvent, rea
     death: ['vo/verish-death-1.m4a'],
     victory: ['vo/verish-victory-1.m4a'],
   },
+  midos: {
+    select: ['vo/midos-select-1.m4a', 'vo/midos-select-2.m4a'],
+    move: ['vo/midos-move-1.m4a', 'vo/midos-move-2.m4a'],
+    capture: ['vo/midos-capture-1.m4a', 'vo/midos-capture-2.m4a', 'vo/midos-capture-3.m4a'],
+    skill: ['vo/midos-skill-1.m4a', 'vo/midos-skill-2.m4a'],
+    death: ['vo/midos-death-1.m4a'],
+    victory: ['vo/midos-victory-1.m4a'],
+  },
 };
 
 /** Spoken text of each clip (Korean), for captions/debugging. */
@@ -241,6 +249,17 @@ export const VOICE_TEXT: Readonly<Record<string, string>> = {
   'vo/verish-hop-multi-1.m4a': "한 줄로 전부 꿰뚫었어!",
   'vo/verish-death-1.m4a': "앗… 여기서 멈추다니…",
   'vo/verish-victory-1.m4a': "골인! 오늘도 내가 일등이야!",
+  'vo/midos-select-1.m4a': "그림자는 언제나 네 곁에 있다.",
+  'vo/midos-select-2.m4a': "어둠이 나를 부른다.",
+  'vo/midos-move-1.m4a': "소리 없이.",
+  'vo/midos-move-2.m4a': "흔적은 남기지 않는다.",
+  'vo/midos-capture-1.m4a': "도망칠 곳은 없다.",
+  'vo/midos-capture-2.m4a': "그림자에 삼켜져라.",
+  'vo/midos-capture-3.m4a': "끝이다.",
+  'vo/midos-skill-1.m4a': "어디든, 그림자가 있는 곳이라면.",
+  'vo/midos-skill-2.m4a': "눈을 감는 순간, 나는 거기 있다.",
+  'vo/midos-death-1.m4a': "그림자로… 돌아간다…",
+  'vo/midos-victory-1.m4a': "이 밤은 우리의 것이다.",
 };
 
 /** Character-specific sound effects per event. */
@@ -257,6 +276,7 @@ export const CHAR_SFX: Record<CharacterId, Partial<Record<CharAudioEvent, string
   larhen: { select: 'sfx/larhen-select.m4a', move: 'sfx/larhen-move.m4a', capture: 'sfx/larhen-capture.m4a' },
   volkonov: { select: 'sfx/volkonov-select.m4a', move: 'sfx/volkonov-move.m4a', capture: 'sfx/volkonov-capture.m4a', skill: 'sfx/volkonov-skill.m4a' },
   verish: { select: 'sfx/verish-select.m4a', move: 'sfx/verish-move.m4a', capture: 'sfx/verish-capture.m4a', 'hop-multi': 'sfx/verish-hop-multi.m4a' },
+  midos: { select: 'sfx/midos-select.m4a', move: 'sfx/midos-move.m4a', capture: 'sfx/midos-capture.m4a', skill: 'sfx/midos-skill.m4a' },
 };
 
 /** Shared effects used when a character has no specific one. */

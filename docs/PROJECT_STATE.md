@@ -263,7 +263,7 @@ legendary.
   game information).
 
 ## 5. Deploy and verify (the routine)
-1. **Gates:** `npx tsc --noEmit -p .`, `npx vitest run` (403 tests at last count) and
+1. **Gates:** `npx tsc --noEmit -p .`, `npx vitest run` (419 tests at last count) and
    `npm run build`.
    - Never leave temporary `tests/*.tmp.test.ts` or `zz-*` files; `node:` imports break tsc.
    - Vitest hides `console.log` from passing tests, so simulations write results to files.
@@ -338,6 +338,13 @@ legendary.
   - Insaner after the 3성 diagonal was removed (3성 vs 3성, 80 games each): 0.59 vs Brutile,
     0.79 vs Rakaeli, 0.82 vs Walk. Further levers if needed: 3성 orthogonal to 2, or an absorb cap.
   - Michelle: 1성 weak (~0.24); 2/3성 ~0.53–0.55 after the forward buff.
+  - Midos (2026-11-06, 40 games per cell, hard bot at 25 ms, X + Rampid + Marki vs Walk + Sad +
+    Marki, same grade): Midos 0.34 / 0.36 / 0.46, Rakaeli 0.23 / 0.39 / 0.49, Verish 0.64 / 0.34 /
+    0.65, Sad 0.38 / 0.61 / 0.71 (1성 / 2성 / 3성; about ±0.08 noise). He sits with Rakaeli at the
+    lower end for an epic. Levers if the owner wants him stronger: a back step at 3성, a second
+    teleport, or a capture on landing.
+- **Audio budget:** 17,691 bytes of headroom left under 2.5 MiB after Midos; the next character
+  needs a budget decision (see `tests/voice.test.ts`).
 - **An `immobile` loss shows no on-board callout:** the result appears after about 0.65 s with "더 이상 움직일 수 없어 패배".
   Consider a toast or FX.
 - **Store assets:** the screenshots and promo video still show the old 12×12 board and must be

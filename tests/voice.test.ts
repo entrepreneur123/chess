@@ -90,6 +90,9 @@ const sfxEvents = (c: CharacterId): CharAudioEvent[] => [
  * Raised to 2.5 MiB on 2026-11-05 for Verish, the 12th character (a rare): 10 voice lines (166,279
  * bytes) and 4 effects (27,132 bytes), 193,411 bytes (0.18 MiB). Measured: 2,373,744 bytes (vo
  * 1,943,189 + sfx 430,555), 14,448 bytes over 2.25 MiB; 0.19 MiB per character; headroom 247,696 bytes.
+ * Midos, the 13th character (an epic), fits without a raise (2026-11-06): 11 voice lines (193,599
+ * bytes) and 4 effects (36,406 bytes). Measured: 2,603,749 bytes on disk for vo + sfx; headroom
+ * 17,691 bytes, so the next character needs a new lead decision on this budget.
  */
 const AUDIO_BUDGET_BYTES = 2.5 * 1024 * 1024;
 

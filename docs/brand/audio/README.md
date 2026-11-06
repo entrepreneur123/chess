@@ -415,3 +415,43 @@ mostly sees broadband noise.
 + sfx 27,132), 14,448 B over the 2.25 MiB budget, which was raised to 2.5 MiB (2,621,440 B, 0.21 MiB per
 character for 12); headroom 247,696 B. Nobody has listened to these files; every statement above is
 a measurement.
+
+## 미도스 Midos (`midos`): 2026-11-06
+
+**Voice.** A ghost assassin of living shadow (see `lines.json` `concept`): a cool, cold, low male
+voice, never shouting. Reference: VoiceDesign, 12 takes over two prompts (`clone._from` in
+`lines.json`); prompt A ("deep, hollow ... sinister whisper") gave 69-87 Hz takes, all creaky
+(HNR -6.7..0.5 dB); prompt B gave the kept take (95.5 Hz, warble 0.093, the lowest of the 12).
+11 lines x 5 Base-clone takes (seed 11). `fx_midos`: his own voice (never pitch-shifted), a
+whispered WORLD double 22 ms behind (about -13 dB, drifting), a faint cold octave-down shadow
+(about -20 dB, low-passed at 900 Hz), a scooped low-mid, a darker top and a dark hall with a 40 ms
+predelay.
+
+| Character | clips | dur s | F0 Hz | harsh dB | sib dB | tail dB | hiss dB | warble st | HNR dB | CER | P(female) w2v |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| midos (median) | 11 | 1.92 (1.07-3.03) | 94.5 (84-102) | -10.4 | -11.9 | -58.7 (max -51.5) | -48.0 (max -43.6) | 0.084 (max 0.150) | 0.9 | 0 (select-1: 0.083) | <= 0.001 |
+
+All 11 clips: -15.88..-16.17 LUFS, true peak <= -1.57 dBTP, 9.9-26.2 KB (193,599 B in all).
+
+- `select-1` CER 0.083 is the 네/내 homophone (Whisper writes 내 곁에 for 네 곁에 in every take;
+  the reference clip has the same pair).
+- `capture-3` (끝이다, 1.07 s) has the highest warble (0.150) and the lowest voicing (0.22): a short,
+  breathy line. Listen to it first.
+
+**SFX.** Appended after verish in `gen_sfx.py` (the shared rng is consumed in order, so earlier
+effects are unchanged; the shipped .m4a of the other characters are byte-identical by md5). New
+building blocks: `claw_snikt` (three detuned steel blades springing out with a 2 ms lock click),
+`ghost_moan` (a hollow airy breath through a dark formant), `void_suck` (air rushing into a point)
+and `void_pop` (a deep soft implosion thump, 2 ms attack).
+
+| File | Concept | dur s | LUFS | peak dBFS | bytes |
+| --- | --- | --- | --- | --- | --- |
+| midos-select | a cold ghost breath, then the claws spring out ('snikt') | 0.939 | -17.05 | -2.50 | 8753 |
+| midos-move | a low ghost glide: a soft whoosh of shadow and a breathy tail, no steps | 0.747 | -17.10 | -1.98 | 7223 |
+| midos-capture | three claws raking in quick succession, a steel 'tsing', a deep void thump | 0.789 | -17.06 | -1.84 | 7382 |
+| midos-skill | 그림자 도약: air rushing into nothing, a shimmer, a void pop elsewhere, the claws | 1.451 | -17.05 | -2.71 | 13048 |
+
+**Budget.** vo + sfx = 2,603,749 B on disk after Midos (vo 193,599 + sfx 36,406 = 230,005 B
+added), under the 2.5 MiB budget (2,621,440 B) with 17,691 B headroom: no raise this time, but the
+next character needs one. Nobody has listened to these files; every statement above is a
+measurement.

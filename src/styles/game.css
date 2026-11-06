@@ -809,6 +809,15 @@ body.in-game,
     flex-wrap: wrap;
     margin-bottom: 0;
   }
+  /* The prompt takes its own row and the buttons wrap under it (squeezed beside two buttons in the
+     narrow column it broke one character per line). */
+  .game .action-bar > .action-bar__text {
+    flex: 1 1 100%;
+    padding-top: 4px;
+  }
+  .game .action-bar > .action-bar__text ~ .btn {
+    flex: 1 1 auto;
+  }
   /* My hand fills the rest of the board's height, cards stacked. */
   .pbar--hand {
     max-width: none;
