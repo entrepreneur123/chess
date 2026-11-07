@@ -86,6 +86,7 @@ const RGB_ENEMY_SEL = hexToRgb(BOARD_COLORS.enemySelectedTint);
 const RGB_ENEMY_MOVE = hexToRgb(BOARD_COLORS.enemyMoveTint);
 const RGB_SHOT_OWN = hexToRgb(BOARD_COLORS.shotOwnTint);
 const RGB_SHOT_ENEMY = hexToRgb(BOARD_COLORS.shotEnemyTint);
+const RGB_FREEZE = hexToRgb(BOARD_COLORS.freezeTint);
 const RGB_TEAM_ZONE: Record<PlayerId, RGB> = {
   0: hexToRgb(TEAM_COLORS[0].zone),
   1: hexToRgb(TEAM_COLORS[1].zone),
@@ -138,6 +139,8 @@ export interface HighlightIndex {
   shots: Set<number>;
   /** Venoa's arrow range (empty squares), tinted in the tone's shot colour. */
   shotRange: Set<number>;
+  /** Glacia's freeze reach (targeting), tinted frost blue. */
+  freezeRange: Set<number>;
   last: Set<number>;
   zone: [number, number] | null;
   /** Reach preview of an enemy piece (red markers) instead of the player's own piece. */
@@ -162,6 +165,7 @@ export function indexHighlights(h: BoardHighlights): HighlightIndex {
     captures: new Set((h.captures ?? []).map(posKey)),
     shots: new Set((h.shots ?? []).map(posKey)),
     shotRange: new Set((h.shotRange ?? []).map(posKey)),
+    freezeRange: new Set((h.freezeRange ?? []).map(posKey)),
     last,
     zone,
     enemy: h.tone === 'enemy',
@@ -210,6 +214,7 @@ export function tileRgb(r: number, c: number, hi: HighlightIndex, pal: TilePalet
   }
   if (hi.enemy && hi.moves.has(sq)) col = mixRgb(col, RGB_ENEMY_MOVE, ENEMY_MOVE_TINT);
   if (hi.shotRange.has(sq)) col = mixRgb(col, hi.enemy ? RGB_SHOT_ENEMY : RGB_SHOT_OWN, SHOT_RANGE_TINT);
+  if (hi.freezeRange.has(sq)) col = mixRgb(col, RGB_FREEZE, SHOT_RANGE_TINT);
   if (hi.captures.has(sq)) col = mixRgb(col, hi.shots.has(sq) ? (hi.enemy ? RGB_SHOT_ENEMY : RGB_SHOT_OWN) : RGB_CAP, CAPTURE_TINT);
   if (hi.selected === sq) col = mixRgb(col, hi.enemy ? RGB_ENEMY_SEL : RGB_SEL, SELECTED_TINT);
   return col;

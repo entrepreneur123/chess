@@ -259,6 +259,16 @@ const lab = {
     }
     view.setHighlights({ selected: at, moves, captures: [far1, far2, adj], shots: [far1, far2], shotRange, tone });
   },
+  /** Glacia (3성, p0 at 4,4) targeting 빙결: her reach 4 in frost blue, two enemies ringed. */
+  freeze(): void {
+    const at = { r: 4, c: 4 };
+    const e1 = { r: 6, c: 7 };
+    const e2 = { r: 1, c: 2 };
+    view.setPieces([P('p0-glacia', 0, 'glacia' as CharacterId, 3, at.r, at.c), P('p1-walk', 1, 'walk', 2, e1.r, e1.c), P('p1-sad', 1, 'sad', 1, e2.r, e2.c), P('p1-marki', 1, 'marki', 1, 9, 9)]);
+    const freezeRange: Pos[] = [];
+    for (let r = 0; r <= 8; r++) for (let c = 0; c <= 8; c++) if (r !== at.r || c !== at.c) freezeRange.push({ r, c });
+    view.setHighlights({ selected: at, moves: [], captures: [e1, e2], freezeRange, lastMove: null, tone: 'own' });
+  },
   /** p0-walk (or any) stepping onto wasteland: absent from piecesAfter. */
   startWasted(id = 'p0-marki', to: Pos = { r: 5, c: 3 }): void {
     const pieces = basePieces();

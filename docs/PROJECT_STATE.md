@@ -205,6 +205,8 @@ quoting a number.
     the melody treats the glide as no reach (a buffed Glacia gets a plain 1-square slide).
   - **글라시아 빙결 (`SkillKind` 'freeze'):** one enemy within 2 / 3 / 4 squares (Chebyshev), not
     stunned, sits out its owner's next turn. `SkillBlock` 'noTarget' when nobody is in range.
+    Targeting marks her whole reach in frost blue (`freezeRange`, `BoardHighlights.freezeRange`,
+    owner 2026-11-08); the enemies she can freeze keep the red target ring.
   - Insaner absorbs their MOVEMENT only: Hammont's slide (captures, never pushes), Venoa's 1-step
     (no arrows), Glacia's glide + diagonals.
   - Rarity / arena / values: Hammont rare, arena 2, 3/4/6; Venoa rare, arena 3, 4/5/6; Glacia epic,
@@ -336,7 +338,7 @@ legendary.
   game information).
 
 ## 5. Deploy and verify (the routine)
-1. **Gates:** `npx tsc --noEmit -p .`, `npx vitest run` (462 tests at last count) and
+1. **Gates:** `npx tsc --noEmit -p .`, `npx vitest run` (464 tests at last count) and
    `npm run build`.
    - Never leave temporary `tests/*.tmp.test.ts` or `zz-*` files; `node:` imports break tsc.
    - Vitest hides `console.log` from passing tests, so simulations write results to files.

@@ -25,6 +25,7 @@ import {
   josa,
   materialScore,
   skillAnchors,
+  freezeRange,
   applySkill,
   posOf,
   skillBlock,
@@ -851,7 +852,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
         // Freeze targeting: every enemy in range ringed; a valid pick gets the selection ring.
         const caster = getPieceById(s, targeting.pieceId);
         const pick = targeting.preview && targeting.anchors.has(sqOf(targeting.preview)) ? targeting.preview : null;
-        board.setHighlights({ selected: pick ?? caster?.pos ?? null, moves: [], captures: [...targeting.anchors].map(posOf), lastMove: null, tone: 'own' });
+        // Her whole reach is marked too (frost blue), so the player sees how far 빙결 goes.
+        board.setHighlights({ selected: pick ?? caster?.pos ?? null, moves: [], captures: [...targeting.anchors].map(posOf), freezeRange: caster ? freezeRange(s, caster) : [], lastMove: null, tone: 'own' });
       } else if (targeting && targeting.kind === 'blink' && snap.phase !== 'animating') {
         // Teleport targeting: every landing square as a move dot; a valid pick gets the selection
         // ring, a path from his square and, from there, the enemies he would threaten.

@@ -1508,7 +1508,7 @@ export class Board2DView implements IBoardView {
 
   private get pulsing(): boolean {
     const h = this.highlights;
-    return !!h.selected || (h.moves?.length ?? 0) > 0 || (h.captures?.length ?? 0) > 0 || (h.shotRange?.length ?? 0) > 0 || (h.deadly?.length ?? 0) > 0;
+    return !!h.selected || (h.moves?.length ?? 0) > 0 || (h.captures?.length ?? 0) > 0 || (h.shotRange?.length ?? 0) > 0 || (h.freezeRange?.length ?? 0) > 0 || (h.deadly?.length ?? 0) > 0;
   }
 
   private fxActive(now: number): boolean {
@@ -1829,7 +1829,7 @@ export class Board2DView implements IBoardView {
     const hi = this.hi;
     const zone = hi.zone;
     const tinted = (k: number, r: number): boolean =>
-      hi.selected === k || hi.last.has(k) || hi.captures.has(k) || hi.shotRange.has(k) || (hi.enemy && hi.moves.has(k)) || (zone !== null && r >= zone[0] && r <= zone[1]);
+      hi.selected === k || hi.last.has(k) || hi.captures.has(k) || hi.shotRange.has(k) || hi.freezeRange.has(k) || (hi.enemy && hi.moves.has(k)) || (zone !== null && r >= zone[0] && r <= zone[1]);
     for (let r = 0; r < BOARD_SIZE; r++) {
       for (let c = 0; c < BOARD_SIZE; c++) {
         const k = r * BOARD_SIZE + c;
@@ -1923,13 +1923,16 @@ export class Board2DView implements IBoardView {
     }
 
     // Venoa's arrow range: a small sight on every empty square her arrows fly over.
-    if ((h.shotRange?.length ?? 0) > 0) {
+    // Glacia's freeze reach (skill targeting) uses the same marks in frost blue.
+    const frost = (h.freezeRange?.length ?? 0) > 0;
+    const sights = frost ? h.freezeRange! : (h.shotRange ?? []);
+    if (sights.length > 0) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha = 0.9 * (0.65 + 0.3 * sp);
-      const sightCol = enemy ? BOARD_COLORS.shotEnemy : BOARD_COLORS.shotOwn;
-      for (const p of h.shotRange ?? []) {
-        if (this.hi.moves.has(posKey(p))) continue; // a move target keeps its dot (or skull)
+      const sightCol = frost ? BOARD_COLORS.freeze : enemy ? BOARD_COLORS.shotEnemy : BOARD_COLORS.shotOwn;
+      for (const p of sights) {
+        if (this.hi.moves.has(posKey(p)) || this.hi.captures.has(posKey(p))) continue; // a move target keeps its dot (or skull), a target its ring
         this.drawMarker('sight', sightCol, this.cx(p.c), this.cy(p.r), cell);
       }
       ctx.restore();

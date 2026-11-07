@@ -736,6 +736,23 @@ export function freezeAnchors(state: Pick<GameState, 'pieces'>, caster: Pick<Pie
 }
 
 /**
+ * Glacia's "빙결" reach for the targeting overlay: every board square within GLACIA_FREEZE[level]
+ * squares of her (Chebyshev, the same measure as freezeAnchors) except her own and the storm
+ * (owner 2026-11-08: "글라시아 스킬 쓸 때 가능한 범위 다 표기"). Board order.
+ */
+export function freezeRange(state: Pick<GameState, 'storm'>, caster: Pick<Piece, 'pos' | 'level'>): Pos[] {
+  const R = GLACIA_FREEZE[caster.level];
+  const out: Pos[] = [];
+  for (let r = Math.max(0, caster.pos.r - R); r <= Math.min(BOARD_SIZE - 1, caster.pos.r + R); r++) {
+    for (let c = Math.max(0, caster.pos.c - R); c <= Math.min(BOARD_SIZE - 1, caster.pos.c + R); c++) {
+      if ((r === caster.pos.r && c === caster.pos.c) || inStorm(r, c, state.storm)) continue;
+      out.push({ r, c });
+    }
+  }
+  return out;
+}
+
+/**
  * Squares a Midos of `owner` may teleport to ("그림자 도약": "비어있는 칸"): no piece, no wasteland
  * (he would die there), no doll trap of the OTHER side (traps are visible to both players, so a
  * teleport onto one would only ever be a misclick) and out of the storm (a safety net: skills are

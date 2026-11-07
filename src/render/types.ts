@@ -26,6 +26,11 @@ export interface BoardHighlights {
    * marked with a small sight in the tone's shot colour (own: venom lime, enemy: magenta).
    */
   shotRange?: Pos[];
+  /**
+   * Glacia's freeze reach while she targets "빙결": every square in range (the enemies she can
+   * freeze are `captures`). Tinted and marked with a small sight in frost blue.
+   */
+  freezeRange?: Pos[];
 }
 
 /** Options for creating a board view. */

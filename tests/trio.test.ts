@@ -360,3 +360,28 @@ describe('bot with the trio', () => {
     expect(freezes).toBeGreaterThan(0);
   }, 180_000);
 });
+
+describe('글라시아 빙결 reach overlay (freezeRange)', () => {
+  it('covers every square within 2 / 3 / 4 (Chebyshev) except her own, clipped to the board and the storm', async () => {
+    const { freezeRange } = await import('../src/engine');
+    const at = (lv: Level, r: number, c: number, storm = 0) => freezeRange({ storm }, { pos: { r, c }, level: lv });
+    expect(at(1, 5, 5).length).toBe(5 * 5 - 1);
+    expect(at(2, 5, 5).length).toBe(7 * 7 - 1);
+    expect(at(3, 5, 5).length).toBe(9 * 9 - 1);
+    // Corner: rows 0..2 x cols 0..2 minus her square.
+    expect(at(1, 0, 0).length).toBe(3 * 3 - 1);
+    // Storm 1 closes columns 0 and 9: a level-3 reach from column 1 loses column 0.
+    expect(at(3, 5, 1, 1).every((p) => p.c >= 1 && p.c <= 8)).toBe(true);
+  });
+
+  it('every enemy she can freeze lies inside the drawn reach', async () => {
+    const { freezeRange } = await import('../src/engine');
+    const s = makeState([[0, 'glacia', 2, 4, 4], [1, 'walk', 1, 7, 7], [1, 'sad', 1, 1, 2], [1, 'marki', 1, 9, 9]]);
+    const g = s.pieces[0];
+    const reach = new Set(freezeRange(s, g).map((p) => `${p.r},${p.c}`));
+    const targets = freezeAnchors(s, g);
+    expect(targets.length).toBe(2);
+    for (const t of targets) expect(reach.has(`${t.r},${t.c}`)).toBe(true);
+    expect(reach.has('9,9')).toBe(false);
+  });
+});

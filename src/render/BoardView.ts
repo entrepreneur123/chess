@@ -1447,7 +1447,8 @@ export class BoardView implements IBoardView {
     this.selTex = [makeSelectGlowTexture(hexToRgb(BOARD_COLORS.selected)), makeSelectGlowTexture(hexToRgb(BOARD_COLORS.enemySelected))];
     const capTex = makeCaptureRingTexture(hexToRgb(BOARD_COLORS.capture));
     this.shotTex = [makeShotReticleTexture(hexToRgb(BOARD_COLORS.shotOwn)), makeShotReticleTexture(hexToRgb(BOARD_COLORS.shotEnemy))];
-    this.sightTex = [makeShotSightTexture(hexToRgb(BOARD_COLORS.shotOwn)), makeShotSightTexture(hexToRgb(BOARD_COLORS.shotEnemy))];
+    // Sight marks: [own shot, enemy shot, Glacia's frost freeze reach].
+    this.sightTex = [makeShotSightTexture(hexToRgb(BOARD_COLORS.shotOwn)), makeShotSightTexture(hexToRgb(BOARD_COLORS.shotEnemy)), makeShotSightTexture(hexToRgb(BOARD_COLORS.freeze))];
     this.ownTextures.push(...this.dotTex, ...this.selTex, capTex, ...this.shotTex, ...this.sightTex);
     const dotGeo = new THREE.PlaneGeometry(MARKER_QUAD.dot, MARKER_QUAD.dot).rotateX(-Math.PI / 2);
     const dots = new THREE.InstancedMesh(dotGeo, mat('#ffffff', 0.95, true, this.dotTex[0]), n);
@@ -3055,7 +3056,10 @@ export class BoardView implements IBoardView {
     this.placeInstances(this.shotGlow, this.placedShots, 1);
     // Venoa's arrow range: a sight on every empty square her arrows fly over (a move target keeps
     // its dot or skull).
-    this.placedSights = clean(this.highlights.shotRange).filter((p) => !this.hi.moves.has(posKey(p)));
+    // Glacia's freeze reach (skill targeting) uses the same marks in frost blue; the two never
+    // show together.
+    const frost = (this.highlights.freezeRange?.length ?? 0) > 0;
+    this.placedSights = clean(frost ? this.highlights.freezeRange : this.highlights.shotRange).filter((p) => !this.hi.moves.has(posKey(p)) && !this.hi.captures.has(posKey(p)));
     this.placeInstances(this.shotSights, this.placedSights, 1);
 
     // Own reach = ice-cyan markers; an enemy's reach preview = red dots + red selection frame.
@@ -3069,7 +3073,8 @@ export class BoardView implements IBoardView {
     const shotMat = this.shotRings.material as THREE.MeshBasicMaterial;
     if (shotMat.map !== this.shotTex[tone]) shotMat.map = this.shotTex[tone];
     const sightMat = this.shotSights.material as THREE.MeshBasicMaterial;
-    if (sightMat.map !== this.sightTex[tone]) sightMat.map = this.sightTex[tone];
+    const sightTone = (this.highlights.freezeRange?.length ?? 0) > 0 ? 2 : tone;
+    if (sightMat.map !== this.sightTex[sightTone]) sightMat.map = this.sightTex[sightTone];
     (this.shotGlow.material as THREE.MeshBasicMaterial).color.set(tone ? BOARD_COLORS.shotEnemy : BOARD_COLORS.shotOwn);
     (this.selectGlow.material as THREE.MeshBasicMaterial).color.set(tone ? BOARD_COLORS.enemySelected : BOARD_COLORS.selected);
     const sel = this.highlights.selected;

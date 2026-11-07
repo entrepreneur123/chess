@@ -263,6 +263,9 @@ export const BOARD_COLORS = {
   shotOwnTint: '#3D5414',
   shotEnemy: '#FF3DCB',
   shotEnemyTint: '#5C1650',
+  /** Glacia's freeze reach while she targets "빙결" (BoardHighlights.freezeRange): frost blue. */
+  freeze: '#9CC8FF',
+  freezeTint: '#24406C',
   /** Selected square: ice-cyan glowing frame + a cool blue tile tint. */
   selected: '#7FE3FF',
   selectedTint: '#3C83C8',

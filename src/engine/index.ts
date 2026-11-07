@@ -29,6 +29,7 @@ export {
   skillBlock,
   skillAnchors,
   blinkAnchors,
+  freezeRange,
   freezeAnchors,
   isShot,
   skillUnlockIn,
