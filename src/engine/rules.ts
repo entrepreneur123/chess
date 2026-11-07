@@ -224,6 +224,18 @@ export function isDirectional(piece: Pick<Piece, 'character' | 'level' | 'absorb
 }
 
 /**
+ * Should the UI show the piece's forward arrow? Every direction-dependent piece (`isDirectional`),
+ * and an Insaner ALWAYS (owner 2026-11-07: "인세이너도 상·하 위치 표시, 위치 있는 캐릭터를 먹었을 때
+ * 그 후 상황이 예측되게"): he turns around at the far edge like any forward mover even while his
+ * reach is symmetric, so his facing must be visible before he absorbs a directional pattern.
+ * Pieces whose reach can never depend on it (Sad, Picker, Volkonov, 2성+ Larhen, 3성 Brutile, ...)
+ * show none.
+ */
+export function showsDirection(piece: Pick<Piece, 'character' | 'level' | 'absorbed'>): boolean {
+  return piece.character === 'insaner' || isDirectional(piece);
+}
+
+/**
  * The piece's forward direction as the player sees the board: player 0 is always drawn at the
  * bottom (rows grow upward on screen, both renderers; the board never flips), so `dir` +1 is up.
  * The one helper every arrow (hand cards, roster chips, board tokens, toasts) goes through.

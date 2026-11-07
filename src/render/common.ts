@@ -1,7 +1,7 @@
 /** Helpers shared by the WebGL and Canvas2D board views. */
 import { BOARD_SIZE, ZONE_DEPTH, stormRows } from '../engine/types';
 import type { CharacterId, Level, Move, Piece, PlayerId, Pos } from '../engine/types';
-import { isDirectional, screenArrow } from '../engine/rules';
+import { screenArrow, showsDirection } from '../engine/rules';
 import type { BoardHighlights } from './types';
 import {
   ANIM,
@@ -61,11 +61,11 @@ export const ARROW_LINE = 0.04;
 export const ARROW_INK = 0.08;
 
 /**
- * The coin's forward chevron: +1 up the screen, -1 down, 0 none (a symmetric mover). Goes through
+ * The coin's forward chevron: +1 up the screen, -1 down, 0 none (`showsDirection`). Goes through
  * the engine's `screenArrow`, like every other direction arrow in the game.
  */
 export function arrowSign(p: Pick<Piece, 'owner' | 'dir' | 'character' | 'level' | 'absorbed'>): -1 | 0 | 1 {
-  if (!isDirectional(p)) return 0;
+  if (!showsDirection(p)) return 0;
   return screenArrow(p) === 'up' ? 1 : -1;
 }
 

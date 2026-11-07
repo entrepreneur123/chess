@@ -1,5 +1,5 @@
 /** DOM pieces of the in-game HUD (player bars, timer ring, turn pill, end-reason copy). */
-import { CHARACTERS, isDirectional, screenArrow, stormRows, type EndReason, type FormationSlot, type GameState, type PlayerId } from '../../engine';
+import { CHARACTERS, showsDirection, screenArrow, stormRows, type EndReason, type FormationSlot, type GameState, type PlayerId } from '../../engine';
 import { PACING } from '../../meta/economy';
 import { pieceToken } from '../components/piece';
 import { h } from '../dom';
@@ -118,7 +118,7 @@ export function createRoster(slots: readonly FormationSlot[], owner: PlayerId): 
       for (const c of chips) {
         const piece = state.pieces.find((p) => p.id === `p${owner}-${c.slot.character}`);
         const awake = !!piece?.awaken;
-        const arrow = piece && isDirectional(piece) ? screenArrow(piece) : null;
+        const arrow = piece && showsDirection(piece) ? screenArrow(piece) : null;
         const buffed = !!piece?.buff;
         const key = `${!!piece}|${awake}|${arrow}|${piece?.buff ?? 0}`;
         if (key === c.key) continue;

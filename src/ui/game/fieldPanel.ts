@@ -7,7 +7,7 @@
  * The drawer does NOT pause the turn clock (no free thinking time); it re-renders on every
  * controller change while open, but only when something it shows actually changed.
  */
-import { BOARD_SIZE, BUFF_TURNS, CHARACTERS, ZONE_DEPTH, SKILL_UNLOCK_PLY, WASTE_SIZE, getTargetsForPiece, inStorm, isAwake, isDirectional, isStunned, pieceDir, screenArrow, skillUnlockIn, trapsLeft, type FormationSlot, type GameState, type Piece, type PlayerId } from '../../engine';
+import { BOARD_SIZE, BUFF_TURNS, CHARACTERS, ZONE_DEPTH, SKILL_UNLOCK_PLY, WASTE_SIZE, getTargetsForPiece, inStorm, isAwake, showsDirection, isStunned, pieceDir, screenArrow, skillUnlockIn, trapsLeft, type FormationSlot, type GameState, type Piece, type PlayerId } from '../../engine';
 import { GLACIA_FREEZE } from '../../engine/characters';
 import { movementDiagram, rarityChip, starsOf, unitArt } from '../components/piece';
 import { overlayRoot, pushOverlay, registerForceClose } from '../components/overlay';
@@ -94,7 +94,7 @@ function skillStatus(piece: Piece | undefined, s: GameState): string {
 
 /** The forward-direction chip of a direction-dependent piece on the board (null otherwise). */
 function arrowChip(piece: Piece | undefined, owner: PlayerId): HTMLElement | null {
-  if (!piece || !isDirectional(piece)) return null;
+  if (!piece || !showsDirection(piece)) return null;
   const chip = dirChip(`fcard__dir owner-${owner}`);
   setArrow(chip, screenArrow(piece), false);
   return chip;

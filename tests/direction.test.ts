@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CHARACTER_IDS, applyMove, getTargetsForPiece, isDirectional, screenArrow, type CharacterId, type Level, type Piece } from '../src/engine';
+import { CHARACTER_IDS, applyMove, getTargetsForPiece, isDirectional, screenArrow, showsDirection, type CharacterId, type Level, type Piece } from '../src/engine';
 import { makeState, targetKeys } from './helpers';
 
 const LEVELS: Level[] = [1, 2, 3];
@@ -68,5 +68,32 @@ describe('screenArrow', () => {
     expect(screenArrow(s.pieces[0])).toBe('up');
     s = applyMove(s, { pieceId: 'p0-walk', from: { r: 8, c: 5 }, to: { r: 9, c: 5 } });
     expect(screenArrow(s.pieces.find((p) => p.id === 'p0-walk')!)).toBe('down');
+  });
+});
+
+describe('showsDirection (which pieces carry a forward arrow)', () => {
+  it('every Insaner shows his facing, even before he absorbs a directional pattern', () => {
+    for (const lv of LEVELS) expect(showsDirection({ character: 'insaner', level: lv })).toBe(true);
+    expect(showsDirection({ character: 'insaner', level: 2, absorbed: [{ character: 'sad', level: 3 }] })).toBe(true);
+  });
+
+  it('otherwise it is exactly isDirectional: symmetric movers like Sad show none', () => {
+    for (const ch of CHARACTER_IDS) {
+      if (ch === 'insaner') continue;
+      for (const lv of LEVELS) expect({ ch, lv, s: showsDirection({ character: ch, level: lv }) }).toEqual({ ch, lv, s: isDirectional({ character: ch, level: lv }) });
+    }
+    expect(showsDirection({ character: 'sad', level: 3 })).toBe(false);
+    expect(showsDirection({ character: 'brutile', level: 3 })).toBe(false);
+    expect(showsDirection({ character: 'larhen', level: 2 })).toBe(false);
+  });
+
+  it('a symmetric Insaner still turns around at the far edge, so the arrow it shows is live', () => {
+    const s = makeState([[0, 'insaner', 1, 7, 4], [1, 'sad', 1, 0, 0]]);
+    const m = getTargetsForPiece(s, s.pieces[0]).find((x) => x.to.r === 9 && x.to.c === 4)!;
+    expect(m).toBeDefined();
+    const t = applyMove(s, m);
+    const ins = t.pieces.find((p) => p.id === 'p0-insaner')!;
+    expect(ins.dir).toBe(-1);
+    expect(screenArrow(ins)).toBe('down');
   });
 });

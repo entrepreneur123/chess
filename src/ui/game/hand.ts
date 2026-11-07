@@ -16,7 +16,7 @@ import {
   CHARACTERS,
   getPieceById,
   isAwake,
-  isDirectional,
+  showsDirection,
   screenArrow,
   isStunned,
   skillBlock,
@@ -53,8 +53,9 @@ export interface HandCardModel {
   /** Michelle only: doll traps she can still lay this match (null for everyone else). */
   traps: number | null;
   /**
-   * Forward direction on screen for a piece whose movement depends on it (`isDirectional`), null
-   * for symmetric movers and captured pieces. It flips when the piece turns around at the far edge.
+   * Forward direction on screen for a piece whose facing matters (`showsDirection`: direction-
+   * dependent pieces and every Insaner), null for symmetric movers and captured pieces. It flips
+   * when the piece turns around at the far edge.
    */
   arrow: 'up' | 'down' | null;
 }
@@ -151,7 +152,7 @@ export function handModel(slots: readonly FormationSlot[], owner: PlayerId, snap
       awaken: p?.awaken ?? 0,
       buff: p?.buff ?? 0,
       traps: s.character === 'michelle' && p ? trapsLeft(snap.state, owner) : null,
-      arrow: p && isDirectional(p) ? screenArrow(p) : null,
+      arrow: p && showsDirection(p) ? screenArrow(p) : null,
     };
   });
 }

@@ -20,7 +20,7 @@ import {
   getShotRange,
   isAwake,
   isBuffed,
-  isDirectional,
+  showsDirection,
   isStunned,
   josa,
   materialScore,
@@ -1385,7 +1385,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
             // Coach toast on the first turn-around of each of my direction-dependent pieces (the
             // hand card and roster chevrons flip every time).
             const who = getPieceById(c.state, e.pieceId);
-            if (e.player === HUMAN && who && isDirectional(who) && !turnTipShown.has(who.id)) {
+            if (e.player === HUMAN && who && showsDirection(who) && !turnTipShown.has(who.id)) {
               turnTipShown.add(who.id);
               toast(`${CHARACTERS[who.character].nameKo} 방향 전환 · 이제 ${e.arrow === 'up' ? '위로' : '아래로'} 전진`, { tone: 'neutral', duration: 2600 });
             }

@@ -259,8 +259,11 @@ quoting a number.
   | venoa | 4/5/6 |
   | glacia | 4/5/6 |
 
-- **Direction arrows:** shown when the reach depends on direction (`isDirectional`). Sad, Picker, Volkonov, 2성+ Larhen,
-  3성 Brutile and an Insaner without directional absorbs show none.
+- **Direction arrows:** shown by `showsDirection`: every piece whose reach depends on direction
+  (`isDirectional`), and every Insaner always (2026-11-07, owner: he turns around at the far edge
+  like any forward mover, so his facing must be readable before he absorbs a directional pattern).
+  Sad, Picker, Volkonov, Hammont, Glacia, 2성+ Larhen and 3성 Brutile show none (their reach can
+  never depend on it). `isDirectional` keeps its meaning (reach depends on facing).
 
 ## 4. Progression (all localStorage; editable by the player, no server)
 **Currencies**

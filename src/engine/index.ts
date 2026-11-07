@@ -20,6 +20,7 @@ export {
   buildOccupancy,
   pieceDir,
   isDirectional,
+  showsDirection,
   screenArrow,
   turnTimeMsFor,
   suddenDeathIn,
