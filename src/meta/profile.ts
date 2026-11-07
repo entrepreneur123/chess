@@ -103,6 +103,11 @@ export interface Settings {
    * and board animations run at 30 fps, for less heat and battery drain. Off by default.
    */
   powerSave: boolean;
+  /**
+   * 선택 이펙트: the signature burst when a piece is tapped (rune sigil, glint, sparks, Venoa's
+   * arrow sweep). On by default (owner 2026-11-08); the reach markers show either way.
+   */
+  selectFx: boolean;
   /** Board camera (kept for when the 3D arena returns; the board is top-down only for now). */
   view: ViewSetting;
 }
@@ -118,7 +123,7 @@ export interface Onboarding {
   stunTip: boolean;
 }
 
-export const DEFAULT_SETTINGS: Settings = { sound: true, music: true, voice: true, haptics: true, powerSave: false, view: 'tilt' };
+export const DEFAULT_SETTINGS: Settings = { sound: true, music: true, voice: true, haptics: true, powerSave: false, selectFx: true, view: 'tilt' };
 /** Grade a character is fielded at until the player picks another. */
 export const DEFAULT_GRADE: Level = 1;
 export const DEFAULT_DUNGEON_LEVEL: DungeonLevel = 'easy';
@@ -383,6 +388,7 @@ function sanitizeBase(input: unknown): ProfileBase {
       voice: asBool(settings.voice, DEFAULT_SETTINGS.voice),
       haptics: asBool(settings.haptics, DEFAULT_SETTINGS.haptics),
       powerSave: asBool(settings.powerSave, DEFAULT_SETTINGS.powerSave),
+      selectFx: asBool(settings.selectFx, DEFAULT_SETTINGS.selectFx),
       view: settings.view === 'top' ? 'top' : 'tilt',
     },
     onboarding: {

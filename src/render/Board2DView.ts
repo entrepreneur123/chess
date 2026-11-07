@@ -1176,7 +1176,7 @@ export class Board2DView implements IBoardView {
     const prevSel = this.hi.selected;
     this.highlights = h;
     this.hi = indexHighlights(h);
-    if (this.hi.selected >= 0 && this.hi.selected !== prevSel && !this.anim) this.startSelectFx(h);
+    if (this.selectFxOn && this.hi.selected >= 0 && this.hi.selected !== prevSel && !this.anim) this.startSelectFx(h);
     this.requestRender();
   }
 
@@ -1549,6 +1549,13 @@ export class Board2DView implements IBoardView {
     if (this.paused === paused) return;
     this.paused = paused;
     this.requestRender();
+  }
+
+  /** 선택 이펙트 on / off (settings.selectFx). */
+  private selectFxOn = true;
+  setSelectFx(on: boolean): void {
+    this.selectFxOn = on;
+    if (!on) this.sel = null;
   }
 
   setLowPower(on: boolean): void {

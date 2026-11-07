@@ -92,6 +92,12 @@ export interface ControllerPorts {
   turnTimeMs?: number;
   setTimer?(fn: () => void, ms: number): unknown;
   clearTimer?(id: unknown): void;
+  /**
+   * Does the human's turn run on a clock (running out forfeits)? Default true. False for matches
+   * against the AI (only online PvP is timed): the player's turn has no deadline, the bot's turn
+   * keeps a silent safety deadline (a stuck bot plays its fallback), and the match can be paused.
+   */
+  timed?: boolean;
 }
 
 const samePos = (a: Pos, b: Pos) => a.r === b.r && a.c === b.c;
@@ -131,6 +137,12 @@ export class GameController {
   /** When the current turn's time runs out (`now()` units); null while no turn clock runs. */
   private deadline: number | null = null;
   private timerHandle: unknown = null;
+
+  /** Paused (untimed matches only): the bot holds its answer and its safety deadline stops. */
+  private _paused = false;
+  /** Time left on the deadline when the pause began (re-armed on resume). */
+  private pausedRemaining: number | null = null;
+  private resumeWaiters: (() => void)[] = [];
 
   private readonly now: () => number;
   private readonly setTimer: (fn: () => void, ms: number) => unknown;
@@ -173,6 +185,55 @@ export class GameController {
     this.enterTurn();
   }
 
+  /** Does the human's turn run on a clock? (see ControllerPorts.timed) */
+  get timed(): boolean {
+    return this.ports.timed !== false;
+  }
+  get paused(): boolean {
+    return this._paused;
+  }
+
+  /**
+   * Pause an untimed match (the menu is open): the player cannot act, the bot finishes thinking but
+   * holds its move until resume(), and the bot's safety deadline stops. A timed (online) match
+   * cannot be paused: returns false. Idempotent.
+   */
+  pause(): boolean {
+    if (this.timed || this.disposed || this._phase === 'ended') return false;
+    if (this._paused) return true;
+    this._paused = true;
+    this.pausedRemaining = this.deadline === null ? null : Math.max(0, this.deadline - this.now());
+    this.stopTimer();
+    this.emit({ type: 'change' });
+    return true;
+  }
+
+  /** Resume a paused match: the bot's held move plays, its safety deadline runs on. */
+  resume(): void {
+    if (!this._paused) return;
+    this._paused = false;
+    const rem = this.pausedRemaining;
+    this.pausedRemaining = null;
+    if (rem !== null && !this.disposed && this._phase === 'botThinking') {
+      this.deadline = this.now() + rem;
+      this.armTimer();
+    }
+    this.flushResume();
+    if (!this.disposed) this.emit({ type: 'change' });
+  }
+
+  private flushResume(): void {
+    const w = this.resumeWaiters;
+    this.resumeWaiters = [];
+    for (const r of w) r();
+  }
+
+  /** Resolves at once, or when the match is resumed (also on resign / dispose). */
+  private untilResumed(): Promise<void> {
+    if (!this._paused) return Promise.resolve();
+    return new Promise<void>((r) => this.resumeWaiters.push(r));
+  }
+
   /** Remaining time of the current turn in ms (the full turn time while no turn clock runs). */
   turnRemainingMs(): number {
     if (this.deadline === null) return this.turnTime;
@@ -195,7 +256,7 @@ export class GameController {
 
   /** Board tap at absolute coordinates. */
   tapCell(pos: Pos): void {
-    if (this.disposed || this._phase === 'ended' || this._phase === 'animating') return;
+    if (this.disposed || this._paused || this._phase === 'ended' || this._phase === 'animating') return;
     const sel = this.selection;
     if (sel?.actionable && this._phase === 'humanTurn') {
       const move = sel.moves.find((m) => samePos(m.to, pos));
@@ -219,7 +280,7 @@ export class GameController {
 
   /** A skill for the human (own turn). Returns false if not allowed now. */
   trySkill(action: SkillAction): boolean {
-    if (this.disposed || this._phase !== 'humanTurn' || !isLegalSkill(this._state, action)) return false;
+    if (this.disposed || this._paused || this._phase !== 'humanTurn' || !isLegalSkill(this._state, action)) return false;
     this.selection = null;
     void this.playSkill(action);
     return true;
@@ -227,7 +288,7 @@ export class GameController {
 
   /** Decline the pending chain move (human only). Returns false if none is pending. */
   skipBonus(): boolean {
-    if (this.disposed || this._phase !== 'humanTurn' || this._state.bonusPieceId === null) return false;
+    if (this.disposed || this._paused || this._phase !== 'humanTurn' || this._state.bonusPieceId === null) return false;
     this.gen++;
     this.stopTimer();
     const prev = this._state;
@@ -240,7 +301,7 @@ export class GameController {
 
   /** Programmatic move (used by tests/debug). Returns false if not allowed now. */
   tryHumanMove(move: Move): boolean {
-    if (this.disposed || this._phase !== 'humanTurn' || !isLegalMove(this._state, move)) return false;
+    if (this.disposed || this._paused || this._phase !== 'humanTurn' || !isLegalMove(this._state, move)) return false;
     void this.playHumanMove(move);
     return true;
   }
@@ -253,6 +314,9 @@ export class GameController {
     if (this.disposed || this._phase === 'ended') return;
     this.gen++;
     this.stopTimer();
+    this._paused = false;
+    this.pausedRemaining = null;
+    this.flushResume();
     this.selection = null;
     this._state = resign(this._state, HUMAN);
     this.checkEndOrContinue(false);
@@ -264,6 +328,7 @@ export class GameController {
     this.gen++;
     this.stopTimer();
     this.listeners.clear();
+    this.flushResume();
   }
 
   // ------------------------------------------------------------------ internals
@@ -366,6 +431,8 @@ export class GameController {
     if (gen !== this.gen || this.disposed) return;
     const wait = this.ports.botThinkDelayMs() - (this.now() - t0);
     if (wait > 0) await new Promise<void>((r) => this.setTimer(r, wait));
+    // Paused (menu open): the answer is ready but waits until the player resumes.
+    await this.untilResumed();
     if (gen !== this.gen || this.disposed || this._phase !== 'botThinking') return;
     if (move && 'kind' in move && move.kind === 'skill' && isLegalSkill(this._state, move)) await this.playSkill(move);
     else if (move && !('kind' in move) && isLegalMove(this._state, move)) await this.playMove(move);
@@ -536,9 +603,17 @@ export class GameController {
 
   // ---- clock
 
-  /** Start the turn clock: a fresh deadline `turnTime` from now. */
+  /**
+   * Start the turn clock: a fresh deadline `turnTime` from now. Untimed matches give the player no
+   * deadline; the bot's silent safety deadline waits while paused.
+   */
   private startClock(): void {
     this.stopTimer();
+    if (!this.timed && this._phase === 'humanTurn') return;
+    if (this._paused) {
+      this.pausedRemaining = this.turnTime;
+      return;
+    }
     this.deadline = this.now() + this.turnTime;
     this.armTimer();
   }

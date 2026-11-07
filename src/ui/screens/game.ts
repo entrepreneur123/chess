@@ -30,6 +30,7 @@ import {
   skillBlock,
   skillKindOf,
   skillUnlockIn,
+  resignUnlockIn,
   sqOf,
   suddenDeathIn,
   turnNumber,
@@ -45,7 +46,7 @@ import {
 import { Board2DView, BoardView, createBoardView, diagEnabled, type IBoardView } from '../../render';
 import type { VoiceEvent } from '../../audio/voice';
 import { PACING } from '../../meta/economy';
-import { getProfile, setProfile, settleMatch, updateProfile, type MatchOutcome, type MatchSummary } from '../../meta/profile';
+import { getProfile, setProfile, settleMatch, subscribeProfile, updateProfile, type MatchOutcome, type MatchSummary } from '../../meta/profile';
 import { DUNGEON_LABEL, arenaById } from '../../meta/progression';
 import { useMatchBackdrop } from '../backdrops';
 import { duck, playArenaMusic } from '../musicBridge';
@@ -69,7 +70,7 @@ import { clockRedrawMs, CRITICAL_MS, createRoster, endReasonText, setText, storm
 import { createFieldPanel } from '../game/fieldPanel';
 import { createHand, handModel, selectFromHand } from '../game/hand';
 import { CUTIN_MS, cutInEl, preloadCutIns } from '../game/cutin';
-import type { GameParams } from './gameParams';
+import { isTimedMatch, type GameParams } from './gameParams';
 import '../game/hud.css';
 
 /**
@@ -112,6 +113,27 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   // ---------- static DOM
   const topRing = new TimerRing(BOT);
   const botRing = new TimerRing(HUMAN);
+  /**
+   * Only online PvP runs the turn clock (owner 2026-11-08). A match against the AI has no
+   * countdown (no rings, no ticks) and pauses while the menu or a dialog is open.
+   */
+  const timed = isTimedMatch(params);
+  topRing.el.hidden = !timed;
+  botRing.el.hidden = !timed;
+  /** Overlays currently holding the match paused (menu drawer, resign dialog). */
+  let pauseHolds = 0;
+  const holdPause = (): void => {
+    pauseHolds++;
+    if (pauseHolds === 1 && ctrl?.pause()) board?.setPaused?.(true);
+  };
+  const releasePause = (): void => {
+    if (pauseHolds === 0) return;
+    pauseHolds--;
+    if (pauseHolds === 0 && ctrl?.paused) {
+      ctrl.resume();
+      board?.setPaused?.(false);
+    }
+  };
   const roster = createRoster(params.botFormation, BOT);
   const topRoster = h('div', { class: 'pbar__roster-host' }, roster.el);
   // My hand: one card per fielded piece; a tap selects it like tapping it on the board.
@@ -155,7 +177,11 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   const field = createFieldPanel({
     formations: [params.playerFormation, params.botFormation],
     names: ['나', params.opponentName],
-    onClose: () => menuBtn.setAttribute('aria-expanded', 'false'),
+    paused: !timed,
+    onClose: () => {
+      menuBtn.setAttribute('aria-expanded', 'false');
+      releasePause();
+    },
   });
   const menuBtn = h(
     'button',
@@ -166,8 +192,9 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       'aria-expanded': 'false',
       'data-action': 'field',
       onclick: () => {
-        if (!ctrl) return;
+        if (!ctrl || field.isOpen) return;
         field.open(ctrl.state);
+        holdPause();
         menuBtn.setAttribute('aria-expanded', 'true');
         sfx('page');
         haptic('light');
@@ -441,15 +468,29 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   };
   let lastTurnShown: number | null = null;
   let lastGlow: PlayerId | null | undefined;
+  /** Online PvP only: resigning unlocks after 3 turns (RESIGN_UNLOCK_PLY); the AI can always be left. */
+  const resignLockedTurns = (): number => (timed && ctrl ? resignUnlockIn(ctrl.state) : 0);
   const askResign = async () => {
     if (!ctrl || ctrl.phase === 'ended') return;
-    const ok = await confirmDialog({
-      title: '기권할까요?',
-      body: '기권하면 이번 대전은 패배로 기록됩니다.',
-      confirmLabel: '기권',
-      cancelLabel: '계속하기',
-      danger: true,
-    });
+    const locked = resignLockedTurns();
+    if (locked > 0) {
+      sfx('tap');
+      toast(`기권은 3턴이 지난 뒤부터 할 수 있어요 · ${locked}턴 남음`, { tone: 'neutral', duration: 2200 });
+      return;
+    }
+    holdPause();
+    let ok = false;
+    try {
+      ok = await confirmDialog({
+        title: '기권할까요?',
+        body: '기권하면 이번 대전은 패배로 기록됩니다.',
+        confirmLabel: '기권',
+        cancelLabel: '계속하기',
+        danger: true,
+      });
+    } finally {
+      releasePause();
+    }
     if (ok) ctrl?.resign();
   };
 
@@ -948,6 +989,10 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       (board as { setTurnGlow?: (owner: PlayerId | null) => void } | null)?.setTurnGlow?.(activeTurn);
     }
     resignBtn.toggleAttribute('disabled', snap.phase === 'ended');
+    // Online PvP: the flag looks locked (still tappable: it says when it opens) for the first 3 turns.
+    const resignLocked = snap.phase !== 'ended' && resignLockedTurns() > 0;
+    resignBtn.classList.toggle('is-locked', resignLocked);
+    resignBtn.setAttribute('aria-disabled', resignLocked ? 'true' : 'false');
 
     const selKey = snap.selection ? `${snap.selection.pieceId}|${snap.selection.actionable}` : null;
     if (selKey !== prevSel) {
@@ -1105,12 +1150,16 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       bag.add(() => badges.dispose());
       // 절전 모드 follows the setting live (it can be switched from the in-match settings too).
       bag.add(watchPowerSave((on) => board?.setLowPower?.(on)));
+      // 선택 이펙트 (settings.selectFx), live: the settings sheet can change it mid-match.
+      board?.setSelectFx?.(getProfile().settings.selectFx);
+      bag.add(subscribeProfile((p) => board?.setSelectFx?.(p.settings.selectFx)));
       bot = new BotClient();
       const botRef = bot;
       bag.add(() => botRef.dispose());
 
       const c: GameController = (ctrl = new GameController(initial, {
         requestBotMove: (state) => botRef.requestMove(state, params.difficulty),
+        timed,
         botThinkDelayMs: () => randInt(defaultRng, PACING.botThinkMinMs, PACING.botThinkMaxMs),
         animate: async (move, after) => {
           if (move.pieceId.startsWith(`p${HUMAN}-`)) finishCoach();
@@ -1258,7 +1307,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
           }
           wireBoard(board);
           board.setLowPower?.(isPowerSave());
-          if (resultShown) board.setPaused?.(true);
+          board.setSelectFx?.(getProfile().settings.selectFx);
+          if (resultShown || ctrl?.paused) board.setPaused?.(true);
           // Everything the board was told so far is re-sent by the next render.
           board.setPieces(c.state.pieces);
           syncedPieces = c.state.pieces;
@@ -1443,7 +1493,8 @@ export function gameScreen(router: Router, params: GameParams): Screen {
 
       // HUD clock: a paced timer, not a per-frame loop (clockRedrawMs). A frame loop here redrew the
       // ring on every display refresh (60–120 Hz) for the whole match: a big, avoidable heat cost.
-      pokeClock = bag.pacedLoop(() => {
+      // Untimed matches (against the AI) have no clock at all: no loop, no rings, no ticks.
+      if (timed) pokeClock = bag.pacedLoop(() => {
         // Hidden page / app in the background: nothing to draw and no countdown ticks to play
         // (the deadline itself is the controller's; checkClock pokes this loop on return).
         if (document.hidden) return CLOCK_HIDDEN_MS;

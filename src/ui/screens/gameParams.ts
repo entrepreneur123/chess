@@ -21,7 +21,19 @@ export interface GameParams {
    * the VS card can announce it. Absent: flipped by the game screen.
    */
   firstTurn?: PlayerId;
+  /**
+   * A real online PvP match (not built yet: every match today is against the AI). Only online
+   * matches run the turn clock; matches against the AI (전장전, 견습전투, 던전) have no countdown
+   * and pause while the menu is open (owner 2026-11-08).
+   */
+  online?: boolean;
 }
+
+/**
+ * Online PvP rules (owner 2026-11-08): only a real user-vs-user match runs the turn clock and locks
+ * resigning for the first 3 turns; a match against the AI has neither and pauses on the menu.
+ */
+export const isTimedMatch = (p: Pick<GameParams, 'online'>): boolean => p.online === true;
 
 /** What starts a match (matchmaking params; "again" on the result screen reuses them). */
 export interface MatchRequest {

@@ -28,6 +28,8 @@ export interface FieldPanelOptions {
   /** Lineups as fielded (dead pieces are listed greyed out). */
   formations: [FormationSlot[], FormationSlot[]];
   names: [string, string];
+  /** The match is paused while the drawer is open (matches against the AI): the header says so. */
+  paused?: boolean;
   onClose?: () => void;
 }
 
@@ -234,6 +236,7 @@ export function createFieldPanel(opts: FieldPanelOptions): FieldPanel {
           'header',
           { class: 'fpanel__header' },
           h('h2', { class: 'fpanel__heading' }, icon('menu', 20), '현재 진형'),
+          opts.paused ? h('span', { class: 'fpanel__paused', role: 'status' }, h('span', { class: 'fpanel__paused-bars', 'aria-hidden': 'true' }), '일시정지') : null,
           h('button', { class: 'icon-btn icon-btn--sm icon-btn--light', type: 'button', 'aria-label': '닫기', 'data-action': 'close-field', onclick: close }, icon('close', 22)),
         ),
         body,

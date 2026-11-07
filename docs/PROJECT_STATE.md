@@ -73,11 +73,19 @@ quoting a number.
   banner.
 - `turnNumber` = floor(ply / 2) + 1.
 
-**Turn time**
-- 45 s per turn; 40 s once either side has 2 or fewer pieces; 20 s at 1 piece.
-- Running out forfeits at once.
-- The clock is wall-clock (Date.now deadline). It KEEPS running when the app or tab is hidden,
-  and is re-checked on return.
+**Turn time, pause, resign (owner 2026-11-08: the clock is for real PvP only)**
+- **Matches against the AI (every match today: 전장전, 견습전투, 던전) have no turn clock:** no rings,
+  no countdown ticks, no HUD clock loop. The bot's turn keeps a silent safety deadline (turn time)
+  so a stuck bot plays `fallbackAction`. `GameController` port `timed: false`.
+- **They pause while the ≡ menu drawer or the resign dialog is open:** `GameController.pause()` /
+  `resume()`; the player cannot act, the bot finishes thinking but holds its move until resume, the
+  safety deadline stops and resumes with what was left, the board's idle loops stop (`setPaused`).
+  The drawer header shows a gold "일시정지" pill. They can always be resigned or left.
+- **Online PvP (not built; `GameParams.online` / `isTimedMatch`) keeps the old clock:** 45 s per
+  turn; 40 s once either side has 2 or fewer pieces; 20 s at 1 piece; running out forfeits at once;
+  wall-clock deadline that KEEPS running while hidden and is re-checked on return; no pause
+  (`pause()` returns false). Resigning unlocks only after 3 turns each (`RESIGN_UNLOCK_PLY` 6,
+  `resignUnlockIn`): the flag looks locked and a tap says how many turns remain.
 - The bot keeps playing while the page is hidden.
 
 **Turning around**
@@ -316,6 +324,11 @@ legendary.
   - a lobby "DEV · 전장 선택" picker that plays any arena.
 - **Off:** restores the snapshot of the real profile (current settings kept).
 
+**선택 이펙트 (settings.selectFx, on by default; owner 2026-11-08)**
+- The burst when a piece is tapped (rune sigil, glint, sparks, Venoa's lane sweep) can be switched
+  off in settings (`IBoardView.setSelectFx`, applied live and re-applied after a board swap). Reach
+  markers, ranges and reticles show either way.
+
 **절전 모드 (settings.powerSave, off by default)**
 - A settings switch (`ui/powerSave.ts`): `html.power-save` stops the decorative CSS loops
   (`base.css`), and the board (`setLowPower`) stops its decorative idle loops (particles, scan
@@ -323,7 +336,7 @@ legendary.
   game information).
 
 ## 5. Deploy and verify (the routine)
-1. **Gates:** `npx tsc --noEmit -p .`, `npx vitest run` (452 tests at last count) and
+1. **Gates:** `npx tsc --noEmit -p .`, `npx vitest run` (462 tests at last count) and
    `npm run build`.
    - Never leave temporary `tests/*.tmp.test.ts` or `zz-*` files; `node:` imports break tsc.
    - Vitest hides `console.log` from passing tests, so simulations write results to files.

@@ -68,6 +68,13 @@ export const MAX_MATCH_PLIES = SUDDEN_DEATH_PLY + STORM_FULL_STEPS * STORM_INTER
  */
 export const SKILL_UNLOCK_PLY = 6;
 /**
+ * Resigning unlocks once both players have taken 3 turns (ply 6: turn 4 as `turnNumber` counts it):
+ * owner 2026-11-08, "기권은 최소 3턴 지나고 부터", for real online PvP only (a match against the AI
+ * can always be resigned or left). Enforced by the game screen (button, dialog, back navigation);
+ * the engine's `resign` itself stays unconditional.
+ */
+export const RESIGN_UNLOCK_PLY = 6;
+/**
  * How many times each skill character may use its skill per match. Use is tracked per piece
  * (`Piece.skillUsed`), so a squad with two skill characters (Brutile and Rakaeli) can cast both.
  */

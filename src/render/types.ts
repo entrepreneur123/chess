@@ -169,4 +169,6 @@ export interface IBoardView {
    * (highlights rest at a steady glow) and moves / effects draw at ~30 fps instead of up to 60–90.
    */
   setLowPower?(on: boolean): void;
+  /** 선택 이펙트 (settings.selectFx): the burst on a newly selected piece; markers show either way. */
+  setSelectFx?(on: boolean): void;
 }

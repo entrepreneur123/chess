@@ -155,6 +155,7 @@ export function showSettings(): void {
       // Hidden until the re-recorded cast ships (audio/voice.ts VOICE_LINES_READY).
       VOICE_LINES_READY ? switchRow('voice', '캐릭터 음성', '선택 · 공격 · 스킬 대사', 'person') : null,
       switchRow('haptics', '진동', canVibrate ? '잡기 · 내 차례 · 승리 시 짧은 진동' : '이 기기에서는 지원되지 않을 수 있어요', 'vibration'),
+      switchRow('selectFx', '선택 이펙트', '캐릭터를 누를 때 반짝이는 효과', 'magic'),
       switchRow('powerSave', '절전 모드', '발열 · 배터리 절약 · 효과 간소화', 'battery'),
     ),
     h(

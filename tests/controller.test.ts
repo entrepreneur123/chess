@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { GameState, Move } from '../src/engine';
+import { getLegalMoves, resignUnlockIn, type GameState, type Move } from '../src/engine';
 import { ANIMATION_WATCHDOG_MS, GameController, type ControllerPorts } from '../src/ui/game/GameController';
 import { makeState } from './helpers';
 
 /** Manual clock + timers so races can be driven deterministically. */
-function harness(initial: GameState, opts: { botMove?: (s: GameState) => Move | null | Promise<Move | null>; timerLagMs?: number | ((ms: number) => number) } = {}) {
+function harness(initial: GameState, opts: { botMove?: (s: GameState) => Move | null | Promise<Move | null>; timerLagMs?: number | ((ms: number) => number); timed?: boolean } = {}) {
   let t = 0;
   let nextId = 1;
   const timers = new Map<number, { at: number; fn: () => void }>();
@@ -27,6 +27,7 @@ function harness(initial: GameState, opts: { botMove?: (s: GameState) => Move | 
       return id;
     },
     clearTimer: (id) => void timers.delete(id as number),
+    ...(opts.timed === false ? { timed: false } : {}),
   };
   const ctrl = new GameController(initial, ports);
   const flush = async () => {
@@ -473,5 +474,102 @@ describe('GameController: the bot moves first (random first player)', () => {
     } finally {
       console.warn = warn;
     }
+  });
+});
+
+describe('matches against the AI: no turn clock, pause on the menu (owner 2026-11-08)', () => {
+  /** The player plays sad (2,5) -> (3,5); the bot is then thinking. */
+  const toBotTurn = async (h: ReturnType<typeof harness>) => {
+    h.ctrl.start();
+    h.ctrl.tapCell({ r: 2, c: 5 });
+    h.ctrl.tapCell({ r: 3, c: 5 });
+    await h.finishAnims();
+    expect(h.ctrl.phase).toBe('botThinking');
+  };
+
+  it("the player's turn never times out", async () => {
+    const h = harness(position(), { timed: false });
+    h.ctrl.start();
+    await h.advance(30 * 60_000);
+    expect(h.ctrl.phase).toBe('humanTurn');
+    expect(h.ctrl.state.status).toBe('playing');
+    expect(h.ctrl.timed).toBe(false);
+  });
+
+  it('a stuck bot still plays its fallback after the silent safety deadline', async () => {
+    const h = harness(position(), { timed: false });
+    await toBotTurn(h);
+    expect(h.botCalls.length).toBe(1); // never answered
+    await h.advance(60_001);
+    expect(h.anims.length).toBe(1);
+    expect(h.anims[0].move.pieceId.startsWith('p1-')).toBe(true);
+  });
+
+  it("pause holds the bot's move until resume; taps are ignored while paused", async () => {
+    const h = harness(position(), { timed: false });
+    await toBotTurn(h);
+    expect(h.ctrl.pause()).toBe(true);
+    expect(h.ctrl.paused).toBe(true);
+    h.botCalls[0].resolve(getLegalMoves(h.ctrl.state)[0]);
+    await h.flush();
+    await h.advance(10 * 60_000); // the safety deadline does not run while paused either
+    expect(h.anims.length).toBe(0);
+    expect(h.ctrl.phase).toBe('botThinking');
+    h.ctrl.resume();
+    await h.flush();
+    expect(h.anims.length).toBe(1);
+    await h.finishAnims();
+    expect(h.ctrl.phase).toBe('humanTurn');
+    h.ctrl.pause();
+    h.ctrl.tapCell({ r: 3, c: 5 });
+    expect(h.ctrl.snapshot().selection).toBeNull();
+    h.ctrl.resume();
+    h.ctrl.tapCell({ r: 3, c: 5 });
+    expect(h.ctrl.snapshot().selection?.pieceId).toBe('p0-sad');
+  });
+
+  it('the safety deadline resumes with the time it had left', async () => {
+    const h = harness(position(), { timed: false });
+    await toBotTurn(h);
+    await h.advance(50_000);
+    h.ctrl.pause();
+    await h.advance(5 * 60_000);
+    h.ctrl.resume();
+    await h.advance(9_000);
+    expect(h.anims.length).toBe(0);
+    await h.advance(2_000);
+    expect(h.anims.length).toBe(1);
+  });
+
+  it('resigning while paused ends the match (no held bot move plays afterwards)', async () => {
+    const h = harness(position(), { timed: false });
+    await toBotTurn(h);
+    h.ctrl.pause();
+    h.ctrl.resign();
+    h.botCalls[0].resolve(getLegalMoves(h.ctrl.state)[0] ?? null);
+    await h.advance(120_000);
+    expect(h.ctrl.phase).toBe('ended');
+    expect(h.anims.length).toBe(0);
+    expect(h.ctrl.paused).toBe(false);
+  });
+
+  it('a timed (online) match cannot be paused and keeps its clock', async () => {
+    const h = harness(position());
+    h.ctrl.start();
+    expect(h.ctrl.pause()).toBe(false);
+    expect(h.ctrl.paused).toBe(false);
+    await h.advance(60_001);
+    expect(h.ctrl.state.status).toBe('ended');
+  });
+});
+
+describe('resign unlock (online PvP only): after 3 turns each', () => {
+  it('counts down the turns until ply 6', () => {
+    expect(resignUnlockIn({ ply: 0 })).toBe(3);
+    expect(resignUnlockIn({ ply: 1 })).toBe(3);
+    expect(resignUnlockIn({ ply: 4 })).toBe(1);
+    expect(resignUnlockIn({ ply: 5 })).toBe(1);
+    expect(resignUnlockIn({ ply: 6 })).toBe(0);
+    expect(resignUnlockIn({ ply: 40 })).toBe(0);
   });
 });

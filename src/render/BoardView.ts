@@ -2203,7 +2203,7 @@ export class BoardView implements IBoardView {
     this.highlights = h;
     this.hi = indexHighlights(h);
     this.applyHighlights();
-    if (this.hi.selected >= 0 && this.hi.selected !== prevSel && !this.anim) this.selectFx(h);
+    if (this.selectFxOn && this.hi.selected >= 0 && this.hi.selected !== prevSel && !this.anim) this.selectFx(h);
     this.requestRender();
   }
 
@@ -2441,6 +2441,12 @@ export class BoardView implements IBoardView {
     if (this.paused === paused || this.disposed) return;
     this.paused = paused;
     this.requestRender();
+  }
+
+  /** 선택 이펙트 on / off (settings.selectFx). */
+  private selectFxOn = true;
+  setSelectFx(on: boolean): void {
+    this.selectFxOn = on;
   }
 
   setLowPower(on: boolean): void {

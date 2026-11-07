@@ -1,4 +1,4 @@
-import { AWAKEN_TURNS, BUFF_TURNS, OFF_TURN_STUN, SKILL_UNLOCK_PLY, STORM_INTERVAL_PLIES, SUDDEN_DEATH_PLY, TRAPS_PER_MICHELLE, TRAP_STUN, TURN_TIME_1_MS, TURN_TIME_2_MS, TURN_TIME_MS } from './types';
+import { AWAKEN_TURNS, BUFF_TURNS, OFF_TURN_STUN, RESIGN_UNLOCK_PLY, SKILL_UNLOCK_PLY, STORM_INTERVAL_PLIES, SUDDEN_DEATH_PLY, TRAPS_PER_MICHELLE, TRAP_STUN, TURN_TIME_1_MS, TURN_TIME_2_MS, TURN_TIME_MS } from './types';
 import type { AbsorbedAbility, CharacterId, EndReason, Formation, GameState, HistoryEntry, Move, Piece, PlayerId, Pos, SkillAction, Trap } from './types';
 import { BOARD_SIZE } from './types';
 import { CHARACTERS, CHAR_CODE, GLACIA_FREEZE, HAMMONT_STUN_LEVEL, WASTE_SIZE, absorbMaskOf, effectiveValue, keepsDirection, skillKindOf } from './characters';
@@ -680,6 +680,11 @@ export function skillBlock(state: GameState, pieceId: string): SkillBlock | null
 /** Turns (of the side to move) until the skill unlocks; 0 once unlocked. */
 export function skillUnlockIn(state: Pick<GameState, 'ply'>): number {
   return Math.max(0, Math.ceil((SKILL_UNLOCK_PLY - state.ply) / 2));
+}
+
+/** Turns until the player may resign (0 = now; see RESIGN_UNLOCK_PLY). */
+export function resignUnlockIn(state: Pick<GameState, 'ply'>): number {
+  return Math.max(0, Math.ceil((RESIGN_UNLOCK_PLY - state.ply) / 2));
 }
 
 /**

@@ -32,6 +32,7 @@ export {
   freezeAnchors,
   isShot,
   skillUnlockIn,
+  resignUnlockIn,
   applySkill,
   isLegalSkill,
   isWasteMove,
