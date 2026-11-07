@@ -438,7 +438,9 @@ legendary.
 - **Store assets:** the screenshots and promo video still show the old 12×12 board and must be
   regenerated with `docs/store-assets/capture.mjs`.
 - **Online PvP needs a server.** Supabase is available as a connector. Until then the
-  currencies, rating and dev mode are client-side only.
+  currencies, rating and dev mode are client-side only. Feasibility, architecture and the cost
+  model (official prices read 2026-11-08): `docs/design/online-pvp.md`. The client side is ready
+  for it: `GameParams.online` switches on the turn clock, no pause and the 3-turn resign lock.
 - **Unverified everywhere:** real iOS/Android devices (including actual temperatures after the
   heat work), WebKit GPU cost of the ambient particles (the idle board redraws at ~10–20 fps by
   theme, plus a ~30 fps scan sweep 2.6 s of every 9 s), and how the voices and music sound.
