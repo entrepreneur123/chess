@@ -222,7 +222,9 @@
 .tut-art--chars {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  align-content: center;
+  /* "safe": with more rows than fit, start at the top (plain center would cut the first rows off
+     above the scroll origin, out of reach). */
+  align-content: safe center;
   gap: 5px;
   padding: 8px;
   overflow-y: auto;
@@ -293,8 +295,10 @@
 
 /* slide 3: tap — an obsidian mini board */
 .tut-board {
+  --cell: 30px;
+  position: relative;
   display: grid;
-  grid-template-columns: repeat(5, 30px);
+  grid-template-columns: repeat(5, var(--cell));
   gap: 2px;
   padding: 6px;
   border-radius: var(--r-s);
@@ -305,10 +309,11 @@
     0 10px 20px -8px rgba(0, 0, 0, 0.8);
 }
 .tut-board__cell {
+  position: relative;
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: var(--cell);
+  height: var(--cell);
   border-radius: 4px;
   background: #222b40;
   box-shadow:
@@ -368,6 +373,159 @@
     transform: translateY(-64px) scale(1);
     opacity: 0;
   }
+}
+
+/* Mini-board marks: a lane the move cannot reach (X), closed storm squares, a facing chevron. */
+.tut-board .token {
+  --tk: calc(var(--cell) - 6px);
+}
+.tut-board__cell.is-blocked::before,
+.tut-board__cell.is-blocked::after {
+  content: '';
+  position: absolute;
+  width: 46%;
+  height: 2.5px;
+  border-radius: 2px;
+  background: rgba(255, 107, 119, 0.9);
+  box-shadow: 0 0 6px rgba(255, 70, 85, 0.6);
+  transform: rotate(45deg);
+}
+.tut-board__cell.is-blocked::after {
+  transform: rotate(-45deg);
+}
+.tut-board__cell.is-storm {
+  background:
+    repeating-linear-gradient(135deg, rgba(182, 92, 255, 0.34) 0 3px, rgba(110, 50, 190, 0.2) 3px 6px),
+    #24183d;
+  box-shadow: inset 0 0 0 1px rgba(182, 92, 255, 0.45);
+}
+.tut-dir {
+  position: absolute;
+  right: -3px;
+  top: -4px;
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #ffe08a, var(--gold-deep));
+  box-shadow: 0 0 0 1.5px var(--outline);
+  color: #2a1a00;
+}
+.tut-dir.is-down .icon {
+  transform: rotate(180deg);
+}
+/* Cards whose art stacks a board (or a row) over caption chips. */
+.tut-art--col {
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: 8px 0;
+}
+.tut-turn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.tut-turn__arrow {
+  color: var(--gold);
+  filter: drop-shadow(0 1px 0 var(--outline));
+}
+.tut-skill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.tut-skill__turn {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 2px 12px;
+  border-radius: var(--r-full);
+  background: linear-gradient(180deg, rgba(255, 224, 138, 0.22), rgba(242, 193, 78, 0.1));
+  box-shadow: inset 0 0 0 1px rgba(242, 193, 78, 0.6);
+  color: var(--gold);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-bold);
+}
+.tut-skill__turn b {
+  font-family: var(--font-num);
+  font-size: 22px;
+  line-height: 1;
+  color: var(--ink);
+  text-shadow: var(--ink-outline-s);
+}
+.tut-skill__row {
+  display: flex;
+  gap: 8px;
+}
+.tut-skill__unit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  color: var(--text-2);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-bold);
+  white-space: nowrap;
+}
+.tut-skill__unit .unit-art__lv {
+  display: none;
+}
+/* Match modes: no clock against the AI, the move clock online. */
+.tut-art--modes {
+  gap: 10px;
+  padding: 12px;
+  align-items: stretch;
+}
+.tut-mode {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px 10px 12px;
+  border-radius: var(--r-m);
+  background: var(--panel-fill);
+  box-shadow:
+    var(--panel-rim),
+    0 3px 0 var(--panel-lip);
+  text-align: left;
+}
+.tut-mode__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+  font-family: var(--font-display);
+  font-size: var(--fs-label);
+  color: var(--ink);
+  text-shadow: var(--ink-outline-s);
+}
+.tut-mode.is-ai .tut-mode__head .icon {
+  color: var(--team-blue-light);
+}
+.tut-mode.is-online .tut-mode__head .icon {
+  color: var(--gold);
+}
+.tut-mode__line {
+  color: var(--text-2);
+  font-size: var(--fs-caption);
+  line-height: 1.35;
+  word-break: keep-all;
+}
+.tut-mode__line::before {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin: 0 6px 2px 0;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.7;
+}
+.tut-mode.is-online .tut-mode__line:nth-child(4) {
+  color: var(--team-red-light);
+  font-weight: var(--fw-bold);
 }
 
 /* slide 4: zone */

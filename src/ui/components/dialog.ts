@@ -5,6 +5,8 @@ export interface DialogAction<T> {
   label: string;
   value: T;
   variant?: 'text' | 'tonal' | 'filled' | 'danger';
+  /** `data-action` on the button (tests and analytics address buttons by it). */
+  action?: string;
 }
 
 export interface DialogOptions<T> {
@@ -35,7 +37,7 @@ export function showDialog<T>(opts: DialogOptions<T>): Promise<T> {
     const actions = opts.actions.map((a) =>
       h(
         'button',
-        { class: `btn btn--${a.variant ?? 'text'}`, type: 'button', onclick: () => close(a.value) },
+        { class: `btn btn--${a.variant ?? 'text'}`, type: 'button', 'data-action': a.action ?? null, onclick: () => close(a.value) },
         a.label,
       ),
     );

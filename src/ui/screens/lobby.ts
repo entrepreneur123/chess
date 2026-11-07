@@ -21,6 +21,8 @@ import { arenaBadge, topBar } from '../components/currency';
 import { artMissing } from '../components/piece';
 import { showDungeonPicker } from '../components/dungeonSheet';
 import { isTutorialOpen, showTutorial } from '../components/tutorial';
+import { showDialog } from '../components/dialog';
+import { TUTORIAL_BOT, TUTORIAL_OPPONENT, TUTORIAL_PLAYER } from '../../meta/tutorialMatch';
 import { Disposables, h, replaceChildren } from '../dom';
 import { icon } from '../icons';
 import { playHomeMusic } from '../musicBridge';
@@ -265,16 +267,52 @@ export function lobbyScreen(router: Router): Screen {
 
   render();
   bag.add(subscribeProfile(render));
+  let inviting = false;
+  const inviteTutorial = async () => {
+    if (inviting) return;
+    inviting = true;
+    const choice = await showDialog<'start' | 'skip'>({
+      title: '환영해요, 지휘관!',
+      icon: h('span', { class: 'result__icon result__icon--win' }, icon('swords', 40)),
+      body: h('p', { class: 'welcome__body' }, '실제로 한 판 두면서 규칙을 배워 봐요. 2분이면 충분해요!'),
+      dismissValue: 'skip',
+      actions: [
+        { label: '건너뛰기', value: 'skip', variant: 'text', action: 'tut-skip' },
+        { label: '튜토리얼 시작', value: 'start', variant: 'filled', action: 'tutorial-start' },
+      ],
+    });
+    inviting = false;
+    if (bag.isDisposed) return;
+    if (choice === 'skip') {
+      updateProfile((p) => ({ ...p, onboarding: { ...p.onboarding, tutorialSeen: true } }));
+      return;
+    }
+    const arena = ARENA_DEFS[0].id;
+    router.navigate('game', {
+      mode: 'casual',
+      difficulty: 'easy',
+      opponentName: TUTORIAL_OPPONENT,
+      opponentRating: 0,
+      opponentArena: arena,
+      themeArena: arena,
+      playerFormation: TUTORIAL_PLAYER,
+      botFormation: TUTORIAL_BOT,
+      firstTurn: 0,
+      tutorial: true,
+    });
+  };
+
   return {
     el,
     mount() {
       playHomeMusic();
       // Warm the match backdrop of this arena (or the DEV pick) so the board never pops in.
       bag.timeout(() => void preloadArt(arenaById(devArenaOf(getProfile()) ?? arena.id).backdrop), 1200);
-      // First launch: open the how-to-play carousel once the lobby has faded in.
+      // First launch: invite a brand-new account to the guided first match (owner 2026-11-08: learn
+      // by playing). The card guide stays one tap away (? 게임 방법).
       if (!getProfile().onboarding.tutorialSeen) {
         bag.timeout(() => {
-          if (!isTutorialOpen() && !getProfile().onboarding.tutorialSeen) void showTutorial();
+          if (!isTutorialOpen() && !getProfile().onboarding.tutorialSeen) void inviteTutorial();
         }, 450);
       }
     },

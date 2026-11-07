@@ -872,3 +872,147 @@ body.in-game,
       0 0 18px 0 rgba(255, 70, 85, 0.7);
   }
 }
+
+/* ---- Guided first match: the coach card ------------------------------------------------------
+   Portrait: it takes the band above the board (opponent bar, turn strip, notes line), so it never
+   covers a square. Landscape: the opponent's column. It carries its own skip (the ≡ menu is under
+   it). One entrance animation per step, no loops. */
+.tcoach {
+  grid-column: 1 / -1;
+  grid-row: top-start / notes-end;
+  z-index: 6;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  margin: calc(var(--sat, 0px) + 4px) 8px 4px;
+  padding: 8px 12px 10px;
+  border-radius: var(--r-l);
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(242, 193, 78, 0.16), transparent 60%),
+    linear-gradient(180deg, rgba(36, 46, 74, 0.98), rgba(17, 23, 39, 0.98));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 231, 163, 0.35),
+    inset 0 0 0 1px rgba(242, 193, 78, 0.75),
+    0 6px 18px -6px rgba(0, 0, 0, 0.7),
+    0 0 22px -6px rgba(242, 193, 78, 0.45);
+  overflow: hidden;
+}
+.tcoach[hidden] {
+  display: none;
+}
+.tcoach.is-entering {
+  animation: tcoach-in 360ms var(--ease-out) both;
+}
+@keyframes tcoach-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.tcoach__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.tcoach__step {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: var(--r-full);
+  background: linear-gradient(180deg, #ffe08a, var(--gold-deep));
+  color: #2a1a00;
+  font-family: var(--font-num);
+  font-size: 12px;
+  line-height: 1.2;
+  box-shadow: 0 0 0 1.5px var(--outline);
+}
+.tcoach__step:empty {
+  display: none;
+}
+.tcoach__title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 19px;
+  line-height: 1.2;
+  color: var(--ink);
+  text-shadow: var(--ink-outline-s);
+}
+.tcoach__skip {
+  flex: none;
+  min-height: 32px;
+  padding: 0 8px;
+  color: var(--text-2);
+  font-size: var(--fs-caption);
+}
+.tcoach__body {
+  margin: 0;
+  color: var(--text-1, var(--ink));
+  font-size: 13.5px;
+  line-height: 1.45;
+  word-break: keep-all;
+}
+@media (max-height: 700px) {
+  .tcoach {
+    padding: 6px 10px 8px;
+  }
+  .tcoach__title {
+    font-size: 17px;
+  }
+  .tcoach__body {
+    font-size: 12.5px;
+    line-height: 1.38;
+  }
+}
+@media (orientation: landscape) and (min-width: 700px) {
+  .tcoach {
+    grid-column: top-start / top-end;
+    grid-row: top-start / opp-end;
+    align-self: start;
+    margin: 0;
+  }
+  /* The side column is narrow: the title takes its own full line under the step and the skip. */
+  .tcoach__head {
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+  .tcoach__title {
+    order: 3;
+    flex-basis: 100%;
+    white-space: normal;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tcoach.is-entering {
+    animation: none;
+  }
+}
+/* Tutorial completion card + the first-launch invite. */
+.tut-done__tips {
+  margin: 10px 0 0;
+  padding: 10px 12px 10px 28px;
+  border-radius: var(--r-m);
+  background: rgba(7, 10, 18, 0.45);
+  box-shadow: inset 0 0 0 1px rgba(72, 88, 128, 0.7);
+  color: var(--text-2);
+  font-size: var(--fs-caption);
+  line-height: 1.55;
+  text-align: left;
+}
+.welcome__body {
+  margin: 0;
+  color: var(--text-2);
+  line-height: 1.55;
+}

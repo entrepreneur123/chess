@@ -27,6 +27,8 @@ export interface GameParams {
    * and pause while the menu is open (owner 2026-11-08).
    */
   online?: boolean;
+  /** The guided first match (src/meta/tutorialMatch.ts): prepared position, scripted AI, coach card, no rating. */
+  tutorial?: boolean;
 }
 
 /**

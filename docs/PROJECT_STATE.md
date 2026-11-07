@@ -316,6 +316,21 @@ legendary.
 - The lobby and tab screens play a separate `lobby` theme (Eb major). Matches crossfade to the
   arena track at the VS reveal.
 
+**First launch: the guided first match (owner 2026-11-08: "튜토리얼을 실제로 맨 처음에 한판")**
+- A brand-new account (`onboarding.tutorialSeen` false) gets a welcome dialog on the lobby:
+  "튜토리얼 시작" plays a real guided match (`GameParams.tutorial`, `meta/tutorialMatch.ts`),
+  "건너뛰기" (`data-action="tut-skip"`, used by the e2e flow) marks it seen.
+- The match: prepared position (my Walk / Marki / Glacia vs Sad / Marki / Walk), I move first;
+  each guided ply offers exactly one move (`ControllerPorts.humanMoveFilter`), the AI plays
+  scripted replies, a coach card above the board explains each rule as it happens: move (ply 0),
+  slider capture (2), reaching the last row turns Marki around (4), skills from turn 4 / Glacia's
+  freeze (6), capturing the frozen Marki leaves one enemy and starts the storm (8), then free play
+  against the easy AI. The card has its own skip. No rating, rewards or stats; it ends on a
+  completion card with the remaining rules (immobile loss, jumpers, hop / pierce, online clock).
+  `tests/tutorial-match.test.ts` plays the whole script through the engine.
+- The 12-card guide (`ui/components/tutorial.ts`, every rule illustrated on a mini board) stays as
+  the reference: the lobby's ? button and settings' 게임 방법 다시 보기.
+
 **Developer mode**
 - **Unlock:** tap the version label at the bottom of settings 7 times in 2 s.
 - **Effect:**
@@ -338,7 +353,7 @@ legendary.
   game information).
 
 ## 5. Deploy and verify (the routine)
-1. **Gates:** `npx tsc --noEmit -p .`, `npx vitest run` (464 tests at last count) and
+1. **Gates:** `npx tsc --noEmit -p .`, `npx vitest run` (466 tests at last count) and
    `npm run build`.
    - Never leave temporary `tests/*.tmp.test.ts` or `zz-*` files; `node:` imports break tsc.
    - Vitest hides `console.log` from passing tests, so simulations write results to files.

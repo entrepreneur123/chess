@@ -98,6 +98,11 @@ export interface ControllerPorts {
    * keeps a silent safety deadline (a stuck bot plays its fallback), and the match can be paused.
    */
   timed?: boolean;
+  /**
+   * Which of the player's legal moves are offered (the guided tutorial allows only the step's
+   * move; the others are not highlighted and cannot be played). Default: all of them.
+   */
+  humanMoveFilter?(state: GameState, move: Move): boolean;
 }
 
 const samePos = (a: Pos, b: Pos) => a.r === b.r && a.c === b.c;
@@ -271,7 +276,7 @@ export class GameController {
       return;
     }
     if (piece.owner === HUMAN && this._phase === 'humanTurn') {
-      this.setSelection({ pieceId: piece.id, moves: getLegalMoves(this._state, piece.id), actionable: true });
+      this.setSelection({ pieceId: piece.id, moves: this.humanMoves(piece.id), actionable: true });
     } else {
       // Enemy piece, or own piece while the bot is thinking: non-actionable reach preview.
       this.setSelection({ pieceId: piece.id, moves: getTargetsForPiece(this._state, piece), actionable: false });
@@ -302,6 +307,7 @@ export class GameController {
   /** Programmatic move (used by tests/debug). Returns false if not allowed now. */
   tryHumanMove(move: Move): boolean {
     if (this.disposed || this._paused || this._phase !== 'humanTurn' || !isLegalMove(this._state, move)) return false;
+    if (this.ports.humanMoveFilter && !this.ports.humanMoveFilter(this._state, move)) return false;
     void this.playHumanMove(move);
     return true;
   }
@@ -370,6 +376,13 @@ export class GameController {
     }
   }
 
+  /** The player's legal moves for a piece, as offered (ControllerPorts.humanMoveFilter). */
+  private humanMoves(pieceId: string): Move[] {
+    const all = getLegalMoves(this._state, pieceId);
+    const f = this.ports.humanMoveFilter;
+    return f ? all.filter((m) => f(this._state, m)) : all;
+  }
+
   private setSelection(sel: Selection | null): void {
     this.selection = sel;
     this.emit({ type: 'change' });
@@ -387,7 +400,7 @@ export class GameController {
     if (!piece || this._phase === 'ended') {
       this.selection = null;
     } else if (piece.owner === HUMAN && this._phase === 'humanTurn') {
-      this.selection = { pieceId: piece.id, moves: getLegalMoves(this._state, piece.id), actionable: true };
+      this.selection = { pieceId: piece.id, moves: this.humanMoves(piece.id), actionable: true };
     } else {
       this.selection = { pieceId: piece.id, moves: getTargetsForPiece(this._state, piece), actionable: false };
     }
@@ -404,7 +417,7 @@ export class GameController {
       this._phase = 'humanTurn';
       // A chain move can only be played by one piece: pre-select it so the player just taps a square.
       const bonusId = this._state.bonusPieceId;
-      if (bonusId !== null && getPieceById(this._state, bonusId)) this.selection = { pieceId: bonusId, moves: getLegalMoves(this._state, bonusId), actionable: true };
+      if (bonusId !== null && getPieceById(this._state, bonusId)) this.selection = { pieceId: bonusId, moves: this.humanMoves(bonusId), actionable: true };
       this.refreshSelection();
       this.startClock();
       this.emit({ type: 'change' });

@@ -72,6 +72,7 @@ import { createFieldPanel } from '../game/fieldPanel';
 import { createHand, handModel, selectFromHand } from '../game/hand';
 import { CUTIN_MS, cutInEl, preloadCutIns } from '../game/cutin';
 import { isTimedMatch, type GameParams } from './gameParams';
+import { tutorialAllows, tutorialBotMove, tutorialCoach, tutorialStart } from '../../meta/tutorialMatch';
 import '../game/hud.css';
 
 /**
@@ -109,7 +110,9 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   const bag = new Disposables();
   // Who moves first was flipped by matchmaking (and shown on the VS card); flip here otherwise.
   const firstTurn: PlayerId = params.firstTurn ?? coinFlipFirst(defaultRng);
-  const initial = createGame(params.playerFormation, params.botFormation, firstTurn);
+  /** The guided first match (meta/tutorialMatch.ts): prepared position, scripted AI, coach card. */
+  const tutorial = params.tutorial === true;
+  const initial = tutorial ? tutorialStart() : createGame(params.playerFormation, params.botFormation, firstTurn);
 
   // ---------- static DOM
   const topRing = new TimerRing(BOT);
@@ -314,7 +317,42 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   const notes = h('div', { class: 'hud-notes board-overlay' }, stormChip, passChip, coach);
   const boardWrap = h('div', { class: 'board-wrap' }, boardHost, fx);
   const oppPanel = h('aside', { class: 'pbar opp-hand', 'aria-label': `${params.opponentName} · 레드` }, oppHand.el);
-  const el = h('main', { class: 'game no-select' }, topBar, oppPanel, hudStrip, notes, boardWrap, infoHost, bottomBar);
+  // Guided first match: a coach card over the opponent bar / turn strip / notes band (never over
+  // the board), with its own skip (the ≡ menu sits under it).
+  const tcStep = h('span', { class: 'tcoach__step' });
+  const tcTitle = h('h2', { class: 'tcoach__title' });
+  const tcBody = h('p', { class: 'tcoach__body' });
+  const tcoach = tutorial
+    ? h(
+        'section',
+        { class: 'tcoach', role: 'status', 'aria-live': 'polite' },
+        h('div', { class: 'tcoach__head' }, tcStep, tcTitle, h('button', { class: 'btn btn--text btn--sm tcoach__skip', type: 'button', 'data-action': 'tutorial-skip', onclick: () => skipTutorial() }, '건너뛰기')),
+        tcBody,
+      )
+    : null;
+  let tcKey = '';
+  const updateTutorial = (snap: ControllerSnapshot) => {
+    if (!tcoach) return;
+    const c = tutorialCoach(snap.state, snap.state.turn === HUMAN && snap.phase !== 'ended');
+    tcoach.hidden = !c;
+    if (!c) return;
+    const k = `${c.step}|${c.title}`;
+    if (k === tcKey) return;
+    tcKey = k;
+    setText(tcStep, c.step);
+    setText(tcTitle, c.title);
+    setText(tcBody, c.body);
+    tcoach.classList.remove('is-entering');
+    void tcoach.offsetWidth;
+    tcoach.classList.add('is-entering');
+  };
+  const finishTutorialFlag = () =>
+    updateProfile((p) => ({ ...p, onboarding: { ...p.onboarding, tutorialSeen: true, firstMoveDone: true } }));
+  const skipTutorial = () => {
+    finishTutorialFlag();
+    router.home();
+  };
+  const el = h('main', { class: `game no-select${tutorial ? ' is-tutorial' : ''}` }, topBar, oppPanel, hudStrip, notes, boardWrap, infoHost, bottomBar, tcoach);
 
   // ---------- runtime objects (created on mount)
   let board: IBoardView | null = null;
@@ -352,7 +390,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
   const notified = { unlock: false, storm: false };
   let stormStarted = initial.stormIn !== null;
   const passToastShown = [false, false];
-  let coachOn = !getProfile().onboarding.firstMoveDone;
+  let coachOn = !tutorial && !getProfile().onboarding.firstMoveDone;
   let coachMsg = '';
 
   const setCoach = (msg: string) => {
@@ -982,6 +1020,7 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     }
     prevPhase = snap.phase;
     updateCoach(snap);
+    updateTutorial(snap);
     const activeTurn = snap.phase === 'ended' ? null : s.turn;
     topBar.classList.toggle('is-turn', activeTurn === BOT);
     bottomBar.classList.toggle('is-turn', activeTurn === HUMAN);
@@ -1061,9 +1100,48 @@ export function gameScreen(router: Router, params: GameParams): Screen {
     return r.summary;
   };
 
+  /** End of the guided first match: no rating or stats, a completion card, then the lobby. */
+  const showTutorialResult = async (s: GameState) => {
+    finishTutorialFlag();
+    field.close();
+    if (tcoach) tcoach.hidden = true;
+    await bag.sleep(650);
+    if (bag.isDisposed) return;
+    clearToasts();
+    board?.setPaused?.(true);
+    const won = outcomeOf(s) === 'win';
+    const tips = [
+      '이동도 스킬도 할 수 없으면 패배해요',
+      '월크 · 라르헨 · 라카엘리는 사이의 말을 뛰어넘는 점퍼',
+      '피커 · 베리쉬는 지나는 적을 모두 잡아요',
+      '온라인 대전은 한 수 제한 시간이 있고, 넘기면 몰수패',
+      '더 자세한 규칙은 로비의 ? 게임 방법에서',
+    ];
+    if (won) {
+      sfx('win');
+      haptic('win');
+      bag.add(confetti());
+    } else sfx('draw');
+    await showDialog<'lobby'>({
+      title: won ? '튜토리얼 완료!' : '튜토리얼 끝!',
+      className: `result result--${won ? 'win' : 'draw'}`,
+      icon: h('span', { class: `result__icon result__icon--${won ? 'win' : 'draw'}` }, icon(won ? 'trophy' : 'info', 40)),
+      body: h(
+        'div',
+        { class: 'result__body tut-done' },
+        h('p', { class: 'result__reason' }, won ? '기본 규칙을 모두 익혔어요. 이제 실전이에요!' : '기본 규칙은 다 배웠어요. 실전에서 다시 도전해 봐요!'),
+        h('ul', { class: 'tut-done__tips' }, tips.map((t) => h('li', null, t))),
+      ),
+      dismissValue: 'lobby',
+      actions: [{ label: '로비로', value: 'lobby', variant: 'filled', action: 'tutorial-done' }],
+    });
+    if (!bag.isDisposed) router.home();
+  };
+
   const showResult = async (s: GameState) => {
     if (resultShown) return;
     resultShown = true;
+    if (tutorial) return showTutorialResult(s);
     const outcome = outcomeOf(s);
     const summary = settle(outcome);
     const after = getProfile();
@@ -1160,7 +1238,12 @@ export function gameScreen(router: Router, params: GameParams): Screen {
       bag.add(() => botRef.dispose());
 
       const c: GameController = (ctrl = new GameController(initial, {
-        requestBotMove: (state) => botRef.requestMove(state, params.difficulty),
+        // The guided first match: scripted replies first, then the real (easy) AI.
+        requestBotMove: (state) => {
+          const scripted = tutorial ? tutorialBotMove(state) : null;
+          return scripted ? Promise.resolve(scripted) : botRef.requestMove(state, params.difficulty);
+        },
+        humanMoveFilter: tutorial ? tutorialAllows : undefined,
         timed,
         botThinkDelayMs: () => randInt(defaultRng, PACING.botThinkMinMs, PACING.botThinkMaxMs),
         animate: async (move, after) => {
