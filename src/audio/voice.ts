@@ -13,8 +13,8 @@
  *   defaults to on) gates voice lines only.
  * - VOICE_LINES_READY (below) is the release gate of the voice lines as a whole: while it is false
  *   no line is spoken or even downloaded and the settings sheet hides the voice switch. Character
- *   sound effects are not voices and keep playing. Every call site stays wired, so shipping the
- *   re-recorded cast is: new clips + manifest (docs/brand/audio/VOICE_REDO.md), then flip the flag.
+ *   sound effects are not voices and keep playing. Every call site stays wired, so a cast change is:
+ *   new clips + manifest (docs/brand/audio/README.md), and the flag stays true.
  */
 import type { CharacterId } from '../engine/types';
 import { getProfile } from '../meta/profile';
@@ -179,11 +179,12 @@ function hasBrowserAudio(): boolean {
 }
 
 /**
- * Release gate of the character voice lines. False since 2026-11-07: the owner judged the current
- * AI voices not good enough to ship and will brief a new concept per character; until the new cast
- * is recorded the game is silent of speech (captions still show each character's written lines).
+ * Release gate of the character voice lines. Switched off on 2026-11-07 when the owner judged the
+ * first AI cast too poor to ship, and back on the same day with the ElevenLabs cast (a designed voice
+ * per character, every line directed and mastered: docs/brand/audio/README.md). Set false to silence
+ * every line and hide the voice switch again without touching any call site.
  */
-export const VOICE_LINES_READY = false;
+export const VOICE_LINES_READY = true;
 
 function voiceOn(): boolean {
   if (!VOICE_LINES_READY) return false;

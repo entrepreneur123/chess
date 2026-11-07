@@ -1,12 +1,14 @@
 # Voice re-recording brief (성우 재작업 준비)
 
-**Status (2026-11-07): voice lines are switched OFF.** The owner judged the current AI voices not
-good enough to ship. `VOICE_LINES_READY = false` in `src/audio/voice.ts` silences every line, skips
-downloading the clips and hides the 캐릭터 음성 switch in settings. Character sound effects (not
-voices) keep playing, and cut-in captions keep showing each character's written lines.
-
-Nothing else needs to change in the game code: every voice call site (select, move, capture,
-skill, chain, death, victory, trap, hop, Rakaeli's transformed lines) stays wired.
+**Status (2026-11-07, evening): shipped.** The lines were switched off in the morning (the owner judged
+the first AI cast too poor) and re-recorded the same day with ElevenLabs: a designed voice per
+character, every line directed with `eleven_v4` audio tags and mastered (`README.md`, "Current cast").
+`VOICE_LINES_READY = true` again in `src/audio/voice.ts`. This document stays as the per-character
+reference of concepts and lines; the direction actually recorded per line is `lines.json` → `v4`
+(source: `v4/direction.json`). The owner's acting brief that the cast was directed to: real
+professional voice-actor delivery, no robotic cadence, natural sentence endings, pitch / speed /
+intensity varied per line, breath and pauses, clean studio sound, one concept-matched voice per
+character.
 
 ## How to ship the new cast
 
@@ -29,7 +31,7 @@ row): 선택 select · 이동 move (spoken 60% of the time) · 잡기 capture ·
 다중 잡기 hop-multi (Picker, Verish) and the 타천 awake-* set (Rakaeli). Two or three variants per
 frequent event (select, move, capture) keep it from getting repetitive.
 
-**Budget:** all audio together must stay under the limit in `tests/voice.test.ts` (3.25 MiB today);
+**Budget:** all audio together must stay under the limit in `tests/voice.test.ts` (4.25 MiB today);
 short lines (0.6–1.6 s) keep the game snappy and the cut-ins in sync.
 
 ## Characters

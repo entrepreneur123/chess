@@ -1,1306 +1,1540 @@
 {
-  "_note": "Voice script for GRID CLASH. Every character is voiced by Qwen3-TTS Base voice cloning of a reference clip in refs/ that is itself a Qwen3-TTS VoiceDesign take (a designed voice, no real person). 'voice' + 'clone.style' document the VoiceDesign prompt that made the reference; 'concept' is the target derived from the character art (public/chars/*-lv*.jpg); 'gender': 'female' / 'male' makes post_voice.py gate takes on a gender classifier (QA only). 'asr' (optional) is the reference text for the character-error-rate check when the spoken text has non-lexical sounds. 'say' (optional) is what the TTS speaks when it differs from the caption 'text' (exclamation marks make Qwen shout male voices an octave up); 'f0_target' (optional) is the pitch post_voice.py prefers when choosing takes.",
-  "characters": {
-    "sad": {
-      "concept": "Young-adult paladin in gold armour and winged helm, stoic and focused: a warm, clear, confident baritone, heroic but natural, never shouted or shrill.",
-      "voice": "A brave adult man in his thirties, a holy paladin knight. Warm, natural and confident baritone with a heroic, noble tone, relaxed full chest voice, clear pronunciation. Strong but never shouting and never shrill.",
-      "clone": {
-        "ref": "refs/sad-ref.flac",
-        "text": "명을 받들겠습니다. 나를 따르라!",
-        "style": "Confident, warm and heroic, steady.",
-        "_from": "VoiceDesign take (seed 11, take 2) of the prompt in 'voice' + 'style', trimmed; chosen for CER 0, F0 163 Hz, the warmest spectrum and the lowest warble of 12 takes"
-      },
-      "f0_target": 160,
-      "lines": [
-        {
-          "id": "select-1",
-          "event": "select",
-          "text": "명을 받들겠습니다.",
-          "style": "Calm, loyal and dignified, moderate volume."
-        },
-        {
-          "id": "select-2",
-          "event": "select",
-          "text": "성검과 함께.",
-          "style": "Quiet resolve, dignified and steady."
-        },
-        {
-          "id": "move-1",
-          "event": "move",
-          "text": "전진한다!",
-          "style": "Commanding and firm, resonant chest voice, lower register, brief, not yelling.",
-          "say": "전진한다."
-        },
-        {
-          "id": "move-2",
-          "event": "move",
-          "text": "나를 따르라!",
-          "style": "Leading his troops, firm and brief.",
-          "say": "나를 따르라."
-        },
-        {
-          "id": "capture-1",
-          "event": "capture",
-          "text": "정의의 심판을!",
-          "style": "A determined battle cry, forceful but controlled, not screaming.",
-          "say": "정의의 심판을."
-        },
-        {
-          "id": "capture-2",
-          "event": "capture",
-          "text": "성검을 받아라!",
-          "style": "A powerful commanding strike call, resonant chest voice, lower register, not yelling.",
-          "say": "성검을 받아라."
-        },
-        {
-          "id": "capture-3",
-          "event": "capture",
-          "text": "물러서라!",
-          "style": "A stern, commanding shout while striking.",
-          "say": "물러서라."
-        },
-        {
-          "id": "skill-1",
-          "event": "skill",
-          "text": "성스러운 빛이여!",
-          "style": "Invoking holy power, solemn, resonant and low, steady.",
-          "say": "성스러운 빛이여."
-        },
-        {
-          "id": "death-1",
-          "event": "death",
-          "text": "크윽… 여기까지인가…",
-          "style": "Mortally wounded, pained, weak and breathy, fading."
-        },
-        {
-          "id": "victory-1",
-          "event": "victory",
-          "text": "빛의 승리다!",
-          "style": "Proud and triumphant, resonant chest voice, lower register, not yelling.",
-          "say": "빛의 승리다."
-        }
-      ]
+ "_note": "Voice script for GRID CLASH. Since 2026-11-07 every character is voiced by ElevenLabs: a voice designed per character from a text prompt (model eleven_ttv_v3, language ko; a synthetic voice, no real person) and saved in the owner's ElevenLabs workspace under 'elevenlabs.voice_id', then every line rendered with eleven_v4 from the directed prompt in 'v4' (audio tags + the spoken text; 'text' is the tag-free caption the game shows). 'concept' is the character brief the voice was designed to; 'voice', 'clone', 'f0_target' and 'style' are the earlier Qwen3-TTS pipeline's metadata, kept for history (that pipeline and refs/ are no longer used for shipped clips). Mastering: docs/brand/audio/v4/master_v4.py (QA in v4/qa-v4.json).",
+ "characters": {
+  "sad": {
+   "concept": "Young-adult paladin in gold armour and winged helm, stoic and focused: a warm, clear, confident baritone, heroic but natural, never shouted or shrill.",
+   "elevenlabs": {
+    "voice_id": "xLoQXNclZDKhFgVbxDKw",
+    "voice_design_model": "eleven_ttv_v3",
+    "tts_model": "eleven_v4",
+    "language": "ko"
+   },
+   "voice": "A brave adult man in his thirties, a holy paladin knight. Warm, natural and confident baritone with a heroic, noble tone, relaxed full chest voice, clear pronunciation. Strong but never shouting and never shrill.",
+   "clone": {
+    "ref": "refs/sad-ref.flac",
+    "text": "명을 받들겠습니다. 나를 따르라!",
+    "style": "Confident, warm and heroic, steady.",
+    "_from": "VoiceDesign take (seed 11, take 2) of the prompt in 'voice' + 'style', trimmed; chosen for CER 0, F0 163 Hz, the warmest spectrum and the lowest warble of 12 takes"
+   },
+   "f0_target": 160,
+   "lines": [
+    {
+     "id": "select-1",
+     "event": "select",
+     "text": "명을 받들겠습니다.",
+     "style": "Calm, loyal and dignified, moderate volume.",
+     "v4": "[calm] [warmly] [composed] 명을 받들겠습니다."
     },
-    "marki": {
-      "concept": "A massive armoured bull with lava-cracked hide, snorting steam: a thick, deep, guttural bass with a growl underneath, still intelligible.",
-      "voice": "A gigantic minotaur warrior, a male beast with a massive chest. Extremely deep, low-pitched bass voice, rough, raspy and gravelly. He never yells in a high voice: even when furious he growls and roars from deep in the chest, low register throughout, heavy and intimidating.",
-      "clone": {
-        "ref": "refs/marki-ref.flac",
-        "text": "피 냄새가 난다.",
-        "_from": "VoiceDesign take of marki select-2 (voice + style below), trimmed"
-      },
-      "lines": [
-        {
-          "id": "select-1",
-          "event": "select",
-          "text": "누구냐.",
-          "style": "A low, slow, suspicious grunt."
-        },
-        {
-          "id": "select-2",
-          "event": "select",
-          "text": "피 냄새가 난다.",
-          "style": "Low, slow and menacing, savoring it."
-        },
-        {
-          "id": "move-1",
-          "event": "move",
-          "text": "비켜라!",
-          "style": "A heavy, low growling bark, menacing, deep chest voice."
-        },
-        {
-          "id": "move-2",
-          "event": "move",
-          "text": "길을 비켜!",
-          "style": "A heavy, low growling bark, menacing, deep chest voice."
-        },
-        {
-          "id": "capture-1",
-          "event": "capture",
-          "text": "박살이다!",
-          "style": "A deep, guttural beast roar followed by a low growled threat, furious but low-pitched."
-        },
-        {
-          "id": "capture-2",
-          "event": "capture",
-          "text": "날려버린다!",
-          "style": "A low, menacing growl, gravelly, deep chest voice, not shouting."
-        },
-        {
-          "id": "capture-3",
-          "event": "capture",
-          "text": "부숴버린다!",
-          "style": "A brutal low growl, gravelly and furious, deep chest voice, not shouting."
-        },
-        {
-          "id": "skill-1",
-          "event": "skill",
-          "text": "돌격이다!",
-          "style": "A thunderous low roar, deep chest voice, furious but low-pitched."
-        },
-        {
-          "id": "death-1",
-          "event": "death",
-          "text": "크르륵… 이럴 수가…",
-          "style": "Dying beast, a weak gurgling growl, fading."
-        },
-        {
-          "id": "victory-1",
-          "event": "victory",
-          "text": "약하다! 약해!",
-          "style": "Booming, low, mocking contempt, deep chest voice, slow."
-        }
-      ]
+    {
+     "id": "select-2",
+     "event": "select",
+     "text": "성검과 함께.",
+     "style": "Quiet resolve, dignified and steady.",
+     "v4": "[calm] [softly] [resolute] 성검과 함께."
     },
-    "walk": {
-      "concept": "A scrappy shield fighter in leather and chainmail (rune armour at lv3), shouting as he charges: a brave man like sad but rougher, darker and lower, steady and terse.",
-      "voice": "A grizzled veteran soldier in his fifties, a shield guardian. Rough, gravelly, husky low baritone, weathered but unshakable, calm and steady, short clipped decisive words, quiet authority, never shouting.",
-      "clone": {
-        "ref": "refs/walk-ref.flac",
-        "text": "준비 완료. 명령을.",
-        "style": "Calm, steady and ready.",
-        "_from": "VoiceDesign take (seed 11, take 0); the 'young soldier' prompt matched the art better but its takes shouted (F0 150-330 Hz, CER up to 0.57), so the steadier, rougher veteran take (F0 100 Hz) was kept"
-      },
-      "lines": [
-        {
-          "id": "select-1",
-          "event": "select",
-          "text": "준비 완료.",
-          "style": "Calm and alert, reporting for duty."
-        },
-        {
-          "id": "select-2",
-          "event": "select",
-          "text": "명령을.",
-          "style": "Calm and alert, awaiting orders."
-        },
-        {
-          "id": "move-1",
-          "event": "move",
-          "text": "간다.",
-          "style": "Short, calm and determined."
-        },
-        {
-          "id": "move-2",
-          "event": "move",
-          "text": "이동한다.",
-          "style": "Short, calm and determined."
-        },
-        {
-          "id": "capture-1",
-          "event": "capture",
-          "text": "방패로 막고, 친다!",
-          "style": "Focused and forceful, striking with a shield.",
-          "say": "방패로 막고, 친다."
-        },
-        {
-          "id": "capture-2",
-          "event": "capture",
-          "text": "끝이다!",
-          "style": "A short, firm, controlled exclamation in a low register, not yelling.",
-          "say": "끝이다."
-        },
-        {
-          "id": "capture-3",
-          "event": "capture",
-          "text": "쓰러뜨렸다!",
-          "style": "A short, firm, controlled exclamation in a low register, not yelling.",
-          "say": "쓰러뜨렸다."
-        },
-        {
-          "id": "skill-1",
-          "event": "skill",
-          "text": "도약한다!",
-          "style": "A short, firm effort grunt-word while leaping, low register, not yelling.",
-          "say": "도약한다."
-        },
-        {
-          "id": "death-1",
-          "event": "death",
-          "text": "방어선이… 무너졌다…",
-          "style": "Wounded and exhausted, quiet and pained."
-        },
-        {
-          "id": "victory-1",
-          "event": "victory",
-          "text": "임무 완수.",
-          "style": "Calm, proud and satisfied."
-        }
-      ]
+    {
+     "id": "move-1",
+     "event": "move",
+     "text": "전진한다!",
+     "style": "Commanding and firm, resonant chest voice, lower register, brief, not yelling.",
+     "v4": "[determined] [firm] 전진한다!"
     },
-    "insaner": {
-      "concept": "A small purple imp with horns, tail and a manic fanged grin: a sly, wicked creature voice (not a child) under real demonic modulation.",
-      "voice": "A small evil demon imp, a wicked little goblin creature. Raspy, nasal, scratchy and sly voice with a hissing edge, sneaky and malicious, with a nasty snicker. Sounds like a wicked creature, not like a child or a baby: mid pitch with a gritty, crackly texture.",
-      "clone": {
-        "ref": "refs/insaner-ref.flac",
-        "text": "이번엔 누굴 괴롭힐까?",
-        "style": "Wicked and scheming, a nasty whispery tone.",
-        "_from": "VoiceDesign take (seed 11, take 1); a sly male creature voice at 153 Hz, CER 0, no pauses. The demon layer is added by post_voice.py"
-      },
-      "lines": [
-        {
-          "id": "select-1",
-          "event": "select",
-          "text": "키힉… 나를 불렀나?",
-          "style": "Giggling mischievously, cheeky.",
-          "asr": "키힉 나를 불렀나"
-        },
-        {
-          "id": "select-2",
-          "event": "select",
-          "text": "이번엔 누굴 괴롭힐까?",
-          "style": "Playful and sing-song, bored and curious."
-        },
-        {
-          "id": "move-1",
-          "event": "move",
-          "text": "어디 숨었니~?",
-          "style": "Playful sing-song, skipping along."
-        },
-        {
-          "id": "move-2",
-          "event": "move",
-          "text": "그림자 속으로~",
-          "style": "Humming a playful sing-song."
-        },
-        {
-          "id": "capture-1",
-          "event": "capture",
-          "text": "네 영혼, 맛있겠다!",
-          "style": "Greedy and gleeful, snatching something."
-        },
-        {
-          "id": "capture-2",
-          "event": "capture",
-          "text": "키히히히! 잡았다!",
-          "style": "Laughing crazily, delighted.",
-          "asr": "키히히히 잡았다"
-        },
-        {
-          "id": "capture-3",
-          "event": "capture",
-          "text": "장난 좀 쳐볼까?",
-          "style": "Sly and teasing, mischievous."
-        },
-        {
-          "id": "skill-1",
-          "event": "skill",
-          "text": "네 힘, 이제 내 거야!",
-          "style": "Greedy, excited and a little unhinged."
-        },
-        {
-          "id": "chain-1",
-          "event": "chain",
-          "text": "한 번 더~!",
-          "style": "Excited, gleeful and hyper."
-        },
-        {
-          "id": "death-1",
-          "event": "death",
-          "text": "크윽… 두고 보자…",
-          "style": "Sulking and pouting, annoyed."
-        },
-        {
-          "id": "victory-1",
-          "event": "victory",
-          "text": "전부 내 장난감이야! 키히히!",
-          "style": "Triumphant, bratty and cackling.",
-          "asr": "전부 내 장난감이야 키히히"
-        }
-      ]
+    {
+     "id": "move-2",
+     "event": "move",
+     "text": "나를 따르라!",
+     "style": "Leading his troops, firm and brief.",
+     "v4": "[commanding] [confident] 나를 따르라!"
     },
-    "brutile": {
-      "concept": "A green-skinned, fanged, sneering witch in a horned crown hat: an unmistakably female, aged, raspy, cackling villainess voice with energy.",
-      "gender": "female",
-      "voice": "A wicked old witch, an elderly woman in her seventies. Old female voice: thin, dry, crackly and raspy with age, slightly shaky, sneering and mocking, with a wicked cackle. Speaks slowly and theatrically, savoring each word. Clearly an old grandmother's voice, not a young woman and not a man.",
-      "clone": {
-        "ref": "refs/brutile-ref.flac",
-        "text": "이… 늙은이를 불렀느냐…",
-        "style": "Sly, sneering and condescending, slow.",
-        "_from": "VoiceDesign take (seed 11, take 1), trimmed and a 1.9 s mid-line pause shortened to 0.3 s; F0 167 Hz (low, aged), raspy (WORLD aperiodicity 0.31), P(female) 0.996 / 0.95 on two classifiers, CER 0"
-      },
-      "lines": [
-        {
-          "id": "select-1",
-          "event": "select",
-          "text": "이 늙은이를 불렀느냐?",
-          "style": "Sly and condescending, a slow mocking purr."
-        },
-        {
-          "id": "select-2",
-          "event": "select",
-          "text": "흐흐흐… 저주가 필요하냐?",
-          "style": "A soft wicked chuckle, then a seductive, teasing question.",
-          "asr": "흐흐흐 저주가 필요하냐"
-        },
-        {
-          "id": "move-1",
-          "event": "move",
-          "text": "어디, 한번 걸어볼까…",
-          "style": "Leisurely and amused, haughty."
-        },
-        {
-          "id": "move-2",
-          "event": "move",
-          "text": "흐흥… 가볼까?",
-          "style": "A smug, sing-song hum, then a lazy question.",
-          "asr": "흐흥 가볼까"
-        },
-        {
-          "id": "capture-1",
-          "event": "capture",
-          "text": "썩어 문드러져라!",
-          "style": "A venomous, hissing curse, spiteful and intense."
-        },
-        {
-          "id": "capture-2",
-          "event": "capture",
-          "text": "내 저주를 받아라!",
-          "style": "A commanding, wicked curse, forceful and theatrical."
-        },
-        {
-          "id": "capture-3",
-          "event": "capture",
-          "text": "이히히히! 끝이다!",
-          "style": "A short wicked witch cackle, then gleeful and cruel.",
-          "asr": "이히히히 끝이다"
-        },
-        {
-          "id": "skill-1",
-          "event": "skill",
-          "text": "이 땅은 죽었다!",
-          "style": "A dark, grand proclamation, menacing and powerful."
-        },
-        {
-          "id": "skill-2",
-          "event": "skill",
-          "text": "불모지여, 피어나라!",
-          "style": "Casting a dark spell, an ominous, grand incantation."
-        },
-        {
-          "id": "death-1",
-          "event": "death",
-          "text": "이… 이럴 리가…",
-          "style": "Shocked and dying, a weak, breathy, disbelieving gasp, fading."
-        },
-        {
-          "id": "victory-1",
-          "event": "victory",
-          "text": "모두 썩어라! 이히히히!",
-          "style": "Triumphant and cruel, then a short wicked witch cackle.",
-          "asr": "모두 썩어라 이히히히"
-        }
-      ]
+    {
+     "id": "capture-1",
+     "event": "capture",
+     "text": "정의의 심판을!",
+     "style": "A determined battle cry, forceful but controlled, not screaming.",
+     "v4": "[intense] [righteous] 정의의 심판을!"
     },
-    "michelle": {
-      "concept": "A gloomy little girl whose long bangs hide her eyes, always holding a doll; she lays doll traps behind her. A quiet, soft, slightly breathy child's voice with a flat, eerie calm: unsettling, never cute, babyish or shrill.",
-      "gender": "female",
-      "voice": "A gloomy, quiet little girl of about ten who always holds an old doll. Soft, hushed, slightly breathy voice in a natural low-middle child pitch, speaking slowly with a flat, eerie calm, as if telling a secret. Melancholic and unsettling. Never cute, never babyish, never squeaky, never shrill, never excited.",
-      "clone": {
-        "ref": "refs/michelle-ref.flac",
-        "text": "인형이… 기다릴 거야.",
-        "style": "Quiet, slow and eerie, almost a whisper.",
-        "_from": "VoiceDesign take (seed 11, take 7) of 8, trimmed and a 1.0 s mid-line pause shortened to 0.4 s; F0 269 Hz with a narrow 240-295 Hz range (flat, hushed), warble 0.016, HNR 16.9 dB, P(female) 0.94 / 0.95 on two classifiers; the takes at 330-350 Hz were rejected as too childish/bright, those at 200-215 Hz as too adult"
-      },
-      "f0_target": 265,
-      "lines": [
-        {
-          "id": "select-1",
-          "event": "select",
-          "text": "불렀어…?",
-          "style": "Quiet and flat, barely interested."
-        },
-        {
-          "id": "select-2",
-          "event": "select",
-          "text": "인형도… 같이 갈래.",
-          "style": "Soft and solemn, hugging her doll."
-        },
-        {
-          "id": "move-1",
-          "event": "move",
-          "text": "조용히… 갈게.",
-          "style": "Hushed, slow, almost a whisper."
-        },
-        {
-          "id": "move-2",
-          "event": "move",
-          "text": "따라오지 마…",
-          "style": "Flat, quiet and eerie."
-        },
-        {
-          "id": "capture-1",
-          "event": "capture",
-          "text": "같이 놀자…",
-          "style": "Soft, flat and unsettling, slow."
-        },
-        {
-          "id": "capture-2",
-          "event": "capture",
-          "text": "쉿… 이제 잘 시간이야.",
-          "style": "A soft, eerie lullaby tone."
-        },
-        {
-          "id": "capture-3",
-          "event": "capture",
-          "text": "숨바꼭질… 끝.",
-          "style": "Quiet and matter-of-fact, eerie."
-        },
-        {
-          "id": "trap-set-1",
-          "event": "trap-set",
-          "text": "인형이… 기다릴 거야.",
-          "style": "Quiet, slow and eerie, almost a whisper."
-        },
-        {
-          "id": "trap-sprung-1",
-          "event": "trap-sprung",
-          "text": "잡았다… 이제 못 움직여.",
-          "style": "A soft, satisfied, eerie whisper."
-        },
-        {
-          "id": "death-1",
-          "event": "death",
-          "text": "인형… 놓치면 안 되는데…",
-          "style": "Weak, sad and fading."
-        },
-        {
-          "id": "victory-1",
-          "event": "victory",
-          "text": "다들… 조용해졌네.",
-          "style": "Calm, quiet and unsettling."
-        }
-      ]
+    {
+     "id": "capture-2",
+     "event": "capture",
+     "text": "성검을 받아라!",
+     "style": "A powerful commanding strike call, resonant chest voice, lower register, not yelling.",
+     "v4": "[shouting] [intense] 성검을 받아라!"
     },
-    "picker": {
-      "concept": "A lone frontier cowboy of about 30 with a lasso who hops diagonally through every square: a laconic, low, dry drawl, calm and confident, a little amused, never shouted.",
-      "gender": "male",
-      "voice": "A lone frontier cowboy in his thirties, a man of few words. Low, dry, slightly husky baritone with a relaxed, unhurried drawl. Calm, confident and a little amused, speaking softly and slowly from the chest. Never shouting, never excited.",
-      "clone": {
-        "ref": "refs/picker-ref.flac",
-        "text": "일거리인가. 말은 짧게 하지.",
-        "style": "Laconic, calm and dry, low and slow.",
-        "_from": "VoiceDesign take (seed 11, take 7) of 8; a sigh the model added before the line was cut off and a 0.6 s pause shortened to 0.35 s. F0 108 Hz (the 71-86 Hz takes were creaky, HNR -3..9 dB, and as deep as the minotaur), CER 0, warble 0.043, P(female) 0.001 / 0.006"
-      },
-      "f0_target": 105,
-      "lines": [
-        {
-          "id": "select-1",
-          "event": "select",
-          "text": "일거리인가.",
-          "style": "Laconic, calm and dry."
-        },
-        {
-          "id": "select-2",
-          "event": "select",
-          "text": "말은 짧게 하지.",
-          "style": "Dry, unhurried, low."
-        },
-        {
-          "id": "move-1",
-          "event": "move",
-          "text": "가 보지.",
-          "style": "Relaxed and unbothered."
-        },
-        {
-          "id": "move-2",
-          "event": "move",
-          "text": "한 발짝씩.",
-          "style": "Easy-going drawl, unhurried."
-        },
-        {
-          "id": "capture-1",
-          "event": "capture",
-          "text": "올가미에 걸렸군.",
-          "style": "Dry and calm, quietly amused."
-        },
-        {
-          "id": "capture-2",
-          "event": "capture",
-          "text": "운이 없었군.",
-          "style": "Dry and laconic."
-        },
-        {
-          "id": "capture-3",
-          "event": "capture",
-          "text": "한발 늦었어.",
-          "style": "Calm, quietly confident."
-        },
-        {
-          "id": "hop-multi-1",
-          "event": "hop-multi",
-          "text": "줄 서. 한 번에 간다.",
-          "style": "Cool and confident, a low drawl, not shouting."
-        },
-        {
-          "id": "death-1",
-          "event": "death",
-          "text": "여기까지인가… 석양이 좋군.",
-          "style": "Weary, quiet and wry, fading.",
-          "say": "여기까진가… 석양이 좋군.",
-          "_note": "Every take was voiced from 'say' but the model expands the contraction (Whisper hears 여기까지인가 in 6/6 takes), so the caption follows what is spoken."
-        },
-        {
-          "id": "victory-1",
-          "event": "victory",
-          "text": "해 지기 전에 끝났군.",
-          "style": "Calm, dry satisfaction."
-        }
-      ]
+    {
+     "id": "capture-3",
+     "event": "capture",
+     "text": "물러서라!",
+     "style": "A stern, commanding shout while striking.",
+     "v4": "[stern] [commanding] 물러서라!"
     },
-    "rakaeli": {
-      "concept": "A beautiful, pale blindfolded fallen angel in his late teens (black silk blindfold, cracked dim halo, ash-grey wings) who transforms (타천) into a demon with crimson eyes, horns and flame wings. Base form: a soft, calm, melancholic young male voice with a pretty-boy timbre, elegant, quiet and sorrowful. Transformed form: the same young man, deeper and colder, speaking with a doubled, demonic voice.",
-      "gender": "male",
-      "voice": "A delicate, pretty young man of about seventeen, a fallen angel. A youthful, light tenor voice in a medium-high pitch, soft and silky, gentle and refined, with a quiet sadness. He speaks calmly and slowly with clear pronunciation. Never low or gravelly, never shouting, never a child.",
-      "clone": {
-        "ref": "refs/rakaeli-ref.flac",
-        "text": "눈을 가려도… 길은 보여요.",
-        "style": "Soft, calm and melancholic, quiet and elegant.",
-        "_from": "VoiceDesign take (seed 11, take 4) of 32 over three prompts; trimmed, a 1.6 s pause with a breath cut to 0.4 s. F0 160 Hz (130-211 Hz), warble 0.024, HNR 17.9 dB, harshness -21.9 dB (soft), CER 0, P(female) 0.001 / 0.015. A first prompt (\"soft ... young male voice ... never deep\") gave only 77-125 Hz takes, deeper than the cowboy, and was rejected; the second prompt (\"eighteen-year-old ... light, soft young tenor\") reached 155 Hz on one take of 16, with a creakier 0.05 warble."
-      },
-      "f0_target": 155,
-      "bitrate": "48k",
-      "_note": "Lines with \"fx\": \"rakaeli-awake\" are the transformed form (타천): the same cloned takes, processed by post_voice.fx_rakaeli_awake (2 semitones down, formants -6 %, a detuned WORLD double, a quiet octave-down shadow, saturation, a dark tail). awake-end is spoken as he turns back, so it keeps the base chain. 48 kbps AAC: he has about twice the lines of other characters.",
-      "lines": [
-        {
-          "id": "select-1",
-          "event": "select",
-          "text": "눈을 가려도… 길은 보여요.",
-          "style": "Soft, calm and melancholic, quiet and elegant."
-        },
-        {
-          "id": "select-2",
-          "event": "select",
-          "text": "저를… 부르셨나요.",
-          "style": "Gentle and quiet, a little sad."
-        },
-        {
-          "id": "move-1",
-          "event": "move",
-          "text": "조용히… 내려앉을게요.",
-          "style": "Soft and calm, almost weightless."
-        },
-        {
-          "id": "move-2",
-          "event": "move",
-          "text": "깃털처럼, 가볍게.",
-          "style": "Quiet and graceful."
-        },
-        {
-          "id": "capture-1",
-          "event": "capture",
-          "text": "미안해요… 편히 쉬어요.",
-          "style": "Sorrowful, gentle, apologetic."
-        },
-        {
-          "id": "capture-2",
-          "event": "capture",
-          "text": "빛이 없는 곳으로.",
-          "style": "Calm and melancholic, quietly final."
-        },
-        {
-          "id": "capture-3",
-          "event": "capture",
-          "text": "슬퍼하지 마요.",
-          "style": "Soft and tender, a little sad."
-        },
-        {
-          "id": "skill-1",
-          "event": "skill",
-          "text": "하늘이여… 나를 놓아라.",
-          "style": "A slow, intense, sorrowful vow as he tears off the blindfold and falls; rising in resolve, never shouted."
-        },
-        {
-          "id": "death-1",
-          "event": "death",
-          "text": "드디어… 쉴 수 있겠네요.",
-          "style": "Weak, relieved and fading."
-        },
-        {
-          "id": "victory-1",
-          "event": "victory",
-          "text": "기도는… 끝났어요.",
-          "style": "Calm, quiet and sad."
-        },
-        {
-          "id": "awake-select-1",
-          "event": "awake-select",
-          "text": "이제야… 보이는군.",
-          "style": "Cold, low and menacing, slow.",
-          "fx": "rakaeli-awake"
-        },
-        {
-          "id": "awake-select-2",
-          "event": "awake-select",
-          "text": "날개가 타오른다.",
-          "style": "Cold and low, quietly exultant.",
-          "fx": "rakaeli-awake"
-        },
-        {
-          "id": "awake-move-1",
-          "event": "awake-move",
-          "text": "추락은 끝났다.",
-          "style": "Cold and controlled.",
-          "fx": "rakaeli-awake"
-        },
-        {
-          "id": "awake-move-2",
-          "event": "awake-move",
-          "text": "불길 속을 걷는다.",
-          "style": "Low, cold and slow.",
-          "fx": "rakaeli-awake",
-          "_note": "Was '재를 밟고 간다.': Whisper heard the homophone 쟤 (or 죄를 받고) in 8/8 takes after the transformed-form FX, best CER 0.17, so the line was replaced."
-        },
-        {
-          "id": "awake-capture-1",
-          "event": "awake-capture",
-          "text": "타 버려라.",
-          "style": "Cold, low and merciless.",
-          "fx": "rakaeli-awake"
-        },
-        {
-          "id": "awake-capture-2",
-          "event": "awake-capture",
-          "text": "구원은 없다.",
-          "style": "Cold and final.",
-          "fx": "rakaeli-awake"
-        },
-        {
-          "id": "awake-death-1",
-          "event": "awake-death",
-          "text": "또… 떨어지는군.",
-          "style": "Weary, cold and fading.",
-          "fx": "rakaeli-awake"
-        },
-        {
-          "id": "awake-end-1",
-          "event": "awake-end",
-          "text": "불이… 꺼져 가요.",
-          "style": "Weary and soft, as the transformation fades."
-        }
-      ]
+    {
+     "id": "skill-1",
+     "event": "skill",
+     "text": "성스러운 빛이여!",
+     "style": "Invoking holy power, solemn, resonant and low, steady.",
+     "v4": "[dramatically] [solemn] [rising] 성스러운 빛이여!"
     },
-    "rampid": {
-      "concept": "An energetic teenage ice boy (~15) with sky-blue hair who rides the ice and dashes straight forward at speed: a bright, quick, cocky young male voice; not a child, not deep.",
-      "gender": "male",
-      "voice": "A cocky, energetic teenage boy of about fifteen. A light, bright young tenor in a medium-high pitch, quick, cocky and grinning, playful. A teenage boy's voice: not a small child, not deep, not shouting.",
-      "clone": {
-        "ref": "refs/rampid-ref.flac",
-        "text": "얼음 위라면 누구보다 빨라. 따라올 수 있겠어?",
-        "style": "Cocky and playful, quick, smiling, moderate volume.",
-        "_from": "VoiceDesign take (seed 11, take 3) of 16 over two prompts, pauses tightened to 0.35 s. The first prompt ('light, bright young tenor in a medium-high pitch') gave 6/8 takes the QA classifier heard as female (P 0.90-0.99, 285-473 Hz); the second ('voice has already broken ... medium pitch') gave male takes at 196-370 Hz but noisier (warble 0.045-0.078, HNR 9-11 dB). Kept: F0 249 Hz (168-328), CER 0, warble 0.027, HNR 15.9 dB, harshness -16.1 dB, P(female) 0.019."
-      },
-      "f0_target": 235,
-      "lines": [
-        {
-          "id": "select-1",
-          "event": "select",
-          "text": "불렀어? 바로 갈게!",
-          "style": "Eager and cocky.",
-          "say": "불렀어? 바로 갈게."
-        },
-        {
-          "id": "select-2",
-          "event": "select",
-          "text": "빙판 위라면 내가 최고지.",
-          "style": "Cocky grin, playful."
-        },
-        {
-          "id": "move-1",
-          "event": "move",
-          "text": "간다, 슝!",
-          "style": "Quick and bright.",
-          "say": "간다, 슝."
-        },
-        {
-          "id": "move-2",
-          "event": "move",
-          "text": "못 따라오지?",
-          "style": "Teasing, fast."
-        },
-        {
-          "id": "capture-1",
-          "event": "capture",
-          "text": "너무 느려!",
-          "style": "Cocky taunt.",
-          "say": "너무 느려."
-        },
-        {
-          "id": "capture-2",
-          "event": "capture",
-          "text": "꽁꽁 얼려 주지!",
-          "style": "Bright battle cry.",
-          "say": "꽁꽁 얼려 주지."
-        },
-        {
-          "id": "capture-3",
-          "event": "capture",
-          "text": "빙판 조심하라고!",
-          "style": "Playful warning.",
-          "say": "빙판 조심하라고."
-        },
-        {
-          "id": "death-1",
-          "event": "death",
-          "text": "으앗… 미끄러졌다…",
-          "style": "Startled, then fading."
-        },
-        {
-          "id": "victory-1",
-          "event": "victory",
-          "text": "역시 내가 제일 빠르다니까!",
-          "style": "Triumphant, cocky.",
-          "say": "역시 내가 제일 빠르다니까."
-        }
-      ]
+    {
+     "id": "death-1",
+     "event": "death",
+     "text": "크윽… 여기까지인가…",
+     "style": "Mortally wounded, pained, weak and breathy, fading.",
+     "v4": "[pained] [groaning] 크윽… [weakly] [exhales] 여기까지인가…"
     },
-    "larhen": {
-      "concept": "A professional assassin in his thirties with long hair and twin daggers who leaps high: a low, calm, cold, quiet male voice; terse, never shouting.",
-      "gender": "male",
-      "voice": "A calm, cold professional assassin, a man in his thirties. A low but clear and smooth baritone in a medium-low pitch, quiet, controlled and terse. A clean voice with no rasp and no vocal fry, never shouting.",
-      "clone": {
-        "ref": "refs/larhen-ref.flac",
-        "text": "표적은 정해졌다. 소리 없이 끊는다.",
-        "style": "Cold, calm and quiet, steady.",
-        "_from": "VoiceDesign take (seed 11, take 2) of 16 over two prompts, pauses tightened to 0.35 s. The script said 끝낸다 but the take says 끊는다 (Whisper hears it in both the raw and the trimmed clip), so 'text' follows the audio. Both prompts gave 69-113 Hz takes, most of them creaky (HNR -3.6..3.6 dB, warble up to 0.15); kept the cleanest: F0 92 Hz (72-115), HNR 6.5 dB, warble 0.066, harshness -14.6 dB, P(female) 0.001."
-      },
-      "lines": [
-        {
-          "id": "select-1",
-          "event": "select",
-          "text": "표적을 말해.",
-          "style": "Cold, flat, quiet."
-        },
-        {
-          "id": "select-2",
-          "event": "select",
-          "text": "그림자 속에서.",
-          "style": "Low murmur."
-        },
-        {
-          "id": "move-1",
-          "event": "move",
-          "text": "조용히.",
-          "style": "Quiet, controlled."
-        },
-        {
-          "id": "move-2",
-          "event": "move",
-          "text": "위에서 간다.",
-          "style": "Terse, calm."
-        },
-        {
-          "id": "capture-1",
-          "event": "capture",
-          "text": "끝이다.",
-          "style": "Cold finality."
-        },
-        {
-          "id": "capture-2",
-          "event": "capture",
-          "text": "느렸군.",
-          "style": "Cold, unimpressed."
-        },
-        {
-          "id": "capture-3",
-          "event": "capture",
-          "text": "소리 없이.",
-          "style": "Whispered."
-        },
-        {
-          "id": "death-1",
-          "event": "death",
-          "text": "…실수였나.",
-          "style": "Weak, quiet, fading."
-        },
-        {
-          "id": "victory-1",
-          "event": "victory",
-          "text": "임무 완료.",
-          "style": "Calm, flat satisfaction."
-        }
-      ]
-    },
-    "volkonov": {
-      "concept": "A male bard whose eyes are always closed in a smile and who buffs allies with music: a smooth, warm, theatrical, slightly teasing mid-range male voice with a sing-song delivery.",
-      "gender": "male",
-      "voice": "A charming travelling bard, a man in his late twenties who always smiles with his eyes closed. Smooth, warm, theatrical mid-range male voice, playful and slightly teasing, with a lilting, sing-song melodic delivery.",
-      "clone": {
-        "ref": "refs/volkonov-ref.flac",
-        "text": "자, 오늘도 한 곡 들려줄까? 모두 내 선율에 맞춰 봐.",
-        "style": "Warm, theatrical and teasing, melodic, moderate volume.",
-        "_from": "VoiceDesign take (seed 11, take 7) of 8, pauses tightened to 0.35 s. Takes ranged 140-295 Hz (all male, CER 0); the 205-295 Hz ones read as an excited young man, not a smooth mid-range bard. Kept the warmest: F0 140 Hz with a wide melodic range (95-193 Hz), harshness -16.3 dB, warble 0.077, HNR 8.2 dB, P(female) 0.001."
-      },
-      "f0_target": 145,
-      "lines": [
-        {
-          "id": "select-1",
-          "event": "select",
-          "text": "오늘은 어떤 노래를 들려줄까?",
-          "style": "Warm, playful."
-        },
-        {
-          "id": "select-2",
-          "event": "select",
-          "text": "후후, 박자에 맞춰 볼까?",
-          "style": "Teasing chuckle."
-        },
-        {
-          "id": "move-1",
-          "event": "move",
-          "text": "발걸음도 리듬에 맞춰~",
-          "style": "Sing-song.",
-          "say": "발걸음도 리듬에 맞춰."
-        },
-        {
-          "id": "move-2",
-          "event": "move",
-          "text": "라라~ 이쪽이야.",
-          "style": "Humming, light.",
-          "say": "라라, 이쪽이야."
-        },
-        {
-          "id": "capture-1",
-          "event": "capture",
-          "text": "앙코르는 없어.",
-          "style": "Smiling, cool."
-        },
-        {
-          "id": "capture-2",
-          "event": "capture",
-          "text": "피날레다!",
-          "style": "Theatrical flourish.",
-          "say": "피날레다."
-        },
-        {
-          "id": "capture-3",
-          "event": "capture",
-          "text": "박자를 놓쳤군.",
-          "style": "Teasing."
-        },
-        {
-          "id": "skill-1",
-          "event": "skill",
-          "text": "모두, 내 선율을 들어라!",
-          "style": "Rousing call to allies.",
-          "say": "모두, 내 선율을 들어라."
-        },
-        {
-          "id": "skill-2",
-          "event": "skill",
-          "text": "발걸음에 날개를 달아 주지!",
-          "style": "Rousing, uplifting.",
-          "say": "발걸음에 날개를 달아 주지."
-        },
-        {
-          "id": "death-1",
-          "event": "death",
-          "text": "아… 마지막 소절이…",
-          "style": "Wistful, fading."
-        },
-        {
-          "id": "victory-1",
-          "event": "victory",
-          "text": "브라보! 완벽한 무대였어.",
-          "style": "Delighted, theatrical.",
-          "say": "브라보. 완벽한 무대였어."
-        }
-      ]
-    },
-    "verish": {
-      "concept": "A pink-haired young woman of about twenty who slides on high-tech power boots and pierces straight through every enemy in her lane: a bright, quick, confident young female voice, playful and sporty, crisp and energetic; not a child, not sultry.",
-      "gender": "female",
-      "voice": "A sporty, confident young woman of about twenty, a speed racer. A bright, clear and crisp female voice in a natural medium pitch, not high-pitched: a grown young woman, never a little girl. Quick, energetic and playful with a cheeky smile, crisp articulation. Not breathy, not sultry, not shouting.",
-      "clone": {
-        "ref": "refs/verish-ref.flac",
-        "text": "내 부츠보다 빠른 건 없어. 한 줄로 전부 뚫고 갈게.",
-        "style": "Confident and cheeky, quick, relaxed, moderate volume.",
-        "_from": "VoiceDesign take (seed 11, take 1) of 24 over three prompts, trimmed (lead and tail only). All 24 takes were female on both QA classifiers (P 0.85-0.99 / 0.93-0.99) but sat at 321-492 Hz median; the first two prompts ('medium-high pitch' / 'mid-to-high') gave 326-492 Hz, shouted '!' reads in most takes, and the 400+ Hz ones read childish. The third prompt ('natural medium pitch, not high-pitched ... never a little girl', in 'voice') gave the only sub-300 Hz take. Kept: F0 294 Hz (228-473), CER 0, warble 0.066, HNR 13.1 dB, hiss -58.4 dB, bright (harshness -8.0 dB, sibilance -7.9 dB: crisp, left to the de-esser), P(female) 0.949 (wav2vec2) / 0.976 (ECAPA). Runner-up: prompt 1 take 2 (326 Hz, harshness -13.9 dB, but a drawn-out, creaky '없어')."
-      },
-      "f0_target": 290,
-      "lines": [
-        {
-          "id": "select-1",
-          "event": "select",
-          "text": "준비 완료! 부츠 충전 끝!",
-          "style": "Upbeat and confident, ready to go.",
-          "say": "준비 완료. 부츠 충전 끝."
-        },
-        {
-          "id": "select-2",
-          "event": "select",
-          "text": "속도라면 자신 있어!",
-          "style": "Cheeky, confident grin.",
-          "say": "속도라면 자신 있어."
-        },
-        {
-          "id": "move-1",
-          "event": "move",
-          "text": "따라올 수 있으면 와 봐!",
-          "style": "Teasing, quick and playful.",
-          "say": "따라올 수 있으면 와 봐."
-        },
-        {
-          "id": "move-2",
-          "event": "move",
-          "text": "부스트 온!",
-          "style": "Quick and bright, sporty.",
-          "say": "부스트 온."
-        },
-        {
-          "id": "capture-1",
-          "event": "capture",
-          "text": "그대로 뚫고 간다!",
-          "style": "Energetic, determined, punchy.",
-          "say": "그대로 뚫고 간다."
-        },
-        {
-          "id": "capture-2",
-          "event": "capture",
-          "text": "길 막지 마!",
-          "style": "Cocky, quick taunt.",
-          "say": "길 막지 마."
-        },
-        {
-          "id": "capture-3",
-          "event": "capture",
-          "text": "정면 돌파!",
-          "style": "Crisp and triumphant, punchy.",
-          "say": "정면 돌파.",
-          "_note": "First written '한 방에 관통!': Whisper heard '한 방의 관통' in 6/6 takes (the particle 에/의 sound alike), so the line was replaced."
-        },
-        {
-          "id": "hop-multi-1",
-          "event": "hop-multi",
-          "text": "한 줄로 전부 꿰뚫었어!",
-          "style": "Thrilled and triumphant, laughing a little.",
-          "say": "한 줄로 전부 꿰뚫었어."
-        },
-        {
-          "id": "death-1",
-          "event": "death",
-          "text": "앗… 여기서 멈추다니…",
-          "style": "Startled, then fading and deflated.",
-          "_note": "First written '앗… 부츠가… 방전됐어…': Whisper heard 부추/부치/구치 for 부츠 in 5/6 takes (best CER 0.12), so the line was replaced."
-        },
-        {
-          "id": "victory-1",
-          "event": "victory",
-          "text": "골인! 오늘도 내가 일등이야!",
-          "style": "Delighted, sporty triumph.",
-          "say": "골인. 오늘도 내가 일등이야."
-        }
-      ]
-    },
-    "midos": {
-      "concept": "A ghost assassin made of living violet-black shadow, not a human: a horned smooth dark mask with glowing slit eyes, a smoke tail instead of legs and three steel claws on each hand; he teleports anywhere. A cool, cold, low and calm male voice, mysterious and quietly menacing, with a ghostly echo; never shouting.",
-      "gender": "male",
-      "f0_target": 95,
-      "voice": "A cool, mysterious phantom hunter, a man of indeterminate age. A smooth low baritone in a medium-low pitch, calm, confident and cold, with a soft airy edge, eerie and controlled, clear diction, no vocal fry, never shouting.",
-      "clone": {
-        "ref": "refs/midos-ref.flac",
-        "text": "그림자 속에서 기다렸다. 이제 네 차례다.",
-        "style": "Calm, cold, confident and slightly sinister.",
-        "_from": "VoiceDesign take (seed 11, take 4) of 12 over two prompts, lead / tail silence trimmed. Prompt A ('deep, hollow ... like a sinister whisper') gave 69-87 Hz takes, all creaky (HNR -6.7..0.5 dB, warble 0.11-0.15); prompt B (this 'voice') gave 75-151 Hz (one take read female, P 0.996). Kept B take 4: F0 95.5 Hz (78-127), warble 0.093 (lowest of the 12), HNR 0.2 dB, harshness -9.2 dB, P(female) 0.001; Whisper transcript exact (네/내 sound alike)."
-      },
-      "lines": [
-        {
-          "event": "select",
-          "id": "select-1",
-          "text": "그림자는 언제나 네 곁에 있다.",
-          "style": "Calm, cold, quietly menacing."
-        },
-        {
-          "event": "select",
-          "id": "select-2",
-          "text": "어둠이 나를 부른다.",
-          "style": "Low, slow and mysterious."
-        },
-        {
-          "event": "move",
-          "id": "move-1",
-          "text": "소리 없이.",
-          "style": "A cold, quiet murmur."
-        },
-        {
-          "event": "move",
-          "id": "move-2",
-          "text": "흔적은 남기지 않는다.",
-          "style": "Calm and confident, low."
-        },
-        {
-          "event": "capture",
-          "id": "capture-1",
-          "text": "도망칠 곳은 없다.",
-          "style": "Cold and cruel, controlled."
-        },
-        {
-          "event": "capture",
-          "id": "capture-2",
-          "text": "그림자에 삼켜져라.",
-          "style": "Menacing, low and firm."
-        },
-        {
-          "event": "capture",
-          "id": "capture-3",
-          "text": "끝이다.",
-          "style": "Short, cold and final."
-        },
-        {
-          "event": "skill",
-          "id": "skill-1",
-          "text": "어디든, 그림자가 있는 곳이라면.",
-          "style": "Cool and confident, a sly menace."
-        },
-        {
-          "event": "skill",
-          "id": "skill-2",
-          "text": "눈을 감는 순간, 나는 거기 있다.",
-          "style": "Quiet, eerie and confident."
-        },
-        {
-          "event": "death",
-          "id": "death-1",
-          "text": "그림자로… 돌아간다…",
-          "style": "Weak, fading, a dying whisper."
-        },
-        {
-          "event": "victory",
-          "id": "victory-1",
-          "text": "이 밤은 우리의 것이다.",
-          "style": "Calm, cold triumph."
-        }
-      ]
-    },
-    "hammont": {
-      "concept": "A huge bearded blacksmith in his thirties with a red bandana and a molten forge hammer who knocks enemies flying: a deep, warm, hearty baritone, boisterous and good-humoured; never shrill.",
-      "gender": "male",
-      "f0_target": 112,
-      "voice": "A big, hearty, cheerful blacksmith in his thirties. A deep, warm, resonant baritone in a medium-low pitch, boisterous and good-humoured, a strong chest voice with clear diction, confident, never shouting.",
-      "clone": {
-        "ref": "refs/hammont-ref.flac",
-        "text": "쇠는 뜨거울 때 두들기는 거다. 각오해라.",
-        "style": "Hearty and confident, a grin in the voice.",
-        "_from": "VoiceDesign take (seed 11, take 5) of 6, lead / tail silence trimmed. The 6 takes ranged 95-261 Hz median; two were shouted (189 / 206 Hz with p90 330-486 Hz) and one rose to 261 Hz. Kept take 5: F0 112 Hz (67-165), warble 0.034 (the steadiest), HNR 6.9 dB, harshness -11.4 dB, P(female) 0.001; Whisper transcript exact."
-      },
-      "lines": [
-        {
-          "event": "select",
-          "id": "select-1",
-          "text": "망치 준비 완료다. 누굴 두들겨 줄까?",
-          "say": "망치 준비 완료다. 누굴 두들겨 줄까?",
-          "style": "Hearty and cheerful, ready for work."
-        },
-        {
-          "event": "select",
-          "id": "select-2",
-          "text": "불은 충분히 달궈졌다.",
-          "style": "Confident, warm, a grin in the voice."
-        },
-        {
-          "event": "move",
-          "id": "move-1",
-          "text": "길 비켜라.",
-          "style": "Boisterous but calm, firm."
-        },
-        {
-          "event": "move",
-          "id": "move-2",
-          "text": "쿵, 쿵, 간다.",
-          "style": "Playful and heavy, steady rhythm."
-        },
-        {
-          "event": "capture",
-          "id": "capture-1",
-          "text": "납작하게 펴 주마.",
-          "style": "Gleeful and strong."
-        },
-        {
-          "event": "capture",
-          "id": "capture-2",
-          "text": "뜨거운 맛 좀 봐라.",
-          "style": "Fierce and hearty.",
-          "_note": "First written '쇳물 맛 좀 봐라': Whisper heard 샘물 for 쇳물 (CER 0.17), so the line was replaced."
-        },
-        {
-          "event": "capture",
-          "id": "capture-3",
-          "text": "한 방이면 끝이지.",
-          "style": "Confident, a short laugh."
-        },
-        {
-          "event": "skill",
-          "id": "skill-1",
-          "text": "날아가라.",
-          "style": "A powerful heave, strong, not shouting."
-        },
-        {
-          "event": "skill",
-          "id": "skill-2",
-          "text": "저리 꺼져.",
-          "style": "Gruff and good-humoured, firm."
-        },
-        {
-          "event": "death",
-          "id": "death-1",
-          "text": "화로가… 꺼지는구나…",
-          "style": "Weak, fading, a deep sigh."
-        },
-        {
-          "event": "victory",
-          "id": "victory-1",
-          "text": "오늘 일은 이걸로 끝이다.",
-          "style": "Satisfied, warm triumph."
-        }
-      ]
-    },
-    "venoa": {
-      "concept": "A cool, sharp-eyed young huntress from a poison swamp with a bone longbow and venom arrows: a low-medium, calm, quiet and slightly husky female voice, terse; not a child, not shrill.",
-      "gender": "female",
-      "f0_target": 195,
-      "voice": "A cool, composed young woman of about twenty, a huntress from a poison swamp. A low-medium female voice, calm, quiet and sharp, slightly husky, terse and focused; never shrill, not a little girl.",
-      "clone": {
-        "ref": "refs/venoa-ref.flac",
-        "text": "숨어도 소용없어. 내 화살은 놓치지 않아.",
-        "style": "Cool, quiet and focused.",
-        "_from": "VoiceDesign take (seed 11, take 5) of 6, lead / tail silence trimmed. Takes 163-233 Hz median, all female (P 0.995-0.996). Kept take 5: F0 190 Hz (147-230), warble 0.062, HNR 11.9 dB, harshness -20.0 dB, P(female) 0.996; Whisper transcript exact."
-      },
-      "lines": [
-        {
-          "event": "select",
-          "id": "select-1",
-          "text": "사냥감은 정했어.",
-          "style": "Cool and quiet."
-        },
-        {
-          "event": "select",
-          "id": "select-2",
-          "text": "늪은 내 영역이야.",
-          "style": "Calm, a hint of pride."
-        },
-        {
-          "event": "move",
-          "id": "move-1",
-          "text": "조용히.",
-          "style": "A low murmur."
-        },
-        {
-          "event": "move",
-          "id": "move-2",
-          "text": "자리를 옮기지.",
-          "style": "Calm and focused."
-        },
-        {
-          "event": "capture",
-          "id": "capture-1",
-          "text": "명중.",
-          "style": "Cool, satisfied, short."
-        },
-        {
-          "event": "capture",
-          "id": "capture-2",
-          "text": "독이 퍼지는 건 금방이야.",
-          "style": "Cold and quiet."
-        },
-        {
-          "event": "capture",
-          "id": "capture-3",
-          "text": "빗나가는 일은 없어.",
-          "style": "Confident and terse."
-        },
-        {
-          "event": "death",
-          "id": "death-1",
-          "text": "화살이… 다 떨어졌네…",
-          "style": "Weak and fading."
-        },
-        {
-          "event": "victory",
-          "id": "victory-1",
-          "text": "사냥 끝. 돌아가자.",
-          "style": "Calm satisfaction."
-        }
-      ]
-    },
-    "glacia": {
-      "concept": "An elegant young frost witch with long white hair, an icicle-crusted witch hat and ice-skate boots who glides and freezes enemies: a clear, smooth, medium-pitched female voice, aloof and teasing, cold and calm; not a child.",
-      "gender": "female",
-      "f0_target": 205,
-      "voice": "A cool, elegant young witch of about twenty. A clear, smooth, medium-pitched female voice, aloof and teasing, slow and composed, with a cold crystalline calm; never shrill, not a little girl.",
-      "clone": {
-        "ref": "refs/glacia-ref.flac",
-        "text": "움직이지 마. 얼어붙는 건 한순간이니까.",
-        "style": "Cold, elegant and teasing.",
-        "_from": "VoiceDesign take (seed 11, take 2) of 6, lead / tail silence trimmed. Takes 181-259 Hz median, all female (P 0.986-0.996). Kept take 2: F0 204 Hz (156-266), warble 0.044, HNR 14.7 dB, harshness -16.9 dB, P(female) 0.996; Whisper transcript exact."
-      },
-      "lines": [
-        {
-          "event": "select",
-          "id": "select-1",
-          "text": "차갑게 해 줄까?",
-          "style": "Teasing and cool."
-        },
-        {
-          "event": "select",
-          "id": "select-2",
-          "text": "얼음 위는 내 무대야.",
-          "style": "Elegant and confident."
-        },
-        {
-          "event": "move",
-          "id": "move-1",
-          "text": "미끄러지듯이.",
-          "style": "Light, smooth and calm."
-        },
-        {
-          "event": "move",
-          "id": "move-2",
-          "text": "멈추는 건 내가 정해.",
-          "style": "Aloof and playful."
-        },
-        {
-          "event": "capture",
-          "id": "capture-1",
-          "text": "산산조각.",
-          "style": "Cold and crisp."
-        },
-        {
-          "event": "capture",
-          "id": "capture-2",
-          "text": "얼음처럼 부서지렴.",
-          "style": "Cruelly sweet, calm."
-        },
-        {
-          "event": "capture",
-          "id": "capture-3",
-          "text": "추웠지?",
-          "style": "Teasing, quiet."
-        },
-        {
-          "event": "skill",
-          "id": "skill-1",
-          "text": "얼어붙어.",
-          "style": "Cold command, calm and firm."
-        },
-        {
-          "event": "skill",
-          "id": "skill-2",
-          "text": "거기서 가만히 있어.",
-          "style": "Teasing and icy."
-        },
-        {
-          "event": "death",
-          "id": "death-1",
-          "text": "녹아… 버리겠어…",
-          "style": "Weak and fading."
-        },
-        {
-          "event": "victory",
-          "id": "victory-1",
-          "text": "겨울이 이겼네.",
-          "style": "Elegant, quiet triumph."
-        }
-      ]
+    {
+     "id": "victory-1",
+     "event": "victory",
+     "text": "빛의 승리다!",
+     "style": "Proud and triumphant, resonant chest voice, lower register, not yelling.",
+     "v4": "[triumphant] [relieved] [warmly] 빛의 승리다!"
     }
+   ]
+  },
+  "marki": {
+   "concept": "A massive armoured bull with lava-cracked hide, snorting steam: a thick, deep, guttural bass with a growl underneath, still intelligible.",
+   "elevenlabs": {
+    "voice_id": "AYuW1wKCb8GXbmSOy9OH",
+    "voice_design_model": "eleven_ttv_v3",
+    "tts_model": "eleven_v4",
+    "language": "ko"
+   },
+   "voice": "A gigantic minotaur warrior, a male beast with a massive chest. Extremely deep, low-pitched bass voice, rough, raspy and gravelly. He never yells in a high voice: even when furious he growls and roars from deep in the chest, low register throughout, heavy and intimidating.",
+   "clone": {
+    "ref": "refs/marki-ref.flac",
+    "text": "피 냄새가 난다.",
+    "_from": "VoiceDesign take of marki select-2 (voice + style below), trimmed"
+   },
+   "lines": [
+    {
+     "id": "select-1",
+     "event": "select",
+     "text": "누구냐.",
+     "style": "A low, slow, suspicious grunt.",
+     "v4": "[deep voice] [low growl] [suspicious] 누구냐."
+    },
+    {
+     "id": "select-2",
+     "event": "select",
+     "text": "피 냄새가 난다.",
+     "style": "Low, slow and menacing, savoring it.",
+     "v4": "[deep voice] [sniffs] [menacing] 피 냄새가 난다."
+    },
+    {
+     "id": "move-1",
+     "event": "move",
+     "text": "비켜라!",
+     "style": "A heavy, low growling bark, menacing, deep chest voice.",
+     "v4": "[deep voice] [angry] [shouting] 비켜라!"
+    },
+    {
+     "id": "move-2",
+     "event": "move",
+     "text": "길을 비켜!",
+     "style": "A heavy, low growling bark, menacing, deep chest voice.",
+     "v4": "[deep voice] [snarling] 길을 비켜!"
+    },
+    {
+     "id": "capture-1",
+     "event": "capture",
+     "text": "박살이다!",
+     "style": "A deep, guttural beast roar followed by a low growled threat, furious but low-pitched.",
+     "v4": "[deep voice] [roaring] 박살이다!"
+    },
+    {
+     "id": "capture-2",
+     "event": "capture",
+     "text": "날려버린다!",
+     "style": "A low, menacing growl, gravelly, deep chest voice, not shouting.",
+     "v4": "[deep voice] [furious] [shouting] 날려버린다!"
+    },
+    {
+     "id": "capture-3",
+     "event": "capture",
+     "text": "부숴버린다!",
+     "style": "A brutal low growl, gravelly and furious, deep chest voice, not shouting.",
+     "v4": "[deep voice] [growling] [intense] 부숴버린다!"
+    },
+    {
+     "id": "skill-1",
+     "event": "skill",
+     "text": "돌격이다!",
+     "style": "A thunderous low roar, deep chest voice, furious but low-pitched.",
+     "v4": "[deep voice] [battle cry] [shouting] 돌격이다!"
+    },
+    {
+     "id": "death-1",
+     "event": "death",
+     "text": "크르륵… 이럴 수가…",
+     "style": "Dying beast, a weak gurgling growl, fading.",
+     "v4": "[deep voice] [wounded groan] 크르륵… [weakly] [disbelief] 이럴 수가…"
+    },
+    {
+     "id": "victory-1",
+     "event": "victory",
+     "text": "약하다! 약해!",
+     "style": "Booming, low, mocking contempt, deep chest voice, slow.",
+     "v4": "[deep voice] [mocking laugh] 약하다! [snorts] [contempt] 약해!"
+    }
+   ]
+  },
+  "walk": {
+   "concept": "A scrappy shield fighter in leather and chainmail (rune armour at lv3), shouting as he charges: a brave man like sad but rougher, darker and lower, steady and terse.",
+   "elevenlabs": {
+    "voice_id": "b552Bh06vYeCSdGYDXaP",
+    "voice_design_model": "eleven_ttv_v3",
+    "tts_model": "eleven_v4",
+    "language": "ko"
+   },
+   "voice": "A grizzled veteran soldier in his fifties, a shield guardian. Rough, gravelly, husky low baritone, weathered but unshakable, calm and steady, short clipped decisive words, quiet authority, never shouting.",
+   "clone": {
+    "ref": "refs/walk-ref.flac",
+    "text": "준비 완료. 명령을.",
+    "style": "Calm, steady and ready.",
+    "_from": "VoiceDesign take (seed 11, take 0); the 'young soldier' prompt matched the art better but its takes shouted (F0 150-330 Hz, CER up to 0.57), so the steadier, rougher veteran take (F0 100 Hz) was kept"
+   },
+   "lines": [
+    {
+     "id": "select-1",
+     "event": "select",
+     "text": "준비 완료.",
+     "style": "Calm and alert, reporting for duty.",
+     "v4": "[gruff] [terse] [calm] 준비 완료."
+    },
+    {
+     "id": "select-2",
+     "event": "select",
+     "text": "명령을.",
+     "style": "Calm and alert, awaiting orders.",
+     "v4": "[gruff] [terse] 명령을."
+    },
+    {
+     "id": "move-1",
+     "event": "move",
+     "text": "간다.",
+     "style": "Short, calm and determined.",
+     "v4": "[gruff] [firm] 간다."
+    },
+    {
+     "id": "move-2",
+     "event": "move",
+     "text": "이동한다.",
+     "style": "Short, calm and determined.",
+     "v4": "[gruff] [steady] 이동한다."
+    },
+    {
+     "id": "capture-1",
+     "event": "capture",
+     "text": "방패로 막고, 친다!",
+     "style": "Focused and forceful, striking with a shield.",
+     "v4": "[gruff] [strained effort] 방패로 막고, [grunts] 친다!"
+    },
+    {
+     "id": "capture-2",
+     "event": "capture",
+     "text": "끝이다!",
+     "style": "A short, firm, controlled exclamation in a low register, not yelling.",
+     "v4": "[gruff] [shouting] 끝이다!"
+    },
+    {
+     "id": "capture-3",
+     "event": "capture",
+     "text": "쓰러뜨렸다!",
+     "style": "A short, firm, controlled exclamation in a low register, not yelling.",
+     "v4": "[gruff] [breathless] [satisfied] 쓰러뜨렸다!"
+    },
+    {
+     "id": "skill-1",
+     "event": "skill",
+     "text": "도약한다!",
+     "style": "A short, firm effort grunt-word while leaping, low register, not yelling.",
+     "v4": "[gruff] [exerting] [shouting] 도약한다!"
+    },
+    {
+     "id": "death-1",
+     "event": "death",
+     "text": "방어선이… 무너졌다…",
+     "style": "Wounded and exhausted, quiet and pained.",
+     "v4": "[pained] [gasping] 방어선이… [weakly] 무너졌다…"
+    },
+    {
+     "id": "victory-1",
+     "event": "victory",
+     "text": "임무 완수.",
+     "style": "Calm, proud and satisfied.",
+     "v4": "[gruff] [exhales] [quiet pride] 임무 완수."
+    }
+   ]
+  },
+  "insaner": {
+   "concept": "A small purple imp with horns, tail and a manic fanged grin: a sly, wicked creature voice (not a child) under real demonic modulation.",
+   "elevenlabs": {
+    "voice_id": "YlEnHcUHqVO9DRkZ76La",
+    "voice_design_model": "eleven_ttv_v3",
+    "tts_model": "eleven_v4",
+    "language": "ko"
+   },
+   "voice": "A small evil demon imp, a wicked little goblin creature. Raspy, nasal, scratchy and sly voice with a hissing edge, sneaky and malicious, with a nasty snicker. Sounds like a wicked creature, not like a child or a baby: mid pitch with a gritty, crackly texture.",
+   "clone": {
+    "ref": "refs/insaner-ref.flac",
+    "text": "이번엔 누굴 괴롭힐까?",
+    "style": "Wicked and scheming, a nasty whispery tone.",
+    "_from": "VoiceDesign take (seed 11, take 1); a sly male creature voice at 153 Hz, CER 0, no pauses. The demon layer is added by post_voice.py"
+   },
+   "lines": [
+    {
+     "id": "select-1",
+     "event": "select",
+     "text": "키힉… 나를 불렀나?",
+     "style": "Giggling mischievously, cheeky.",
+     "asr": "키힉 나를 불렀나",
+     "v4": "[giggles] 키힉… [sly] [mischievously] 나를 불렀나?"
+    },
+    {
+     "id": "select-2",
+     "event": "select",
+     "text": "이번엔 누굴 괴롭힐까?",
+     "style": "Playful and sing-song, bored and curious.",
+     "v4": "[mischievously] [gleeful] 이번엔 누굴 괴롭힐까?"
+    },
+    {
+     "id": "move-1",
+     "event": "move",
+     "text": "어디 숨었니~?",
+     "style": "Playful sing-song, skipping along.",
+     "v4": "[playful] [singsong] [teasing] 어디 숨었니~?"
+    },
+    {
+     "id": "move-2",
+     "event": "move",
+     "text": "그림자 속으로~",
+     "style": "Humming a playful sing-song.",
+     "v4": "[whispers] [mischievously] 그림자 속으로~"
+    },
+    {
+     "id": "capture-1",
+     "event": "capture",
+     "text": "네 영혼, 맛있겠다!",
+     "style": "Greedy and gleeful, snatching something.",
+     "v4": "[hungry] [gleeful] [sinister] 네 영혼, 맛있겠다!"
+    },
+    {
+     "id": "capture-2",
+     "event": "capture",
+     "text": "키히히히! 잡았다!",
+     "style": "Laughing crazily, delighted.",
+     "asr": "키히히히 잡았다",
+     "v4": "[cackles] 키히히히! [excited] 잡았다!"
+    },
+    {
+     "id": "capture-3",
+     "event": "capture",
+     "text": "장난 좀 쳐볼까?",
+     "style": "Sly and teasing, mischievous.",
+     "v4": "[sly] [teasing] [chuckles] 장난 좀 쳐볼까?"
+    },
+    {
+     "id": "skill-1",
+     "event": "skill",
+     "text": "네 힘, 이제 내 거야!",
+     "style": "Greedy, excited and a little unhinged.",
+     "v4": "[greedy] [gleeful] [triumphant] 네 힘, 이제 내 거야!"
+    },
+    {
+     "id": "chain-1",
+     "event": "chain",
+     "text": "한 번 더~!",
+     "style": "Excited, gleeful and hyper.",
+     "v4": "[excited] [singsong] 한 번 더~!"
+    },
+    {
+     "id": "death-1",
+     "event": "death",
+     "text": "크윽… 두고 보자…",
+     "style": "Sulking and pouting, annoyed.",
+     "v4": "[pained] [hissing] 크윽… [spiteful] [weakly] 두고 보자…"
+    },
+    {
+     "id": "victory-1",
+     "event": "victory",
+     "text": "전부 내 장난감이야! 키히히!",
+     "style": "Triumphant, bratty and cackling.",
+     "asr": "전부 내 장난감이야 키히히",
+     "v4": "[gleeful] [manic] 전부 내 장난감이야! [cackles] 키히히!"
+    }
+   ]
+  },
+  "brutile": {
+   "concept": "A green-skinned, fanged, sneering witch in a horned crown hat: an unmistakably female, aged, raspy, cackling villainess voice with energy.",
+   "elevenlabs": {
+    "voice_id": "JJkYF9pNQkhiwu5NHBDW",
+    "voice_design_model": "eleven_ttv_v3",
+    "tts_model": "eleven_v4",
+    "language": "ko"
+   },
+   "gender": "female",
+   "voice": "A wicked old witch, an elderly woman in her seventies. Old female voice: thin, dry, crackly and raspy with age, slightly shaky, sneering and mocking, with a wicked cackle. Speaks slowly and theatrically, savoring each word. Clearly an old grandmother's voice, not a young woman and not a man.",
+   "clone": {
+    "ref": "refs/brutile-ref.flac",
+    "text": "이… 늙은이를 불렀느냐…",
+    "style": "Sly, sneering and condescending, slow.",
+    "_from": "VoiceDesign take (seed 11, take 1), trimmed and a 1.9 s mid-line pause shortened to 0.3 s; F0 167 Hz (low, aged), raspy (WORLD aperiodicity 0.31), P(female) 0.996 / 0.95 on two classifiers, CER 0"
+   },
+   "lines": [
+    {
+     "id": "select-1",
+     "event": "select",
+     "text": "이 늙은이를 불렀느냐?",
+     "style": "Sly and condescending, a slow mocking purr.",
+     "v4": "[elderly voice] [raspy] [sly] 이 늙은이를 불렀느냐?"
+    },
+    {
+     "id": "select-2",
+     "event": "select",
+     "text": "흐흐흐… 저주가 필요하냐?",
+     "style": "A soft wicked chuckle, then a seductive, teasing question.",
+     "asr": "흐흐흐 저주가 필요하냐",
+     "v4": "[raspy] [chuckles darkly] 흐흐흐… [sinister] 저주가 필요하냐?"
+    },
+    {
+     "id": "move-1",
+     "event": "move",
+     "text": "어디, 한번 걸어볼까…",
+     "style": "Leisurely and amused, haughty.",
+     "v4": "[raspy] [amused] [slowly] 어디, 한번 걸어볼까…"
+    },
+    {
+     "id": "move-2",
+     "event": "move",
+     "text": "흐흥… 가볼까?",
+     "style": "A smug, sing-song hum, then a lazy question.",
+     "asr": "흐흥 가볼까",
+     "v4": "[raspy] [hums] 흐흥… [playful] 가볼까?"
+    },
+    {
+     "id": "capture-1",
+     "event": "capture",
+     "text": "썩어 문드러져라!",
+     "style": "A venomous, hissing curse, spiteful and intense.",
+     "v4": "[raspy] [furious] [cursing] 썩어 문드러져라!"
+    },
+    {
+     "id": "capture-2",
+     "event": "capture",
+     "text": "내 저주를 받아라!",
+     "style": "A commanding, wicked curse, forceful and theatrical.",
+     "v4": "[raspy] [shouting] [malicious] 내 저주를 받아라!"
+    },
+    {
+     "id": "capture-3",
+     "event": "capture",
+     "text": "이히히히! 끝이다!",
+     "style": "A short wicked witch cackle, then gleeful and cruel.",
+     "asr": "이히히히 끝이다",
+     "v4": "[cackles] 이히히히! [gleeful] 끝이다!"
+    },
+    {
+     "id": "skill-1",
+     "event": "skill",
+     "text": "이 땅은 죽었다!",
+     "style": "A dark, grand proclamation, menacing and powerful.",
+     "v4": "[raspy] [dramatically] [ominous] 이 땅은 죽었다!"
+    },
+    {
+     "id": "skill-2",
+     "event": "skill",
+     "text": "불모지여, 피어나라!",
+     "style": "Casting a dark spell, an ominous, grand incantation.",
+     "v4": "[raspy] [chanting] [rising] 불모지여, 피어나라!"
+    },
+    {
+     "id": "death-1",
+     "event": "death",
+     "text": "이… 이럴 리가…",
+     "style": "Shocked and dying, a weak, breathy, disbelieving gasp, fading.",
+     "v4": "[raspy] [shocked] [trembling voice] 이… 이럴 리가…"
+    },
+    {
+     "id": "victory-1",
+     "event": "victory",
+     "text": "모두 썩어라! 이히히히!",
+     "style": "Triumphant and cruel, then a short wicked witch cackle.",
+     "asr": "모두 썩어라 이히히히",
+     "v4": "[raspy] [triumphant] 모두 썩어라! [cackles] 이히히히!"
+    }
+   ]
+  },
+  "michelle": {
+   "concept": "A gloomy little girl whose long bangs hide her eyes, always holding a doll; she lays doll traps behind her. A quiet, soft, slightly breathy child's voice with a flat, eerie calm: unsettling, never cute, babyish or shrill.",
+   "elevenlabs": {
+    "voice_id": "LNCckgKnLd5bDGciaAGY",
+    "voice_design_model": "eleven_ttv_v3",
+    "tts_model": "eleven_v4",
+    "language": "ko"
+   },
+   "gender": "female",
+   "voice": "A gloomy, quiet little girl of about ten who always holds an old doll. Soft, hushed, slightly breathy voice in a natural low-middle child pitch, speaking slowly with a flat, eerie calm, as if telling a secret. Melancholic and unsettling. Never cute, never babyish, never squeaky, never shrill, never excited.",
+   "clone": {
+    "ref": "refs/michelle-ref.flac",
+    "text": "인형이… 기다릴 거야.",
+    "style": "Quiet, slow and eerie, almost a whisper.",
+    "_from": "VoiceDesign take (seed 11, take 7) of 8, trimmed and a 1.0 s mid-line pause shortened to 0.4 s; F0 269 Hz with a narrow 240-295 Hz range (flat, hushed), warble 0.016, HNR 16.9 dB, P(female) 0.94 / 0.95 on two classifiers; the takes at 330-350 Hz were rejected as too childish/bright, those at 200-215 Hz as too adult"
+   },
+   "f0_target": 265,
+   "lines": [
+    {
+     "id": "select-1",
+     "event": "select",
+     "text": "불렀어…?",
+     "style": "Quiet and flat, barely interested.",
+     "v4": "[whispers] [softly] [flat] 불렀어…?"
+    },
+    {
+     "id": "select-2",
+     "event": "select",
+     "text": "인형도… 같이 갈래.",
+     "style": "Soft and solemn, hugging her doll.",
+     "v4": "[softly] [flat] [slowly] 인형도… 같이 갈래."
+    },
+    {
+     "id": "move-1",
+     "event": "move",
+     "text": "조용히… 갈게.",
+     "style": "Hushed, slow, almost a whisper.",
+     "v4": "[whispers] [slowly] 조용히… 갈게."
+    },
+    {
+     "id": "move-2",
+     "event": "move",
+     "text": "따라오지 마…",
+     "style": "Flat, quiet and eerie.",
+     "v4": "[softly] [eerie calm] 따라오지 마…"
+    },
+    {
+     "id": "capture-1",
+     "event": "capture",
+     "text": "같이 놀자…",
+     "style": "Soft, flat and unsettling, slow.",
+     "v4": "[whispers] [eerie] [slowly] 같이 놀자…"
+    },
+    {
+     "id": "capture-2",
+     "event": "capture",
+     "text": "쉿… 이제 잘 시간이야.",
+     "style": "A soft, eerie lullaby tone.",
+     "v4": "[whispers] 쉿… [softly] [flat] 이제 잘 시간이야."
+    },
+    {
+     "id": "capture-3",
+     "event": "capture",
+     "text": "숨바꼭질… 끝.",
+     "style": "Quiet and matter-of-fact, eerie.",
+     "v4": "[softly] [flat] [slowly] 숨바꼭질… 끝."
+    },
+    {
+     "id": "trap-set-1",
+     "event": "trap-set",
+     "text": "인형이… 기다릴 거야.",
+     "style": "Quiet, slow and eerie, almost a whisper.",
+     "v4": "[softly] [eerie calm] 인형이… 기다릴 거야."
+    },
+    {
+     "id": "trap-sprung-1",
+     "event": "trap-sprung",
+     "text": "잡았다… 이제 못 움직여.",
+     "style": "A soft, satisfied, eerie whisper.",
+     "v4": "[softly] [faint smile] [flat] 잡았다… 이제 못 움직여."
+    },
+    {
+     "id": "death-1",
+     "event": "death",
+     "text": "인형… 놓치면 안 되는데…",
+     "style": "Weak, sad and fading.",
+     "v4": "[weakly] [sad] [trembling voice] 인형… 놓치면 안 되는데…"
+    },
+    {
+     "id": "victory-1",
+     "event": "victory",
+     "text": "다들… 조용해졌네.",
+     "style": "Calm, quiet and unsettling.",
+     "v4": "[softly] [flat] [slowly] 다들… 조용해졌네."
+    }
+   ]
+  },
+  "picker": {
+   "concept": "A lone frontier cowboy of about 30 with a lasso who hops diagonally through every square: a laconic, low, dry drawl, calm and confident, a little amused, never shouted.",
+   "elevenlabs": {
+    "voice_id": "9CyFOVVgTwyYj69mAhSZ",
+    "voice_design_model": "eleven_ttv_v3",
+    "tts_model": "eleven_v4",
+    "language": "ko"
+   },
+   "gender": "male",
+   "voice": "A lone frontier cowboy in his thirties, a man of few words. Low, dry, slightly husky baritone with a relaxed, unhurried drawl. Calm, confident and a little amused, speaking softly and slowly from the chest. Never shouting, never excited.",
+   "clone": {
+    "ref": "refs/picker-ref.flac",
+    "text": "일거리인가. 말은 짧게 하지.",
+    "style": "Laconic, calm and dry, low and slow.",
+    "_from": "VoiceDesign take (seed 11, take 7) of 8; a sigh the model added before the line was cut off and a 0.6 s pause shortened to 0.35 s. F0 108 Hz (the 71-86 Hz takes were creaky, HNR -3..9 dB, and as deep as the minotaur), CER 0, warble 0.043, P(female) 0.001 / 0.006"
+   },
+   "f0_target": 105,
+   "lines": [
+    {
+     "id": "select-1",
+     "event": "select",
+     "text": "일거리인가.",
+     "style": "Laconic, calm and dry.",
+     "v4": "[calm] [dry] [unhurried] 일거리인가."
+    },
+    {
+     "id": "select-2",
+     "event": "select",
+     "text": "말은 짧게 하지.",
+     "style": "Dry, unhurried, low.",
+     "v4": "[calm] [dry] [slightly amused] 말은 짧게 하지."
+    },
+    {
+     "id": "move-1",
+     "event": "move",
+     "text": "가 보지.",
+     "style": "Relaxed and unbothered.",
+     "v4": "[calm] [relaxed] 가 보지."
+    },
+    {
+     "id": "move-2",
+     "event": "move",
+     "text": "한 발짝씩.",
+     "style": "Easy-going drawl, unhurried.",
+     "v4": "[calm] [slowly] [dry] 한 발짝씩."
+    },
+    {
+     "id": "capture-1",
+     "event": "capture",
+     "text": "올가미에 걸렸군.",
+     "style": "Dry and calm, quietly amused.",
+     "v4": "[calm] [amused] [dry] 올가미에 걸렸군."
+    },
+    {
+     "id": "capture-2",
+     "event": "capture",
+     "text": "운이 없었군.",
+     "style": "Dry and laconic.",
+     "v4": "[calm] [dry] [matter of fact] 운이 없었군."
+    },
+    {
+     "id": "capture-3",
+     "event": "capture",
+     "text": "한발 늦었어.",
+     "style": "Calm, quietly confident.",
+     "v4": "[calm] [smirking] 한발 늦었어."
+    },
+    {
+     "id": "hop-multi-1",
+     "event": "hop-multi",
+     "text": "줄 서. 한 번에 간다.",
+     "style": "Cool and confident, a low drawl, not shouting.",
+     "v4": "[calm] [dry] 줄 서. [short pause] [confident] 한 번에 간다."
+    },
+    {
+     "id": "death-1",
+     "event": "death",
+     "text": "여기까지인가… 석양이 좋군.",
+     "style": "Weary, quiet and wry, fading.",
+     "_note": "Every take was voiced from 'say' but the model expands the contraction (Whisper hears 여기까지인가 in 6/6 takes), so the caption follows what is spoken.",
+     "v4": "[weakly] [calm] 여기까지인가… [sighs] [peaceful] 석양이 좋군."
+    },
+    {
+     "id": "victory-1",
+     "event": "victory",
+     "text": "해 지기 전에 끝났군.",
+     "style": "Calm, dry satisfaction.",
+     "v4": "[calm] [satisfied] [dry] 해 지기 전에 끝났군."
+    }
+   ]
+  },
+  "rakaeli": {
+   "concept": "A beautiful, pale blindfolded fallen angel in his late teens (black silk blindfold, cracked dim halo, ash-grey wings) who transforms (타천) into a demon with crimson eyes, horns and flame wings. Base form: a soft, calm, melancholic young male voice with a pretty-boy timbre, elegant, quiet and sorrowful. Transformed form: the same young man, deeper and colder, speaking with a doubled, demonic voice.",
+   "elevenlabs": {
+    "voice_id": "4TTIAmTNf8puQvJx0mZ3",
+    "voice_design_model": "eleven_ttv_v3",
+    "tts_model": "eleven_v4",
+    "language": "ko"
+   },
+   "gender": "male",
+   "voice": "A delicate, pretty young man of about seventeen, a fallen angel. A youthful, light tenor voice in a medium-high pitch, soft and silky, gentle and refined, with a quiet sadness. He speaks calmly and slowly with clear pronunciation. Never low or gravelly, never shouting, never a child.",
+   "clone": {
+    "ref": "refs/rakaeli-ref.flac",
+    "text": "눈을 가려도… 길은 보여요.",
+    "style": "Soft, calm and melancholic, quiet and elegant.",
+    "_from": "VoiceDesign take (seed 11, take 4) of 32 over three prompts; trimmed, a 1.6 s pause with a breath cut to 0.4 s. F0 160 Hz (130-211 Hz), warble 0.024, HNR 17.9 dB, harshness -21.9 dB (soft), CER 0, P(female) 0.001 / 0.015. A first prompt (\"soft ... young male voice ... never deep\") gave only 77-125 Hz takes, deeper than the cowboy, and was rejected; the second prompt (\"eighteen-year-old ... light, soft young tenor\") reached 155 Hz on one take of 16, with a creakier 0.05 warble."
+   },
+   "f0_target": 155,
+   "bitrate": "48k",
+   "_note": "Lines with \"fx\": \"rakaeli-awake\" are the transformed form (타천): the same cloned takes, processed by post_voice.fx_rakaeli_awake (2 semitones down, formants -6 %, a detuned WORLD double, a quiet octave-down shadow, saturation, a dark tail). awake-end is spoken as he turns back, so it keeps the base chain. 48 kbps AAC: he has about twice the lines of other characters.",
+   "lines": [
+    {
+     "id": "select-1",
+     "event": "select",
+     "text": "눈을 가려도… 길은 보여요.",
+     "style": "Soft, calm and melancholic, quiet and elegant.",
+     "v4": "[softly] [sad] [calm] 눈을 가려도… 길은 보여요."
+    },
+    {
+     "id": "select-2",
+     "event": "select",
+     "text": "저를… 부르셨나요.",
+     "style": "Gentle and quiet, a little sad.",
+     "v4": "[softly] [gentle] 저를… 부르셨나요."
+    },
+    {
+     "id": "move-1",
+     "event": "move",
+     "text": "조용히… 내려앉을게요.",
+     "style": "Soft and calm, almost weightless.",
+     "v4": "[softly] [slowly] [calm] 조용히… 내려앉을게요."
+    },
+    {
+     "id": "move-2",
+     "event": "move",
+     "text": "깃털처럼, 가볍게.",
+     "style": "Quiet and graceful.",
+     "v4": "[softly] [gentle] 깃털처럼, 가볍게."
+    },
+    {
+     "id": "capture-1",
+     "event": "capture",
+     "text": "미안해요… 편히 쉬어요.",
+     "style": "Sorrowful, gentle, apologetic.",
+     "v4": "[sad] [softly] [apologetic] 미안해요… 편히 쉬어요."
+    },
+    {
+     "id": "capture-2",
+     "event": "capture",
+     "text": "빛이 없는 곳으로.",
+     "style": "Calm and melancholic, quietly final.",
+     "v4": "[softly] [melancholic] [calm] 빛이 없는 곳으로."
+    },
+    {
+     "id": "capture-3",
+     "event": "capture",
+     "text": "슬퍼하지 마요.",
+     "style": "Soft and tender, a little sad.",
+     "v4": "[softly] [tender] [sad] 슬퍼하지 마요."
+    },
+    {
+     "id": "skill-1",
+     "event": "skill",
+     "text": "하늘이여… 나를 놓아라.",
+     "style": "A slow, intense, sorrowful vow as he tears off the blindfold and falls; rising in resolve, never shouted.",
+     "v4": "[slowly] [intense] [sorrowful] 하늘이여… [rising] [resolute] 나를 놓아라."
+    },
+    {
+     "id": "death-1",
+     "event": "death",
+     "text": "드디어… 쉴 수 있겠네요.",
+     "style": "Weak, relieved and fading.",
+     "v4": "[weakly] [relieved] [fading] 드디어… 쉴 수 있겠네요."
+    },
+    {
+     "id": "victory-1",
+     "event": "victory",
+     "text": "기도는… 끝났어요.",
+     "style": "Calm, quiet and sad.",
+     "v4": "[softly] [calm] [sad] 기도는… 끝났어요."
+    },
+    {
+     "id": "awake-select-1",
+     "event": "awake-select",
+     "text": "이제야… 보이는군.",
+     "style": "Cold, low and menacing, slow.",
+     "fx": "rakaeli-awake",
+     "v4": "[deep voice] [cold] [slowly] 이제야… 보이는군."
+    },
+    {
+     "id": "awake-select-2",
+     "event": "awake-select",
+     "text": "날개가 타오른다.",
+     "style": "Cold and low, quietly exultant.",
+     "fx": "rakaeli-awake",
+     "v4": "[deep voice] [cold] [intense] 날개가 타오른다."
+    },
+    {
+     "id": "awake-move-1",
+     "event": "awake-move",
+     "text": "추락은 끝났다.",
+     "style": "Cold and controlled.",
+     "fx": "rakaeli-awake",
+     "v4": "[deep voice] [cold] [calm] 추락은 끝났다."
+    },
+    {
+     "id": "awake-move-2",
+     "event": "awake-move",
+     "text": "불길 속을 걷는다.",
+     "style": "Low, cold and slow.",
+     "fx": "rakaeli-awake",
+     "_note": "Was '재를 밟고 간다.': Whisper heard the homophone 쟤 (or 죄를 받고) in 8/8 takes after the transformed-form FX, best CER 0.17, so the line was replaced.",
+     "v4": "[deep voice] [cold] [slowly] 불길 속을 걷는다."
+    },
+    {
+     "id": "awake-capture-1",
+     "event": "awake-capture",
+     "text": "타 버려라.",
+     "style": "Cold, low and merciless.",
+     "fx": "rakaeli-awake",
+     "v4": "[deep voice] [cold] [menacing] 타 버려라."
+    },
+    {
+     "id": "awake-capture-2",
+     "event": "awake-capture",
+     "text": "구원은 없다.",
+     "style": "Cold and final.",
+     "fx": "rakaeli-awake",
+     "v4": "[deep voice] [cold] [final] 구원은 없다."
+    },
+    {
+     "id": "awake-death-1",
+     "event": "awake-death",
+     "text": "또… 떨어지는군.",
+     "style": "Weary, cold and fading.",
+     "fx": "rakaeli-awake",
+     "v4": "[deep voice] [weakly] [bitter] 또… 떨어지는군."
+    },
+    {
+     "id": "awake-end-1",
+     "event": "awake-end",
+     "text": "불이… 꺼져 가요.",
+     "style": "Weary and soft, as the transformation fades.",
+     "v4": "[softly] [weakly] [sad] 불이… 꺼져 가요."
+    }
+   ]
+  },
+  "rampid": {
+   "concept": "An energetic teenage ice boy (~15) with sky-blue hair who rides the ice and dashes straight forward at speed: a bright, quick, cocky young male voice; not a child, not deep.",
+   "elevenlabs": {
+    "voice_id": "lcg8hb6PTmEiNrWeqZP9",
+    "voice_design_model": "eleven_ttv_v3",
+    "tts_model": "eleven_v4",
+    "language": "ko"
+   },
+   "gender": "male",
+   "voice": "A cocky, energetic teenage boy of about fifteen. A light, bright young tenor in a medium-high pitch, quick, cocky and grinning, playful. A teenage boy's voice: not a small child, not deep, not shouting.",
+   "clone": {
+    "ref": "refs/rampid-ref.flac",
+    "text": "얼음 위라면 누구보다 빨라. 따라올 수 있겠어?",
+    "style": "Cocky and playful, quick, smiling, moderate volume.",
+    "_from": "VoiceDesign take (seed 11, take 3) of 16 over two prompts, pauses tightened to 0.35 s. The first prompt ('light, bright young tenor in a medium-high pitch') gave 6/8 takes the QA classifier heard as female (P 0.90-0.99, 285-473 Hz); the second ('voice has already broken ... medium pitch') gave male takes at 196-370 Hz but noisier (warble 0.045-0.078, HNR 9-11 dB). Kept: F0 249 Hz (168-328), CER 0, warble 0.027, HNR 15.9 dB, harshness -16.1 dB, P(female) 0.019."
+   },
+   "f0_target": 235,
+   "lines": [
+    {
+     "id": "select-1",
+     "event": "select",
+     "text": "불렀어? 바로 갈게!",
+     "style": "Eager and cocky.",
+     "v4": "[excited] [quick] 불렀어? [cheerful] 바로 갈게!"
+    },
+    {
+     "id": "select-2",
+     "event": "select",
+     "text": "빙판 위라면 내가 최고지.",
+     "style": "Cocky grin, playful.",
+     "v4": "[cocky] [grinning] 빙판 위라면 내가 최고지."
+    },
+    {
+     "id": "move-1",
+     "event": "move",
+     "text": "간다, 슝!",
+     "style": "Quick and bright.",
+     "v4": "[excited] [quick] 간다, 슝!"
+    },
+    {
+     "id": "move-2",
+     "event": "move",
+     "text": "못 따라오지?",
+     "style": "Teasing, fast.",
+     "v4": "[teasing] [cocky] 못 따라오지?"
+    },
+    {
+     "id": "capture-1",
+     "event": "capture",
+     "text": "너무 느려!",
+     "style": "Cocky taunt.",
+     "v4": "[teasing] [laughing] 너무 느려!"
+    },
+    {
+     "id": "capture-2",
+     "event": "capture",
+     "text": "꽁꽁 얼려 주지!",
+     "style": "Bright battle cry.",
+     "v4": "[cocky] [excited] 꽁꽁 얼려 주지!"
+    },
+    {
+     "id": "capture-3",
+     "event": "capture",
+     "text": "빙판 조심하라고!",
+     "style": "Playful warning.",
+     "v4": "[teasing] [gleeful] 빙판 조심하라고!"
+    },
+    {
+     "id": "death-1",
+     "event": "death",
+     "text": "으앗… 미끄러졌다…",
+     "style": "Startled, then fading.",
+     "v4": "[yelps] 으앗… [dazed] [groaning] 미끄러졌다…"
+    },
+    {
+     "id": "victory-1",
+     "event": "victory",
+     "text": "역시 내가 제일 빠르다니까!",
+     "style": "Triumphant, cocky.",
+     "v4": "[triumphant] [cocky] [laughing] 역시 내가 제일 빠르다니까!"
+    }
+   ]
+  },
+  "larhen": {
+   "concept": "A professional assassin in his thirties with long hair and twin daggers who leaps high: a low, calm, cold, quiet male voice; terse, never shouting.",
+   "elevenlabs": {
+    "voice_id": "4uenaPDT8XNsE0CuuOM7",
+    "voice_design_model": "eleven_ttv_v3",
+    "tts_model": "eleven_v4",
+    "language": "ko"
+   },
+   "gender": "male",
+   "voice": "A calm, cold professional assassin, a man in his thirties. A low but clear and smooth baritone in a medium-low pitch, quiet, controlled and terse. A clean voice with no rasp and no vocal fry, never shouting.",
+   "clone": {
+    "ref": "refs/larhen-ref.flac",
+    "text": "표적은 정해졌다. 소리 없이 끊는다.",
+    "style": "Cold, calm and quiet, steady.",
+    "_from": "VoiceDesign take (seed 11, take 2) of 16 over two prompts, pauses tightened to 0.35 s. The script said 끝낸다 but the take says 끊는다 (Whisper hears it in both the raw and the trimmed clip), so 'text' follows the audio. Both prompts gave 69-113 Hz takes, most of them creaky (HNR -3.6..3.6 dB, warble up to 0.15); kept the cleanest: F0 92 Hz (72-115), HNR 6.5 dB, warble 0.066, harshness -14.6 dB, P(female) 0.001."
+   },
+   "lines": [
+    {
+     "id": "select-1",
+     "event": "select",
+     "text": "표적을 말해.",
+     "style": "Cold, flat, quiet.",
+     "v4": "[cold] [quiet] [terse] 표적을 말해."
+    },
+    {
+     "id": "select-2",
+     "event": "select",
+     "text": "그림자 속에서.",
+     "style": "Low murmur.",
+     "v4": "[cold] [whispers] 그림자 속에서."
+    },
+    {
+     "id": "move-1",
+     "event": "move",
+     "text": "조용히.",
+     "style": "Quiet, controlled.",
+     "v4": "[cold] [whispers] 조용히."
+    },
+    {
+     "id": "move-2",
+     "event": "move",
+     "text": "위에서 간다.",
+     "style": "Terse, calm.",
+     "v4": "[cold] [quiet] [calm] 위에서 간다."
+    },
+    {
+     "id": "capture-1",
+     "event": "capture",
+     "text": "끝이다.",
+     "style": "Cold finality.",
+     "v4": "[cold] [quiet] [final] 끝이다."
+    },
+    {
+     "id": "capture-2",
+     "event": "capture",
+     "text": "느렸군.",
+     "style": "Cold, unimpressed.",
+     "v4": "[cold] [quiet] [faint contempt] 느렸군."
+    },
+    {
+     "id": "capture-3",
+     "event": "capture",
+     "text": "소리 없이.",
+     "style": "Whispered.",
+     "v4": "[cold] [whispers] 소리 없이."
+    },
+    {
+     "id": "death-1",
+     "event": "death",
+     "text": "…실수였나.",
+     "style": "Weak, quiet, fading.",
+     "v4": "[quiet] [pained] [breathless] …실수였나."
+    },
+    {
+     "id": "victory-1",
+     "event": "victory",
+     "text": "임무 완료.",
+     "style": "Calm, flat satisfaction.",
+     "v4": "[cold] [quiet] [calm] 임무 완료."
+    }
+   ]
+  },
+  "volkonov": {
+   "concept": "A male bard whose eyes are always closed in a smile and who buffs allies with music: a smooth, warm, theatrical, slightly teasing mid-range male voice with a sing-song delivery.",
+   "elevenlabs": {
+    "voice_id": "fDLS2XhYJecyaqNrbeor",
+    "voice_design_model": "eleven_ttv_v3",
+    "tts_model": "eleven_v4",
+    "language": "ko"
+   },
+   "gender": "male",
+   "voice": "A charming travelling bard, a man in his late twenties who always smiles with his eyes closed. Smooth, warm, theatrical mid-range male voice, playful and slightly teasing, with a lilting, sing-song melodic delivery.",
+   "clone": {
+    "ref": "refs/volkonov-ref.flac",
+    "text": "자, 오늘도 한 곡 들려줄까? 모두 내 선율에 맞춰 봐.",
+    "style": "Warm, theatrical and teasing, melodic, moderate volume.",
+    "_from": "VoiceDesign take (seed 11, take 7) of 8, pauses tightened to 0.35 s. Takes ranged 140-295 Hz (all male, CER 0); the 205-295 Hz ones read as an excited young man, not a smooth mid-range bard. Kept the warmest: F0 140 Hz with a wide melodic range (95-193 Hz), harshness -16.3 dB, warble 0.077, HNR 8.2 dB, P(female) 0.001."
+   },
+   "f0_target": 145,
+   "lines": [
+    {
+     "id": "select-1",
+     "event": "select",
+     "text": "오늘은 어떤 노래를 들려줄까?",
+     "style": "Warm, playful.",
+     "v4": "[warmly] [playful] [theatrical] 오늘은 어떤 노래를 들려줄까?"
+    },
+    {
+     "id": "select-2",
+     "event": "select",
+     "text": "후후, 박자에 맞춰 볼까?",
+     "style": "Teasing chuckle.",
+     "v4": "[chuckles] 후후, [playful] [singsong] 박자에 맞춰 볼까?"
+    },
+    {
+     "id": "move-1",
+     "event": "move",
+     "text": "발걸음도 리듬에 맞춰~",
+     "style": "Sing-song.",
+     "v4": "[singsong] [cheerful] 발걸음도 리듬에 맞춰~"
+    },
+    {
+     "id": "move-2",
+     "event": "move",
+     "text": "라라~ 이쪽이야.",
+     "style": "Humming, light.",
+     "v4": "[singing] 라라~ [playful] 이쪽이야."
+    },
+    {
+     "id": "capture-1",
+     "event": "capture",
+     "text": "앙코르는 없어.",
+     "style": "Smiling, cool.",
+     "v4": "[smug] [theatrical] [calm] 앙코르는 없어."
+    },
+    {
+     "id": "capture-2",
+     "event": "capture",
+     "text": "피날레다!",
+     "style": "Theatrical flourish.",
+     "v4": "[dramatically] [excited] 피날레다!"
+    },
+    {
+     "id": "capture-3",
+     "event": "capture",
+     "text": "박자를 놓쳤군.",
+     "style": "Teasing.",
+     "v4": "[teasing] [amused] 박자를 놓쳤군."
+    },
+    {
+     "id": "skill-1",
+     "event": "skill",
+     "text": "모두, 내 선율을 들어라!",
+     "style": "Rousing call to allies.",
+     "v4": "[dramatically] [commanding] [theatrical] 모두, 내 선율을 들어라!"
+    },
+    {
+     "id": "skill-2",
+     "event": "skill",
+     "text": "발걸음에 날개를 달아 주지!",
+     "style": "Rousing, uplifting.",
+     "v4": "[warmly] [theatrical] [cheerful] 발걸음에 날개를 달아 주지!"
+    },
+    {
+     "id": "death-1",
+     "event": "death",
+     "text": "아… 마지막 소절이…",
+     "style": "Wistful, fading.",
+     "v4": "[weakly] [sad] [sighs] 아… 마지막 소절이…"
+    },
+    {
+     "id": "victory-1",
+     "event": "victory",
+     "text": "브라보! 완벽한 무대였어.",
+     "style": "Delighted, theatrical.",
+     "v4": "[delighted] [theatrical] 브라보! [warmly] [satisfied] 완벽한 무대였어."
+    }
+   ]
+  },
+  "verish": {
+   "concept": "A pink-haired young woman of about twenty who slides on high-tech power boots and pierces straight through every enemy in her lane: a bright, quick, confident young female voice, playful and sporty, crisp and energetic; not a child, not sultry.",
+   "elevenlabs": {
+    "voice_id": "Fop2JPxtq6vVEBW5od0I",
+    "voice_design_model": "eleven_ttv_v3",
+    "tts_model": "eleven_v4",
+    "language": "ko"
+   },
+   "gender": "female",
+   "voice": "A sporty, confident young woman of about twenty, a speed racer. A bright, clear and crisp female voice in a natural medium pitch, not high-pitched: a grown young woman, never a little girl. Quick, energetic and playful with a cheeky smile, crisp articulation. Not breathy, not sultry, not shouting.",
+   "clone": {
+    "ref": "refs/verish-ref.flac",
+    "text": "내 부츠보다 빠른 건 없어. 한 줄로 전부 뚫고 갈게.",
+    "style": "Confident and cheeky, quick, relaxed, moderate volume.",
+    "_from": "VoiceDesign take (seed 11, take 1) of 24 over three prompts, trimmed (lead and tail only). All 24 takes were female on both QA classifiers (P 0.85-0.99 / 0.93-0.99) but sat at 321-492 Hz median; the first two prompts ('medium-high pitch' / 'mid-to-high') gave 326-492 Hz, shouted '!' reads in most takes, and the 400+ Hz ones read childish. The third prompt ('natural medium pitch, not high-pitched ... never a little girl', in 'voice') gave the only sub-300 Hz take. Kept: F0 294 Hz (228-473), CER 0, warble 0.066, HNR 13.1 dB, hiss -58.4 dB, bright (harshness -8.0 dB, sibilance -7.9 dB: crisp, left to the de-esser), P(female) 0.949 (wav2vec2) / 0.976 (ECAPA). Runner-up: prompt 1 take 2 (326 Hz, harshness -13.9 dB, but a drawn-out, creaky '없어')."
+   },
+   "f0_target": 290,
+   "lines": [
+    {
+     "id": "select-1",
+     "event": "select",
+     "text": "준비 완료! 부츠 충전 끝!",
+     "style": "Upbeat and confident, ready to go.",
+     "v4": "[excited] [energetic] 준비 완료! 부츠 충전 끝!"
+    },
+    {
+     "id": "select-2",
+     "event": "select",
+     "text": "속도라면 자신 있어!",
+     "style": "Cheeky, confident grin.",
+     "v4": "[confident] [cheerful] 속도라면 자신 있어!"
+    },
+    {
+     "id": "move-1",
+     "event": "move",
+     "text": "따라올 수 있으면 와 봐!",
+     "style": "Teasing, quick and playful.",
+     "v4": "[teasing] [playful] [quick] 따라올 수 있으면 와 봐!"
+    },
+    {
+     "id": "move-2",
+     "event": "move",
+     "text": "부스트 온!",
+     "style": "Quick and bright, sporty.",
+     "v4": "[excited] [quick] 부스트 온!"
+    },
+    {
+     "id": "capture-1",
+     "event": "capture",
+     "text": "그대로 뚫고 간다!",
+     "style": "Energetic, determined, punchy.",
+     "v4": "[determined] [shouting] 그대로 뚫고 간다!"
+    },
+    {
+     "id": "capture-2",
+     "event": "capture",
+     "text": "길 막지 마!",
+     "style": "Cocky, quick taunt.",
+     "v4": "[annoyed] [quick] [energetic] 길 막지 마!"
+    },
+    {
+     "id": "capture-3",
+     "event": "capture",
+     "text": "정면 돌파!",
+     "style": "Crisp and triumphant, punchy.",
+     "_note": "First written '한 방에 관통!': Whisper heard '한 방의 관통' in 6/6 takes (the particle 에/의 sound alike), so the line was replaced.",
+     "v4": "[excited] [shouting] 정면 돌파!"
+    },
+    {
+     "id": "hop-multi-1",
+     "event": "hop-multi",
+     "text": "한 줄로 전부 꿰뚫었어!",
+     "style": "Thrilled and triumphant, laughing a little.",
+     "v4": "[triumphant] [breathless] [excited] 한 줄로 전부 꿰뚫었어!"
+    },
+    {
+     "id": "death-1",
+     "event": "death",
+     "text": "앗… 여기서 멈추다니…",
+     "style": "Startled, then fading and deflated.",
+     "_note": "First written '앗… 부츠가… 방전됐어…': Whisper heard 부추/부치/구치 for 부츠 in 5/6 takes (best CER 0.12), so the line was replaced.",
+     "v4": "[gasps] 앗… [disappointed] [weakly] 여기서 멈추다니…"
+    },
+    {
+     "id": "victory-1",
+     "event": "victory",
+     "text": "골인! 오늘도 내가 일등이야!",
+     "style": "Delighted, sporty triumph.",
+     "v4": "[cheering] 골인! [proud] [laughing] 오늘도 내가 일등이야!"
+    }
+   ]
+  },
+  "midos": {
+   "concept": "A ghost assassin made of living violet-black shadow, not a human: a horned smooth dark mask with glowing slit eyes, a smoke tail instead of legs and three steel claws on each hand; he teleports anywhere. A cool, cold, low and calm male voice, mysterious and quietly menacing, with a ghostly echo; never shouting.",
+   "elevenlabs": {
+    "voice_id": "NPczI0ENupczysuuiRAS",
+    "voice_design_model": "eleven_ttv_v3",
+    "tts_model": "eleven_v4",
+    "language": "ko"
+   },
+   "gender": "male",
+   "f0_target": 95,
+   "voice": "A cool, mysterious phantom hunter, a man of indeterminate age. A smooth low baritone in a medium-low pitch, calm, confident and cold, with a soft airy edge, eerie and controlled, clear diction, no vocal fry, never shouting.",
+   "clone": {
+    "ref": "refs/midos-ref.flac",
+    "text": "그림자 속에서 기다렸다. 이제 네 차례다.",
+    "style": "Calm, cold, confident and slightly sinister.",
+    "_from": "VoiceDesign take (seed 11, take 4) of 12 over two prompts, lead / tail silence trimmed. Prompt A ('deep, hollow ... like a sinister whisper') gave 69-87 Hz takes, all creaky (HNR -6.7..0.5 dB, warble 0.11-0.15); prompt B (this 'voice') gave 75-151 Hz (one take read female, P 0.996). Kept B take 4: F0 95.5 Hz (78-127), warble 0.093 (lowest of the 12), HNR 0.2 dB, harshness -9.2 dB, P(female) 0.001; Whisper transcript exact (네/내 sound alike)."
+   },
+   "lines": [
+    {
+     "event": "select",
+     "id": "select-1",
+     "text": "그림자는 언제나 네 곁에 있다.",
+     "style": "Calm, cold, quietly menacing.",
+     "v4": "[cold] [whispers] [slowly] 그림자는 언제나 네 곁에 있다."
+    },
+    {
+     "event": "select",
+     "id": "select-2",
+     "text": "어둠이 나를 부른다.",
+     "style": "Low, slow and mysterious.",
+     "v4": "[cold] [quiet] [eerie] 어둠이 나를 부른다."
+    },
+    {
+     "event": "move",
+     "id": "move-1",
+     "text": "소리 없이.",
+     "style": "A cold, quiet murmur.",
+     "v4": "[whispers] [cold] 소리 없이."
+    },
+    {
+     "event": "move",
+     "id": "move-2",
+     "text": "흔적은 남기지 않는다.",
+     "style": "Calm and confident, low.",
+     "v4": "[cold] [quiet] [calm] 흔적은 남기지 않는다."
+    },
+    {
+     "event": "capture",
+     "id": "capture-1",
+     "text": "도망칠 곳은 없다.",
+     "style": "Cold and cruel, controlled.",
+     "v4": "[cold] [menacing] [slowly] 도망칠 곳은 없다."
+    },
+    {
+     "event": "capture",
+     "id": "capture-2",
+     "text": "그림자에 삼켜져라.",
+     "style": "Menacing, low and firm.",
+     "v4": "[cold] [menacing] [intense] 그림자에 삼켜져라."
+    },
+    {
+     "event": "capture",
+     "id": "capture-3",
+     "text": "끝이다.",
+     "style": "Short, cold and final.",
+     "v4": "[cold] [quiet] [final] 끝이다."
+    },
+    {
+     "event": "skill",
+     "id": "skill-1",
+     "text": "어디든, 그림자가 있는 곳이라면.",
+     "style": "Cool and confident, a sly menace.",
+     "v4": "[cold] [whispers] [slowly] 어디든, 그림자가 있는 곳이라면."
+    },
+    {
+     "event": "skill",
+     "id": "skill-2",
+     "text": "눈을 감는 순간, 나는 거기 있다.",
+     "style": "Quiet, eerie and confident.",
+     "v4": "[cold] [eerie] [slowly] 눈을 감는 순간, [whispers] 나는 거기 있다."
+    },
+    {
+     "event": "death",
+     "id": "death-1",
+     "text": "그림자로… 돌아간다…",
+     "style": "Weak, fading, a dying whisper.",
+     "v4": "[weakly] [fading] [cold] 그림자로… 돌아간다…"
+    },
+    {
+     "event": "victory",
+     "id": "victory-1",
+     "text": "이 밤은 우리의 것이다.",
+     "style": "Calm, cold triumph.",
+     "v4": "[cold] [quiet satisfaction] [slowly] 이 밤은 우리의 것이다."
+    }
+   ]
+  },
+  "hammont": {
+   "concept": "A huge bearded blacksmith in his thirties with a red bandana and a molten forge hammer who knocks enemies flying: a deep, warm, hearty baritone, boisterous and good-humoured; never shrill.",
+   "elevenlabs": {
+    "voice_id": "q5hXqX4X0XOZ4JrZYaeU",
+    "voice_design_model": "eleven_ttv_v3",
+    "tts_model": "eleven_v4",
+    "language": "ko"
+   },
+   "gender": "male",
+   "f0_target": 112,
+   "voice": "A big, hearty, cheerful blacksmith in his thirties. A deep, warm, resonant baritone in a medium-low pitch, boisterous and good-humoured, a strong chest voice with clear diction, confident, never shouting.",
+   "clone": {
+    "ref": "refs/hammont-ref.flac",
+    "text": "쇠는 뜨거울 때 두들기는 거다. 각오해라.",
+    "style": "Hearty and confident, a grin in the voice.",
+    "_from": "VoiceDesign take (seed 11, take 5) of 6, lead / tail silence trimmed. The 6 takes ranged 95-261 Hz median; two were shouted (189 / 206 Hz with p90 330-486 Hz) and one rose to 261 Hz. Kept take 5: F0 112 Hz (67-165), warble 0.034 (the steadiest), HNR 6.9 dB, harshness -11.4 dB, P(female) 0.001; Whisper transcript exact."
+   },
+   "lines": [
+    {
+     "event": "select",
+     "id": "select-1",
+     "text": "망치 준비 완료다. 누굴 두들겨 줄까?",
+     "style": "Hearty and cheerful, ready for work.",
+     "v4": "[deep voice] [hearty] [cheerful] 망치 준비 완료다. [chuckles] 누굴 두들겨 줄까?"
+    },
+    {
+     "event": "select",
+     "id": "select-2",
+     "text": "불은 충분히 달궈졌다.",
+     "style": "Confident, warm, a grin in the voice.",
+     "v4": "[deep voice] [warmly] [calm] 불은 충분히 달궈졌다."
+    },
+    {
+     "event": "move",
+     "id": "move-1",
+     "text": "길 비켜라.",
+     "style": "Boisterous but calm, firm.",
+     "v4": "[deep voice] [booming] [good natured] 길 비켜라."
+    },
+    {
+     "event": "move",
+     "id": "move-2",
+     "text": "쿵, 쿵, 간다.",
+     "style": "Playful and heavy, steady rhythm.",
+     "v4": "[deep voice] [rhythmic] [hearty] 쿵, 쿵, 간다."
+    },
+    {
+     "event": "capture",
+     "id": "capture-1",
+     "text": "납작하게 펴 주마.",
+     "style": "Gleeful and strong.",
+     "v4": "[deep voice] [grinning] [hearty] 납작하게 펴 주마."
+    },
+    {
+     "event": "capture",
+     "id": "capture-2",
+     "text": "뜨거운 맛 좀 봐라.",
+     "style": "Fierce and hearty.",
+     "_note": "First written '쇳물 맛 좀 봐라': Whisper heard 샘물 for 쇳물 (CER 0.17), so the line was replaced.",
+     "v4": "[deep voice] [exerting] [hearty] 뜨거운 맛 좀 봐라."
+    },
+    {
+     "event": "capture",
+     "id": "capture-3",
+     "text": "한 방이면 끝이지.",
+     "style": "Confident, a short laugh.",
+     "v4": "[deep voice] [laughs] [confident] 한 방이면 끝이지."
+    },
+    {
+     "event": "skill",
+     "id": "skill-1",
+     "text": "날아가라.",
+     "style": "A powerful heave, strong, not shouting.",
+     "v4": "[deep voice] [exerting] [shouting] 날아가라."
+    },
+    {
+     "event": "skill",
+     "id": "skill-2",
+     "text": "저리 꺼져.",
+     "style": "Gruff and good-humoured, firm.",
+     "v4": "[deep voice] [gruff] [grunts] 저리 꺼져."
+    },
+    {
+     "event": "death",
+     "id": "death-1",
+     "text": "화로가… 꺼지는구나…",
+     "style": "Weak, fading, a deep sigh.",
+     "v4": "[deep voice] [weakly] [sad] [sighs] 화로가… 꺼지는구나…"
+    },
+    {
+     "event": "victory",
+     "id": "victory-1",
+     "text": "오늘 일은 이걸로 끝이다.",
+     "style": "Satisfied, warm triumph.",
+     "v4": "[deep voice] [warmly] [satisfied] [exhales] 오늘 일은 이걸로 끝이다."
+    }
+   ]
+  },
+  "venoa": {
+   "concept": "A cool, sharp-eyed young huntress from a poison swamp with a bone longbow and venom arrows: a low-medium, calm, quiet and slightly husky female voice, terse; not a child, not shrill.",
+   "elevenlabs": {
+    "voice_id": "kypqG0ZjRGINEpbOLyEv",
+    "voice_design_model": "eleven_ttv_v3",
+    "tts_model": "eleven_v4",
+    "language": "ko"
+   },
+   "gender": "female",
+   "f0_target": 195,
+   "voice": "A cool, composed young woman of about twenty, a huntress from a poison swamp. A low-medium female voice, calm, quiet and sharp, slightly husky, terse and focused; never shrill, not a little girl.",
+   "clone": {
+    "ref": "refs/venoa-ref.flac",
+    "text": "숨어도 소용없어. 내 화살은 놓치지 않아.",
+    "style": "Cool, quiet and focused.",
+    "_from": "VoiceDesign take (seed 11, take 5) of 6, lead / tail silence trimmed. Takes 163-233 Hz median, all female (P 0.995-0.996). Kept take 5: F0 190 Hz (147-230), warble 0.062, HNR 11.9 dB, harshness -20.0 dB, P(female) 0.996; Whisper transcript exact."
+   },
+   "lines": [
+    {
+     "event": "select",
+     "id": "select-1",
+     "text": "사냥감은 정했어.",
+     "style": "Cool and quiet.",
+     "v4": "[calm] [quiet] [cold] 사냥감은 정했어."
+    },
+    {
+     "event": "select",
+     "id": "select-2",
+     "text": "늪은 내 영역이야.",
+     "style": "Calm, a hint of pride.",
+     "v4": "[calm] [quiet] [confident] 늪은 내 영역이야."
+    },
+    {
+     "event": "move",
+     "id": "move-1",
+     "text": "조용히.",
+     "style": "A low murmur.",
+     "v4": "[whispers] [calm] 조용히."
+    },
+    {
+     "event": "move",
+     "id": "move-2",
+     "text": "자리를 옮기지.",
+     "style": "Calm and focused.",
+     "v4": "[calm] [quiet] [terse] 자리를 옮기지."
+    },
+    {
+     "event": "capture",
+     "id": "capture-1",
+     "text": "명중.",
+     "style": "Cool, satisfied, short.",
+     "v4": "[calm] [quiet] [flat] 명중."
+    },
+    {
+     "event": "capture",
+     "id": "capture-2",
+     "text": "독이 퍼지는 건 금방이야.",
+     "style": "Cold and quiet.",
+     "v4": "[calm] [cold] [faint smile] 독이 퍼지는 건 금방이야."
+    },
+    {
+     "event": "capture",
+     "id": "capture-3",
+     "text": "빗나가는 일은 없어.",
+     "style": "Confident and terse.",
+     "v4": "[calm] [confident] [quiet] 빗나가는 일은 없어."
+    },
+    {
+     "event": "death",
+     "id": "death-1",
+     "text": "화살이… 다 떨어졌네…",
+     "style": "Weak and fading.",
+     "v4": "[weakly] [pained] [quiet] 화살이… 다 떨어졌네…"
+    },
+    {
+     "event": "victory",
+     "id": "victory-1",
+     "text": "사냥 끝. 돌아가자.",
+     "style": "Calm satisfaction.",
+     "v4": "[calm] [quiet] 사냥 끝. [short pause] [softly] 돌아가자."
+    }
+   ]
+  },
+  "glacia": {
+   "concept": "An elegant young frost witch with long white hair, an icicle-crusted witch hat and ice-skate boots who glides and freezes enemies: a clear, smooth, medium-pitched female voice, aloof and teasing, cold and calm; not a child.",
+   "elevenlabs": {
+    "voice_id": "pH9wISYHjoa5aH61pcvf",
+    "voice_design_model": "eleven_ttv_v3",
+    "tts_model": "eleven_v4",
+    "language": "ko"
+   },
+   "gender": "female",
+   "f0_target": 205,
+   "voice": "A cool, elegant young witch of about twenty. A clear, smooth, medium-pitched female voice, aloof and teasing, slow and composed, with a cold crystalline calm; never shrill, not a little girl.",
+   "clone": {
+    "ref": "refs/glacia-ref.flac",
+    "text": "움직이지 마. 얼어붙는 건 한순간이니까.",
+    "style": "Cold, elegant and teasing.",
+    "_from": "VoiceDesign take (seed 11, take 2) of 6, lead / tail silence trimmed. Takes 181-259 Hz median, all female (P 0.986-0.996). Kept take 2: F0 204 Hz (156-266), warble 0.044, HNR 14.7 dB, harshness -16.9 dB, P(female) 0.996; Whisper transcript exact."
+   },
+   "lines": [
+    {
+     "event": "select",
+     "id": "select-1",
+     "text": "차갑게 해 줄까?",
+     "style": "Teasing and cool.",
+     "v4": "[teasing] [cold] [playful] 차갑게 해 줄까?"
+    },
+    {
+     "event": "select",
+     "id": "select-2",
+     "text": "얼음 위는 내 무대야.",
+     "style": "Elegant and confident.",
+     "v4": "[aloof] [confident] [calm] 얼음 위는 내 무대야."
+    },
+    {
+     "event": "move",
+     "id": "move-1",
+     "text": "미끄러지듯이.",
+     "style": "Light, smooth and calm.",
+     "v4": "[calm] [softly] [elegant] 미끄러지듯이."
+    },
+    {
+     "event": "move",
+     "id": "move-2",
+     "text": "멈추는 건 내가 정해.",
+     "style": "Aloof and playful.",
+     "v4": "[aloof] [cold] [calm] 멈추는 건 내가 정해."
+    },
+    {
+     "event": "capture",
+     "id": "capture-1",
+     "text": "산산조각.",
+     "style": "Cold and crisp.",
+     "v4": "[cold] [calm] [faint smile] 산산조각."
+    },
+    {
+     "event": "capture",
+     "id": "capture-2",
+     "text": "얼음처럼 부서지렴.",
+     "style": "Cruelly sweet, calm.",
+     "v4": "[cold] [teasing] [cruel] 얼음처럼 부서지렴."
+    },
+    {
+     "event": "capture",
+     "id": "capture-3",
+     "text": "추웠지?",
+     "style": "Teasing, quiet.",
+     "v4": "[teasing] [mocking] [playful] 추웠지?"
+    },
+    {
+     "event": "skill",
+     "id": "skill-1",
+     "text": "얼어붙어.",
+     "style": "Cold command, calm and firm.",
+     "v4": "[cold] [commanding] [calm] 얼어붙어."
+    },
+    {
+     "event": "skill",
+     "id": "skill-2",
+     "text": "거기서 가만히 있어.",
+     "style": "Teasing and icy.",
+     "v4": "[cold] [commanding] [slowly] 거기서 가만히 있어."
+    },
+    {
+     "event": "death",
+     "id": "death-1",
+     "text": "녹아… 버리겠어…",
+     "style": "Weak and fading.",
+     "v4": "[weakly] [trembling voice] [fading] 녹아… 버리겠어…"
+    },
+    {
+     "event": "victory",
+     "id": "victory-1",
+     "text": "겨울이 이겼네.",
+     "style": "Elegant, quiet triumph.",
+     "v4": "[calm] [satisfied] [aloof] 겨울이 이겼네."
+    }
+   ]
   }
+ }
 }

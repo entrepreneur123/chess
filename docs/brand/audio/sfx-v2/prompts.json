@@ -1,0 +1,277 @@
+{
+ "_note": "ElevenLabs eleven_text_to_sound_v2 prompts for every character / generic effect (sfx-v2, 2026-11-07). duration_s is the requested length; prompt_influence 0.55 everywhere; 2 variations per effect, takes in gens.tsv, the pick per effect in qa-sfx-v2.json (master_sfx.py).",
+ "effects": {
+  "sad-select": {
+   "duration_s": 0.9,
+   "prompt": "Longsword drawn from a leather scabbard, rising metallic scrape ending in a clean bright ringing blade tone, close-mic"
+  },
+  "sad-move": {
+   "duration_s": 0.6,
+   "prompt": "Two heavy armoured footsteps with plate metal clink, steady and deliberate, on stone"
+  },
+  "sad-capture": {
+   "duration_s": 1.3,
+   "prompt": "Heavy sword swing whoosh into a solid metal-on-armour strike, bright steel ring, holy shimmer tail"
+  },
+  "sad-skill": {
+   "duration_s": 1.8,
+   "prompt": "Holy magic invocation: swelling warm major chord with rising sparkling shimmer, then a bright radiant strike at the end"
+  },
+  "marki-select": {
+   "duration_s": 0.7,
+   "prompt": "Big animal snort and a heavy hoof stamp on dirt, close"
+  },
+  "marki-move": {
+   "duration_s": 0.7,
+   "prompt": "Two heavy galloping hoof beats on hard ground, low thuds with dust"
+  },
+  "marki-capture": {
+   "duration_s": 1.1,
+   "prompt": "Thundering charge into a crunching heavy body-slam impact, deep thud with debris"
+  },
+  "marki-skill": {
+   "duration_s": 1.7,
+   "prompt": "Beast charge: a snort, then an accelerating stampede of hooves with a rising rumble"
+  },
+  "walk-select": {
+   "duration_s": 0.5,
+   "prompt": "Short wooden shield thump, a round shield hoisted and knocked once, dry"
+  },
+  "walk-move": {
+   "duration_s": 0.5,
+   "prompt": "Two quick boot steps with light chainmail jingle on gravel"
+  },
+  "walk-capture": {
+   "duration_s": 0.7,
+   "prompt": "Fast spear thrust whoosh into a solid shield-bash impact, metallic knock"
+  },
+  "walk-skill": {
+   "duration_s": 1.0,
+   "prompt": "Shield wall: heavy shield slams down with a deep metallic boom and a short resonant ring"
+  },
+  "insaner-select": {
+   "duration_s": 0.6,
+   "prompt": "Small demonic cackle giggle with a crackle of magic fire, cartoon villain"
+  },
+  "insaner-move": {
+   "duration_s": 0.6,
+   "prompt": "Quick imp hop: a short fiery whoosh with a tiny magical sparkle on landing"
+  },
+  "insaner-capture": {
+   "duration_s": 0.9,
+   "prompt": "Demonic fire burst engulfing a target, fiery whoosh with a low growl and crackling embers"
+  },
+  "insaner-skill": {
+   "duration_s": 1.1,
+   "prompt": "Magic absorb: a reversed sucking whoosh pulling inward, a rising warbling tone and a closing wet gulp pop"
+  },
+  "insaner-chain": {
+   "duration_s": 1.1,
+   "prompt": "Rapid chain of three fiery magical zips rising in pitch, each with a sparkle, quick and playful"
+  },
+  "death": {
+   "duration_s": 1.1,
+   "prompt": "A stone statue shatters and disintegrates: short crack, crumbling grains thinning out, a falling tone and dust sparkle"
+  },
+  "brutile-select": {
+   "duration_s": 1.0,
+   "prompt": "Dark witch chime: an eerie dissonant bell tone with a cloak swish and a faint poison hiss"
+  },
+  "brutile-move": {
+   "duration_s": 0.6,
+   "prompt": "A cloak swish with a hushed dark magical whoosh, low and soft"
+  },
+  "brutile-capture": {
+   "duration_s": 1.2,
+   "prompt": "Curse blast: sucking whoosh, a sizzling green-fire burst and a low dark boom with a dissonant sting"
+  },
+  "brutile-skill": {
+   "duration_s": 1.8,
+   "prompt": "Wasteland curse cast: rising dark choir hum and drone, a ground crack at the climax, then bubbling poison"
+  },
+  "waste-death": {
+   "duration_s": 1.2,
+   "prompt": "A body dissolving in acid poison: sharp acid hiss, thick bubbling, a falling gurgle"
+  },
+  "michelle-select": {
+   "duration_s": 1.0,
+   "prompt": "Three slow slightly detuned music box notes, a falling minor melody, and a faint rubber doll squeak"
+  },
+  "michelle-move": {
+   "duration_s": 0.5,
+   "prompt": "Two tiny soft footsteps and a faint dress rustle, very quiet, no metal"
+  },
+  "michelle-capture": {
+   "duration_s": 1.1,
+   "prompt": "Scissor snip: two sharp scissor blade clicks, a muffled cloth thump and a single music box note sinking flat"
+  },
+  "michelle-trap-set": {
+   "duration_s": 1.0,
+   "prompt": "A wind-up toy being set: four ratchet clicks slowing down, a creaky spring settles, then one soft music box note"
+  },
+  "michelle-trap-sprung": {
+   "duration_s": 0.7,
+   "prompt": "Toy trap snaps shut: sharp wooden snap, a string pulled tight with a rising creak and a small low thump"
+  },
+  "picker-select": {
+   "duration_s": 0.7,
+   "prompt": "Spur jingle as boots shift weight, then a rope coil sliding through a gloved hand"
+  },
+  "picker-move": {
+   "duration_s": 0.6,
+   "prompt": "Two unhurried boot steps on dry sand, each with a faint spur ring"
+  },
+  "picker-capture": {
+   "duration_s": 1.0,
+   "prompt": "Lasso twirl whoosh, the rope tip cracks, pulled taut with a creak, then a soft thud on sand"
+  },
+  "picker-hop-multi": {
+   "duration_s": 1.0,
+   "prompt": "Three springy cartoon hops rising in pitch, each landing with a light tap on sand, then a final spur jingle"
+  },
+  "rakaeli-select": {
+   "duration_s": 0.7,
+   "prompt": "Folded feathered wings stir with a soft feather rustle under the faint glassy ring of a cracked halo"
+  },
+  "rakaeli-move": {
+   "duration_s": 0.6,
+   "prompt": "Two soft feathered wing flaps, the second lighter, then a quill settles"
+  },
+  "rakaeli-capture": {
+   "duration_s": 0.9,
+   "prompt": "A pale strike: a quick feather-edged slash of air, a cold glass-like impact with a soft low body, and a falling eerie halo sigh"
+  },
+  "rakaeli-skill": {
+   "duration_s": 1.3,
+   "prompt": "Dark transformation: rising sizzle and flare whoosh, a glass halo snaps, two big accelerating wing strokes as a dark choir swells, and a crimson flame bloom"
+  },
+  "rakaeli-awake-move": {
+   "duration_s": 0.8,
+   "prompt": "One heavy flaming wing beat: a deep downstroke whump with fire roaring along the wing and a few embers crackling"
+  },
+  "rakaeli-awake-capture": {
+   "duration_s": 1.0,
+   "prompt": "Dark flame impact: air sucked inward, a heavy blow with a low out-of-tune bell strike, a fire bloom and a trail of embers"
+  },
+  "rakaeli-awake-end": {
+   "duration_s": 1.0,
+   "prompt": "Flames die back: last embers pop and thin out, smoke leaves in a soft breathy exhale, then a single faint halo ring returns"
+  },
+  "rampid-select": {
+   "duration_s": 0.6,
+   "prompt": "Quick ice skate stop with a spray of shaved ice and a sparkle of frost"
+  },
+  "rampid-move": {
+   "duration_s": 0.6,
+   "prompt": "Two fast ice skating strides, bright blade carves, and a short glide hiss"
+  },
+  "rampid-capture": {
+   "duration_s": 0.9,
+   "prompt": "Speed dash into an icy hit: fast rising rush, glassy ice shatter strike with a small low body, shards scattering, frost crackling"
+  },
+  "larhen-select": {
+   "duration_s": 0.7,
+   "prompt": "Twin daggers drawn one after the other, two crisp steel shings, the second a touch higher, in a quiet dry space"
+  },
+  "larhen-move": {
+   "duration_s": 0.7,
+   "prompt": "A high leap: a coat flick, air rushing past, and a near-silent light landing"
+  },
+  "larhen-capture": {
+   "duration_s": 0.7,
+   "prompt": "Two lightning-fast dagger cross slashes with a crisp steel tsing on the cut, then silence"
+  },
+  "volkonov-select": {
+   "duration_s": 0.9,
+   "prompt": "A quick friendly rolled lute strum in a major key and a playful little high plucked answer"
+  },
+  "volkonov-move": {
+   "duration_s": 0.7,
+   "prompt": "Two light lute plucks stepping up a fourth with a soft cloak swish under them"
+  },
+  "volkonov-capture": {
+   "duration_s": 0.9,
+   "prompt": "Lute flourish: a fast run down the scale, a snapped low string thwack on the body and a sly resolving high note"
+  },
+  "volkonov-skill": {
+   "duration_s": 1.5,
+   "prompt": "Accelerating rising major arpeggio of lute plucks over a warm swelling chorused pad, crowned by a bright two-note chime and a sparkle"
+  },
+  "verish-select": {
+   "duration_s": 0.7,
+   "prompt": "Power boots start up: a quick servo spin-up whine, two small electric ticks and a bright rising two-note ready ping"
+  },
+  "verish-move": {
+   "duration_s": 0.6,
+   "prompt": "Fast power-boot slide: a thrust whoosh, a dropping whine as she glides, and an electric skid with arc crackle"
+  },
+  "verish-capture": {
+   "duration_s": 0.7,
+   "prompt": "A punchy pierce: one strong impact as she shoots through the target, a burst of static where the boots strike, air rushing closed behind"
+  },
+  "verish-hop-multi": {
+   "duration_s": 0.9,
+   "prompt": "Three rapid pierce impacts rising in pitch over one rising zip, a crackling electric discharge and a short skid to a stop"
+  },
+  "midos-select": {
+   "duration_s": 0.9,
+   "prompt": "A cold ghostly breath, then metal claws spring out with a snikt, in a hollow dark space"
+  },
+  "midos-move": {
+   "duration_s": 0.8,
+   "prompt": "A low ghost glide: a soft rising then falling whoosh of shadow with a breathy tail, no footsteps"
+  },
+  "midos-capture": {
+   "duration_s": 0.8,
+   "prompt": "Three quick claw rakes rising in pitch, a steel tsing on the last cut and a deep hollow void thump"
+  },
+  "midos-skill": {
+   "duration_s": 1.4,
+   "prompt": "Shadow teleport: air rushing inward as a ghost folds into nothing, a beat of shimmer, then a deep void pop as it bursts out and claws spring"
+  },
+  "hammont-select": {
+   "duration_s": 0.9,
+   "prompt": "Two anvil hammer taps, a smith testing his hammer, with forge coals breathing behind"
+  },
+  "hammont-move": {
+   "duration_s": 0.7,
+   "prompt": "Heavy boots: two weighty steps and an iron hammer head swinging on its haft"
+  },
+  "hammont-capture": {
+   "duration_s": 0.9,
+   "prompt": "Crushing hammer blow: a big swing, the hammer slamming down with a low body and anvil ring, sparks and debris"
+  },
+  "hammont-skill": {
+   "duration_s": 0.9,
+   "prompt": "Knock-back: a heave, a booming hit, a whoosh as the enemy flies off, then a skid"
+  },
+  "venoa-select": {
+   "duration_s": 0.7,
+   "prompt": "An arrow drawn from a quiver and nocked, the bowstring creaking half-drawn"
+  },
+  "venoa-move": {
+   "duration_s": 0.5,
+   "prompt": "Light steps through wet moss and a cloak swish"
+  },
+  "venoa-capture": {
+   "duration_s": 1.0,
+   "prompt": "Bowstring twang, an arrow hissing off, a thock into the target and poison fizzing"
+  },
+  "glacia-select": {
+   "duration_s": 0.9,
+   "prompt": "A cold breath of wind and a crystalline two-note chime, a falling minor third, aloof and icy"
+  },
+  "glacia-move": {
+   "duration_s": 0.8,
+   "prompt": "An ice skate push-off and a long smooth glide across ice"
+  },
+  "glacia-capture": {
+   "duration_s": 1.0,
+   "prompt": "A frost slash whoosh and the target shattering like ice, glassy shards"
+  },
+  "glacia-skill": {
+   "duration_s": 1.4,
+   "prompt": "Freeze: a rising frost swirl, a freezing crunch as ice locks around the target, and a cold shimmer"
+  }
+ }
+}
