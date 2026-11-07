@@ -1341,6 +1341,12 @@ img.is-awake-fallback {
   background: radial-gradient(circle, #f4ffd0 0 18%, transparent 22% 48%, #c6f23a 52% 66%, transparent 70%);
   box-shadow: none;
 }
+/* An enemy Venoa's arrow range (opponent hand / field card) is magenta, as on the board, so her
+   shots read apart from my Venoa's lime ones (render/palette.ts BOARD_COLORS.shotEnemy). */
+.move-diagram.owner-1 .md-cell.is-target.is-shot,
+.hand--opp .move-diagram .md-cell.is-target.is-shot {
+  background: radial-gradient(circle, #ffd6f4 0 18%, transparent 22% 48%, #ff3dcb 52% 66%, transparent 70%);
+}
 .move-diagram .md-cell.is-target.is-glide {
   border-radius: 2px;
   background: linear-gradient(135deg, rgba(232, 244, 255, 0.95), rgba(156, 200, 255, 0.55));

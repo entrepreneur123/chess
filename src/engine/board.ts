@@ -440,6 +440,31 @@ function shoot(
   return n;
 }
 
+/**
+ * Venoa's arrow range for the board overlay: the EMPTY squares her arrows fly over at a distance of
+ * VENOA_SHOT_MIN..max, walked exactly as `shoot` walks them (the edge and the storm end a lane, the
+ * first piece blocks it; wasteland and traps do not). The piece that blocks a lane is not included:
+ * an enemy there is already a shot target. Appends square indices to `out`, returns the new count.
+ */
+export function venoaShotRange(occ: ArrayLike<number>, r: number, c: number, dir: number, level: number, storm: number, out: { [i: number]: number }, n: number): number {
+  const lanes = VENOA_LANES[dir];
+  const nl = level >= VENOA_DIAG_LEVEL ? lanes.length : 2;
+  const max = VENOA_SHOT_MAX[level];
+  for (let d = 0; d < nl; d += 2) {
+    let nr = r;
+    let nc = c;
+    for (let k = 1; k <= max; k++) {
+      nr += lanes[d];
+      nc += lanes[d + 1];
+      if (nr < 0 || nr >= BOARD_SIZE || nc < 0 || nc >= BOARD_SIZE || inStorm(nr, nc, storm)) break;
+      const s = nr * BOARD_SIZE + nc;
+      if (occ[s] >= 0) break;
+      if (k >= VENOA_SHOT_MIN) out[n++] = s;
+    }
+  }
+  return n;
+}
+
 /** Set while `orthoReach` measures a pattern: Glacia's glide is not a reach (see there). */
 let measuringReach = false;
 

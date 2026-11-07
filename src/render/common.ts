@@ -84,6 +84,8 @@ const RGB_SEL = hexToRgb(BOARD_COLORS.selectedTint);
 const RGB_CAP = hexToRgb(BOARD_COLORS.captureTint);
 const RGB_ENEMY_SEL = hexToRgb(BOARD_COLORS.enemySelectedTint);
 const RGB_ENEMY_MOVE = hexToRgb(BOARD_COLORS.enemyMoveTint);
+const RGB_SHOT_OWN = hexToRgb(BOARD_COLORS.shotOwnTint);
+const RGB_SHOT_ENEMY = hexToRgb(BOARD_COLORS.shotEnemyTint);
 const RGB_TEAM_ZONE: Record<PlayerId, RGB> = {
   0: hexToRgb(TEAM_COLORS[0].zone),
   1: hexToRgb(TEAM_COLORS[1].zone),
@@ -121,6 +123,8 @@ const DEFAULT_TILES = tilePalette(DEFAULT_BOARD_THEME);
 /** Highlight tint strengths over the dark tiles (the glowing markers carry the meaning). */
 const ENEMY_MOVE_TINT = 0.4;
 const CAPTURE_TINT = 0.75;
+/** Venoa's arrow range: lighter than a target, so the lanes read as an area, not as targets. */
+const SHOT_RANGE_TINT = 0.6;
 const SELECTED_TINT = 0.78;
 /** Edge darkening of the field (fraction of brightness lost at the corner tiles). */
 const FIELD_VIGNETTE = 0.16;
@@ -130,6 +134,10 @@ export interface HighlightIndex {
   selected: number;
   moves: Set<number>;
   captures: Set<number>;
+  /** Captures that are Venoa shots (reticle in the tone's shot colour). */
+  shots: Set<number>;
+  /** Venoa's arrow range (empty squares), tinted in the tone's shot colour. */
+  shotRange: Set<number>;
   last: Set<number>;
   zone: [number, number] | null;
   /** Reach preview of an enemy piece (red markers) instead of the player's own piece. */
@@ -152,6 +160,8 @@ export function indexHighlights(h: BoardHighlights): HighlightIndex {
     selected: h.selected ? posKey(h.selected) : -1,
     moves: new Set((h.moves ?? []).map(posKey)),
     captures: new Set((h.captures ?? []).map(posKey)),
+    shots: new Set((h.shots ?? []).map(posKey)),
+    shotRange: new Set((h.shotRange ?? []).map(posKey)),
     last,
     zone,
     enemy: h.tone === 'enemy',
@@ -199,7 +209,8 @@ export function tileRgb(r: number, c: number, hi: HighlightIndex, pal: TilePalet
     col = mixRgb(col, [RGB_LAST[0] * k, RGB_LAST[1] * k, RGB_LAST[2] * k], LAST_MOVE_TINT_STRENGTH);
   }
   if (hi.enemy && hi.moves.has(sq)) col = mixRgb(col, RGB_ENEMY_MOVE, ENEMY_MOVE_TINT);
-  if (hi.captures.has(sq)) col = mixRgb(col, RGB_CAP, CAPTURE_TINT);
+  if (hi.shotRange.has(sq)) col = mixRgb(col, hi.enemy ? RGB_SHOT_ENEMY : RGB_SHOT_OWN, SHOT_RANGE_TINT);
+  if (hi.captures.has(sq)) col = mixRgb(col, hi.shots.has(sq) ? (hi.enemy ? RGB_SHOT_ENEMY : RGB_SHOT_OWN) : RGB_CAP, CAPTURE_TINT);
   if (hi.selected === sq) col = mixRgb(col, hi.enemy ? RGB_ENEMY_SEL : RGB_SEL, SELECTED_TINT);
   return col;
 }

@@ -17,6 +17,7 @@ import {
   getLegalMoves,
   getPieceById,
   getTargetsForPiece,
+  getShotRange,
   isAwake,
   isBuffed,
   isDirectional,
@@ -842,6 +843,10 @@ export function gameScreen(router: Router, params: GameParams): Screen {
           // Hammont's hits only knock the enemy back, but they are aimed at it: drawn as captures.
           moves: sel ? sel.moves.filter((m) => !m.captureId && !m.push).map((m) => m.to) : [],
           captures: sel ? sel.moves.filter((m) => m.captureId || m.push).map((m) => m.to) : [],
+          // Venoa's shots: a reticle in her side's colour (own lime, enemy magenta), not the ring.
+          shots: sel ? sel.moves.filter((m) => m.shot).map((m) => m.to) : [],
+          // ...and every empty square her arrows fly over (her whole arrow range), in the same colour.
+          shotRange: selPiece ? getShotRange(s, selPiece) : [],
           lastMove: snap.lastMove,
           // A tapped enemy shows its reach in red; own pieces keep the white markers.
           tone: selPiece && selPiece.owner === BOT ? 'enemy' : 'own',

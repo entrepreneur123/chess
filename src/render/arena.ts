@@ -1205,8 +1205,74 @@ export function paintCaptureRing(g: CanvasRenderingContext2D, x: number, y: numb
   g.restore();
 }
 
+/**
+ * Venoa's shot target: a sniper reticle around the threatened coin (centre (x, y), cell size s).
+ * A thinner ring than the capture ring plus four crosshair ticks crossing it at N / E / S / W, so a
+ * shot reads apart from a capture by shape as well as colour; the coin's face stays uncovered.
+ */
+export function paintShotReticle(g: CanvasRenderingContext2D, x: number, y: number, s: number, color: RGB): void {
+  const rr = s * 0.45;
+  const ring = (lw: number, style: string): void => {
+    g.lineWidth = lw;
+    g.strokeStyle = style;
+    g.beginPath();
+    g.arc(x, y, rr, 0, Math.PI * 2);
+    g.stroke();
+  };
+  const ticks = (lw: number, style: string): void => {
+    g.lineWidth = lw;
+    g.strokeStyle = style;
+    g.beginPath();
+    for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]] as const) {
+      g.moveTo(x + dx * s * 0.33, y + dy * s * 0.33);
+      g.lineTo(x + dx * s * 0.55, y + dy * s * 0.55);
+    }
+    g.stroke();
+  };
+  g.save();
+  g.lineCap = 'round';
+  ring(s * 0.18, rgbToCss(color, 0.14));
+  ticks(s * 0.16, rgbToCss(color, 0.18));
+  g.shadowColor = rgbToCss(color, 1);
+  g.shadowBlur = s * 0.08;
+  ring(s * 0.05, rgbToCss(color, 1));
+  ticks(s * 0.06, rgbToCss(color, 1));
+  g.shadowBlur = 0;
+  ring(s * 0.02, rgbToCss(mixRgb(color, WHITE, 0.55), 1));
+  ticks(s * 0.022, rgbToCss(mixRgb(color, WHITE, 0.6), 1));
+  g.restore();
+}
+
+/**
+ * A square of Venoa's arrow range (empty): a small sight (thin ring + four short ticks) centred at
+ * (x, y) for cell size s, quieter than the target reticle so the lanes read as an area.
+ */
+export function paintShotSight(g: CanvasRenderingContext2D, x: number, y: number, s: number, color: RGB): void {
+  const rr = s * 0.15;
+  const draw = (lw: number, style: string): void => {
+    g.lineWidth = lw;
+    g.strokeStyle = style;
+    g.beginPath();
+    g.arc(x, y, rr, 0, Math.PI * 2);
+    for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]] as const) {
+      g.moveTo(x + dx * s * 0.2, y + dy * s * 0.2);
+      g.lineTo(x + dx * s * 0.31, y + dy * s * 0.31);
+    }
+    g.stroke();
+  };
+  g.save();
+  g.lineCap = 'round';
+  draw(s * 0.1, rgbToCss(color, 0.2));
+  g.shadowColor = rgbToCss(color, 1);
+  g.shadowBlur = s * 0.06;
+  draw(s * 0.035, rgbToCss(color, 1));
+  g.shadowBlur = 0;
+  draw(s * 0.014, rgbToCss(mixRgb(color, WHITE, 0.6), 1));
+  g.restore();
+}
+
 /** Marker sprite sizes (fractions of a cell): the canvas each painter above needs. */
-export const MARKER_QUAD = { dot: 0.95, select: 1.36, capture: 1.3 } as const;
+export const MARKER_QUAD = { dot: 0.95, select: 1.36, capture: 1.3, shot: 1.36, sight: 0.8 } as const;
 
 /** How much the glow-dot core whitens: own reach glows ice-white, enemy reach keeps its red. */
 export const DOT_WHITEN = { own: 0.55, enemy: 0.3 } as const;

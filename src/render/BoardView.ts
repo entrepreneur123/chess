@@ -123,6 +123,8 @@ import {
   makeBandTexture,
   makeBlobTexture,
   makeCaptureRingTexture,
+  makeShotReticleTexture,
+  makeShotSightTexture,
   makeCometTexture,
   makeDotTexture,
   makeFieldOverlayTexture,
@@ -689,11 +691,18 @@ export class BoardView implements IBoardView {
   private readonly moveDots: THREE.InstancedMesh;
   private readonly captureRings: THREE.InstancedMesh;
   private readonly captureGlow: THREE.InstancedMesh;
+  /** Venoa's shot targets: crosshair reticles + glow, own / enemy tone (see shotTex). */
+  private readonly shotRings: THREE.InstancedMesh;
+  private readonly shotGlow: THREE.InstancedMesh;
+  /** Venoa's arrow range: a small sight on each empty square, own / enemy tone (see sightTex). */
+  private readonly shotSights: THREE.InstancedMesh;
   private readonly selectRing: THREE.Mesh;
   private readonly selectGlow: THREE.Mesh;
   /** Own / enemy tone textures of the move dots and the selection frame (index 0 = own). */
   private dotTex: THREE.Texture[] = [];
   private selTex: THREE.Texture[] = [];
+  private shotTex: THREE.Texture[] = [];
+  private sightTex: THREE.Texture[] = [];
   private readonly pieceLayer = new THREE.Group();
   private readonly fxLayer = new THREE.Group();
 
@@ -818,6 +827,8 @@ export class BoardView implements IBoardView {
   private hi: HighlightIndex = indexHighlights({});
   private placedMoves: Pos[] = [];
   private placedCaps: Pos[] = [];
+  private placedShots: Pos[] = [];
+  private placedSights: Pos[] = [];
   private selVisual: PieceVisual | null = null;
   private pulsing = false;
   /** Covered by the result dialog (setPaused): no decorative idle loops. */
@@ -918,6 +929,9 @@ export class BoardView implements IBoardView {
     this.moveDots = overlays.dots;
     this.captureRings = overlays.rings;
     this.captureGlow = overlays.ringGlow;
+    this.shotRings = overlays.shots;
+    this.shotGlow = overlays.shotGlow;
+    this.shotSights = overlays.sights;
     this.selectRing = overlays.select;
     this.selectGlow = overlays.selectGlow;
 
@@ -1389,6 +1403,9 @@ export class BoardView implements IBoardView {
     dots: THREE.InstancedMesh;
     rings: THREE.InstancedMesh;
     ringGlow: THREE.InstancedMesh;
+    shots: THREE.InstancedMesh;
+    shotGlow: THREE.InstancedMesh;
+    sights: THREE.InstancedMesh;
     select: THREE.Mesh;
     selectGlow: THREE.Mesh;
   } {
@@ -1423,7 +1440,9 @@ export class BoardView implements IBoardView {
     this.dotTex = [makeDotTexture(own, DOT_WHITEN.own), makeDotTexture(foe, DOT_WHITEN.enemy)];
     this.selTex = [makeSelectGlowTexture(hexToRgb(BOARD_COLORS.selected)), makeSelectGlowTexture(hexToRgb(BOARD_COLORS.enemySelected))];
     const capTex = makeCaptureRingTexture(hexToRgb(BOARD_COLORS.capture));
-    this.ownTextures.push(...this.dotTex, ...this.selTex, capTex);
+    this.shotTex = [makeShotReticleTexture(hexToRgb(BOARD_COLORS.shotOwn)), makeShotReticleTexture(hexToRgb(BOARD_COLORS.shotEnemy))];
+    this.sightTex = [makeShotSightTexture(hexToRgb(BOARD_COLORS.shotOwn)), makeShotSightTexture(hexToRgb(BOARD_COLORS.shotEnemy))];
+    this.ownTextures.push(...this.dotTex, ...this.selTex, capTex, ...this.shotTex, ...this.sightTex);
     const dotGeo = new THREE.PlaneGeometry(MARKER_QUAD.dot, MARKER_QUAD.dot).rotateX(-Math.PI / 2);
     const dots = new THREE.InstancedMesh(dotGeo, mat('#ffffff', 0.95, true, this.dotTex[0]), n);
     dots.count = 0;
@@ -1443,6 +1462,22 @@ export class BoardView implements IBoardView {
     ringGlow.renderOrder = 2;
     ringGlow.frustumCulled = false;
 
+    // Venoa's shot targets: the same layering in the tone's shot colour (applyMarkers swaps it).
+    const shotGeo = new THREE.PlaneGeometry(MARKER_QUAD.shot, MARKER_QUAD.shot).rotateX(-Math.PI / 2);
+    const shots = new THREE.InstancedMesh(shotGeo, mat('#ffffff', 1, false, this.shotTex[0]), n);
+    shots.count = 0;
+    shots.renderOrder = 5;
+    shots.frustumCulled = false;
+    const shotGlow = new THREE.InstancedMesh(glowGeo, mat(BOARD_COLORS.shotOwn, 0.6, true, glowTex), n);
+    shotGlow.count = 0;
+    shotGlow.renderOrder = 2;
+    shotGlow.frustumCulled = false;
+    const sightGeo = new THREE.PlaneGeometry(MARKER_QUAD.sight, MARKER_QUAD.sight).rotateX(-Math.PI / 2);
+    const sights = new THREE.InstancedMesh(sightGeo, mat('#ffffff', 0.9, true, this.sightTex[0]), n);
+    sights.count = 0;
+    sights.renderOrder = 2;
+    sights.frustumCulled = false;
+
     // Selection: an ice-cyan (enemy: red) glowing frame hugging the tile + a soft halo under the coin.
     const selGeo = new THREE.PlaneGeometry(MARKER_QUAD.select, MARKER_QUAD.select).rotateX(-Math.PI / 2);
     const select = new THREE.Mesh(selGeo, mat('#ffffff', 1, true, this.selTex[0]));
@@ -1452,9 +1487,9 @@ export class BoardView implements IBoardView {
     selectGlow.visible = false;
     selectGlow.renderOrder = 1;
 
-    this.ownGeometries.push(dotGeo, ringGeo, glowGeo, selGeo);
-    this.scene.add(dots, rings, ringGlow, select, selectGlow);
-    return { dots, rings, ringGlow, select, selectGlow };
+    this.ownGeometries.push(dotGeo, ringGeo, glowGeo, selGeo, shotGeo, sightGeo);
+    this.scene.add(dots, rings, ringGlow, shots, shotGlow, sights, select, selectGlow);
+    return { dots, rings, ringGlow, shots, shotGlow, sights, select, selectGlow };
   }
 
   /** Glowing home-zone edge lines (one per team) + a comet used for the turn sweep. */
@@ -2687,6 +2722,9 @@ export class BoardView implements IBoardView {
     this.moveDots.dispose();
     this.captureRings.dispose();
     this.captureGlow.dispose();
+    this.shotRings.dispose();
+    this.shotGlow.dispose();
+    this.shotSights.dispose();
     this.burst.dispose();
     this.scene.background = null;
     this.scene.clear();
@@ -2956,11 +2994,20 @@ export class BoardView implements IBoardView {
     const deadly = clean(this.highlights.deadly).map(posKey);
     const deadlySet = new Set(deadly);
     this.placedMoves = clean(this.highlights.moves).filter((p) => !deadlySet.has(posKey(p)));
-    this.placedCaps = clean(this.highlights.captures);
+    // Venoa's shots (a subset of the captures) get the reticle instead of the capture ring.
+    const caps = clean(this.highlights.captures);
+    this.placedCaps = caps.filter((p) => !this.hi.shots.has(posKey(p)));
+    this.placedShots = caps.filter((p) => this.hi.shots.has(posKey(p)));
     this.wasteFx.setDeadly(deadly);
     this.placeInstances(this.moveDots, this.placedMoves, 1);
     this.placeInstances(this.captureRings, this.placedCaps, 1);
     this.placeInstances(this.captureGlow, this.placedCaps, 1);
+    this.placeInstances(this.shotRings, this.placedShots, 1);
+    this.placeInstances(this.shotGlow, this.placedShots, 1);
+    // Venoa's arrow range: a sight on every empty square her arrows fly over (a move target keeps
+    // its dot or skull).
+    this.placedSights = clean(this.highlights.shotRange).filter((p) => !this.hi.moves.has(posKey(p)));
+    this.placeInstances(this.shotSights, this.placedSights, 1);
 
     // Own reach = ice-cyan markers; an enemy's reach preview = red dots + red selection frame.
     const tone = this.hi.enemy ? 1 : 0;
@@ -2970,6 +3017,11 @@ export class BoardView implements IBoardView {
       dotMat.map = this.dotTex[tone];
       selMat.map = this.selTex[tone];
     }
+    const shotMat = this.shotRings.material as THREE.MeshBasicMaterial;
+    if (shotMat.map !== this.shotTex[tone]) shotMat.map = this.shotTex[tone];
+    const sightMat = this.shotSights.material as THREE.MeshBasicMaterial;
+    if (sightMat.map !== this.sightTex[tone]) sightMat.map = this.sightTex[tone];
+    (this.shotGlow.material as THREE.MeshBasicMaterial).color.set(tone ? BOARD_COLORS.shotEnemy : BOARD_COLORS.shotOwn);
     (this.selectGlow.material as THREE.MeshBasicMaterial).color.set(tone ? BOARD_COLORS.enemySelected : BOARD_COLORS.selected);
     const sel = this.highlights.selected;
     this.selectRing.visible = !!sel;
@@ -2979,7 +3031,7 @@ export class BoardView implements IBoardView {
       this.selectGlow.position.set(cellX(sel.c), OVERLAY_Y, cellZ(sel.r));
     }
     if (!this.anim) this.applyLift();
-    this.pulsing = !!sel || this.placedMoves.length > 0 || this.placedCaps.length > 0 || deadly.length > 0;
+    this.pulsing = !!sel || this.placedMoves.length > 0 || this.placedCaps.length > 0 || this.placedShots.length > 0 || this.placedSights.length > 0 || deadly.length > 0;
   }
 
   private placeInstances(mesh: THREE.InstancedMesh, list: Pos[], scale: number): void {
@@ -3017,6 +3069,15 @@ export class BoardView implements IBoardView {
       (this.captureGlow.material as THREE.MeshBasicMaterial).opacity = 0.4 + 0.35 * sc;
       this.placeInstances(this.captureRings, this.placedCaps, 0.96 + 0.07 * sc);
       this.placeInstances(this.captureGlow, this.placedCaps, 0.85 + 0.25 * sc);
+    }
+    if (this.placedSights.length > 0) {
+      (this.shotSights.material as THREE.MeshBasicMaterial).opacity = 0.65 + 0.3 * s;
+    }
+    if (this.placedShots.length > 0) {
+      const sc = rest ? PULSE_REST : pulse01(now, 700);
+      (this.shotGlow.material as THREE.MeshBasicMaterial).opacity = 0.4 + 0.35 * sc;
+      this.placeInstances(this.shotRings, this.placedShots, 0.96 + 0.07 * sc);
+      this.placeInstances(this.shotGlow, this.placedShots, 0.85 + 0.25 * sc);
     }
     if (this.selVisual && !this.anim) {
       this.selVisual.inner.position.y = TILE_TOP + SELECT_LIFT + (rest ? 0 : 0.04 * Math.sin(now / 240));

@@ -16,6 +16,16 @@ export interface BoardHighlights {
   tone?: 'own' | 'enemy';
   /** Subset of `moves` that end on wasteland (the mover would be destroyed): draw a danger mark. */
   deadly?: Pos[];
+  /**
+   * Subset of `captures` that are Venoa shots (she stays put): drawn as a crosshair reticle in the
+   * tone's shot colour (own: venom lime, enemy: magenta) instead of the red capture ring.
+   */
+  shots?: Pos[];
+  /**
+   * Venoa's arrow range: the empty squares her arrows fly over (engine `getShotRange`). Tinted and
+   * marked with a small sight in the tone's shot colour (own: venom lime, enemy: magenta).
+   */
+  shotRange?: Pos[];
 }
 
 /** Options for creating a board view. */

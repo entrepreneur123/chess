@@ -226,6 +226,38 @@ const lab = {
     const h: BoardHighlights = { selected: { r: 2, c: 4 }, moves, captures: [], deadly: [{ r: 5, c: 4 }, { r: 5, c: 3 }], tone };
     view.setHighlights(h);
   },
+  /**
+   * Venoa's shot markers: a Venoa (own: p0 at 4,4; enemy: p1 at 5,4) aiming at two far targets
+   * (reticles in the tone's shot colour) next to one adjacent capture (the red ring).
+   */
+  shots(tone: 'own' | 'enemy' = 'own'): void {
+    const own = tone === 'own';
+    const me: PlayerId = own ? 0 : 1;
+    const foe: PlayerId = own ? 1 : 0;
+    const at = own ? { r: 4, c: 4 } : { r: 5, c: 4 };
+    const f = own ? 1 : -1;
+    const far1 = { r: at.r + 2 * f, c: at.c };
+    const far2 = { r: at.r + 3 * f, c: at.c + 3 };
+    const adj = { r: at.r, c: at.c + 1 };
+    view.setPieces([
+      P(`p${me}-venoa`, me, 'venoa', 3, at.r, at.c),
+      P(`p${foe}-sad`, foe, 'sad', 2, far1.r, far1.c),
+      P(`p${foe}-walk`, foe, 'walk', 2, far2.r, far2.c),
+      P(`p${foe}-marki`, foe, 'marki', 1, adj.r, adj.c),
+    ]);
+    const moves = [{ r: at.r - f, c: at.c }, { r: at.r, c: at.c - 1 }, { r: at.r + f, c: at.c }];
+    // Her 3성 arrow range: forward and both forward diagonals 2..4, cut by the two targets.
+    const shotRange: Pos[] = [];
+    for (const dc of [-1, 0, 1]) {
+      for (let k = 2; k <= 4; k++) {
+        const q = { r: at.r + f * k, c: at.c + dc * k };
+        if (q.r < 0 || q.r > 9 || q.c < 0 || q.c > 9) break;
+        if ((q.r === far1.r && q.c === far1.c) || (q.r === far2.r && q.c === far2.c)) break;
+        shotRange.push(q);
+      }
+    }
+    view.setHighlights({ selected: at, moves, captures: [far1, far2, adj], shots: [far1, far2], shotRange, tone });
+  },
   /** p0-walk (or any) stepping onto wasteland: absent from piecesAfter. */
   startWasted(id = 'p0-marki', to: Pos = { r: 5, c: 3 }): void {
     const pieces = basePieces();

@@ -111,6 +111,8 @@ import {
   paintFrame,
   paintGlowDot,
   paintSelectGlow,
+  paintShotReticle,
+  paintShotSight,
   paintTile,
   paintTurnGlow,
   tileOuterPath,
@@ -1437,7 +1439,7 @@ export class Board2DView implements IBoardView {
 
   private get pulsing(): boolean {
     const h = this.highlights;
-    return !!h.selected || (h.moves?.length ?? 0) > 0 || (h.captures?.length ?? 0) > 0 || (h.deadly?.length ?? 0) > 0;
+    return !!h.selected || (h.moves?.length ?? 0) > 0 || (h.captures?.length ?? 0) > 0 || (h.shotRange?.length ?? 0) > 0 || (h.deadly?.length ?? 0) > 0;
   }
 
   private fxActive(now: number): boolean {
@@ -1752,7 +1754,7 @@ export class Board2DView implements IBoardView {
     const hi = this.hi;
     const zone = hi.zone;
     const tinted = (k: number, r: number): boolean =>
-      hi.selected === k || hi.last.has(k) || hi.captures.has(k) || (hi.enemy && hi.moves.has(k)) || (zone !== null && r >= zone[0] && r <= zone[1]);
+      hi.selected === k || hi.last.has(k) || hi.captures.has(k) || hi.shotRange.has(k) || (hi.enemy && hi.moves.has(k)) || (zone !== null && r >= zone[0] && r <= zone[1]);
     for (let r = 0; r < BOARD_SIZE; r++) {
       for (let c = 0; c < BOARD_SIZE; c++) {
         const k = r * BOARD_SIZE + c;
@@ -1841,6 +1843,19 @@ export class Board2DView implements IBoardView {
       for (const p of h.moves ?? []) {
         if (deadly.has(posKey(p))) continue;
         this.drawMarker('dot', dotCol, this.cx(p.c), this.cy(p.r), ds);
+      }
+      ctx.restore();
+    }
+
+    // Venoa's arrow range: a small sight on every empty square her arrows fly over.
+    if ((h.shotRange?.length ?? 0) > 0) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.9 * (0.65 + 0.3 * sp);
+      const sightCol = enemy ? BOARD_COLORS.shotEnemy : BOARD_COLORS.shotOwn;
+      for (const p of h.shotRange ?? []) {
+        if (this.hi.moves.has(posKey(p))) continue; // a move target keeps its dot (or skull)
+        this.drawMarker('sight', sightCol, this.cx(p.c), this.cy(p.r), cell);
       }
       ctx.restore();
     }
@@ -1978,7 +1993,12 @@ export class Board2DView implements IBoardView {
     this.drawTrapsOver(now);
     // Capture targets sit on top of the threatened tokens.
     const cp = this.still ? PULSE_REST : pulse01(now, 700);
-    for (const p of h.captures ?? []) this.drawMarker('capture', BOARD_COLORS.capture, this.cx(p.c), this.cy(p.r), cell * (0.96 + 0.07 * cp));
+    // Venoa's shots (a subset of the captures) get a reticle in the tone's shot colour instead.
+    const shotCol = enemy ? BOARD_COLORS.shotEnemy : BOARD_COLORS.shotOwn;
+    for (const p of h.captures ?? []) {
+      const shot = this.hi.shots.has(posKey(p));
+      this.drawMarker(shot ? 'shot' : 'capture', shot ? shotCol : BOARD_COLORS.capture, this.cx(p.c), this.cy(p.r), cell * (0.96 + 0.07 * cp));
+    }
     this.drawTrail(now);
     if (moverDraw) moverDraw();
     this.drawRakaeliFx(now);
@@ -3058,6 +3078,8 @@ export class Board2DView implements IBoardView {
         const rgb = hexToRgb(color);
         if (kind === 'dot') paintGlowDot(g, S / 2, S / 2, S / 2, rgb, color === BOARD_COLORS.moveDot ? DOT_WHITEN.own : DOT_WHITEN.enemy);
         else if (kind === 'select') paintSelectGlow(g, S / 2, S / 2, S / q, rgb);
+        else if (kind === 'shot') paintShotReticle(g, S / 2, S / 2, S / q, rgb);
+        else if (kind === 'sight') paintShotSight(g, S / 2, S / 2, S / q, rgb);
         else paintCaptureRing(g, S / 2, S / 2, S / q, rgb);
       }
       this.sprites.set(key, c);

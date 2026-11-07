@@ -7,6 +7,7 @@ export {
   getPieceAt,
   getPieceById,
   getTargetsForPiece,
+  getShotRange,
   getLegalMoves,
   isLegalMove,
   applyMove,

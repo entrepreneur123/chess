@@ -22,6 +22,8 @@ import {
   paintFrame,
   paintGlowDot,
   paintSelectGlow,
+  paintShotReticle,
+  paintShotSight,
   paintTile,
   paintTurnGlow,
 } from './arena';
@@ -368,6 +370,26 @@ export function makeCaptureRingTexture(color: RGB): THREE.CanvasTexture {
   const s = 160;
   const { cvs, ctx } = canvas(s, s);
   if (ctx) paintCaptureRing(ctx, s / 2, s / 2, s / MARKER_QUAD.capture, color);
+  const tex = toTexture(cvs);
+  tex.anisotropy = 4;
+  return tex;
+}
+
+/** A square of Venoa's arrow range: a small sight in its own colour; quad = MARKER_QUAD.sight cells. */
+export function makeShotSightTexture(color: RGB): THREE.CanvasTexture {
+  const s = 96;
+  const { cvs, ctx } = canvas(s, s);
+  if (ctx) paintShotSight(ctx, s / 2, s / 2, s / MARKER_QUAD.sight, color);
+  const tex = toTexture(cvs);
+  tex.anisotropy = 4;
+  return tex;
+}
+
+/** Venoa's shot reticle in its own colour (normal blend); quad = MARKER_QUAD.shot cells. */
+export function makeShotReticleTexture(color: RGB): THREE.CanvasTexture {
+  const s = 160;
+  const { cvs, ctx } = canvas(s, s);
+  if (ctx) paintShotReticle(ctx, s / 2, s / 2, s / MARKER_QUAD.shot, color);
   const tex = toTexture(cvs);
   tex.anisotropy = 4;
   return tex;

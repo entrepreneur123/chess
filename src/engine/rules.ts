@@ -2,7 +2,7 @@ import { AWAKEN_TURNS, BUFF_TURNS, OFF_TURN_STUN, SKILL_UNLOCK_PLY, STORM_INTERV
 import type { AbsorbedAbility, CharacterId, EndReason, Formation, GameState, HistoryEntry, Move, Piece, PlayerId, Pos, SkillAction, Trap } from './types';
 import { BOARD_SIZE } from './types';
 import { CHARACTERS, CHAR_CODE, GLACIA_FREEZE, HAMMONT_STUN_LEVEL, WASTE_SIZE, absorbMaskOf, effectiveValue, keepsDirection, skillKindOf } from './characters';
-import { N_SQUARES, atTurnRow, canHop, formationToAbsolute, forwardDir, genTargets, inStorm, isOnBoard, posOf, sqOf, trapBit } from './board';
+import { N_SQUARES, atTurnRow, canHop, formationToAbsolute, forwardDir, genTargets, inStorm, isOnBoard, posOf, sqOf, trapBit, venoaShotRange } from './board';
 import { validateFormation } from './formation';
 
 const other = (p: PlayerId): PlayerId => (p === 0 ? 1 : 0);
@@ -297,6 +297,20 @@ export function getTargetsForPiece(state: GameState, piece: Piece): Move[] {
   if (isStunned(piece)) return [];
   const { occ, owners } = buildOccupancy(state.pieces);
   return targetsWith(state.pieces, occ, owners, piece, state.storm, wasteFlags(state.waste), trapFlags(state.traps));
+}
+
+/**
+ * Venoa's arrow range (board overlay): the empty squares her arrows fly over, 2..max squares along
+ * each shot lane until the edge, the storm or the first piece (see `venoaShotRange`). [] for any
+ * other piece (an Insaner that absorbed her only steps) and while she is stunned.
+ */
+export function getShotRange(state: GameState, piece: Piece): Pos[] {
+  if (piece.character !== 'venoa' || isStunned(piece)) return [];
+  const { occ } = buildOccupancy(state.pieces);
+  const n = venoaShotRange(occ, piece.pos.r, piece.pos.c, pieceDir(piece), piece.level, state.storm, tmpTargets, 0);
+  const out: Pos[] = [];
+  for (let i = 0; i < n; i++) out.push(posOf(tmpTargets[i]));
+  return out;
 }
 
 /** True when moving to `to` touches wasteland (the mover is destroyed there). */

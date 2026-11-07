@@ -203,6 +203,14 @@ quoting a number.
     (`ui/game/trioFx.ts`) and the enemy sliding away; a shot is a DOM arrow then the board's own hit
     with Venoa standing still (`animateMove` with `to = from`); the freeze is a DOM beam and crystal.
     Diagrams show Venoa's arrow range (`is-shot`) and Glacia's glide lanes (`is-glide`).
+  - **Venoa's arrow range on the board (2026-11-07, owner: "사격 가능 범위 전체를 다 보여주고, 아군/적군마다
+    다른 색"):** selecting her (mine, or tapping the enemy's) shows every empty square her arrows fly
+    over (`getShotRange`: 2..max along each lane, cut by the edge, the storm or the first piece, the
+    same walk as the shot rule) as a tinted tile with a small sight (`BoardHighlights.shotRange`), and
+    her shot targets as a crosshair reticle instead of the red capture ring (`BoardHighlights.shots`,
+    a subset of `captures`). Colours by whose Venoa aims: mine venom lime `#C6F23A`, the enemy's
+    magenta `#FF3DCB` (`BOARD_COLORS.shotOwn` / `shotEnemy`); the enemy's diagram shot cells are
+    magenta too. Both boards (WebGL / 2D); `lab.shots('own' | 'enemy')` in the board lab.
 - **Owner-brief interpretations (decided by the lead on 2026-11-05; the owner asked for no more
   questions on these):** Larhen's back diagonals arrive at 2성 (the brief said "일성에서", which would
   make 1성 and 2성 identical); his 3성 keeps the four diagonals (an H); the melody buffs the other
@@ -293,7 +301,7 @@ legendary.
   game information).
 
 ## 5. Deploy and verify (the routine)
-1. **Gates:** `npx tsc --noEmit -p .`, `npx vitest run` (419 tests at last count) and
+1. **Gates:** `npx tsc --noEmit -p .`, `npx vitest run` (452 tests at last count) and
    `npm run build`.
    - Never leave temporary `tests/*.tmp.test.ts` or `zz-*` files; `node:` imports break tsc.
    - Vitest hides `console.log` from passing tests, so simulations write results to files.

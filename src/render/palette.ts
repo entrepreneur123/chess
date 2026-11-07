@@ -254,6 +254,15 @@ export const BOARD_COLORS = {
   /** Capture target ring (glowing red) + tile tint. */
   capture: '#FF4655',
   captureTint: '#6A1E2C',
+  /**
+   * Venoa's shot targets (BoardHighlights.shots): a crosshair reticle instead of the capture ring,
+   * coloured by whose Venoa aims. Own = her venom lime; an enemy Venoa's (reach preview) = hot
+   * magenta, apart from the red capture ring and the red enemy reach. Each with its tile tint.
+   */
+  shotOwn: '#C6F23A',
+  shotOwnTint: '#3D5414',
+  shotEnemy: '#FF3DCB',
+  shotEnemyTint: '#5C1650',
   /** Selected square: ice-cyan glowing frame + a cool blue tile tint. */
   selected: '#7FE3FF',
   selectedTint: '#3C83C8',
