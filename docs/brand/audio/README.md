@@ -1,5 +1,50 @@
 # Character audio pipeline (voices + SFX)
 
+## Current cast: ElevenLabs (shipped 2026-11-07)
+
+Every shipped voice clip comes from ElevenLabs (owner's workspace, Creator plan: commercial licence;
+`public/audio/LICENSES.md`). The pipeline is driven through the ElevenLabs connector (no API key):
+
+1. **Voice design** — one voice per character from a text prompt (`creative_design_voice`, model
+   `eleven_ttv_v3`, language `ko`, a 100+ character Korean sample line in the character's register),
+   previews measured for register (median F0 with `v4`'s autocorrelation tracker, loudness, length)
+   and the best saved (`creative_save_designed_voice`). Ids: `lines.json` → `elevenlabs.voice_id`.
+   The safety filter refuses child / teen descriptions, so Michelle is an airy adult voice in a high
+   register lifted +2 st in mastering, and Rampid a light, high, energetic adult male voice.
+2. **Direction** — `v4/direction.json`: per line, `eleven_v4` audio tags + the spoken text
+   (`[calm] [warmly] [composed] 명을 받들겠습니다.`). `v4/merge_direction.py` writes it into
+   `lines.json` as `v4` and the tag-free caption as `text` (it fails on a missing or extra line).
+3. **Render** — `creative_generate_speech` with the character's voice id and `eleven_v4`, two takes
+   per line, ~35 credits a take (the full cast: 343 takes). Generation ids per line: `v4/gens.tsv`
+   (`char  id  gen1  gen2`, `-` = no second take). The mp3 takes are downloaded from the signed
+   `content_url`s of `creative_get_flow_run_status` into a scratch directory (not committed).
+4. **Master** — `v4/master_v4.py --gens v4/gens.tsv --raw <takes dir> --out public/audio/vo`:
+   per line both takes are trimmed (lead -42 dB with 20 ms pre-roll, tail -54 dB + 180 ms) and
+   measured; quick events (select / move / capture / skill / chain / trap / hop / awake-*) take the
+   shorter take, one-off moments (death / victory / awake-end) the longer; a take under 0.45 s or
+   with a flat-topped peak is rejected. Treatment: 60 Hz high-pass; `"fx": "rakaeli-awake"` lines get
+   the demon layer (-1 st and -0.8 st detuned copies, formant preserved, 15 ms delay, dark room);
+   Michelle +2 st; Midos a short slap echo. Loudness -16 LUFS integrated, limiter ceiling -3 dB
+   before the encoder; the decoded AAC is re-measured and the ceiling lowered until the true peak is
+   under -1.5 dBTP (48 kb/s was measured to add up to 2.4 dB of overshoot, so 64 kb/s is used).
+   Overs are consonant spikes of 0.1-1 ms (5-30 ms per clip in total), so the 1.5 ms look-ahead
+   limiter may take up to 15 dB off them; a sustained over beyond 4 dB leaves the clip quieter
+   instead (flagged). QA per clip in `v4/qa-v4.json` (take, candidates, duration, LUFS, true peak,
+   gain, limiting, attempts, size).
+5. `python3 write_manifest.py`, `python3 write_audition.py`, gates, `VOICE_LINES_READY` stays true.
+
+Result (172 clips, 16 characters): LUFS -17.0 … -15.7 (sad death-1 is the one clip left 1 dB under
+target, its opening gasp is a 16 dB spike), true peak ≤ -1.33 dBTP, 0.80-5.02 s, 5,828-42,232 bytes,
+3,434,898 bytes in all (`tests/voice.test.ts` budget raised to 4.25 MiB for vo + sfx).
+
+To change a line: edit `v4/direction.json`, run `merge_direction.py`, render the line, add its
+generation ids to `gens.tsv`, run `master_v4.py --only <char>:<id>` (or `--only <char>`), then the
+manifest. Everything below this point documents the earlier Qwen3-TTS pipeline (2026-11-03 →
+2026-11-07): it is history, nothing shipped comes from it any more, and its scripts and `refs/` are
+kept only for reference.
+
+## Earlier pipeline: Qwen3-TTS (history)
+
 Generates the files in `public/audio/` and the manifest `src/audio/voiceManifest.ts`.
 Licences and sources: `public/audio/LICENSES.md`. Large models are never committed.
 Audition every shipped line at `/audio/audition.html` (`public/audio/audition.html`).

@@ -98,8 +98,14 @@ const sfxEvents = (c: CharacterId): CharAudioEvent[] => [
  * Raised to 3.25 MiB on 2026-11-06 for the trio (Hammont, Venoa, Glacia): 31 voice lines (447,598
  * bytes) and 11 effects (89,604 bytes), 537,202 bytes, about 0.17 MiB per character, below the
  * average. Measured: 3,140,951 bytes for 16 characters (0.19 MiB each); headroom 266,921 bytes.
+ * Raised to 4.25 MiB on 2026-11-07 for the ElevenLabs cast (lead decision; the owner's brief makes the
+ * voices a top-priority asset): the same 172 lines re-rendered as real performances, encoded at
+ * 64 kb/s instead of 48 (48 kb/s was measured to add up to 2.4 dB of peak overshoot and audible
+ * quantisation noise on breaths and sibilants), so vo grew from 2,584,386 to 3,434,898 bytes.
+ * Measured: 3,991,463 bytes (vo 3,434,898 + sfx 556,565); 0.24 MiB per character; headroom 464,985
+ * bytes. Clips are still fetched lazily per character, so this is CDN weight, not first-load weight.
  */
-const AUDIO_BUDGET_BYTES = 3.25 * 1024 * 1024;
+const AUDIO_BUDGET_BYTES = 4.25 * 1024 * 1024;
 
 function allFiles(): string[] {
   const out = new Set<string>();
@@ -163,7 +169,7 @@ describe('character audio manifest', () => {
       expect(existsSync(p), p).toBe(true);
       const size = statSync(p).size;
       expect(size, f).toBeGreaterThan(1000);
-      expect(size, f).toBeLessThan(40_000);
+      expect(size, f).toBeLessThan(48_000); // 64 kb/s AAC: the longest line (5.0 s) is 42,232 bytes
     }
   });
 
