@@ -95,12 +95,19 @@ quoting a number.
 
 **Storm (자기장)**
 - **Start:** at turn 20 (`SUDDEN_DEATH_PLY` 38), or as soon as a side is down to 1 piece.
-- **Shrink:** every 2 turns (`STORM_INTERVAL_PLIES` 4).
-- **Which squares close:**
-  - each step closes one outer column on both sides;
-  - from step 3 (`STORM_ROWS_FROM`) it also closes rows from the top and bottom, max(0, step − 2)
-    per end.
-  - Step 5 covers the whole board, so `MAX_MATCH_PLIES` = 38 + 5×4 = 58 (29 turns).
+- **Shrink:** every 2 turns (`STORM_INTERVAL_PLIES` 4), except the final 2×2 (below).
+- **Which squares close (end-game changed 2026-11-08, owner: "2×2까지 위아래로 좁힌 다음 2×2에서 5턴
+  지나야 게임 끝"):** `stormCols` / `stormRows` / `inStorm` (engine), `stormClosesAt` (AI eval).
+  - Columns: one per side per step until only the middle 2 are open (`STORM_MAX_COLS` 4 per side).
+  - Rows: from step 3 (`STORM_ROWS_FROM`) one per end per step until only the middle 2 are open
+    (`STORM_MAX_ROWS` 4 per end).
+  - Open area by step on 10×10: 1: 8×10, 2: 6×10, 3: 4×8, 4: 2×6, 5: 2×4, 6: 2×2, 7: none.
+  - The 2×2 holds `STORM_FINAL_HOLD_PLIES` 10 turn changes (5 turns; `stormIntervalAfter`), then
+    step 7 (`STORM_FULL_STEPS`) swallows everything and the game ends (both wiped: more pieces
+    wins, equal draws).
+  - `MAX_MATCH_PLIES` = 38 + 6×4 + 10 = 72 (36 turns). Renderers warn only the axis that closes
+    next (rows only from step 4); before the final step the whole 2×2 warns. HUD chip:
+    "자기장 · 마지막 2×2 · N턴 후 전체 소멸".
 - **Storm squares:** a piece on one is removed. Nothing may enter or pass through a storm square.
 - **Both sides wiped in one step:** the side that had MORE PIECES wins. Rarity and grade are
   ignored; equal counts are a draw.
@@ -353,7 +360,7 @@ legendary.
   game information).
 
 ## 5. Deploy and verify (the routine)
-1. **Gates:** `npx tsc --noEmit -p .`, `npx vitest run` (466 tests at last count) and
+1. **Gates:** `npx tsc --noEmit -p .`, `npx vitest run` (467 tests at last count) and
    `npm run build`.
    - Never leave temporary `tests/*.tmp.test.ts` or `zz-*` files; `node:` imports break tsc.
    - Vitest hides `console.log` from passing tests, so simulations write results to files.

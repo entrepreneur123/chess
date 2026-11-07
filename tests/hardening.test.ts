@@ -162,14 +162,15 @@ describe('end reasons', () => {
 });
 
 describe('sudden death at the new constant', () => {
-  it('SUDDEN_DEATH_PLY is turn 20 (ply 38), the storm closes in every 2 turns and the match is bounded by 58 plies', () => {
+  it('SUDDEN_DEATH_PLY is turn 20 (ply 38), the storm closes in every 2 turns and the match is bounded by 72 plies', () => {
     expect(SUDDEN_DEATH_PLY).toBe(38);
     expect(turnNumber({ ply: SUDDEN_DEATH_PLY })).toBe(20);
     expect(STORM_INTERVAL_PLIES).toBe(4);
     expect(turnNumber({ ply: SUDDEN_DEATH_PLY + STORM_INTERVAL_PLIES })).toBe(22);
-    expect(STORM_FULL_STEPS).toBe(5);
-    expect(SUDDEN_DEATH_PLY + STORM_FULL_STEPS * STORM_INTERVAL_PLIES).toBe(58);
-    expect(MAX_MATCH_PLIES).toBe(58);
+    expect(STORM_FULL_STEPS).toBe(7);
+    // Six 2-turn steps down to the 2 x 2, which holds 5 turns: 38 + 24 + 10.
+    expect(MAX_MATCH_PLIES).toBe(72);
+    expect(turnNumber({ ply: MAX_MATCH_PLIES })).toBe(37);
   });
 
   it('a capture-free match has no storm through ply 37 and starts it at ply 38 (turn 20)', () => {

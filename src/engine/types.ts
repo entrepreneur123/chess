@@ -42,26 +42,44 @@ export const STORM_INTERVAL_PLIES = 4;
  */
 export const SUDDEN_DEATH_PLY = 38;
 /**
- * Storm advances needed to swallow the whole board: each one closes a column on BOTH sides, so
- * ceil(BOARD_SIZE / 2) = 5 on 10 columns (after the 5th, columns 0..4 and 5..9 are all storm).
+ * The storm's end-game (owner 2026-11-08): the columns close one per side per step until only the
+ * middle 2 columns are open (STORM_MAX_COLS per side), the rows close one per end per step from
+ * STORM_ROWS_FROM until only the middle 2 rows are open (STORM_MAX_ROWS per end), that 2 x 2 holds
+ * for STORM_FINAL_HOLD_PLIES (5 turns), then the last step swallows the whole board.
+ * On 10 x 10 the open area per step is: 1: 8x10, 2: 6x10, 3: 4x8, 4: 2x6, 5: 2x4, 6: 2x2, 7: none.
  */
-export const STORM_FULL_STEPS = Math.ceil(BOARD_SIZE / 2);
+export const STORM_MAX_COLS = BOARD_SIZE / 2 - 1;
+export const STORM_MAX_ROWS = BOARD_SIZE / 2 - 1;
 /**
  * From this storm step on (3 columns per side), the storm also closes in from the top and bottom:
  * one row on each end at step 3, one more per later step (`stormRows`).
  */
 export const STORM_ROWS_FROM = 3;
-/** Rows swallowed at EACH end (top and bottom) by a storm of `storm` columns per side. */
+/** Storm steps to swallow the whole board: the step after the rows reach STORM_MAX_ROWS (7 on 10 x 10). */
+export const STORM_FULL_STEPS = STORM_ROWS_FROM + STORM_MAX_ROWS;
+/** How long the last open 2 x 2 holds before the final step: 5 turns (10 turn changes). */
+export const STORM_FINAL_HOLD_PLIES = 10;
+/** Columns swallowed on EACH side (left and right) at storm step `storm`. */
+export function stormCols(storm: number): number {
+  if (storm >= STORM_FULL_STEPS) return BOARD_SIZE / 2;
+  return Math.max(0, Math.min(storm, STORM_MAX_COLS));
+}
+/** Rows swallowed at EACH end (top and bottom) at storm step `storm`. */
 export function stormRows(storm: number): number {
-  return storm >= STORM_ROWS_FROM ? storm - STORM_ROWS_FROM + 1 : 0;
+  if (storm >= STORM_FULL_STEPS) return BOARD_SIZE / 2;
+  return storm >= STORM_ROWS_FROM ? Math.min(storm - STORM_ROWS_FROM + 1, STORM_MAX_ROWS) : 0;
+}
+/** Turn changes from storm step `storm` to the next one: STORM_INTERVAL_PLIES, the final 2 x 2 holds longer. */
+export function stormIntervalAfter(storm: number): number {
+  return storm === STORM_FULL_STEPS - 1 ? STORM_FINAL_HOLD_PLIES : STORM_INTERVAL_PLIES;
 }
 /**
- * Upper bound on the turn changes of a match: the storm starts at SUDDEN_DEATH_PLY at the latest
- * and swallows the board STORM_FULL_STEPS * STORM_INTERVAL_PLIES turn changes later, so
- * 38 + 5 * 4 = 58 plies (29 turns each). Only a level-3 Insaner's chain moves (an extra ply that is
- * not a turn change) can push `GameState.ply` past it, by one ply per chain move.
+ * Upper bound on the turn changes of a match: the storm starts at SUDDEN_DEATH_PLY at the latest,
+ * steps every STORM_INTERVAL_PLIES up to the 2 x 2 and swallows it STORM_FINAL_HOLD_PLIES later:
+ * 38 + 6 * 4 + 10 = 72 plies (36 turns each). Only a level-3 Insaner's chain moves (an extra ply
+ * that is not a turn change) can push `GameState.ply` past it, by one ply per chain move.
  */
-export const MAX_MATCH_PLIES = SUDDEN_DEATH_PLY + STORM_FULL_STEPS * STORM_INTERVAL_PLIES;
+export const MAX_MATCH_PLIES = SUDDEN_DEATH_PLY + (STORM_FULL_STEPS - 1) * STORM_INTERVAL_PLIES + STORM_FINAL_HOLD_PLIES;
 /**
  * Brutile's skill "불모지" (wasteland) unlocks once both players have taken 3 turns (ply 6: turn 4 as
  * `turnNumber` counts it) and is forbidden once the storm has started to close in (storm >= 1).

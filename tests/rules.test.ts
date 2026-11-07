@@ -241,11 +241,12 @@ describe('no moves / stalemate / sudden death', () => {
       s = applyMove(s, (moves.length ? moves : legal)[guard % (moves.length || legal.length)]);
     }
     expect(s.status).toBe('ended');
-    // 10 columns: 5 storm advances swallow the board, so 38 + 5 * 4 = 58 plies at most.
+    // 10 x 10: six 2-turn steps down to the middle 2 x 2, which holds 5 turns, then the 7th step
+    // swallows the board: 38 + 6 * 4 + 10 = 72 plies at most.
     expect(BOARD_SIZE).toBe(10);
-    expect(STORM_FULL_STEPS).toBe(5);
-    expect(MAX_MATCH_PLIES).toBe(SUDDEN_DEATH_PLY + STORM_FULL_STEPS * STORM_INTERVAL_PLIES);
-    expect(MAX_MATCH_PLIES).toBe(58);
+    expect(STORM_FULL_STEPS).toBe(7);
+    expect(MAX_MATCH_PLIES).toBe(SUDDEN_DEATH_PLY + (STORM_FULL_STEPS - 1) * STORM_INTERVAL_PLIES + 10);
+    expect(MAX_MATCH_PLIES).toBe(72);
     expect(s.ply).toBeLessThanOrEqual(MAX_MATCH_PLIES);
   });
 });

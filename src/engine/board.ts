@@ -1,4 +1,4 @@
-import { BOARD_SIZE, ZONE_DEPTH, stormRows } from './types';
+import { BOARD_SIZE, STORM_FULL_STEPS, ZONE_DEPTH, stormCols, stormRows } from './types';
 import type { PlayerId, Pos } from './types';
 import {
   CH_BRUTILE,
@@ -84,15 +84,23 @@ export function posOf(sq: number): Pos {
 }
 
 /**
- * True when square (r, c) is swallowed by a storm at step `storm`: the outer `storm` columns on
- * each side and, from step STORM_ROWS_FROM, the outer `stormRows(storm)` rows at the top and bottom.
- * The open area is always a rectangle, so a straight path between two open squares stays open.
+ * True when square (r, c) is swallowed by a storm at step `storm`: the outer `stormCols(storm)`
+ * columns on each side and, from step STORM_ROWS_FROM, the outer `stormRows(storm)` rows at the top
+ * and bottom (the end-game narrows to the middle 2 x 2, then the last step takes everything). The
+ * open area is always a rectangle, so a straight path between two open squares stays open.
  */
 export function inStorm(r: number, c: number, storm: number): boolean {
   if (storm <= 0) return false;
-  if (c < storm || c >= BOARD_SIZE - storm) return true;
+  const cols = stormCols(storm);
+  if (c < cols || c >= BOARD_SIZE - cols) return true;
   const rows = stormRows(storm);
   return r < rows || r >= BOARD_SIZE - rows;
+}
+
+/** The storm step that first swallows square (r, c) (the middle 2 x 2 only goes at the last step). */
+export function stormClosesAt(r: number, c: number): number {
+  for (let s = 1; s < STORM_FULL_STEPS; s++) if (inStorm(r, c, s)) return s;
+  return STORM_FULL_STEPS;
 }
 
 const ORTHO_DIRS = [1, 0, -1, 0, 0, 1, 0, -1];

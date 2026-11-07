@@ -1,5 +1,5 @@
 /** DOM pieces of the in-game HUD (player bars, timer ring, turn pill, end-reason copy). */
-import { CHARACTERS, showsDirection, screenArrow, stormRows, type EndReason, type FormationSlot, type GameState, type PlayerId } from '../../engine';
+import { BOARD_SIZE, CHARACTERS, STORM_FULL_STEPS, showsDirection, screenArrow, stormCols, stormRows, type EndReason, type FormationSlot, type GameState, type PlayerId } from '../../engine';
 import { PACING } from '../../meta/economy';
 import { pieceToken } from '../components/piece';
 import { h } from '../dom';
@@ -13,9 +13,13 @@ import { dirChip, setArrow } from './hand';
  */
 export function stormStatusText(storm: number, inTurns: number): string {
   if (storm <= 0) return `자기장 활성 · ${inTurns}턴 후 축소`;
+  const cols = stormCols(storm);
   const rows = stormRows(storm);
-  const gone = rows > 0 ? `좌우 ${storm}줄 · 위아래 ${rows}줄 소멸` : `좌우 ${storm}줄 소멸`;
-  return `자기장 · ${gone} · ${inTurns}턴 후 ${rows === 0 && stormRows(storm + 1) > 0 ? '위아래도 축소' : '축소'}`;
+  // The end-game: the last open square holds, then the whole board goes.
+  if (storm >= STORM_FULL_STEPS - 1) return `자기장 · 마지막 ${BOARD_SIZE - 2 * cols}×${BOARD_SIZE - 2 * rows} · ${inTurns}턴 후 전체 소멸`;
+  const gone = rows > 0 ? `좌우 ${cols}줄 · 위아래 ${rows}줄 소멸` : `좌우 ${cols}줄 소멸`;
+  const next = rows === 0 && stormRows(storm + 1) > 0 ? '위아래도 축소' : stormCols(storm + 1) === cols ? '위아래 축소' : '축소';
+  return `자기장 · ${gone} · ${inTurns}턴 후 ${next}`;
 }
 
 const RING_R = 18;

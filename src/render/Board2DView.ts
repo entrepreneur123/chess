@@ -31,7 +31,7 @@
  * idle, static with reduced motion) and the countdown badge; his moves leave crimson feathers and
  * a crimson ribbon, captures burst in a dark flame. playAwaken plays the transform / revert.
  */
-import { BOARD_SIZE, STORM_FULL_STEPS, ZONE_DEPTH, stormRows } from '../engine/types';
+import { BOARD_SIZE, STORM_FULL_STEPS, ZONE_DEPTH, stormCols, stormRows } from '../engine/types';
 import type { CharacterId, Level, Move, Piece, PlayerId, Pos, Trap } from '../engine/types';
 import type { BoardHighlights, BoardViewOptions, IBoardView, ScreenRect, SkillPreview } from './types';
 import { ambientFrameMs, BUSY_FRAME_MS, clearAmbientSprites, drawAmbient2D, LOW_POWER_FRAME_MS, PULSE_REST } from './ambient';
@@ -2216,9 +2216,17 @@ export class Board2DView implements IBoardView {
     const size = cell * BOARD_SIZE;
     const t = now / 1000;
     const warn = this.stormActive && this.stormNext !== null && this.stormNext <= 2 && this.storm < STORM_FULL_STEPS;
-    const cols = this.storm;
-    const rows = stormRows(cols);
-    const rowsNext = warn && stormRows(cols + 1) > rows;
+    // Columns stop at the middle 2; the end-game narrows only the rows down to a 2 x 2.
+    const cols = stormCols(this.storm);
+    const rows = stormRows(this.storm);
+    const colsN = stormCols(this.storm + 1);
+    const rowsN = stormRows(this.storm + 1);
+    const colsNext = warn && colsN > cols;
+    const rowsNext = warn && rowsN > rows;
+    // Warning strips run along what stays open after the next step (the last 2 x 2 before the end).
+    const final = this.storm + 1 >= STORM_FULL_STEPS;
+    const alongCols = final ? cols : colsN;
+    const alongRows = final ? rows : rowsN;
     // The open rectangle: columns [ox0, ox1], rows [oy0, oy1] on screen.
     const ox0 = x0 + cols * cell;
     const ox1 = x0 + size - cols * cell;
@@ -2231,7 +2239,8 @@ export class Board2DView implements IBoardView {
       // (the corners belong to the columns); the wall runs along the open rows only.
       const xIn = side < 0 ? ox0 : ox1;
       if (cols > 0) this.drawStormBand(side < 0 ? x0 : x0 + size, xIn, y0, y0 + size, oy0, oy1, cols, side, t, cell);
-      if (warn) this.drawStormWarn(side < 0 ? xIn : xIn - cell, oy0, oy1, cell, pulse);
+      // The next column to go spans the rows that are still open after the next step.
+      if (colsNext) this.drawStormWarn(side < 0 ? xIn : xIn - cell, y0 + alongRows * cell, y0 + size - alongRows * cell, cell, pulse);
     }
     if (rows > 0 || rowsNext) {
       // Rows: the same band drawn with x and y swapped (a reflection across the diagonal), between
@@ -2243,7 +2252,7 @@ export class Board2DView implements IBoardView {
         const yEdge = side < 0 ? y0 + size : y0;
         if (rows > 0) this.drawStormBand(yEdge, yIn, ox0, ox1, ox0, ox1, rows, -side as -1 | 1, t, cell);
         // The next row to go spans the columns that are still open after the next step.
-        if (rowsNext) this.drawStormWarn(side < 0 ? yIn - cell : yIn, ox0 + cell, ox1 - cell, cell, pulse);
+        if (rowsNext) this.drawStormWarn(side < 0 ? yIn - cell : yIn, x0 + alongCols * cell, x0 + size - alongCols * cell, cell, pulse);
       }
       ctx.restore();
     }

@@ -1,4 +1,4 @@
-import { AWAKEN_TURNS, BUFF_TURNS, OFF_TURN_STUN, RESIGN_UNLOCK_PLY, SKILL_UNLOCK_PLY, STORM_INTERVAL_PLIES, SUDDEN_DEATH_PLY, TRAPS_PER_MICHELLE, TRAP_STUN, TURN_TIME_1_MS, TURN_TIME_2_MS, TURN_TIME_MS } from './types';
+import { AWAKEN_TURNS, BUFF_TURNS, OFF_TURN_STUN, RESIGN_UNLOCK_PLY, SKILL_UNLOCK_PLY, STORM_INTERVAL_PLIES, SUDDEN_DEATH_PLY, stormIntervalAfter, TRAPS_PER_MICHELLE, TRAP_STUN, TURN_TIME_1_MS, TURN_TIME_2_MS, TURN_TIME_MS } from './types';
 import type { AbsorbedAbility, CharacterId, EndReason, Formation, GameState, HistoryEntry, Move, Piece, PlayerId, Pos, SkillAction, Trap } from './types';
 import { BOARD_SIZE } from './types';
 import { CHARACTERS, CHAR_CODE, GLACIA_FREEZE, HAMMONT_STUN_LEVEL, WASTE_SIZE, absorbMaskOf, effectiveValue, keepsDirection, skillKindOf } from './characters';
@@ -446,7 +446,7 @@ function switchTurn(state: GameState, entry: HistoryEntry, pliesSinceCapture: nu
         killed.push(p.id);
         return false;
       });
-      next = { ...next, storm, stormIn: STORM_INTERVAL_PLIES, pieces, history: [...next.history, { kind: 'storm', storm, killed }] };
+      next = { ...next, storm, stormIn: stormIntervalAfter(storm), pieces, history: [...next.history, { kind: 'storm', storm, killed }] };
       const left0 = countPieces(pieces, 0);
       const left1 = countPieces(pieces, 1);
       // The storm (columns, and rows from step 3) swallowed the last pieces of BOTH sides at once:

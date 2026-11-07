@@ -9,6 +9,7 @@ import {
   N_SQUARES,
   STORM_FULL_STEPS,
   STORM_INTERVAL_PLIES,
+  STORM_FINAL_HOLD_PLIES,
   SUDDEN_DEATH_PLY,
   ZONE_DEPTH,
   applyMove,
@@ -97,19 +98,24 @@ describe('character reach on 10 columns', () => {
 });
 
 describe('storm on 10 columns', () => {
-  it('5 advances swallow the whole board', () => {
-    expect(STORM_FULL_STEPS).toBe(5);
+  it('7 steps: columns stop at the middle 2, rows narrow to the middle 2 x 2, the last step swallows the board', () => {
+    expect(STORM_FULL_STEPS).toBe(7);
     for (let r = 0; r < BOARD_SIZE; r++) for (let c = 0; c < BOARD_SIZE; c++) expect(inStorm(r, c, STORM_FULL_STEPS)).toBe(true);
-    const open = Array.from({ length: BOARD_SIZE }, (_, c) => c).filter((c) => !inStorm(5, c, STORM_FULL_STEPS - 1));
-    expect(open).toEqual([4, 5]);
-    // Step 4 also closes rows 0..1 and 8..9 (rows close in from step 3).
-    const openRows = Array.from({ length: BOARD_SIZE }, (_, r) => r).filter((r) => !inStorm(r, 4, STORM_FULL_STEPS - 1));
-    expect(openRows).toEqual([2, 3, 4, 5, 6, 7]);
+    const openCols = (step: number) => Array.from({ length: BOARD_SIZE }, (_, c) => c).filter((c) => !inStorm(5, c, step));
+    const openRows = (step: number) => Array.from({ length: BOARD_SIZE }, (_, r) => r).filter((r) => !inStorm(r, 4, step));
+    // Step 4: the middle 2 columns, rows 2..7; the columns then stay at 2.
+    expect(openCols(4)).toEqual([4, 5]);
+    expect(openRows(4)).toEqual([2, 3, 4, 5, 6, 7]);
+    expect(openCols(5)).toEqual([4, 5]);
+    expect(openRows(5)).toEqual([3, 4, 5, 6]);
+    // Step 6: the final 2 x 2.
+    expect(openCols(6)).toEqual([4, 5]);
+    expect(openRows(6)).toEqual([4, 5]);
   });
 
-  it('a capture-free game in the centre ends at exactly MAX_MATCH_PLIES = 58 by the storm (engine and FastBoard agree)', () => {
-    expect(MAX_MATCH_PLIES).toBe(SUDDEN_DEATH_PLY + STORM_FULL_STEPS * STORM_INTERVAL_PLIES);
-    expect(MAX_MATCH_PLIES).toBe(58);
+  it('a capture-free game in the centre follows the storm schedule to the end (engine and FastBoard agree)', () => {
+    expect(MAX_MATCH_PLIES).toBe(SUDDEN_DEATH_PLY + (STORM_FULL_STEPS - 1) * STORM_INTERVAL_PLIES + STORM_FINAL_HOLD_PLIES);
+    expect(MAX_MATCH_PLIES).toBe(72);
     // Two pieces a side (so the one-piece trigger never fires), shuffling in columns 4..5 of rows
     // 2..4 (player 0) / 5..7 (player 1), out of reach of the storm rows until the last step, never
     // capturing: only sudden death and the storm can end it.
@@ -136,16 +142,17 @@ describe('storm on 10 columns', () => {
       expect(b.storm).toBe(s.storm);
       expect(b.ply).toBe(s.ply);
     }
-    // Storm from ply 38 (turn 20), one advance every 4 turn changes (2 turns): plies 42 .. 58.
-    expect(advances).toEqual([42, 46, 50, 54, 58]);
-    expect(s.ply).toBe(MAX_MATCH_PLIES);
-    expect(s.storm).toBe(STORM_FULL_STEPS);
-    expect(s.endReason).toBe('storm');
-    expect(s.pieces).toHaveLength(0);
-    expect(b.alive[0] + b.alive[1]).toBe(0);
+    // Storm from ply 38 (turn 20), one step every 4 turn changes (2 turns) down to the 2 x 2 at
+    // ply 62, which holds 10 turn changes (5 turns): the last step at ply 72. Four pieces cannot all
+    // live in the shrinking centre, so the game may end earlier (storm kills, or a side boxed in):
+    // whatever happened follows that schedule, and both engines agree on every step.
+    expect([42, 46, 50, 54, 58, 62, 72].slice(0, advances.length)).toEqual(advances);
+    expect(s.ply).toBeLessThanOrEqual(MAX_MATCH_PLIES);
+    expect(s.status).toBe('ended');
+    expect(b.storm).toBe(s.storm);
   });
 
-  it('the one-piece trigger resolves within 5 * 4 = 20 turn changes', () => {
+  it('the one-piece trigger resolves within 6 * 4 + 10 = 34 turn changes', () => {
     let s = makeState([
       [0, 'sad', 1, 3, 4],
       [1, 'sad', 1, 6, 5],
@@ -159,7 +166,29 @@ describe('storm on 10 columns', () => {
       if (start === null && s.stormIn !== null) start = s.ply;
     }
     expect(start).toBe(11);
+    expect(s.ply - start!).toBeLessThanOrEqual((STORM_FULL_STEPS - 1) * STORM_INTERVAL_PLIES + STORM_FINAL_HOLD_PLIES);
+  });
+
+  it('the final 2 x 2 holds for 5 turns (10 turn changes), then the last step ends the game', () => {
+    // Step 5 -> 6 on the next turn change: one Sad each in the middle, never capturing.
+    let s = makeState([
+      [0, 'sad', 1, 4, 4],
+      [1, 'sad', 1, 5, 5],
+    ], 0, { storm: 5, stormIn: 1, ply: 58 });
+    const pick = () => {
+      const legal = getLegalMoves(s);
+      return legal.find((x) => !x.captureId) ?? legal[0];
+    };
+    s = applyMove(s, pick());
+    expect(s.storm).toBe(6);
+    expect(s.stormIn).toBe(STORM_FINAL_HOLD_PLIES);
+    const at6 = s.ply;
+    while (s.status === 'playing' && s.storm === 6) s = applyMove(s, pick());
+    // Nobody captured: the 2 x 2 held exactly 10 turn changes, then the board went (1 vs 1: draw).
+    expect(s.storm).toBe(STORM_FULL_STEPS);
+    expect(s.ply - at6).toBe(STORM_FINAL_HOLD_PLIES);
     expect(s.endReason).toBe('storm');
-    expect(s.ply - start!).toBe(STORM_FULL_STEPS * STORM_INTERVAL_PLIES);
+    expect(s.pieces).toHaveLength(0);
+    expect(s.winner).toBeNull();
   });
 });

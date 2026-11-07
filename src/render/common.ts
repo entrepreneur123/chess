@@ -1,5 +1,5 @@
 /** Helpers shared by the WebGL and Canvas2D board views. */
-import { BOARD_SIZE, ZONE_DEPTH, stormRows } from '../engine/types';
+import { BOARD_SIZE, ZONE_DEPTH, stormCols, stormRows } from '../engine/types';
 import type { CharacterId, Level, Move, Piece, PlayerId, Pos } from '../engine/types';
 import { screenArrow, showsDirection } from '../engine/rules';
 import type { BoardHighlights } from './types';
@@ -242,14 +242,15 @@ export function prefersReducedMotion(): boolean {
 }
 
 /**
- * Is square (r, c) inside a storm at step `storm` (both boards)? `storm` columns per side and, from
- * step 3, `stormRows(storm)` rows at the top and bottom (the engine's `inStorm`). `slack` widens it
- * by that many steps (vanish detection: the next band to be consumed counts too).
+ * Is square (r, c) inside a storm at step `storm` (both boards)? `stormCols(storm)` columns per side
+ * and, from step 3, `stormRows(storm)` rows at the top and bottom (the engine's `inStorm`). `slack`
+ * looks that many steps ahead (vanish detection: the next band to be consumed counts too).
  */
 export function stormSquare(r: number, c: number, storm: number, slack = 0): boolean {
   const n = storm + slack;
   if (n <= 0) return false;
-  if (c < n || c >= BOARD_SIZE - n) return true;
+  const cols = stormCols(n);
+  if (c < cols || c >= BOARD_SIZE - cols) return true;
   const rows = stormRows(n);
   return r < rows || r >= BOARD_SIZE - rows;
 }

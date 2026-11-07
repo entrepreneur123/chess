@@ -17,7 +17,7 @@
  * absorbed Picker pattern is a plain slide), Michelle's backward moves lay doll
  * traps and a mover ending on an enemy trap is stunned: all of it is undone from the LIFO history.
  */
-import { AWAKEN_TURNS, BOARD_SIZE, BUFF_TURNS, OFF_TURN_STUN, SKILL_UNLOCK_PLY, STORM_INTERVAL_PLIES, SUDDEN_DEATH_PLY, TRAPS_PER_MICHELLE, TRAP_STUN } from './types';
+import { AWAKEN_TURNS, BOARD_SIZE, BUFF_TURNS, OFF_TURN_STUN, SKILL_UNLOCK_PLY, STORM_INTERVAL_PLIES, SUDDEN_DEATH_PLY, stormIntervalAfter, TRAPS_PER_MICHELLE, TRAP_STUN } from './types';
 import type { CharacterId, GameState, Move, PlayerId, SkillAction } from './types';
 import { CHARACTERS, CHAR_BY_CODE, CHAR_CODE, CH_BRUTILE, CH_GLACIA, CH_HAMMONT, CH_INSANER, CH_MICHELLE, CH_MIDOS, CH_RAKAELI, CH_VENOA, CH_VOLKONOV, GLACIA_FREEZE, HAMMONT_STUN_LEVEL, WASTE_SIZE, abilityBit, absorbMaskOf, absorbMerge, absorbWithout, keepsDirection } from './characters';
 import { N_SQUARES, atTurnRow, canHop, genTargets, inStorm, posOf, sqOf, trapBit } from './board';
@@ -398,7 +398,7 @@ function switchSide(b: FastBoard): void {
     b.stormIn--;
     if (b.stormIn === 0) {
       b.storm++;
-      b.stormIn = STORM_INTERVAL_PLIES;
+      b.stormIn = stormIntervalAfter(b.storm);
       for (let i = 0; i < b.n; i++) {
         const s = b.sq[i];
         if (s < 0) continue;

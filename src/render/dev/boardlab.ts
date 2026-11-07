@@ -5,7 +5,8 @@
  * so a Playwright script can drive every visual state (wasteland, skill preview / cast, wasted
  * moves, deadly highlights, captures) and measure the JS cost of the render loop.
  */
-import { BOARD_SIZE } from '../../engine/types';
+import { BOARD_SIZE, stormCols, stormRows } from '../../engine/types';
+import { inStorm } from '../../engine/board';
 import type { CharacterId, Level, Move, Piece, PlayerId, Pos } from '../../engine/types';
 import { BoardView } from '../BoardView';
 import { Board2DView } from '../Board2DView';
@@ -379,17 +380,16 @@ const lab = {
    */
   storm(step: number, nextIn: number | null = 2, closing = false): void {
     impacts = 0;
-    const rows = step >= 3 ? step - 2 : 0;
-    const open = (r: number, c: number): boolean => c >= step && c < BOARD_SIZE - step && r >= rows && r < BOARD_SIZE - rows;
+    const open = (r: number, c: number): boolean => !inStorm(r, c, step);
     const keep = stormPieces().filter((p) => open(p.pos.r, p.pos.c));
     view.setWaste?.([]);
     view.setHighlights({});
     if (closing && step > 0) {
       // Pieces standing on the band this step closes (the previous step's open edge).
-      const prevRows = step - 1 >= 3 ? step - 3 : 0;
-      const prevOpen = (r: number, c: number): boolean => c >= step - 1 && c < BOARD_SIZE - step + 1 && r >= prevRows && r < BOARD_SIZE - prevRows;
+      const prevRows = stormRows(step - 1);
+      const prevOpen = (r: number, c: number): boolean => !inStorm(r, c, step - 1);
       const doomed = [
-        P('p0-doom-a', 0, 'sad', 2, Math.max(prevRows, 3), step - 1),
+        P('p0-doom-a', 0, 'sad', 2, Math.max(prevRows, 3), stormCols(step - 1)),
         P('p1-doom-b', 1, 'marki', 1, BOARD_SIZE - 1 - prevRows, 5),
         P('p0-doom-c', 0, 'walk', 1, prevRows, 4),
       ].filter((p) => prevOpen(p.pos.r, p.pos.c) && !open(p.pos.r, p.pos.c));

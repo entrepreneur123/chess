@@ -10,8 +10,11 @@ import {
   MAX_MATCH_PLIES,
   STORM_FULL_STEPS,
   STORM_INTERVAL_PLIES,
+  STORM_FINAL_HOLD_PLIES,
   STORM_ROWS_FROM,
   SUDDEN_DEATH_PLY,
+  stormCols,
+  stormIntervalAfter,
   applyMove,
   createGame,
   fastFromState,
@@ -41,17 +44,21 @@ const mv = (s: GameState, id: string, r: number, c: number): Move => {
 const at = (storm: number, stormIn = STORM_INTERVAL_PLIES) => ({ storm, stormIn, ply: SUDDEN_DEATH_PLY + 4 * storm });
 
 describe('storm interval and bound', () => {
-  it('shrinks every 2 turns (4 plies) and a match is bounded by 38 + 5 * 4 = 58 plies', () => {
+  it('shrinks every 2 turns (4 plies) down to the 2 x 2, which holds 5 turns: a match is bounded by 38 + 6 * 4 + 10 = 72 plies', () => {
     expect(STORM_INTERVAL_PLIES).toBe(4);
-    expect(MAX_MATCH_PLIES).toBe(SUDDEN_DEATH_PLY + STORM_FULL_STEPS * STORM_INTERVAL_PLIES);
-    expect(MAX_MATCH_PLIES).toBe(58);
+    expect(STORM_FULL_STEPS).toBe(7);
+    expect(STORM_FINAL_HOLD_PLIES).toBe(10);
+    expect([1, 2, 3, 4, 5, 6].map(stormIntervalAfter)).toEqual([4, 4, 4, 4, 4, 10]);
+    expect(MAX_MATCH_PLIES).toBe(SUDDEN_DEATH_PLY + (STORM_FULL_STEPS - 1) * STORM_INTERVAL_PLIES + STORM_FINAL_HOLD_PLIES);
+    expect(MAX_MATCH_PLIES).toBe(72);
   });
 });
 
 describe('storm rows', () => {
-  it('rows per end = max(0, step - 2): rows 0/9 at step 3, 0-1/8-9 at step 4, the whole board at step 5', () => {
+  it('columns stop at the middle 2 (step 4); rows narrow to the middle 2 (steps 5-6); step 7 swallows everything', () => {
     expect(STORM_ROWS_FROM).toBe(3);
-    expect([0, 1, 2, 3, 4, 5].map(stormRows)).toEqual([0, 0, 0, 1, 2, 3]);
+    expect([0, 1, 2, 3, 4, 5, 6, 7].map(stormCols)).toEqual([0, 1, 2, 3, 4, 4, 4, 5]);
+    expect([0, 1, 2, 3, 4, 5, 6, 7].map(stormRows)).toEqual([0, 0, 0, 1, 2, 3, 4, 5]);
     const open = (step: number) => {
       const out: string[] = [];
       for (let r = 0; r < BOARD_SIZE; r++) for (let c = 0; c < BOARD_SIZE; c++) if (!inStorm(r, c, step)) out.push(`${r},${c}`);
@@ -64,7 +71,10 @@ describe('storm rows', () => {
     expect(inStorm(0, 5, 3) && inStorm(9, 4, 3) && !inStorm(1, 5, 3) && !inStorm(8, 4, 3)).toBe(true);
     // Step 4: columns 4..5 of rows 2..7.
     expect(open(4)).toEqual(['2,4', '2,5', '3,4', '3,5', '4,4', '4,5', '5,4', '5,5', '6,4', '6,5', '7,4', '7,5']);
-    expect(open(5)).toEqual([]);
+    // Step 5: rows 3..6 of the same 2 columns; step 6: the final 2 x 2; step 7: nothing.
+    expect(open(5)).toEqual(['3,4', '3,5', '4,4', '4,5', '5,4', '5,5', '6,4', '6,5']);
+    expect(open(6)).toEqual(['4,4', '4,5', '5,4', '5,5']);
+    expect(open(7)).toEqual([]);
   });
 
   it('removes a piece standing on a row the moment it closes (step 3: rows 0 and 9, step 4: rows 1 and 8)', () => {
@@ -314,6 +324,8 @@ describe('storm status copy (HUD chip / field panel)', () => {
     expect(stormStatusText(1, 2)).toBe('자기장 · 좌우 1줄 소멸 · 2턴 후 축소');
     expect(stormStatusText(2, 1)).toBe('자기장 · 좌우 2줄 소멸 · 1턴 후 위아래도 축소');
     expect(stormStatusText(3, 2)).toBe('자기장 · 좌우 3줄 · 위아래 1줄 소멸 · 2턴 후 축소');
-    expect(stormStatusText(4, 2)).toBe('자기장 · 좌우 4줄 · 위아래 2줄 소멸 · 2턴 후 축소');
+    expect(stormStatusText(4, 2)).toBe('자기장 · 좌우 4줄 · 위아래 2줄 소멸 · 2턴 후 위아래 축소');
+    expect(stormStatusText(5, 2)).toBe('자기장 · 좌우 4줄 · 위아래 3줄 소멸 · 2턴 후 위아래 축소');
+    expect(stormStatusText(6, 5)).toBe('자기장 · 마지막 2×2 · 5턴 후 전체 소멸');
   });
 });

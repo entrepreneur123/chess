@@ -16,7 +16,7 @@
  * x = c - 4.5, column 0 spans x in [-5, -4], z = 4.5 - r).
  */
 import * as THREE from 'three';
-import { BOARD_SIZE, STORM_FULL_STEPS, stormRows } from '../engine/types';
+import { BOARD_SIZE, STORM_FULL_STEPS, stormCols, stormRows } from '../engine/types';
 
 export const STORM_COLORS = {
   /** Deep purple field. */
@@ -33,6 +33,8 @@ const VS = /* glsl */ `
 attribute float aKind;
 uniform float uStorm;
 uniform float uRows;
+uniform float uColsNext;
+uniform float uRowsNext;
 uniform float uWall;
 uniform float uFloorY;
 varying vec2 vUv;
@@ -71,7 +73,7 @@ void main() {
     y = uFloorY + uv.y * uWall;
   } else {
     // Warning strip: the next line in, along the squares still open after the next step.
-    float nextAlong = axis < 0.5 ? HALF - uRows : HALF - uStorm - 1.0;
+    float nextAlong = axis < 0.5 ? HALF - uRowsNext : HALF - uColsNext;
     across = mix(aIn, side * (HALF - n - 1.0), uv.x);
     along = mix(-nextAlong, nextAlong, uv.y);
     y = uFloorY + 0.003;
@@ -197,6 +199,8 @@ export class StormFx {
         uTime: { value: 0 },
         uStorm: { value: 0 },
         uRows: { value: 0 },
+        uColsNext: { value: 0 },
+        uRowsNext: { value: 0 },
         uWarn: { value: 0 },
         uWarnRows: { value: 0 },
         uWall: { value: wallHeight },
@@ -225,17 +229,26 @@ export class StormFx {
   }
 
   /**
-   * `storm` = storm step (consumed columns per side; rows per end follow from it, `stormRows`);
-   * `nextIn` = plies until the next shrink (null = inactive).
+   * `storm` = storm step (columns per side `stormCols`, rows per end `stormRows`; the end-game stops
+   * the columns at the middle 2 and narrows only the rows down to a 2 x 2); `nextIn` = plies until
+   * the next shrink (null = inactive). Each axis warns only when the next step closes it.
    */
   set(storm: number, nextIn: number | null): void {
     this.storm = Math.max(0, Math.min(STORM_FULL_STEPS, Math.floor(storm)));
     this.warn = nextIn !== null && nextIn <= 2 && this.storm < STORM_FULL_STEPS;
+    const cols = stormCols(this.storm);
     const rows = stormRows(this.storm);
-    this.mat.uniforms.uStorm.value = this.storm;
+    const colsNext = stormCols(this.storm + 1);
+    const rowsNext = stormRows(this.storm + 1);
+    this.mat.uniforms.uStorm.value = cols;
     this.mat.uniforms.uRows.value = rows;
-    this.mat.uniforms.uWarn.value = this.warn ? 1 : 0;
-    this.mat.uniforms.uWarnRows.value = this.warn && stormRows(this.storm + 1) > rows ? 1 : 0;
+    // The warning strips run along what stays open after the next step; before the final step
+    // (nothing stays open) they run along the last 2 x 2 itself.
+    const final = this.storm + 1 >= STORM_FULL_STEPS;
+    this.mat.uniforms.uColsNext.value = final ? cols : colsNext;
+    this.mat.uniforms.uRowsNext.value = final ? rows : rowsNext;
+    this.mat.uniforms.uWarn.value = this.warn && colsNext > cols ? 1 : 0;
+    this.mat.uniforms.uWarnRows.value = this.warn && rowsNext > rows ? 1 : 0;
     this.mesh.visible = this.storm > 0 || this.warn;
   }
 

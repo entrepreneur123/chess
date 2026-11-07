@@ -123,7 +123,7 @@ export function tutorialCoach(state: Pick<GameState, 'ply' | 'status' | 'stormIn
         return {
           step: '6/6',
           title: myTurn ? '마지막 적을 잡아 승리!' : '자기장 발동!',
-          body: '적이 1개 남거나 20턴이 되면 시작! 2턴마다 바깥 줄이 닫히고, 닿은 말은 사라져요.',
+          body: '적이 1개 남거나 20턴이 되면 시작! 2턴마다 좁혀와 가운데 2×2만 남고, 5턴 뒤 전부 사라져요.',
         };
       return { step: '6/6', title: '이제 자유롭게!', body: 'AI 대전은 시간 제한이 없고, ≡ 메뉴를 열면 일시정지돼요.' };
   }

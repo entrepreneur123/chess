@@ -18,8 +18,8 @@ import {
 import type { FastBoard } from '../engine';
 import { SKILL_FLAG, fastBlinkFits, fastCanSkill, fastCaptureGain, fastFreezeFits, fastIsShot, fastPushDest, fastSkillFits, fastSkillSize } from '../engine/fast';
 import { CHARACTERS, CHAR_BY_CODE, CH_BRUTILE, CH_INSANER, CH_LARHEN, CH_GLACIA, CH_HAMMONT, CH_MARKI, CH_MICHELLE, CH_MIDOS, CH_PICKER, CH_RAKAELI, CH_RAMPID, CH_SAD, CH_VENOA, CH_VERISH, CH_VOLKONOV, CH_WALK, MARKI_RANGE, MARKI_SIDE_LEVEL, N_CHARS, absorbedLevel } from '../engine/characters';
-import { trapBit } from '../engine/board';
-import { BOARD_SIZE, STORM_ROWS_FROM, TRAPS_PER_MICHELLE, stormRows } from '../engine/types';
+import { stormClosesAt, trapBit } from '../engine/board';
+import { BOARD_SIZE, TRAPS_PER_MICHELLE, stormRows } from '../engine/types';
 
 /** Bot strength. `extreme` (극악) is the dungeon's top tier and the AI of the top arena. */
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'extreme';
@@ -151,6 +151,12 @@ const now: () => number =
 const MARKI_MAX_RUSH = MARKI_RANGE[3];
 /** Last row / column index, and the board's centre line (4.5 on 10 x 10). */
 const LAST = BOARD_SIZE - 1;
+/** Storm step that swallows each square (board.ts stormClosesAt), precomputed for the evaluation. */
+const STORM_CLOSES_AT: Int8Array = (() => {
+  const t = new Int8Array(BOARD_SIZE * BOARD_SIZE);
+  for (let r = 0; r < BOARD_SIZE; r++) for (let c = 0; c < BOARD_SIZE; c++) t[r * BOARD_SIZE + c] = stormClosesAt(r, c);
+  return t;
+})();
 const MID = LAST / 2;
 
 const attackBuf = new Int32Array(MAX_MOVES);
@@ -295,10 +301,10 @@ export function evaluate(b: FastBoard, side: number): number {
     }
     if (b.buff[i] > 0) sc += BUFF_BONUS[b.lvl[i]] * b.buff[i];
     if (b.stun[i] > 0) sc -= v * STUN_PENALTY;
-    // storm: standing next to (or on) the columns / rows that vanish next is a liability. Column c
-    // closes at step min(c, LAST - c) + 1, row r at step min(r, LAST - r) + STORM_ROWS_FROM.
+    // storm: standing next to (or on) the columns / rows that vanish next is a liability
+    // (STORM_CLOSES_AT: the step that swallows each square; the middle 2 x 2 goes last).
     if (b.stormIn >= 0) {
-      const dist = Math.min(Math.min(c, LAST - c) - b.storm, Math.min(r, LAST - r) + STORM_ROWS_FROM - 1 - b.storm);
+      const dist = STORM_CLOSES_AT[s] - 1 - b.storm;
       const urgency = b.stormIn <= 2 ? 1 : 0.5;
       if (dist <= 0) sc -= v * 0.6 * urgency;
       else if (dist === 1) sc -= v * 0.25 * urgency;
