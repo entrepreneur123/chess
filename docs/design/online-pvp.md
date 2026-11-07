@@ -96,3 +96,28 @@ month even at the "growing" stage; accounts and the database would still cost Su
 3. Whether the existing local progress migrates to the server account (one-time upload, trusted
    once) or ranked starts fresh.
 4. Disconnects: how long a dropped player has to come back before forfeiting (e.g. 30 s).
+
+## 8. At global scale: what large games do (added 2026-11-08)
+
+Sources checked 2026-11-08: AWS's Supercell case studies; Heroic Labs' Nakama docs; vendor
+comparisons (treated as opinion).
+
+- **The client does not depend on Vercel.** In the store app (Capacitor) the game files ship inside
+  the app; Vercel only hosts the web version and the static assets (a CDN, fine at any scale).
+- **Large studios run their own game servers on a big cloud.** Supercell (Clash Royale, Brawl
+  Stars) runs its in-house backend (Java, some Rust) on AWS: EC2 auto scaling, Aurora (Postgres /
+  MySQL), CloudFront; AWS reports ~200 M monthly players on it.
+- **Supabase is Postgres underneath** (open source, self-hostable): the data is not locked in, it
+  can move to Aurora / Cloud SQL / our own Postgres later.
+- **Game-server frameworks big and small studios use:** Nakama (Heroic Labs, open source,
+  self-host or Heroic Cloud; its TypeScript runtime runs authoritative match handlers, so our
+  pure-TS engine can run inside it), PlayFab (Microsoft, managed live-ops), Photon (realtime
+  networking only, needs a backend beside it), GameLift (dedicated servers for realtime action
+  games; overkill for a turn-based game).
+- **Recommended path:** keep all match logic in our own TS server code (the engine already is), so
+  the host can change without a rewrite:
+  1. launch: Supabase (accounts, Postgres, realtime) or Nakama, cheapest to ship;
+  2. growth: our own Node/TS match service (or self-hosted Nakama) on AWS or GCP with managed
+     Postgres, the same shape as the big studios, with monitoring and on-call.
+  A turn-based game puts little load on servers; the real cost of "our own" is operations
+  (monitoring, security, deploys, incidents), not hardware.
