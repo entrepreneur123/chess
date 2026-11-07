@@ -11,6 +11,10 @@
  *   cooldown so rapid taps do not turn into chatter.
  * - Settings are read at play time: `settings.sound` gates everything, `settings.voice` (optional,
  *   defaults to on) gates voice lines only.
+ * - VOICE_LINES_READY (below) is the release gate of the voice lines as a whole: while it is false
+ *   no line is spoken or even downloaded and the settings sheet hides the voice switch. Character
+ *   sound effects are not voices and keep playing. Every call site stays wired, so shipping the
+ *   re-recorded cast is: new clips + manifest (docs/brand/audio/VOICE_REDO.md), then flip the flag.
  */
 import type { CharacterId } from '../engine/types';
 import { getProfile } from '../meta/profile';
@@ -174,7 +178,15 @@ function hasBrowserAudio(): boolean {
   return typeof window !== 'undefined' && typeof fetch === 'function';
 }
 
+/**
+ * Release gate of the character voice lines. False since 2026-11-07: the owner judged the current
+ * AI voices not good enough to ship and will brief a new concept per character; until the new cast
+ * is recorded the game is silent of speech (captions still show each character's written lines).
+ */
+export const VOICE_LINES_READY = false;
+
 function voiceOn(): boolean {
+  if (!VOICE_LINES_READY) return false;
   try {
     return isSoundOn() && (getProfile().settings as { voice?: boolean }).voice !== false;
   } catch {
@@ -380,7 +392,8 @@ function playSfx(rel: string | null | undefined): void {
 /** Every clip (voice + sfx) a character can use. */
 function clipsFor(character: CharacterId): string[] {
   const out = new Set<string>();
-  const v = (VOICE_CLIPS as Partial<typeof VOICE_CLIPS>)[character] ?? {};
+  // Voice lines are only fetched once they are released (VOICE_LINES_READY).
+  const v = VOICE_LINES_READY ? ((VOICE_CLIPS as Partial<typeof VOICE_CLIPS>)[character] ?? {}) : {};
   for (const list of Object.values(v)) for (const rel of list ?? []) out.add(rel);
   for (const rel of Object.values((CHAR_SFX as Partial<typeof CHAR_SFX>)[character] ?? {})) if (rel) out.add(rel);
   for (const rel of Object.values(GENERIC_SFX)) if (rel) out.add(rel);

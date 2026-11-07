@@ -219,7 +219,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     value: [4, 5, 6],
     trait: {
       nameKo: '독화살',
-      descKo: '움직이지 않고 2칸 이상 떨어진 적을 쏘아 잡습니다. 화살은 사이에 있는 말에 막힙니다 (끝줄에서 방향 전환)',
+      descKo: '움직이지 않고 2칸 이상 떨어진 적을 쏘아 잡습니다. 화살은 사이에 있는 말을 넘어 날아가 사거리 안의 적은 언제든 저격합니다 (끝줄에서 방향 전환)',
     },
   },
   glacia: {
@@ -338,8 +338,9 @@ export const HAMMONT_RANGE = [0, 2, 3, 3];
 export const HAMMONT_STUN_LEVEL = 3;
 /**
  * Venoa steps 1 square orthogonally and shoots ("독화살") along her shot lanes: straight forward,
- * and from VENOA_DIAG_LEVEL the two forward diagonals too, hitting the FIRST piece of the lane if it
- * is an enemy at a distance of VENOA_SHOT_MIN..VENOA_SHOT_MAX[level] squares. She stays put.
+ * and from VENOA_DIAG_LEVEL the two forward diagonals too, hitting ANY enemy of the lane at a
+ * distance of VENOA_SHOT_MIN..VENOA_SHOT_MAX[level] squares: the arrow flies over the pieces in
+ * between (owner rule 2026-11-07). She stays put.
  */
 export const VENOA_SHOT_MIN = 2;
 export const VENOA_SHOT_MAX = [0, 3, 3, 4];

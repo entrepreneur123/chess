@@ -246,13 +246,14 @@ const lab = {
       P(`p${foe}-marki`, foe, 'marki', 1, adj.r, adj.c),
     ]);
     const moves = [{ r: at.r - f, c: at.c }, { r: at.r, c: at.c - 1 }, { r: at.r + f, c: at.c }];
-    // Her 3성 arrow range: forward and both forward diagonals 2..4, cut by the two targets.
+    // Her 3성 arrow range: forward and both forward diagonals 2..4 (pieces do not block it; the
+    // two targets' squares carry reticles instead).
     const shotRange: Pos[] = [];
     for (const dc of [-1, 0, 1]) {
       for (let k = 2; k <= 4; k++) {
         const q = { r: at.r + f * k, c: at.c + dc * k };
         if (q.r < 0 || q.r > 9 || q.c < 0 || q.c > 9) break;
-        if ((q.r === far1.r && q.c === far1.c) || (q.r === far2.r && q.c === far2.c)) break;
+        if ((q.r === far1.r && q.c === far1.c) || (q.r === far2.r && q.c === far2.c)) continue;
         shotRange.push(q);
       }
     }
@@ -284,6 +285,34 @@ const lab = {
     const { move, after } = lab.setupCapture(id);
     impacts = 0;
     (window as unknown as { moveDone: unknown }).moveDone = view.animateMove(move, after).then(() => 'done');
+  },
+  /**
+   * Any character's signature FX in an empty arena: p0 `ch` (grade `level`) at (3, 4), a p1 Sad two
+   * squares ahead, a p1 Walk far away. kind 'capture' strikes the Sad (Venoa shoots it: to = from),
+   * 'move' slides / leaps two squares to the side-front, 'select' selects her (setHighlights).
+   */
+  fxScene(ch: CharacterId, kind: 'capture' | 'move' | 'select', level: Level = 3): void {
+    impacts = 0;
+    const me = P(`p0-${ch}`, 0, ch, level, 3, 4);
+    const victim = P('p1-victim', 1, 'sad', 2, 5, 4);
+    const pieces = [me, victim, P('p1-walk', 1, 'walk', 2, 9, 9)];
+    view.setPieces(pieces);
+    view.setHighlights({});
+    const w = window as unknown as { moveDone: unknown };
+    if (kind === 'select') {
+      view.setHighlights({ selected: me.pos, moves: [{ r: 4, c: 4 }, { r: 3, c: 3 }, { r: 3, c: 5 }], captures: [victim.pos], tone: 'own' });
+      return;
+    }
+    if (kind === 'capture') {
+      const shot = ch === 'venoa';
+      const move: Move = { pieceId: me.id, from: { ...me.pos }, to: shot ? { ...me.pos } : { ...victim.pos }, captureId: victim.id, ...(shot ? { shot: true } : {}) };
+      const after = pieces.filter((p) => p.id !== victim.id).map((p) => (p.id === me.id && !shot ? { ...p, pos: { ...victim.pos } } : p));
+      w.moveDone = view.animateMove(move, after).then(() => 'done');
+      return;
+    }
+    const to = { r: 5, c: 6 };
+    const move: Move = { pieceId: me.id, from: { ...me.pos }, to };
+    w.moveDone = view.animateMove(move, pieces.map((p) => (p.id === me.id ? { ...p, pos: { ...to } } : p))).then(() => 'done');
   },
   /** Plain move for the move FX (e.g. brutile's green sparkle trail). */
   startMove(id = 'p0-brutile', to: Pos = { r: 2, c: 1 }): void {

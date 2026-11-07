@@ -400,10 +400,11 @@ const VERISH_LANE: number[][][] = [
 ];
 
 /**
- * Venoa's "독화살": along each shot lane the FIRST piece is the target if it is an enemy between
- * VENOA_SHOT_MIN and `max` squares away (with `includeAllies`, an ally there too: she covers it).
- * Pieces block the arrow, edges and the storm end the lane; wasteland and doll traps do not stop
- * it. Empty lane squares are not targets (she does not walk there).
+ * Venoa's "독화살": along each shot lane EVERY enemy between VENOA_SHOT_MIN and `max` squares away
+ * is a target (with `includeAllies`, an ally there too: she covers it). The arrow flies over
+ * pieces (owner rule 2026-11-07: "범위 안의 적은 항상 저격 가능"); only the edge and the storm end
+ * a lane, and wasteland and doll traps do not stop it. Empty lane squares are not targets (she
+ * does not walk there).
  */
 function shoot(
   occ: ArrayLike<number>,
@@ -432,19 +433,17 @@ function shoot(
       if (nr < 0 || nr >= BOARD_SIZE || nc < 0 || nc >= BOARD_SIZE || inStorm(nr, nc, storm)) break;
       const s = nr * BOARD_SIZE + nc;
       const o = occ[s];
-      if (o < 0) continue;
-      if (k >= VENOA_SHOT_MIN && (includeAllies || owners[o] !== owner)) out[n++] = s;
-      break;
+      if (o >= 0 && k >= VENOA_SHOT_MIN && (includeAllies || owners[o] !== owner)) out[n++] = s;
     }
   }
   return n;
 }
 
 /**
- * Venoa's arrow range for the board overlay: the EMPTY squares her arrows fly over at a distance of
- * VENOA_SHOT_MIN..max, walked exactly as `shoot` walks them (the edge and the storm end a lane, the
- * first piece blocks it; wasteland and traps do not). The piece that blocks a lane is not included:
- * an enemy there is already a shot target. Appends square indices to `out`, returns the new count.
+ * Venoa's arrow range for the board overlay: the EMPTY squares of her lanes at a distance of
+ * VENOA_SHOT_MIN..max, walked exactly as `shoot` walks them (the edge and the storm end a lane;
+ * pieces, wasteland and traps do not). Occupied squares are left out: an enemy there is a shot
+ * target, an ally is not shootable. Appends square indices to `out`, returns the new count.
  */
 export function venoaShotRange(occ: ArrayLike<number>, r: number, c: number, dir: number, level: number, storm: number, out: { [i: number]: number }, n: number): number {
   const lanes = VENOA_LANES[dir];
@@ -458,8 +457,7 @@ export function venoaShotRange(occ: ArrayLike<number>, r: number, c: number, dir
       nc += lanes[d + 1];
       if (nr < 0 || nr >= BOARD_SIZE || nc < 0 || nc >= BOARD_SIZE || inStorm(nr, nc, storm)) break;
       const s = nr * BOARD_SIZE + nc;
-      if (occ[s] >= 0) break;
-      if (k >= VENOA_SHOT_MIN) out[n++] = s;
+      if (k >= VENOA_SHOT_MIN && occ[s] < 0) out[n++] = s;
     }
   }
   return n;

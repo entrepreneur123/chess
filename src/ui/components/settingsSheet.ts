@@ -4,6 +4,7 @@
  * (ui/powerSave.ts) follows `powerSave` on their own.
  */
 import { haptic, primeAudio, sfx } from '../../audio/sfx';
+import { VOICE_LINES_READY } from '../../audio/voice';
 import { APP_NAME } from '../../meta/economy';
 import { DEV_RATING, disableDevMode, enableDevMode, getProfile, isDevMode, unlockDevMode, updateProfile, type Settings } from '../../meta/profile';
 import { h } from '../dom';
@@ -151,7 +152,8 @@ export function showSettings(): void {
       { class: 'set-group' },
       switchRow('sound', '효과음', '이동 · 잡기 · 승리 사운드', 'volume'),
       switchRow('music', '배경음악', '전장마다 다른 테마 음악', 'music'),
-      switchRow('voice', '캐릭터 음성', '선택 · 공격 · 스킬 대사', 'person'),
+      // Hidden until the re-recorded cast ships (audio/voice.ts VOICE_LINES_READY).
+      VOICE_LINES_READY ? switchRow('voice', '캐릭터 음성', '선택 · 공격 · 스킬 대사', 'person') : null,
       switchRow('haptics', '진동', canVibrate ? '잡기 · 내 차례 · 승리 시 짧은 진동' : '이 기기에서는 지원되지 않을 수 있어요', 'vibration'),
       switchRow('powerSave', '절전 모드', '발열 · 배터리 절약 · 효과 간소화', 'battery'),
     ),

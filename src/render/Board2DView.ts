@@ -38,6 +38,7 @@ import { ambientFrameMs, BUSY_FRAME_MS, clearAmbientSprites, drawAmbient2D, LOW_
 import { DEFAULT_BOARD_THEME, boardTheme } from './arenaThemes';
 import type { BoardTheme } from './arenaThemes';
 import { ANIM, BOARD_COLORS, CHARACTER_FX, CHARACTER_RARITY, RAKAELI_AWAKE_FX, RARITY_RING, TEAM_COLORS, WASTE_COLORS } from './palette';
+import { MOVE_TRAIL } from './moveStyle';
 import { STORM_COLORS } from './storm';
 import { wasteMask } from './waste';
 import { Waste2DSprites, wasteVariant } from './waste2d';
@@ -83,6 +84,7 @@ import {
   hopSquares,
   hopTimingFor,
   indexHighlights,
+  shotLaneEnds,
   isHopMove,
   mixRgb,
   posKey,
@@ -1023,6 +1025,11 @@ export class Board2DView implements IBoardView {
       this.tGlint = now;
       this.glintAt = { x: this.cx(mover.pos.c), y: this.cy(mover.pos.r) };
       this.glintColor = '#FF4FE8';
+    } else if (!rk) {
+      // Everyone else: a take-off glint in the character's core colour (its signature).
+      this.tGlint = now;
+      this.glintAt = { x: this.cx(mover.pos.c), y: this.cy(mover.pos.r) };
+      this.glintColor = fx.primary;
     }
     this.trailColor = chain ? '#D04BFF' : ch === 'marki' ? '#FFE2B0' : rk === 'awake' ? RAKAELI_AWAKE_FX.primary : fx.primary;
     if (rk === 'awake') {
@@ -1166,9 +1173,71 @@ export class Board2DView implements IBoardView {
 
   setHighlights(h: BoardHighlights): void {
     if (this.disposed) return;
+    const prevSel = this.hi.selected;
     this.highlights = h;
     this.hi = indexHighlights(h);
+    if (this.hi.selected >= 0 && this.hi.selected !== prevSel && !this.anim) this.startSelectFx(h);
     this.requestRender();
+  }
+
+  /** Selection signature (see BoardView.selectFx): a rune sigil, a glint, Venoa's lane sweep. */
+  private sel: { t0: number; at: Pos; c1: string; c2: string; lanes: Pos[]; laneCol: string } | null = null;
+
+  private startSelectFx(h: BoardHighlights): void {
+    const k = this.hi.selected;
+    const p = this.pieces.find((q) => posKey(q.pos) === k);
+    if (!p) return;
+    const now = performance.now();
+    const fx = rakaeliStyle(p) === 'awake' ? RAKAELI_AWAKE_FX : CHARACTER_FX[p.character];
+    const lanes = this.reducedMotion ? [] : shotLaneEnds(p.pos, [...(h.shotRange ?? []), ...(h.shots ?? [])]);
+    this.sel = { t0: now, at: { ...p.pos }, c1: fx.primary, c2: fx.secondary, lanes, laneCol: h.tone === 'enemy' ? BOARD_COLORS.shotEnemy : BOARD_COLORS.shotOwn };
+    this.tGlint = now;
+    this.glintAt = { x: this.cx(p.pos.c), y: this.cy(p.pos.r) };
+    this.glintColor = fx.primary;
+  }
+
+  private drawSelectFx(now: number): void {
+    const sf = this.sel;
+    if (!sf) return;
+    const el = now - sf.t0;
+    if (el >= SELECT_FX_MS) {
+      this.sel = null;
+      return;
+    }
+    const ctx = this.ctx;
+    const cell = this.layout.cell;
+    const k = el / SELECT_FX_MS;
+    const x = this.cx(sf.at.c);
+    const y = this.cy(sf.at.r);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    fx2dSigil(ctx, x, y, cell * 1.15, easeOutCubic(k), 1 - k, el, sf.c1, sf.c2);
+    // Venoa: a bright arrow head with a fading tail runs out along each lane.
+    const ak = clamp01(el / 340);
+    if (ak < 1) {
+      ctx.lineCap = 'round';
+      for (const end of sf.lanes) {
+        const ex = this.cx(end.c);
+        const ey = this.cy(end.r);
+        const hx = x + (ex - x) * easeOutCubic(ak);
+        const hy = y + (ey - y) * easeOutCubic(ak);
+        const tk = Math.max(0, easeOutCubic(ak) - 0.35);
+        const g = ctx.createLinearGradient(x + (ex - x) * tk, y + (ey - y) * tk, hx, hy);
+        g.addColorStop(0, hexAlpha(sf.laneCol, 0));
+        g.addColorStop(1, hexAlpha(sf.laneCol, 0.95 * (1 - ak * ak)));
+        ctx.strokeStyle = g;
+        ctx.lineWidth = cell * 0.08;
+        ctx.beginPath();
+        ctx.moveTo(x + (ex - x) * tk, y + (ey - y) * tk);
+        ctx.lineTo(hx, hy);
+        ctx.stroke();
+        ctx.fillStyle = hexAlpha('#FFFFFF', 1 - ak);
+        ctx.beginPath();
+        ctx.arc(hx, hy, cell * 0.06, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
   }
 
   onCellClick(cb: (pos: Pos) => void): void {
@@ -1448,6 +1517,7 @@ export class Board2DView implements IBoardView {
       (this.tCap >= 0 && now - this.tCap < FX_MS + 300) ||
       (this.tShake >= 0 && now - this.tShake < this.shakeMs) ||
       (this.tGlint >= 0 && now - this.tGlint < 320) ||
+      (this.sel !== null && now - this.sel.t0 < SELECT_FX_MS) ||
       (this.tTurn >= 0 && now - this.tTurn < ANIM.turn) ||
       this.tGlow >= 0 ||
       this.trail.length > 0 ||
@@ -1617,16 +1687,13 @@ export class Board2DView implements IBoardView {
       a.landed = true;
       this.tLand = now;
       this.landAt = { ...a.strike };
-      const m = this.pieces.find((p) => p.id === a.moverId);
       this.landColor = a.wasted
         ? WASTE_COLORS.glow
         : a.rk === 'awake'
           ? RAKAELI_AWAKE_FX.primary
           : a.rk === 'ash'
             ? CHARACTER_FX.rakaeli.primary
-            : a.jump
-              ? CHARACTER_FX.walk.primary
-              : TEAM_COLORS[m ? m.owner : 0].glow;
+            : CHARACTER_FX[a.character].primary; // the mover's own colour (its signature)
       if (a.rk && !a.wasted) {
         const x = a.strike.c + 0.5;
         const y = BOARD_SIZE - 0.5 - a.strike.r;
@@ -1646,17 +1713,18 @@ export class Board2DView implements IBoardView {
     this.tShake = now;
     this.capKind = a.character;
     this.capAt = a.captured ? { ...a.captured.pos } : { ...a.to };
-    const dc = a.to.c - a.from.c;
-    const dr = a.to.r - a.from.r;
+    // A Venoa shot is animated with to = from: her arrow's direction is toward the victim.
+    const aim = a.to.r === a.from.r && a.to.c === a.from.c ? this.capAt : a.to;
+    const dc = aim.c - a.from.c;
+    const dr = aim.r - a.from.r;
     const l = Math.hypot(dc, dr) || 1;
     this.capDir = { x: dc / l, y: -dr / l };
     this.capBurst = Array.from({ length: 12 }, (_, i) => ({
       a: (i / 12) * Math.PI * 2 + Math.sin(now + i * 7.3) * 0.35,
       v: 0.8 + 0.5 * (0.5 + 0.5 * Math.sin(now * 0.37 + i * 3.1)),
     }));
-    this.shakeAmp =
-      a.character === 'marki' ? (this.reducedMotion ? 0.5 : 2.6) : a.character === 'walk' ? 1.5 : a.character === 'brutile' ? (this.reducedMotion ? 0.6 : 1.6) : 1;
-    this.shakeMs = a.character === 'marki' ? 260 : ANIM.shake;
+    this.shakeAmp = this.reducedMotion ? Math.min(0.6, CAPTURE_SHAKE_2D[a.character] ?? 1) : (CAPTURE_SHAKE_2D[a.character] ?? 1);
+    this.shakeMs = a.character === 'marki' || a.character === 'hammont' ? 270 : ANIM.shake;
     this.soulTo = a.character === 'insaner' ? a.moverId : null;
     if (a.character === 'insaner') this.lastCapture = { id: a.moverId, t: now };
     this.capRak = a.rk;
@@ -1860,6 +1928,7 @@ export class Board2DView implements IBoardView {
       ctx.restore();
     }
 
+    this.drawSelectFx(now);
     this.drawTrapsUnder(now);
     const sk = this.skill;
     if (sk && sk.casterId) this.drawRune(this.cx(sk.from.c), this.cy(sk.from.r), cell * 1.15, (now - sk.start) / SKILL_RUNE_MS, (now - sk.start) * 0.0016);
@@ -1946,7 +2015,7 @@ export class Board2DView implements IBoardView {
         }
         const pop = 1 + 0.14 * bump(a.impactAt - 90, a.impactAt + 170, t);
         moverXY = { x, y: y - lift * cell * 0.1 };
-        if (t < a.moveDur && a.rk !== 'ash' && (a.jump || a.chain || a.charge || a.character === 'brutile')) this.pushTrail(moverXY.x, moverXY.y, now);
+        if (t < a.moveDur && a.rk !== 'ash' && (a.jump || a.chain || a.charge || a.character === 'brutile' || (!a.rk && MOVE_TRAIL[a.character]))) this.pushTrail(moverXY.x, moverXY.y, now);
         if (a.rk && t < a.moveDur && t >= a.nextFeather) {
           // Feathers shed along the leap (crimson-edged black when transformed, pale ash otherwise).
           const awake = a.rk === 'awake';
@@ -2883,6 +2952,66 @@ export class Board2DView implements IBoardView {
           }
           break;
         }
+        // The rest of the roster: each the 2D counterpart of its WebGL hit (render/BoardView.ts
+        // impactFx), built from the shared painters below.
+        case 'michelle':
+          // Doll curse: a stitched lavender sigil and grey-violet threads of smoke.
+          fx2dPuffs(ctx, x, y, cell, e, fade, this.capBurst, WASTE_COLORS.curse, 0.3);
+          fx2dSigil(ctx, x, y, cell, e, fade, el, fx.primary, fx.secondary);
+          break;
+        case 'picker':
+          // A bright bounce ring and a dust puff.
+          fx2dPuffs(ctx, x, y, cell, e, fade, this.capBurst, '#C9B9A0', 0.22);
+          fx2dRing(ctx, x, y, cell, e, fade, fx.core, 1.15);
+          break;
+        case 'rakaeli':
+          // Base form: a pale halo-gold sigil (the transformed hit is the dark flame above).
+          if (this.capRak !== 'awake') fx2dSigil(ctx, x, y, cell, e, fade, el, fx.secondary, fx.primary);
+          break;
+        case 'rampid':
+          // Ice claw: frost cracks and ice shards flung low.
+          fx2dCracks(ctx, x, y, cell, e, fade, this.capBurst, fx.primary, 9);
+          fx2dShards(ctx, x, y, cell, e, fade, this.capBurst, fx.secondary);
+          break;
+        case 'larhen':
+          // Twin daggers: a silver crescent slash and an indigo ring.
+          fx2dSlash(ctx, x, y, cell, el, fx.primary, dir.x < 0);
+          fx2dRing(ctx, x, y, cell, e, fade, fx.secondary, 1.0);
+          break;
+        case 'volkonov':
+          // A chord: a rose sigil ringing out with a gold echo ring.
+          fx2dSigil(ctx, x, y, cell, e, fade, el, fx.primary, fx.secondary);
+          fx2dRing(ctx, x, y, cell, e, fade, fx.secondary, 1.3);
+          break;
+        case 'verish':
+          // Pierce: a teal slash and streaks flung along her lane, a pink ring.
+          fx2dSlash(ctx, x, y, cell, el, fx.primary, dir.x < 0);
+          fx2dStreaks(ctx, x, y, cell, e, fade, dir, fx.primary);
+          fx2dRing(ctx, x, y, cell, e, fade, fx.secondary, 1.0);
+          break;
+        case 'midos':
+          // Ghost claws: a moon-white slash over shadow smoke.
+          fx2dPuffs(ctx, x, y, cell, e, fade, this.capBurst, '#140C2E', 0.38);
+          fx2dSlash(ctx, x, y, cell, el, fx.core, dir.x < 0);
+          break;
+        case 'hammont':
+          // Hammer crush: forge-hot cracks, soot and a molten ring.
+          fx2dPuffs(ctx, x, y, cell, e, fade, this.capBurst, '#3A1C0E', 0.35);
+          fx2dCracks(ctx, x, y, cell, e, fade, this.capBurst, fx.primary, 13);
+          fx2dRing(ctx, x, y, cell, e, fade, fx.core, 1.35);
+          break;
+        case 'venoa':
+          // Poison arrow: venom splash streaks along the arrow's flight over bog spores.
+          fx2dPuffs(ctx, x, y, cell, e, fade, this.capBurst, '#56702A', 0.3);
+          fx2dStreaks(ctx, x, y, cell, e, fade, dir, fx.primary);
+          fx2dFlameRing(ctx, x, y, cell, e, fade, el, fx.primary, fx.core, 7);
+          break;
+        case 'glacia':
+          // Shatter: ice cracks, crystal shards and a cold white ring.
+          fx2dCracks(ctx, x, y, cell, e, fade, this.capBurst, fx.secondary, 5);
+          fx2dShards(ctx, x, y, cell, e, fade, this.capBurst, fx.core);
+          fx2dRing(ctx, x, y, cell, e, fade, fx.primary, 1.2);
+          break;
       }
       // Shock ring + debris.
       ctx.strokeStyle = hexAlpha(fx.primary, 0.85 * fade);
@@ -3314,4 +3443,173 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
 function hexAlpha(hex: string, alpha: number): string {
   const n = parseInt(hex.replace('#', ''), 16);
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${Math.max(0, Math.min(1, alpha))})`;
+}
+
+/** Length of the selection signature (rune sigil; Venoa's lane sweep takes its first 340 ms). */
+const SELECT_FX_MS = 460;
+
+/** Screen-shake strength of a capture per attacker (Canvas2D board; 1 = the default jolt). */
+const CAPTURE_SHAKE_2D: Partial<Record<CharacterId, number>> = {
+  marki: 2.6,
+  walk: 1.5,
+  brutile: 1.6,
+  hammont: 2.8,
+  glacia: 1.4,
+  rampid: 1.3,
+  verish: 1.2,
+  midos: 1.3,
+  picker: 1.4,
+  venoa: 1.1,
+};
+
+// ------------------------------------------------------------------------------------------------
+// Capture FX painters (Canvas2D). Each draws one layer of a hit centred at (x, y) for a cell of
+// `cell` px; `e` is the eased progress, `fade` 1 → 0, `el` the elapsed ms. Additive blending is
+// the caller's, except fx2dPuffs (smoke) which draws normally and restores 'lighter'.
+// ------------------------------------------------------------------------------------------------
+
+/** A glowing ring expanding to `scale` cells. */
+function fx2dRing(g: CanvasRenderingContext2D, x: number, y: number, cell: number, e: number, fade: number, color: string, scale: number): void {
+  g.strokeStyle = hexAlpha(color, 0.9 * fade);
+  g.lineWidth = cell * 0.05 * (0.5 + fade * 0.5);
+  g.beginPath();
+  g.arc(x, y, cell * (0.2 + scale * 0.55 * e), 0, Math.PI * 2);
+  g.stroke();
+}
+
+/** Jagged cracks radiating out (one per burst ray); `jag` varies the zigzag per character. */
+function fx2dCracks(g: CanvasRenderingContext2D, x: number, y: number, cell: number, e: number, fade: number, burst: { a: number; v: number }[], color: string, jag: number): void {
+  g.strokeStyle = hexAlpha(color, Math.min(1, 1.4 * fade));
+  g.lineWidth = Math.max(1, cell * 0.045);
+  g.lineJoin = 'round';
+  for (const b of burst) {
+    const len = cell * (0.35 + 0.85 * b.v) * Math.min(1, e * 1.7);
+    g.beginPath();
+    g.moveTo(x, y);
+    for (let st = 1; st <= 4; st++) {
+      const d = (len * st) / 4;
+      const j = Math.sin(b.a * jag + st * 2.3) * cell * 0.08;
+      g.lineTo(x + Math.cos(b.a) * d - Math.sin(b.a) * j, y + Math.sin(b.a) * d + Math.cos(b.a) * j);
+    }
+    g.stroke();
+  }
+}
+
+/** A flickering flame ring (two layers). */
+function fx2dFlameRing(g: CanvasRenderingContext2D, x: number, y: number, cell: number, e: number, fade: number, el: number, c1: string, c2: string, lobes: number): void {
+  const R = cell * (0.22 + 0.55 * e);
+  for (let layer = 0; layer < 2; layer++) {
+    g.beginPath();
+    for (let i = 0; i <= 36; i++) {
+      const a = (i / 36) * Math.PI * 2;
+      const rr = R + Math.abs(Math.sin(a * lobes + el * 0.02 + layer * 1.5)) * cell * 0.2 * fade;
+      if (i === 0) g.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+      else g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+    }
+    g.closePath();
+    g.strokeStyle = hexAlpha(layer === 0 ? c1 : c2, 0.85 * fade);
+    g.lineWidth = cell * (0.075 - layer * 0.035);
+    g.stroke();
+  }
+}
+
+/** A rune sigil: two rings and six turning ticks between them. */
+function fx2dSigil(g: CanvasRenderingContext2D, x: number, y: number, cell: number, e: number, fade: number, el: number, c1: string, c2: string): void {
+  const r1 = cell * (0.3 + 0.38 * e);
+  const r2 = r1 * 1.32;
+  g.lineWidth = Math.max(1, cell * 0.035);
+  g.strokeStyle = hexAlpha(c1, 0.9 * fade);
+  g.beginPath();
+  g.arc(x, y, r1, 0, Math.PI * 2);
+  g.stroke();
+  g.strokeStyle = hexAlpha(c2, 0.75 * fade);
+  g.beginPath();
+  g.arc(x, y, r2, 0, Math.PI * 2);
+  g.stroke();
+  const rot = el * 0.0035;
+  g.strokeStyle = hexAlpha(c1, fade);
+  g.lineWidth = Math.max(1, cell * 0.05);
+  g.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = rot + (i / 6) * Math.PI * 2;
+    g.moveTo(x + Math.cos(a) * r1, y + Math.sin(a) * r1);
+    g.lineTo(x + Math.cos(a + 0.25) * r2, y + Math.sin(a + 0.25) * r2);
+  }
+  g.stroke();
+}
+
+/** A crescent slash across the victim (three strokes, white-hot core). */
+function fx2dSlash(g: CanvasRenderingContext2D, x: number, y: number, cell: number, el: number, color: string, flip: boolean): void {
+  const sk = clamp01(el / 300);
+  if (sk >= 1) return;
+  const a0 = -2.4;
+  const head = a0 + 3.4 * easeOutCubic(sk);
+  const tail = Math.max(a0, head - 1.8);
+  g.lineCap = 'round';
+  g.shadowColor = color;
+  g.shadowBlur = cell * 0.25;
+  for (let i = 0; i < 3; i++) {
+    g.lineWidth = cell * (0.15 - i * 0.045);
+    g.strokeStyle = i === 2 ? hexAlpha('#FFFFFF', 1 - sk) : hexAlpha(color, 0.9 * (1 - sk));
+    g.beginPath();
+    if (flip) g.ellipse(x, y, cell * 0.6, cell * 0.6, 0, Math.PI - head, Math.PI - tail, true);
+    else g.ellipse(x, y, cell * 0.6, cell * 0.6, 0, tail, head, false);
+    g.stroke();
+  }
+  g.shadowBlur = 0;
+}
+
+/** Crystal / ice shards: slim diamonds flung out along the burst rays. */
+function fx2dShards(g: CanvasRenderingContext2D, x: number, y: number, cell: number, e: number, fade: number, burst: { a: number; v: number }[], color: string): void {
+  g.fillStyle = hexAlpha(color, 0.95 * fade);
+  for (let i = 0; i < burst.length; i += 1) {
+    const b = burst[i];
+    const d = cell * (0.25 + 0.9 * e * b.v);
+    const px = x + Math.cos(b.a + 0.2) * d;
+    const py = y + Math.sin(b.a + 0.2) * d;
+    const l = cell * 0.16 * (1 - e * 0.5);
+    const w = cell * 0.045;
+    const ca = Math.cos(b.a + 0.2);
+    const sa = Math.sin(b.a + 0.2);
+    g.beginPath();
+    g.moveTo(px + ca * l, py + sa * l);
+    g.lineTo(px - sa * w, py + ca * w);
+    g.lineTo(px - ca * l, py - sa * l);
+    g.lineTo(px + sa * w, py - ca * w);
+    g.closePath();
+    g.fill();
+  }
+}
+
+/** Streaks flung along the attack direction (a fan of seven). */
+function fx2dStreaks(g: CanvasRenderingContext2D, x: number, y: number, cell: number, e: number, fade: number, dir: { x: number; y: number }, color: string): void {
+  const nx = -dir.y;
+  const ny = dir.x;
+  g.strokeStyle = hexAlpha(color, 0.9 * fade);
+  g.lineCap = 'round';
+  g.lineWidth = Math.max(1, cell * 0.04);
+  g.beginPath();
+  for (let i = 0; i < 7; i++) {
+    const sp = (i - 3) * 0.32;
+    const vx = dir.x + nx * sp;
+    const vy = dir.y + ny * sp;
+    const d0 = cell * (0.2 + 0.8 * e);
+    const d1 = d0 + cell * 0.32 * (1 - e * 0.6);
+    g.moveTo(x + vx * d0, y + vy * d0);
+    g.lineTo(x + vx * d1, y + vy * d1);
+  }
+  g.stroke();
+}
+
+/** Smoke puffs drawn with normal blending (dark smoke would vanish additively); restores 'lighter'. */
+function fx2dPuffs(g: CanvasRenderingContext2D, x: number, y: number, cell: number, e: number, fade: number, burst: { a: number; v: number }[], color: string, alpha: number): void {
+  g.globalCompositeOperation = 'source-over';
+  g.fillStyle = hexAlpha(color, alpha * fade);
+  for (const b of burst) {
+    const d = cell * (0.2 + 0.6 * e) * b.v;
+    g.beginPath();
+    g.arc(x + Math.cos(b.a) * d, y + Math.sin(b.a) * d * 0.85, cell * (0.11 + 0.17 * e), 0, Math.PI * 2);
+    g.fill();
+  }
+  g.globalCompositeOperation = 'lighter';
 }

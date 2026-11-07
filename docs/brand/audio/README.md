@@ -4,6 +4,8 @@ Generates the files in `public/audio/` and the manifest `src/audio/voiceManifest
 Licences and sources: `public/audio/LICENSES.md`. Large models are never committed.
 Audition every shipped line at `/audio/audition.html` (`public/audio/audition.html`).
 
+**Voice lines are switched off until the cast is re-recorded: see `VOICE_REDO.md`.**
+
 | File | Purpose |
 | --- | --- |
 | `lines.json` | Voice script: per character the art-derived `concept`, the VoiceDesign prompt of its reference, the clone reference, and every line (text, event). |

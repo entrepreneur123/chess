@@ -76,7 +76,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { BOARD_SIZE, STORM_FULL_STEPS, ZONE_DEPTH } from '../engine/types';
-import type { Level, Move, Piece, PlayerId, Pos, Rarity, Trap } from '../engine/types';
+import type { CharacterId, Level, Move, Piece, PlayerId, Pos, Rarity, Trap } from '../engine/types';
 import type { BoardHighlights, BoardViewMode, BoardViewOptions, IBoardView, ScreenRect, SkillPreview } from './types';
 import type { UnitActor } from './units/actor';
 import { loadUnitAssets, unitAssetsIfLoaded } from './units/assets';
@@ -104,6 +104,7 @@ import {
   arrowSign,
   hopTimingFor,
   indexHighlights,
+  shotLaneEnds,
   isHopMove,
   makeRng,
   mixRgb,
@@ -139,6 +140,7 @@ import {
   releaseAfterUpload,
 } from './textures';
 import { DOT_WHITEN, FRAME_REGULAR, MARKER_QUAD, frameFit, frameStyleFor } from './arena';
+import { MOVE_TRAIL } from './moveStyle';
 import type { FrameStyle } from './arena';
 import { canvasStats, getFallbackReason, glIdentity, releaseCanvas } from './diag';
 import type { ProgramDiag, RenderDiagnostics } from './diag';
@@ -395,6 +397,10 @@ const STORM_TILE_STRENGTH = 0.55;
 const WASTE_TILE = hexToRgb(WASTE_COLORS.tile);
 const SMOKE_GREEN = 0x1f4a14;
 const SMOKE_CURSE = 0x2e1240;
+/** Signature dust colours: forge soot (Hammont), frost mist (Glacia, Rampid), bog spores (Venoa). */
+const SOOT = 0x3a1c0e;
+const FROST_MIST = 0xd6e8ff;
+const BOG_SPORE = 0x56702a;
 const WASTE_DIE_MS = 560;
 /** Rakaeli: dark smoke / pale ash dust, feather cadence (ms) while transformed / in base form. */
 const SMOKE_RAK = 0x2a0a18;
@@ -1716,7 +1722,9 @@ export class BoardView implements IBoardView {
     const charge = ch === 'marki' && dist >= 2;
     const witch = ch === 'brutile';
     // Base-form Rakaeli only sheds ash feathers (no ribbon); transformed he leaves a crimson ribbon.
-    const trail = (jump && rk !== 'ash') || chain || witch;
+    // Every other slider leaves its signature ribbon (render/moveStyle.ts).
+    const sigTrail = !jump && !chain && !witch && !rk ? MOVE_TRAIL[ch] : undefined;
+    const trail = (jump && rk !== 'ash') || chain || witch || !!sigTrail;
     const p0 = mover.root.position;
     if (rk === 'awake') {
       // Dark flame flaring under him as he takes off + a crimson glint.
@@ -1739,11 +1747,14 @@ export class BoardView implements IBoardView {
       // Brutile: a green hex glint and a puff of curse smoke where she lifts off.
       this.strike.glint(p0.x, 0.75, p0.z, 0.85, fx.primary, 300, now);
       this.dust.ring(p0.x, TILE_TOP + 0.05, p0.z, 7, 0.9, 0.42, 0.6, SMOKE_CURSE, 0.5);
+    } else {
+      this.takeoffFx(ch, p0, jump, now);
     }
     if (trail) {
       this.camera.getWorldDirection(this.camDir);
       if (witch) this.strike.trailStart(fx.primary, fx.core, 0.36, 340, dirX, dirZ, this.camDir);
       else if (rk === 'awake') this.strike.trailStart(RAKAELI_AWAKE_FX.primary, '#FF9A7A', 0.3, 360, dirX, dirZ, this.camDir);
+      else if (sigTrail) this.strike.trailStart(fx.primary, fx.core, sigTrail.width, sigTrail.life, dirX, dirZ, this.camDir);
       else this.strike.trailStart(jump ? fx.primary : '#D04BFF', jump ? fx.core : '#FFD6FA', jump ? 0.34 : 0.42, jump ? 300 : 260, dirX, dirZ, this.camDir);
     }
 
@@ -2188,10 +2199,42 @@ export class BoardView implements IBoardView {
 
   setHighlights(h: BoardHighlights): void {
     if (this.disposed) return;
+    const prevSel = this.hi.selected;
     this.highlights = h;
     this.hi = indexHighlights(h);
     this.applyHighlights();
+    if (this.hi.selected >= 0 && this.hi.selected !== prevSel && !this.anim) this.selectFx(h);
     this.requestRender();
+  }
+
+  /**
+   * Signature burst when a piece is newly selected (own, or an enemy's reach preview): a rune sigil
+   * in its colours under the coin, a glint and a few sparks (more with its grade). Venoa's arrows
+   * also sweep each shot lane once, in the tone's shot colour. One-shot pool effects only.
+   */
+  private selectFx(h: BoardHighlights): void {
+    const k = this.hi.selected;
+    let v: PieceVisual | undefined;
+    for (const x of this.visuals.values()) if (posKey(x.piece.pos) === k) v = x;
+    if (!v) return;
+    const now = performance.now();
+    const p = v.piece;
+    const fx = rakaeliStyle(p) === 'awake' ? RAKAELI_AWAKE_FX : CHARACTER_FX[p.character];
+    const x = cellX(p.pos.c);
+    const z = cellZ(p.pos.r);
+    this.strike.ground(1, GROUND_MODE.sigil, x, TILE_TOP + 0.012, z, 1.12, fx.primary, fx.secondary, 460, now);
+    this.strike.glint(x, 0.95, z, 0.7 + 0.08 * p.level, fx.primary, 300, now);
+    if (!this.lowPower) this.sparks.burst(x, 0.4, z, 4 + p.level * 3, 1.4, fx.primary, now % 97);
+    // Venoa: an arrow sweeps each lane to its last square (shot targets included).
+    const lanes = shotLaneEnds(p.pos, [...(h.shotRange ?? []), ...(h.shots ?? [])]);
+    if (lanes.length && !this.reducedMotion) {
+      const col = h.tone === 'enemy' ? BOARD_COLORS.shotEnemy : BOARD_COLORS.shotOwn;
+      for (const end of lanes) {
+        const dx = cellX(end.c) - x;
+        const dz = cellZ(end.r) - z;
+        for (const life of [0.3, 0.34, 0.38]) this.sparks.streak(x, 0.5, z, dx / life, 0, dz / life, life, col, 0);
+      }
+    }
   }
 
   onCellClick(cb: (pos: Pos) => void): void {
@@ -3467,13 +3510,15 @@ export class BoardView implements IBoardView {
     if (!a.landed && t >= a.moveDur) {
       a.landed = true;
       const fx = a.rk === 'awake' ? RAKAELI_AWAKE_FX : CHARACTER_FX[a.mover.piece.character];
-      this.startLandFx(a.strikeAt, a.jump ? fx.primary : TEAM_COLORS[a.mover.piece.owner].glow, now);
+      // The landing ring is the mover's own colour (its signature), not a team tint.
+      this.startLandFx(a.strikeAt, fx.primary, now);
       const big = a.jump || a.charge;
       const dustCol = a.rk === 'awake' ? SMOKE_RAK : a.rk === 'ash' ? ASH_DUST : DUST;
       this.dust.ring(a.strikeAt.x, TILE_TOP + 0.04, a.strikeAt.z, a.jump ? 12 : big ? 10 : 6, a.jump ? 1.8 : big ? 1.5 : 1.0, big ? 0.55 : 0.38, 0.6, dustCol, k);
       if (a.trail) this.strike.trailEnd();
       if (a.rk) this.rakaeliLanding(a, now);
       else if (a.jump) this.strike.ground(1, GROUND_MODE.ring, a.strikeAt.x, TILE_TOP + 0.012, a.strikeAt.z, 0.95, fx.secondary, fx.core, 380, now);
+      else if (!a.capture && !a.chain) this.landingFx(a.mover.piece.character, a.strikeAt, now);
       if (a.mover.piece.character === 'brutile' && !a.capture) {
         this.strike.ground(1, GROUND_MODE.ring, a.strikeAt.x, TILE_TOP + 0.012, a.strikeAt.z, 0.8, fx.primary, fx.core, 380, now);
         this.sparks.burst(a.strikeAt.x, 0.3, a.strikeAt.z, 8, 1.8, fx.primary, now % 97);
@@ -3693,6 +3738,60 @@ export class BoardView implements IBoardView {
         shake = this.reducedMotion ? 0.5 : 1.3;
         flash = 0.45;
         break;
+      case 'hammont': {
+        // Hammer crush: a forge-hot crater cracking out, molten sparks flung up, soot, a heavy shake.
+        this.strike.ground(0, GROUND_MODE.crack, at.x, gy, at.z, 1.7, fx.primary, fx.secondary, 820, now);
+        this.strike.ground(1, GROUND_MODE.ring, at.x, gy, at.z, 1.35, fx.core, fx.primary, 460, now);
+        for (let i = 0; i < 12; i++) {
+          const ang = i * 0.52 + seed;
+          this.sparks.streak(at.x, 0.2, at.z, Math.cos(ang) * 1.9, 2.6 + (i % 3) * 0.8, Math.sin(ang) * 1.9, 0.55, i % 2 ? fx.primary : fx.core, 0.7);
+        }
+        this.sparks.burst(at.x, 0.6, at.z, 18 + mp.level * 3, 3.4, fx.primary, seed);
+        this.dust.ring(at.x, TILE_TOP + 0.06, at.z, 16, 2.6, 0.7, 0.9, SOOT, 0.3);
+        if (a.captured) (a.captured.tokenMat.uniforms.uEdge.value as THREE.Color).set(fx.primary);
+        shake = this.reducedMotion ? 0.6 : 2.8;
+        shakeMs = 280;
+        flash = 0.65;
+        break;
+      }
+      case 'venoa': {
+        // Poison arrow: a venom ring and splash where it lands, spores and lime drops flung along
+        // the arrow's flight (from her square to the victim), the victim melts on a lime edge.
+        const fdx = at.x - a.from.x;
+        const fdz = at.z - a.from.z;
+        const fl = Math.hypot(fdx, fdz) || 1;
+        const ux = fdx / fl;
+        const uz = fdz / fl;
+        this.strike.ground(0, GROUND_MODE.ring, at.x, gy, at.z, 1.15, fx.primary, fx.core, 560, now);
+        this.strike.ground(1, GROUND_MODE.flame, at.x, gy, at.z, 0.85, fx.primary, fx.secondary, 640, now);
+        for (let i = 0; i < 9; i++) {
+          const spread = (i - 4) * 0.42;
+          this.sparks.streak(at.x, 0.35, at.z, ux * 2.2 + uz * spread, 1.2 + (i % 3) * 0.4, uz * 2.2 - ux * spread, 0.45, i % 3 ? fx.primary : fx.core, 0.9);
+        }
+        this.sparks.burst(at.x, 0.6, at.z, 14 + mp.level * 3, 3.0, fx.primary, seed);
+        this.dust.ring(at.x, TILE_TOP + 0.08, at.z, 12, 1.4, 0.55, 1.0, BOG_SPORE, 0.4);
+        this.dust.ring(at.x, TILE_TOP + 0.12, at.z, 8, 0.9, 0.45, 1.1, SMOKE_GREEN, 1.2);
+        if (a.captured) (a.captured.tokenMat.uniforms.uEdge.value as THREE.Color).set(fx.primary);
+        shake = this.reducedMotion ? 0.4 : 1.1;
+        flash = 0.5;
+        break;
+      }
+      case 'glacia': {
+        // Shatter: the victim freezes and breaks: a frost ring and ice cracks, crystal shards flung
+        // low, frost mist and a cold white flash.
+        this.strike.ground(0, GROUND_MODE.crack, at.x, gy, at.z, 1.4, fx.secondary, fx.primary, 760, now);
+        this.strike.ground(1, GROUND_MODE.ring, at.x, gy, at.z, 1.2, fx.core, fx.primary, 520, now);
+        for (let i = 0; i < 14; i++) {
+          const ang = i * 0.449 + seed;
+          this.sparks.streak(at.x, 0.3, at.z, Math.cos(ang) * 2.3, 1.1 + (i % 4) * 0.45, Math.sin(ang) * 2.3, 0.5, i % 2 ? fx.core : fx.primary, 1.1);
+        }
+        this.sparks.burst(at.x, 0.75, at.z, 16 + mp.level * 3, 3.2, fx.secondary, seed);
+        this.dust.ring(at.x, TILE_TOP + 0.08, at.z, 12, 1.5, 0.6, 0.9, FROST_MIST, 0.2);
+        if (a.captured) (a.captured.tokenMat.uniforms.uEdge.value as THREE.Color).set(fx.primary);
+        shake = this.reducedMotion ? 0.5 : 1.4;
+        flash = 0.7;
+        break;
+      }
     }
     this.startCaptureFx(at, col, flash, now, shake, shakeMs);
     const act = a.captured?.actor;
@@ -3753,6 +3852,91 @@ export class BoardView implements IBoardView {
       a.nextDust = tk + 70;
       const ang = tk * 0.05;
       this.sparks.streak(p.x + Math.cos(ang) * 0.22, 0.2, p.z + Math.sin(ang) * 0.22, Math.cos(ang) * 0.5, 1.2, Math.sin(ang) * 0.5, 0.4, fx.primary, 0);
+    }
+  }
+
+  /**
+   * Signature take-off of a plain move (characters without a bespoke one above): a short burst in
+   * the character's colours where it lifts off. One-shot pool effects, nothing per frame.
+   */
+  private takeoffFx(ch: CharacterId, p0: THREE.Vector3, jump: boolean, now: number): void {
+    const fx = CHARACTER_FX[ch];
+    const gy = TILE_TOP + 0.012;
+    switch (ch) {
+      case 'walk':
+      case 'larhen':
+        // A leap: a dust kick and a glint in the hero colour.
+        this.dust.ring(p0.x, TILE_TOP + 0.04, p0.z, 8, 1.2, 0.42, 0.55, DUST, 0.3);
+        this.strike.glint(p0.x, 0.8, p0.z, 0.75, fx.primary, 260, now);
+        break;
+      case 'insaner':
+        this.strike.glint(p0.x, 0.85, p0.z, 0.8, fx.primary, 260, now);
+        this.sparks.burst(p0.x, 0.45, p0.z, 6, 1.6, fx.secondary, now % 97);
+        break;
+      case 'marki':
+        this.dust.ring(p0.x, TILE_TOP + 0.04, p0.z, 6, 0.9, 0.4, 0.5, DUST, 0.2);
+        break;
+      case 'michelle':
+        this.strike.glint(p0.x, 0.75, p0.z, 0.7, fx.primary, 300, now);
+        this.dust.ring(p0.x, TILE_TOP + 0.05, p0.z, 6, 0.8, 0.38, 0.6, SMOKE_CURSE, 0.4);
+        break;
+      case 'picker':
+      case 'verish':
+        this.strike.glint(p0.x, 0.7, p0.z, 0.7, fx.primary, 240, now);
+        break;
+      case 'rampid':
+        this.dust.ring(p0.x, TILE_TOP + 0.05, p0.z, 8, 1.0, 0.4, 0.6, FROST_MIST, 0.3);
+        this.strike.glint(p0.x, 0.7, p0.z, 0.7, fx.core, 260, now);
+        break;
+      case 'volkonov':
+        this.strike.ground(1, GROUND_MODE.sigil, p0.x, gy, p0.z, 0.7, fx.primary, fx.secondary, 420, now);
+        this.sparks.burst(p0.x, 0.5, p0.z, 6, 1.4, fx.secondary, now % 97);
+        break;
+      case 'midos':
+        this.dust.ring(p0.x, TILE_TOP + 0.06, p0.z, 8, 0.9, 0.46, 0.7, SMOKE_CURSE, 0.6);
+        this.strike.glint(p0.x, 0.8, p0.z, 0.75, fx.core, 280, now);
+        break;
+      case 'hammont':
+        this.dust.ring(p0.x, TILE_TOP + 0.04, p0.z, 8, 1.1, 0.46, 0.6, SOOT, 0.2);
+        for (let i = 0; i < 4; i++) {
+          const ang = i * 1.57 + (now % 97);
+          this.sparks.streak(p0.x, 0.2, p0.z, Math.cos(ang) * 0.6, 1.8 + i * 0.3, Math.sin(ang) * 0.6, 0.35, fx.primary, 0.8);
+        }
+        break;
+      case 'venoa':
+        this.dust.ring(p0.x, TILE_TOP + 0.05, p0.z, 6, 0.8, 0.36, 0.6, BOG_SPORE, 0.4);
+        this.strike.glint(p0.x, 0.7, p0.z, 0.65, fx.primary, 240, now);
+        break;
+      case 'glacia':
+        this.strike.ground(1, GROUND_MODE.ring, p0.x, gy, p0.z, 0.75, fx.core, fx.primary, 380, now);
+        this.dust.ring(p0.x, TILE_TOP + 0.05, p0.z, 8, 1.0, 0.42, 0.7, FROST_MIST, 0.2);
+        break;
+      default:
+        if (jump) this.dust.ring(p0.x, TILE_TOP + 0.04, p0.z, 8, 1.2, 0.42, 0.55, DUST, 0.3);
+    }
+  }
+
+  /** Signature touch-down of a slide that captured nothing: a small burst in the character's colour. */
+  private landingFx(ch: CharacterId, at: THREE.Vector3, now: number): void {
+    const fx = CHARACTER_FX[ch];
+    const seed = now % 97;
+    switch (ch) {
+      case 'glacia':
+      case 'rampid':
+        this.dust.ring(at.x, TILE_TOP + 0.05, at.z, 8, 1.1, 0.42, 0.7, FROST_MIST, seed);
+        this.sparks.burst(at.x, 0.35, at.z, 8, 1.6, fx.core, seed);
+        break;
+      case 'hammont':
+        this.strike.ground(1, GROUND_MODE.crack, at.x, TILE_TOP + 0.012, at.z, 0.9, fx.primary, fx.secondary, 420, now);
+        this.sparks.burst(at.x, 0.3, at.z, 8, 1.8, fx.primary, seed);
+        break;
+      case 'midos':
+        this.dust.ring(at.x, TILE_TOP + 0.06, at.z, 8, 0.9, 0.46, 0.7, SMOKE_CURSE, seed);
+        break;
+      case 'brutile':
+        break; // her own green ring below
+      default:
+        this.sparks.burst(at.x, 0.35, at.z, 6, 1.4, fx.primary, seed);
     }
   }
 

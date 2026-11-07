@@ -82,13 +82,13 @@ describe('Venoa arrow range (getShotRange)', () => {
     );
   });
 
-  it('the first piece blocks the lane; the arrow flies over the square right in front of her', () => {
-    // Enemy 2 ahead: it is the target, nothing past it is in range.
-    expect(range([[0, 'venoa', 1, 4, 4], [1, 'sad', 1, 6, 4]])).toEqual([]);
+  it('pieces never cut the range: occupied squares are left out, the squares past them stay', () => {
+    // Enemy 2 ahead: it is a shot target, the square past it is still in range.
+    expect(range([[0, 'venoa', 1, 4, 4], [1, 'sad', 1, 6, 4]])).toEqual(keys([[7, 4]]));
     // Enemy 3 ahead: the square before it is in range (and the enemy is a shot target).
     expect(range([[0, 'venoa', 1, 4, 4], [1, 'sad', 1, 7, 4]])).toEqual(keys([[6, 4]]));
-    // Any piece right in front of her blocks the whole lane.
-    expect(range([[0, 'venoa', 1, 4, 4], [0, 'sad', 1, 5, 4], [1, 'walk', 1, 0, 0]])).toEqual([]);
+    // A piece right in front of her does not block the lane.
+    expect(range([[0, 'venoa', 1, 4, 4], [0, 'sad', 1, 5, 4], [1, 'walk', 1, 0, 0]])).toEqual(keys([[6, 4], [7, 4]]));
   });
 
   it('an enemy Venoa aims down the board', () => {
@@ -111,7 +111,7 @@ describe('Venoa arrow range (getShotRange)', () => {
     expect(getShotRange(s, s.pieces[1])).toEqual([]);
   });
 
-  it('matches the shot rule: every shot flies over range squares only, and range squares are empty', () => {
+  it('matches the shot rule: every lane square 2..max is either in range (empty) or occupied, and every enemy there is a shot', () => {
     const rnd = rngFrom(20261107);
     const others = CHARACTER_IDS.filter((c) => c !== 'venoa');
     let shots = 0;
@@ -141,12 +141,20 @@ describe('Venoa arrow range (getShotRange)', () => {
       const inRange = new Set(getShotRange(s, v).map(key));
       lanes += inRange.size;
       for (const k of inRange) expect(s.pieces.some((p) => key(p.pos) === k)).toBe(false);
-      for (const m of getTargetsForPiece(s, v).filter((x) => x.shot)) {
-        const dr = Math.sign(m.to.r - m.from.r);
-        const dc = Math.sign(m.to.c - m.from.c);
-        const d = Math.max(Math.abs(m.to.r - m.from.r), Math.abs(m.to.c - m.from.c));
-        shots++;
-        for (let k = 2; k < d; k++) expect(inRange.has(key({ r: m.from.r + dr * k, c: m.from.c + dc * k }))).toBe(true);
+      const shotKeys = new Set(getTargetsForPiece(s, v).filter((x) => x.shot).map((x) => key(x.to)));
+      shots += shotKeys.size;
+      // Walk her lanes independently: forward, plus both forward diagonals from 2성; 2..max squares.
+      const f = v.owner === 0 ? 1 : -1;
+      const max = [0, 3, 3, 4][v.level];
+      for (const dc of v.level >= 2 ? [0, -1, 1] : [0]) {
+        for (let k = 2; k <= max; k++) {
+          const q = { r: v.pos.r + f * k, c: v.pos.c + dc * k };
+          if (q.r < 0 || q.r > 9 || q.c < 0 || q.c > 9) break;
+          if (s.storm && (q.c < s.storm || q.c > 9 - s.storm)) break;
+          const at = s.pieces.find((p) => key(p.pos) === key(q));
+          expect(inRange.has(key(q))).toBe(!at);
+          expect(shotKeys.has(key(q))).toBe(!!at && at.owner !== v.owner);
+        }
       }
     }
     // The sample really exercises both (not a vacuous pass).

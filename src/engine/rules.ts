@@ -301,7 +301,7 @@ export function getTargetsForPiece(state: GameState, piece: Piece): Move[] {
 
 /**
  * Venoa's arrow range (board overlay): the empty squares her arrows fly over, 2..max squares along
- * each shot lane until the edge, the storm or the first piece (see `venoaShotRange`). [] for any
+ * each shot lane until the edge or the storm; pieces do not block it (see `venoaShotRange`). [] for any
  * other piece (an Insaner that absorbed her only steps) and while she is stunned.
  */
 export function getShotRange(state: GameState, piece: Piece): Pos[] {

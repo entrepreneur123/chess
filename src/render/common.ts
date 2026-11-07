@@ -331,3 +331,25 @@ export function shakeOffset(k: number, axis: 0 | 1): number {
   const phase = k * Math.PI * 2 * 3;
   return ANIM.shakePx * decay * (axis === 0 ? Math.sin(phase) : Math.cos(phase * 1.3 + 0.7));
 }
+
+/**
+ * Venoa's shot lanes as seen from `from`: for each straight direction that has squares in `squares`
+ * (her arrow range plus her targets), the farthest of them. Boards sweep an arrow to each end.
+ */
+export function shotLaneEnds(from: Pos, squares: readonly Pos[]): Pos[] {
+  const far = new Map<number, Pos>();
+  const dist = new Map<number, number>();
+  for (const q of squares) {
+    const dr = q.r - from.r;
+    const dc = q.c - from.c;
+    // Only straight lanes (orthogonal or diagonal) count.
+    if ((dr === 0 && dc === 0) || (dr !== 0 && dc !== 0 && Math.abs(dr) !== Math.abs(dc))) continue;
+    const key = (Math.sign(dr) + 1) * 3 + (Math.sign(dc) + 1);
+    const d = Math.max(Math.abs(dr), Math.abs(dc));
+    if (d > (dist.get(key) ?? 0)) {
+      dist.set(key, d);
+      far.set(key, q);
+    }
+  }
+  return [...far.values()];
+}

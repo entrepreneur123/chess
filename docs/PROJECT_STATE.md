@@ -185,9 +185,13 @@ quoting a number.
     knocked one square on in the same direction (`Move.push`). If that square is the edge, the storm,
     any piece or wasteland it is crushed instead (a normal capture, `Move.crush`). 3성 (and a landing
     on a trap of his side at any grade) stuns it for its owner's next turn (`OFF_TURN_STUN` = 1).
-  - **베노아 독화살:** along each shot lane the FIRST piece is shot if it is an enemy 2..max squares
-    away; she stays put (`Move.shot`). Pieces block the arrow; wasteland and traps do not. Any Venoa
-    target at Chebyshev distance >= 2 is a shot (a buffed 2-square capture is a shot too).
+  - **베노아 독화살:** along each shot lane EVERY enemy 2..max squares away can be shot; she stays put
+    (`Move.shot`). Since 2026-11-07 (owner: "범위 안의 적은 항상 저격 가능하게") the arrow flies over
+    pieces of either side; only the edge and the storm end a lane (wasteland and traps never did).
+    Any Venoa target at Chebyshev distance >= 2 is a shot (a buffed 2-square capture is a shot too).
+    Balance after the change (same harness, 40 games): Venoa team vs Walk + Sad + Marki 1성 0.76 /
+    3성 0.43 (was 0.66 / 0.46); Insaner's score vs the Venoa team 2성 0.90 / 3성 0.86 (was 0.86 /
+    0.96): Insaner stays on top.
   - **글라시아 빙판 활주:** she must glide until the next square is the edge, the storm or a piece
     (one landing per direction; wasteland ends it ON the square). She never captures by gliding;
     the melody treats the glide as no reach (a buffed Glacia gets a plain 1-square slide).
@@ -205,12 +209,27 @@ quoting a number.
     Diagrams show Venoa's arrow range (`is-shot`) and Glacia's glide lanes (`is-glide`).
   - **Venoa's arrow range on the board (2026-11-07, owner: "사격 가능 범위 전체를 다 보여주고, 아군/적군마다
     다른 색"):** selecting her (mine, or tapping the enemy's) shows every empty square her arrows fly
-    over (`getShotRange`: 2..max along each lane, cut by the edge, the storm or the first piece, the
-    same walk as the shot rule) as a tinted tile with a small sight (`BoardHighlights.shotRange`), and
+    over (`getShotRange`: the empty squares 2..max along each lane, cut only by the edge and the
+    storm, the same walk as the shot rule) as a tinted tile with a small sight (`BoardHighlights.shotRange`), and
     her shot targets as a crosshair reticle instead of the red capture ring (`BoardHighlights.shots`,
     a subset of `captures`). Colours by whose Venoa aims: mine venom lime `#C6F23A`, the enemy's
     magenta `#FF3DCB` (`BOARD_COLORS.shotOwn` / `shotEnemy`); the enemy's diagram shot cells are
     magenta too. Both boards (WebGL / 2D); `lab.shots('own' | 'enemy')` in the board lab.
+- **Signature FX for every character (2026-11-07, owner: "고급스러운 이펙트 · 고퀄리티 효과 전부 추가,
+  모든 캐릭터"):** both boards, all one-shot pool effects (no new loop, nothing per frame at idle):
+  - captures: every character has its own hit on both boards (WebGL `impactFx` switch; Canvas2D
+    `drawFx` switch built from the `fx2d*` painters at the end of Board2DView.ts). New: Hammont forge
+    crush, Venoa venom splash along the arrow's flight, Glacia ice shatter, and the 2D versions of
+    the other eleven. 2D capture shake per attacker: `CAPTURE_SHAKE_2D`.
+  - moves: a take-off burst (`takeoffFx`), a ribbon trail in the character's colours for every
+    slider (`render/moveStyle.ts` MOVE_TRAIL; leapers, Brutile and transformed Rakaeli keep their own,
+    Picker / Verish keep their per-square hop rings), a landing ring in the mover's own colour (was
+    the team tint; the 2D board also showed Walk's colour for every leap) and a small landing burst
+    (`landingFx`).
+  - selection: a newly selected piece (own or a tapped enemy) gets a rune sigil in its colours, a
+    glint and sparks (`selectFx` / `startSelectFx`); Venoa's arrows sweep each lane once in the
+    tone's shot colour (`shotLaneEnds`). Reduced motion skips the sweep; 절전 모드 skips the sparks.
+  - Lab: `lab.fxScene(ch, 'capture' | 'move' | 'select', level)` plays any character's FX.
 - **Owner-brief interpretations (decided by the lead on 2026-11-05; the owner asked for no more
   questions on these):** Larhen's back diagonals arrive at 2성 (the brief said "일성에서", which would
   make 1성 and 2성 identical); his 3성 keeps the four diagonals (an H); the melody buffs the other
@@ -388,6 +407,12 @@ legendary.
   - Insaner head-to-head (Insaner + Rampid + Marki vs X + Rampid + Marki, 40 games, Insaner's
     score): 3성 vs Hammont 0.86, Venoa 0.96, Glacia 0.94, Midos 0.82, Brutile 0.70; 2성 vs Venoa
     0.86, Glacia 0.91, Midos 0.72, Brutile 0.99. Owner rule: Insaner must stay the strongest.
+- **Voices are switched OFF (2026-11-07, owner: the AI voices are too poor; concepts per character
+  will come later):** `VOICE_LINES_READY = false` in `src/audio/voice.ts` silences every line, skips
+  downloading them and hides the 캐릭터 음성 switch; character SFX keep playing and cut-in captions
+  still show the written lines. Re-recording brief with each character's current concept and lines
+  and an empty owner-brief field: `docs/brand/audio/VOICE_REDO.md`. Ship = new clips + manifest,
+  then flip the flag.
 - **Audio budget:** raised to 3.25 MiB for the trio; 266,921 bytes of headroom (see
   `tests/voice.test.ts`).
 - **An `immobile` loss shows no on-board callout:** the result appears after about 0.65 s with "더 이상 움직일 수 없어 패배".

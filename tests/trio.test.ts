@@ -136,7 +136,7 @@ describe('베노아 Venoa: poison arrows', () => {
     expect(isDirectional({ character: 'venoa', level: 1 })).toBe(true);
   });
 
-  it('a shot captures without moving; the arrow is blocked by any piece in between', () => {
+  it('a shot captures without moving; the arrow flies over any piece in between (owner rule 2026-11-07)', () => {
     const s = makeState([[0, 'venoa', 1, 4, 4], [1, 'walk', 1, 6, 4], [1, 'sad', 1, 9, 9]]);
     const m = move(s, V, 6, 4);
     expect(m.shot).toBe(true);
@@ -145,8 +145,19 @@ describe('베노아 Venoa: poison arrows', () => {
     expect(pos(t, V)).toEqual({ r: 4, c: 4 });
     expect(t.pieces.some((p) => p.id === 'p1-walk')).toBe(false);
     expect(t.history.at(-1)).toMatchObject({ move: { shot: true, captureId: 'p1-walk' } });
-    const blocked = makeState([[0, 'venoa', 1, 4, 4], [0, 'sad', 1, 5, 4], [1, 'walk', 1, 6, 4], [1, 'sad', 1, 9, 9]]);
-    expect(reach(blocked, V)).not.toContain('6,4');
+    // An ally right in front of her: the arrow flies over it.
+    const overAlly = makeState([[0, 'venoa', 1, 4, 4], [0, 'sad', 1, 5, 4], [1, 'walk', 1, 6, 4], [1, 'sad', 1, 9, 9]]);
+    expect(reach(overAlly, V)).toContain('6,4');
+    expect(move(overAlly, V, 6, 4).shot).toBe(true);
+    // Two enemies on one lane (3성 diagonal, 2 and 4 squares away): both can be shot.
+    const two = makeState([[0, 'venoa', 3, 2, 2], [1, 'walk', 1, 4, 4], [1, 'sad', 1, 6, 6], [1, 'marki', 1, 9, 0]]);
+    expect(reach(two, V)).toEqual(expect.arrayContaining(['4,4', '6,6']));
+    const t2 = applyMove(two, move(two, V, 6, 6));
+    expect(t2.pieces.some((p) => p.id === 'p1-sad')).toBe(false);
+    expect(t2.pieces.some((p) => p.id === 'p1-walk')).toBe(true); // only the chosen target goes
+    // Allies are never shot, and the edge still ends a lane.
+    const ally = makeState([[0, 'venoa', 1, 4, 4], [0, 'sad', 1, 6, 4], [1, 'walk', 1, 9, 9]]);
+    expect(reach(ally, V)).not.toContain('6,4');
   });
 
   it('an adjacent enemy is taken by stepping onto it (not a shot)', () => {
