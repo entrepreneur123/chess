@@ -297,8 +297,8 @@ describe('music module', () => {
     const ctx = new FakeCtx();
     const sr = 48000;
     // A fake decoded file: [0.512 s pad][loop][0.512 s pad] of a ramp signal.
-    const start = 24576;
-    const len = 3291136; // moonrune
+    const start = MUSIC_LOOPS.moonrune.start;
+    const len = MUSIC_LOOPS.moonrune.length; // whatever the current moonrune loop is (docs/brand/audio/bgm/loops.json)
     const dec = new FakeBuffer(2, start + len + start, sr);
     for (let c = 0; c < 2; c++) {
       const d = dec.getChannelData(c);

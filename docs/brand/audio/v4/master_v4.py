@@ -40,6 +40,7 @@ MAX_LIMIT_DB = 4.0        # most gain reduction the limiter may do on a sustaine
 TRANSIENT_LIMIT_DB = 15.0  # ... and on consonant / plosive spikes (total time over the ceiling <= TRANSIENT_MS)
 TRANSIENT_MS = 60.0
 BITRATE = os.environ.get("VO_BITRATE", "64k")
+OUT_SR = 32000  # shipped sample rate (sfx-v2/master_sfx.py sets 48000)
 QUICK = {"select", "move", "capture", "skill", "chain", "trap-set", "trap-sprung", "hop-multi",
          "awake-select", "awake-move", "awake-capture"}
 
@@ -148,7 +149,11 @@ def master(x: np.ndarray, sr: int, char: str, fx: str, out_path: str) -> dict:
     z = decode(tmp_fx, sr)
     m0 = measure(z, sr)
     tp0 = true_peak_db(z, sr)
-    gain = TARGET_LUFS - m0["lufs"]
+    if np.isfinite(m0["lufs"]):
+        gain = TARGET_LUFS - m0["lufs"]
+    else:
+        # Too short or too sparse for a gated integrated loudness (some effects): peak-normalise instead.
+        gain = (PRE_CEILING_DB - 1.0) - tp0
     # How much the limiter would have to take off the loudest peak, and for how long the signal sits
     # above the ceiling at that gain. In these takes the overs are consonant / plosive spikes of a few
     # ms (measured 5-30 ms per clip in total), which a 1.5 ms look-ahead limiter rounds off without an
@@ -165,12 +170,12 @@ def master(x: np.ndarray, sr: int, char: str, fx: str, out_path: str) -> dict:
     def encode(g: float, c: float, attempt: int) -> dict:
         af = (f"volume={g:.2f}dB,"
               f"alimiter=limit={10 ** (c / 20):.4f}:level=false:attack=1.5:release=60,"
-              f"aresample=32000")
+              f"aresample={OUT_SR}")
         run(["ffmpeg", "-y", "-v", "error", "-i", tmp_fx, "-af", af, "-ac", "1",
              "-c:a", "aac", "-b:a", BITRATE, "-movflags", "+faststart", out_path])
-        y = decode(out_path, 32000)
-        m = measure(y, 32000)
-        return {**m, "tp_db": round(true_peak_db(y, 32000), 2), "gain_db": round(g, 2),
+        y = decode(out_path, OUT_SR)
+        m = measure(y, OUT_SR)
+        return {**m, "tp_db": round(true_peak_db(y, OUT_SR), 2), "gain_db": round(g, 2),
                 "limit_db": round(max(gr, 0.0), 2), "over_ms": round(over_ms, 1), "quieter": bool(gr > allowed),
                 "ceiling_db": round(c, 2), "attempts": attempt, "size": os.path.getsize(out_path)}
 
@@ -181,12 +186,13 @@ def master(x: np.ndarray, sr: int, char: str, fx: str, out_path: str) -> dict:
     for attempt in range(1, 9):
         result = encode(gain, ceiling_db, attempt)
         tp_ok = result["tp_db"] <= TP_LIMIT_DB + 0.2
-        if tp_ok and (best is None or abs(result["lufs"] - TARGET_LUFS) < abs(best["lufs"] - TARGET_LUFS)):
+        if tp_ok and (best is None or not np.isfinite(result["lufs"])
+                      or abs(result["lufs"] - TARGET_LUFS) < abs(best["lufs"] - TARGET_LUFS)):
             best = result
         if not tp_ok:
             ceiling_db -= (result["tp_db"] - TP_LIMIT_DB) + 0.1
             continue
-        if gr <= allowed and abs(result["lufs"] - TARGET_LUFS) > 0.4:
+        if gr <= allowed and np.isfinite(result["lufs"]) and abs(result["lufs"] - TARGET_LUFS) > 0.4:
             gain += TARGET_LUFS - result["lufs"]
             gr = (tp0 + gain) - PRE_CEILING_DB
             continue

@@ -62,7 +62,10 @@ quoting a number.
   - art: `docs/brand/illust/` (Magic Patterns `generate_image`, then `process-illust.py`);
   - voices: `docs/brand/audio/` (ElevenLabs designed voices + `eleven_v4` renders through the
     connector, `v4/master_v4.py`; the Qwen3-TTS scripts there are history);
-  - BGM: `docs/brand/audio/bgm/` (FluidSynth scores, `audit_bgm.py`).
+  - SFX: `docs/brand/audio/sfx-v2/` (ElevenLabs `eleven_text_to_sound_v2`, `master_sfx.py`;
+    `gen_sfx.py` is history);
+  - BGM: `docs/brand/audio/bgm-v2/make_loops.py` (ElevenLabs Music renders cut into seamless loops;
+    the FluidSynth scores in `bgm/` are history; `bgm/measure_bgm.py` still does the seam QA).
 - **Design docs:** `docs/design/`: progression, Michelle/Picker, Rakaeli, v6 UI, arena style.
   Their "(lead default)" items are unconfirmed choices.
 
@@ -448,16 +451,23 @@ legendary.
   - Insaner head-to-head (Insaner + Rampid + Marki vs X + Rampid + Marki, 40 games, Insaner's
     score): 3성 vs Hammont 0.86, Venoa 0.96, Glacia 0.94, Midos 0.82, Brutile 0.70; 2성 vs Venoa
     0.86, Glacia 0.91, Midos 0.72, Brutile 0.99. Owner rule: Insaner must stay the strongest.
-- **Voices: ElevenLabs cast shipped (2026-11-07 evening; `VOICE_LINES_READY = true`).** The
-  morning's first AI cast was switched off by the owner (too poor); the same day all 172 lines were
-  re-recorded: one voice designed per character (`eleven_ttv_v3`, ids in `lines.json`), every line
-  directed with `eleven_v4` audio tags (`v4/direction.json`), two takes each, mastered by
-  `v4/master_v4.py` (-16 LUFS, true peak ≤ -1.33 dBTP, AAC 64 kb/s). Owner-approved routine for
-  changes: `docs/brand/audio/README.md` "Current cast". Known limits: ElevenLabs refuses child /
-  teen voice descriptions, so Michelle is an airy adult high voice lifted +2 st and Rampid a light
-  adult tenor; sad death-1 sits 1 dB under target; midos move-1 has a single take. Licensing:
-  Creator plan (commercial), `public/audio/LICENSES.md`. Not yet done: listening QA by a person,
-  and the owner's phase 2 (BGM + SFX redo at the same quality).
+- **Audio: ElevenLabs cast, effects and music shipped (2026-11-07; `VOICE_LINES_READY = true`).**
+  Voices: the morning's first AI cast was switched off by the owner (too poor); the same day all 172
+  lines were re-recorded (one voice designed per character, `eleven_ttv_v3`, ids in `lines.json`;
+  every line directed with `eleven_v4` audio tags, `v4/direction.json`; `v4/master_v4.py`). Phase 2
+  the same evening: all 68 effects re-rendered with `eleven_text_to_sound_v2` (`sfx-v2/`) and the
+  seven BGM loops re-made from `eleven_music_v2_5` renders (`bgm-v2/make_loops.py`, loop points in
+  `bgm/loops.json` / `MUSIC_LOOPS`). Routines: `docs/brand/audio/README.md` ("Current cast",
+  "Current effects") and `bgm/README.md` ("Current tracks"). Licensing: Creator plan (commercial),
+  `public/audio/LICENSES.md`. Not yet done: listening QA by a person.
+- **Owner's voice / art revisions, requested 2026-11-07 for the next session (owner: "성우 작업은
+  내일"):** Verish sounds unnatural ("AI slop", odd intonation) → redesign the voice and re-direct
+  her lines; Insaner's "크크크 키홉" is unintelligible → rewrite the line; Walk's illustration is too
+  AI-cartoon / light youth for his shield-soldier voice → redo the art as a tougher, general-like
+  man; Brutile sounds goblin-like, gender-ambiguous and muffled (먹먹) → redesign as a clear, bright
+  witch voice; Rakaeli sounds female → redesign clearly male, and his transformed form must sound
+  demonic (the current layer is too mild → much heavier processing); Hammont's "불은 충분히
+  달궈졌다" still sounds AI → hearty old-craftsman boisterousness, keep the concept.
 - **Audio budget:** raised to 4.25 MiB for the 64 kb/s cast; 464,985 bytes of headroom (see
   `tests/voice.test.ts`).
 - **An `immobile` loss shows no on-board callout:** the result appears after about 0.65 s with "더 이상 움직일 수 없어 패배".

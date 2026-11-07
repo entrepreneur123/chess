@@ -1,5 +1,53 @@
 # GRID CLASH music (BGM)
 
+## Current tracks: ElevenLabs Music (bgm-v2, shipped 2026-11-07)
+
+Seven seamless loops in `public/audio/bgm/<id>.m4a`, one per arena plus the lobby theme, played by
+`src/audio/music.ts` exactly as before (same file layout: 0.512 s guard pad, `loopStart`,
+`loopEnd`, -20 LUFS). They are ElevenLabs Music renders (`eleven_music_v2_5`, instrumental, 100 s,
+two takes per track, 1,500 credits a take, owner's Creator plan: commercial licence) cut into loops
+by `../bgm-v2/make_loops.py`:
+
+1. Beat tracking (librosa, seeded with the prompted tempo), loop candidates from a beat in the first
+   25 s to a beat 60.5-82 s later, a whole number of 4-beat bars apart.
+2. Score: how well the music right after the loop end matches the music right after the loop start
+   (2 s of normalised log-mel + chroma), the bar before each point, and level continuity. The best
+   candidate of either take is shipped.
+3. Exact end sample: the frame-aligned position (loop length a multiple of 1024 samples) whose 40 ms
+   waveform best correlates with the start.
+4. The loop's last 1.5 s are equal-power crossfaded into the bar that leads into the loop start, so
+   the jump continues the waveform; the file is [0.512 s before][loop][0.512 s of the music after
+   the start]; 32 Hz high-pass, -20 LUFS, -1.6 dBFS true-peak ceiling (never engaged: true peaks
+   are -5.8 to -8.5 dBTP), AAC-LC 48 kHz stereo at min(80 kb/s, 5300 kbit / duration).
+5. `loops.json` (this folder) is written by the script; `MUSIC_LOOPS` in `src/audio/music.ts` is
+   synced from it (the `music assets` test checks they match and that the loop is 60-90 s of whole
+   bars at the stored tempo; `bpm` is the tempo that makes the loop exactly `bars` bars).
+
+| Track | Key (prompted) | BPM | Bars / loop | Take (generation id) | Seam score | kb/s | Bytes |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| moonrune | D minor | 83.8 | 22 / 62.997 s | HPqGEvyrMSLj1NamSy8a | 0.892 | 80 | 655,605 |
+| emberforge | C minor | 99.9 | 26 / 62.464 s | nqs4nPFXZsQDQmjKUIMk | 0.562 | 80 | 651,135 |
+| blightmire | F# Phrygian | 90.0 | 24 / 64.000 s | yJKyNmj0A4wrQbhvHFdN | 0.539 | 80 | 669,332 |
+| frostkeep | B minor | 96.0 | 32 / 80.000 s | T3fWPoBTSbkuGiumaEPZ | 0.715 | 65 | 678,700 |
+| madcrown | Bb harmonic minor | 110.1 | 32 / 69.739 s | v6jGibv07voguLheouHu | 0.644 | 74 | 672,299 |
+| apex | E minor / E major | 119.8 | 32 / 64.085 s | sbHdGqL1t2kj92TvJPhC | 0.997 | 80 | 666,341 |
+| lobby | Eb major | 104.0 | 28 / 64.640 s | mboaAaRz8oNBGL7biFft | 0.869 | 80 | 679,401 |
+
+Measured on the decoded files (`measure_bgm.py`, `BGM_WORK` = the script's `--work` dir):
+-20 LUFS, step ratio 0.13-0.46 (the sample step at the jump is smaller than ordinary steps: no
+click), seam residual -12 to -19 dB against the file's own continuation (the previous FluidSynth
+loops were exact repetitions at -189 dB; an AI render cut at a bar line is a musical transition,
+not a repetition). Prompts and generation ids: `../bgm-v2/gens.tsv` and flow `hPMT5V9ngdzZBGXWqnJ2`.
+Known limits: the loop point is a section change rather than a composed return, and the lobby's
+lead-in bar is quieter than the music after the jump (a short dip before the loop restarts).
+
+To regenerate: download the takes as `<id>_<generation id>.mp3`, then
+`python -I ../bgm-v2/make_loops.py --gens ../bgm-v2/gens.tsv --raw <takes> --work <dir>` and sync
+`MUSIC_LOOPS`. Everything below documents the previous FluidSynth pipeline (2026-11-05 →
+2026-11-07): history, nothing shipped comes from it any more.
+
+## Previous pipeline: FluidSynth scores (history)
+
 Seven original, seamless loops in `public/audio/bgm/<id>.m4a`, played by `src/audio/music.ts`:
 one per arena, plus the lobby/home theme `lobby`.
 

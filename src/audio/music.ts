@@ -23,15 +23,15 @@ import { getProfile } from '../meta/profile';
 import { audioOut, getAudioContext, primeAudio } from './sfx';
 import { setVoiceActivityListener } from './voice';
 
-/** Loop points in samples at 48 kHz (the files' rate), from docs/brand/audio/bgm/loops.json. */
+/** Loop points in samples at 48 kHz (the files' rate), from docs/brand/audio/bgm/loops.json (bgm-v2/make_loops.py). */
 export const MUSIC_LOOPS: Readonly<Record<string, { start: number; length: number }>> = {
-  moonrune: { start: 24576, length: 3291136 },
-  emberforge: { start: 24576, length: 3686400 },
+  moonrune: { start: 24576, length: 3023872 },
+  emberforge: { start: 24576, length: 2998272 },
   blightmire: { start: 24576, length: 3072000 },
-  frostkeep: { start: 24576, length: 3359744 },
-  madcrown: { start: 24576, length: 3351552 },
-  apex: { start: 24576, length: 3456000 },
-  lobby: { start: 24576, length: 3545088 },
+  frostkeep: { start: 24576, length: 3840000 },
+  madcrown: { start: 24576, length: 3347456 },
+  apex: { start: 24576, length: 3076096 },
+  lobby: { start: 24576, length: 3102720 },
 };
 export const MUSIC_LOOP_RATE = 48000;
 const LOOPS = MUSIC_LOOPS;

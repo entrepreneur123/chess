@@ -43,6 +43,33 @@ manifest. Everything below this point documents the earlier Qwen3-TTS pipeline (
 2026-11-07): it is history, nothing shipped comes from it any more, and its scripts and `refs/` are
 kept only for reference.
 
+## Current effects: ElevenLabs Sound Effects (sfx-v2, shipped 2026-11-07)
+
+The 68 character / generic effects (`public/audio/sfx/<name>.m4a`, same names and events as before,
+so `write_manifest.py` and `src/audio/voice.ts` needed no change) are ElevenLabs
+`eleven_text_to_sound_v2` renders:
+
+1. **Prompts** — `sfx-v2/prompts.json`: one concrete sound per effect (the gesture the old
+   synthesis aimed at, in the model's own terms: texture, transient, space), requested length
+   0.5-1.8 s, `prompt_influence` 0.55 (0.7 on the four re-renders).
+2. **Render** — one `sfx` node per effect on flow `hPMT5V9ngdzZBGXWqnJ2` (`sfx-v2/nodes.tsv`),
+   run in batches of 20 with two takes each (2-6 credits a take). Takes are downloaded from the
+   signed `content_url`s into a scratch directory; generation ids per take: `sfx-v2/gens.tsv`.
+   Four effects (walk-select, michelle-move, picker-move, volkonov-capture) came back almost silent
+   (raw peak under -20 dBFS: words like "quiet", "faint", "near-silent" in the prompt do that) and
+   were re-rendered with reworded prompts; the silent takes are left out of `gens.tsv`.
+3. **Master** — `sfx-v2/master_sfx.py --gens sfx-v2/gens.tsv --raw <takes> --out public/audio/sfx`:
+   both takes trimmed and measured; clipped, under-0.3 s or quiet takes (raw peak under -14 dBFS)
+   rejected; select / move take the shorter take, the rest the longer; then the voice pipeline's
+   mastering (`v4/master_v4.py`) at -17 LUFS, 48 kHz mono, 64 kb/s, with up to 6 dB of sustained
+   limiting allowed on impacts. QA per effect: `sfx-v2/qa-sfx-v2.json`.
+
+Result: 68 effects, 559,859 bytes (the synthesised set was 556,565), true peak ≤ -1.32 dBTP,
+-17 LUFS ± 0.5 except impacts whose peaks lead (death -17.6, hammont-select -17.8). The runtime UI
+sounds in `src/audio/sfx.ts` (taps, turn, win / lose) are still synthesised in the browser.
+
+The music is documented in `bgm/README.md` ("Current tracks").
+
 ## Earlier pipeline: Qwen3-TTS (history)
 
 Generates the files in `public/audio/` and the manifest `src/audio/voiceManifest.ts`.
@@ -60,9 +87,9 @@ Audition every shipped line at `/audio/audition.html` (`public/audio/audition.ht
 | `voice_qa.py` | Objective measurements (loudness, true peak, F0, formants, brightness, sibilance, tail decay, artefact proxies, optional gender classifier). Also a CLI. |
 | `write_audition.py` | Writes `public/audio/audition.html` from `lines.json` + `qa-voice.json`. |
 | `process_voice.py` | The previous post-processor (pitch-shifting); kept only because `post_voice.py` reuses its helpers. Do not use it to ship. |
-| `gen_sfx.py`, `encode_sfx.py` | Pure numpy/scipy synthesis of every character SFX; -17 LUFS normalisation and encode. |
+| `gen_sfx.py`, `encode_sfx.py` | History: pure numpy/scipy synthesis of the previous character SFX set; -17 LUFS normalisation and encode. Replaced by `sfx-v2/` on 2026-11-07. |
 | `write_manifest.py` | Writes `src/audio/voiceManifest.ts` from `lines.json` + files present on disk. |
-| `qa-voice.json`, `qa-sfx.json` | Objective QA of the shipped files. |
+| `qa-voice.json`, `qa-sfx.json` | History: objective QA of the Qwen voices and the synthesised SFX (current QA: `v4/qa-v4.json`, `sfx-v2/qa-sfx-v2.json`). |
 
 ## Setup (CPU only, ~11 GB disk)
 

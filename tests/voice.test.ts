@@ -104,6 +104,8 @@ const sfxEvents = (c: CharacterId): CharAudioEvent[] => [
  * quantisation noise on breaths and sibilants), so vo grew from 2,584,386 to 3,434,898 bytes.
  * Measured: 3,991,463 bytes (vo 3,434,898 + sfx 556,565); 0.24 MiB per character; headroom 464,985
  * bytes. Clips are still fetched lazily per character, so this is CDN weight, not first-load weight.
+ * The same day the 68 effects were re-rendered with ElevenLabs (docs/brand/audio/sfx-v2): 559,859
+ * bytes, so vo + sfx = 3,994,757; headroom 461,691 bytes.
  */
 const AUDIO_BUDGET_BYTES = 4.25 * 1024 * 1024;
 
